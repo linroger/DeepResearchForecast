@@ -1,0 +1,655 @@
+{
+ "entity_types": [
+  {
+   "name": "Organization",
+   "description": "Corporate actors: miners, smelters, traders, operators with real decision levers",
+   "attributes": [
+    {
+     "name": "subsector",
+     "type": "text",
+     "description": "miner/smelter/trader/utility"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low impact on copper price"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "headquarters or primary operating country"
+    }
+   ],
+   "examples": [
+    "Codelco",
+    "First Quantum Minerals",
+    "Ivanhoe Mines",
+    "Antofagasta plc",
+    "CSPT",
+    "Glencore",
+    "Freeport-McMoRan",
+    "China State Grid"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Any firm/producer/smelter group/trader whose production, cutback, or investment decisions causally move copper supply or demand",
+   "anti_examples": [
+    "ICSG (data publisher)",
+    "Goldman Sachs Research (analyst source)",
+    "Bloomberg (media source)"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "调整矿山产量指引",
+    "宣布冶炼减产配额",
+    "重启/封存矿山",
+    "签署TC/RC基准条款",
+    "调整库存与套利持仓",
+    "追加资本开支"
+   ]
+  },
+  {
+   "name": "Government",
+   "description": "Governments, ministries, regulators and courts with policy or veto power",
+   "attributes": [
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "country or legal jurisdiction"
+    },
+    {
+     "name": "decision_rights",
+     "type": "text",
+     "description": "tariff/mining-permit/restart-veto/monetary-policy etc."
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low impact on copper market"
+    }
+   ],
+   "examples": [
+    "Government of Panama",
+    "US President and administration",
+    "NDRC / Beijing policymakers",
+    "Cochilco",
+    "US Court of International Trade",
+    "Peru Ministry of Energy and Mines",
+    "Indonesia government (Grasberg policy)"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "arbiter",
+   "selection_rule": "State actors holding tariff, permit, restart-veto or policy levers that directly alter copper flows or demand",
+   "anti_examples": [
+    "LME (market operator, Platform)",
+    "IEA (research source)"
+   ],
+   "agency_class": "sovereign_government",
+   "levers": [
+    "签署/否决Cobre Panama重启协议",
+    "发布Section 232精炼铜关税公告",
+    "调整出口与废铜管制",
+    "放宽采矿许可",
+    "出台地产刺激或电网投资计划"
+   ]
+  },
+  {
+   "name": "Platform",
+   "description": "Market operator/exchange setting the settlement price and publishing stock data",
+   "attributes": [
+    {
+     "name": "market_role",
+     "type": "text",
+     "description": "price-setting/warehouse/clearing function"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "regulatory jurisdiction"
+    }
+   ],
+   "examples": [
+    "London Metal Exchange",
+    "CME Group (COMEX)"
+   ],
+   "archetype": "institution_rule",
+   "simulation_tier": 1,
+   "role_class": "intermediary",
+   "selection_rule": "Exchange or market infrastructure whose published prices/stocks resolve the forecast or anchor spreads",
+   "anti_examples": [
+    "Westmetall (unofficial mirror, source)",
+    "FRED/IMF data portals (source)"
+   ],
+   "agency_class": "financial_institution",
+   "levers": [
+    "调整库存规则与仓单制度",
+    "发布官方结算价与库存数据"
+   ]
+  },
+  {
+   "name": "MineProject",
+   "description": "Specific mines/projects whose tonnes materially swing 2026-27 supply",
+   "attributes": [
+    {
+     "name": "annual_capacity_tonnes",
+     "type": "text",
+     "description": "nameplate or guided annual output"
+    },
+    {
+     "name": "status",
+     "type": "text",
+     "description": "operating/ramping/shuttered/under-negotiation"
+    },
+    {
+     "name": "country",
+     "type": "text",
+     "description": "location"
+    }
+   ],
+   "examples": [
+    "Cobre Panama",
+    "Kamoa-Kakula",
+    "El Teniente",
+    "Escondida",
+    "Antamina",
+    "Grasberg"
+   ],
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Named mine or project with identifiable tonnage impact on the 2027 balance",
+   "anti_examples": [
+    "\"mine supply\" as abstract concept",
+    "\"grades\" as topic"
+   ]
+  },
+  {
+   "name": "PolicyInstrument",
+   "description": "Concrete tariff/regulatory measures affecting copper trade flows",
+   "attributes": [
+    {
+     "name": "effective_date",
+     "type": "text",
+     "description": "in force or proposed start date"
+    },
+    {
+     "name": "rate_scope",
+     "type": "text",
+     "description": "rate and product coverage"
+    },
+    {
+     "name": "status",
+     "type": "text",
+     "description": "in-force/recommended/pending/litigated"
+    }
+   ],
+   "examples": [
+    "Section 232 semi-finished copper tariff (Proclamation 10962)",
+    "Recommended 15% refined-copper tariff from Jan 2027",
+    "Annex III floating-tariff framework",
+    "China scrap export controls"
+   ],
+   "archetype": "institution_rule",
+   "simulation_tier": 2,
+   "role_class": "arbiter",
+   "selection_rule": "Named legal instrument/proclamation whose imposition or removal changes copper flows",
+   "anti_examples": [
+    "\"tariff policy\" as abstract topic",
+    "\"trade war sentiment\""
+   ]
+  },
+  {
+   "name": "CopperInstrument",
+   "description": "The tradable price object being forecast: LME cash copper and linked contracts",
+   "attributes": [
+    {
+     "name": "quote_currency_unit",
+     "type": "text",
+     "description": "USD/t or USD/lb"
+    },
+    {
+     "name": "latest_level",
+     "type": "text",
+     "description": "most recent settlement/quote"
+    },
+    {
+     "name": "as_of_date",
+     "type": "text",
+     "description": "date of latest observation"
+    }
+   ],
+   "examples": [
+    "LME copper Official Settlement Price (cash)",
+    "COMEX HG futures (HGZ6/HGH7/HGZ7)",
+    "IMF global copper price series"
+   ],
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Specific priced instrument/series on which the forecast or its signposts resolve",
+   "anti_examples": [
+    "\"copper price\" with no instrument",
+    "\"volatility\" as abstract concept"
+   ]
+  },
+  {
+   "name": "MarketIndicator",
+   "description": "Trackable supply/demand/price signals used as forecast signposts",
+   "attributes": [
+    {
+     "name": "publisher",
+     "type": "text",
+     "description": "who publishes the series"
+    },
+    {
+     "name": "threshold",
+     "type": "text",
+     "description": "value that discriminates scenarios"
+    },
+    {
+     "name": "frequency",
+     "type": "text",
+     "description": "daily/monthly/quarterly"
+    }
+   ],
+   "examples": [
+    "Spot TC/RC (Argus)",
+    "Antofagasta-CSPT annual TC/RC benchmark",
+    "LME warehouse stocks",
+    "COMEX-LME spread",
+    "ICSG refined balance vintage",
+    "EIA US retail electricity sales"
+   ],
+   "archetype": "signal",
+   "simulation_tier": 3,
+   "role_class": "amplifier",
+   "selection_rule": "Named measurable series with a discriminating threshold in the evidence",
+   "anti_examples": [
+    "\"market sentiment\"",
+    "\"demand strength\" without a series"
+   ]
+  },
+  {
+   "name": "ResearchSource",
+   "description": "Cited publishers of forecasts and analysis (banks, agencies, data providers)",
+   "attributes": [
+    {
+     "name": "source_type",
+     "type": "text",
+     "description": "bank research/intergovernmental agency/data provider/news"
+    },
+    {
+     "name": "forecast_vintage",
+     "type": "text",
+     "description": "as-of date of key forecast"
+    }
+   ],
+   "examples": [
+    "ICSG",
+    "Goldman Sachs Research",
+    "J.P. Morgan Research",
+    "S&P Global",
+    "Cochilco forecasts (as publisher)",
+    "IEA",
+    "Societe Generale COMEX-premium model"
+   ],
+   "archetype": "source",
+   "simulation_tier": 3,
+   "role_class": "amplifier",
+   "selection_rule": "Cited provider of forecasts/estimates used as evidence; not a decision-maker on outcomes",
+   "anti_examples": [
+    "Codelco (produces copper, actor)",
+    "US administration (decision-maker)"
+   ]
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "REGULATES",
+   "description": "Government or court governs an organization, project, instrument or policy",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "MineProject"
+    },
+    {
+     "source": "Government",
+     "target": "PolicyInstrument"
+    },
+    {
+     "source": "Government",
+     "target": "Platform"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/negative/neutral toward target"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "veto power: high/medium/low"
+    }
+   ],
+   "family": "governance",
+   "valence": "directional",
+   "direction_semantics": "source 监管/持有否决权于 target（如巴拿马政府否决 Cobre Panama 重启）"
+  },
+  {
+   "name": "OPERATES",
+   "description": "Organization owns/operates a mine project",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "MineProject"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "ownership_share",
+     "type": "text",
+     "description": "stake if known"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "operation start"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "source 运营/持有 target 矿山项目"
+  },
+  {
+   "name": "SUPPLIES",
+   "description": "Producer/smelter supplies copper units to market or offtakers",
+   "source_targets": [
+    {
+     "source": "MineProject",
+     "target": "CopperInstrument"
+    },
+    {
+     "source": "Organization",
+     "target": "CopperInstrument"
+    },
+    {
+     "source": "MineProject",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "volume_tonnes",
+     "type": "text",
+     "description": "guided annual tonnage"
+    },
+    {
+     "name": "material_form",
+     "type": "text",
+     "description": "concentrate/refined cathode/scrap"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "source 向 target 供应铜原料/精炼铜（矿山→冶炼厂、生产者→市场）"
+  },
+  {
+   "name": "PARTNERS_WITH",
+   "description": "Negotiating or benchmark-setting partnership (e.g., TC/RC benchmark talks)",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Organization",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "cooperative/adversarial posture"
+    },
+    {
+     "name": "status",
+     "type": "text",
+     "description": "proposed/in-negotiation/signed/stalled"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "negotiation start"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "source 与 target 处于谈判/基准条款合作关系（如 Antofagasta–中国冶炼厂 TC/RC 谈判）"
+  },
+  {
+   "name": "COMPETES_WITH",
+   "description": "Competitive rivalry among producers or between exchanges",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Platform",
+     "target": "Platform"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "dimension",
+     "type": "text",
+     "description": "market share/pricing/liquidity"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "source 与 target 在同一市场竞争（如 LME vs COMEX 定价）"
+  },
+  {
+   "name": "DEPENDS_ON",
+   "description": "Actor or instrument depends on a project, policy or indicator",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "MineProject"
+    },
+    {
+     "source": "Organization",
+     "target": "PolicyInstrument"
+    },
+    {
+     "source": "CopperInstrument",
+     "target": "MarketIndicator"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low criticality"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "time until dependency bites"
+    }
+   ],
+   "family": "dependency",
+   "valence": "directional",
+   "direction_semantics": "source 依赖 target（冶炼厂依赖铜精矿供应；价格依赖库存/价差信号）"
+  },
+  {
+   "name": "TRIGGERS",
+   "description": "Event/policy/indicator causally triggers market moves or actions",
+   "source_targets": [
+    {
+     "source": "PolicyInstrument",
+     "target": "CopperInstrument"
+    },
+    {
+     "source": "MineProject",
+     "target": "CopperInstrument"
+    },
+    {
+     "source": "MarketIndicator",
+     "target": "CopperInstrument"
+    },
+    {
+     "source": "Government",
+     "target": "PolicyInstrument"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "price impact direction positive/negative"
+    },
+    {
+     "name": "magnitude",
+     "type": "text",
+     "description": "estimated USD/t or tonnage impact"
+    },
+    {
+     "name": "probability",
+     "type": "text",
+     "description": "published risk-neutral prob if any"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source 的发生因果性触发 target 变动（关税公告→精炼铜价；矿山重启→价格）"
+  },
+  {
+   "name": "INFLUENCES",
+   "description": "Actor or source shapes market expectations or policy decisions",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "CopperInstrument"
+    },
+    {
+     "source": "ResearchSource",
+     "target": "CopperInstrument"
+    },
+    {
+     "source": "ResearchSource",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "CopperInstrument"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "channel",
+     "type": "text",
+     "description": "forecast/positioning/policy/demand"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "influence",
+   "valence": "directional",
+   "direction_semantics": "source 通过预期/持仓/政策渠道影响 target（如 ICSG 平衡预测影响价格预期）"
+  },
+  {
+   "name": "REPORTS_ON",
+   "description": "Source publishes data or forecasts about an indicator, actor or instrument",
+   "source_targets": [
+    {
+     "source": "ResearchSource",
+     "target": "MarketIndicator"
+    },
+    {
+     "source": "ResearchSource",
+     "target": "MineProject"
+    },
+    {
+     "source": "ResearchSource",
+     "target": "PolicyInstrument"
+    },
+    {
+     "source": "Platform",
+     "target": "CopperInstrument"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "as_of_date",
+     "type": "text",
+     "description": "publication vintage"
+    },
+    {
+     "name": "key_figure",
+     "type": "text",
+     "description": "headline number published"
+    }
+   ],
+   "family": "information",
+   "valence": "neutral",
+   "direction_semantics": "source 发布/报道关于 target 的数据或预测（LME→结算价；ICSG→平衡预测）"
+  },
+  {
+   "name": "CAUSES",
+   "description": "Causal mechanism edge: supply/demand shocks transmit to price",
+   "source_targets": [
+    {
+     "source": "MineProject",
+     "target": "MarketIndicator"
+    },
+    {
+     "source": "PolicyInstrument",
+     "target": "MarketIndicator"
+    },
+    {
+     "source": "Organization",
+     "target": "MarketIndicator"
+    },
+    {
+     "source": "MarketIndicator",
+     "target": "MarketIndicator"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "direction of effect on target"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "transmission delay"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source 因果性导致 target 变动（精矿短缺→TC/RC 负值；关税→COMEX-LME 价差）"
+  }
+ ],
+ "analysis_summary": "该预测问题的核心是 2027-12-31 LME 铜现金结算价，由四条传导链决定：(1) 矿山供给（智利/Codelco、Cobre Panama 重启、Kamoa-Kakula 爬产）；(2) 冶炼瓶颈（TC/RC 崩塌与中国冶炼厂减产）；(3) 电气化需求（电网、EV、数据中心 vs 中国地产）；(4) 美国 Section 232 关税与 COMEX-LME 价差。本体保留种子类型 Organization/Government/Platform（覆盖 9+7+1 的 actor 阵容），并新增 MineProject、PolicyInstrument、CopperInstrument、MarketIndicator、ResearchSource 五个领域类型：前三者刻画可追踪的供给客体、政策工具与价格标的，MarketIndicator 承载可验证的二元预测阈值，ResearchSource 以 tier=3 区分 ICSG、投行研究等被引用的预测发布方（非能动主体）。边类型覆盖治理（REGULATES，含巴拿马否决权）、经济（OPERATES/SUPPLIES）、谈判（PARTNERS_WITH）、依赖与两条因果边（TRIGGERS/CAUSES，带 sign/lag/strength），使图谱能作为冲击传导模型驱动情景推演（超級周期 30% / 高位平台 40% / 均值回归 25% / 硬着陆 5%）。"
+}

@@ -1,0 +1,696 @@
+{
+ "entity_types": [
+  {
+   "name": "Organization",
+   "description": "Firms and financial institutions acting on BTC: ETF issuers, corporate holders, stablecoin issuer...",
+   "attributes": [
+    {
+     "name": "sector",
+     "type": "text",
+     "description": "Primary business line: etf_issuer / corporate_holder / stablecoin_issuer / research"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high / medium / low influence on BTC price path"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "Primary regulatory jurisdiction"
+    }
+   ],
+   "examples": [
+    "BlackRock (IBIT)",
+    "Fidelity (FBTC)",
+    "MicroStrategy / Strategy (MSTR)",
+    "Circle",
+    "Tether",
+    "Galaxy Research",
+    "Glassnode / CryptoQuant"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "stakeholder",
+   "selection_rule": "Any named firm/institution whose allocation, issuance or research causally moves BTC demand or supply",
+   "anti_examples": [
+    "个体分析师推文",
+    "被引用的排行榜网站"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "申购/赎回 ETF 份额披露",
+    "增发股票购币",
+    "稳定币储备扩张",
+    "发布研究报告影响叙事"
+   ]
+  },
+  {
+   "name": "Government",
+   "description": "US government bodies: Fed, Treasury/Executive, Congress, SEC — policy and rulemaking actors",
+   "attributes": [
+    {
+     "name": "branch",
+     "type": "text",
+     "description": "monetary / fiscal_executive / legislative / regulatory"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high / medium / low influence on 2027 BTC price"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "supportive / neutral / restrictive toward BTC"
+    }
+   ],
+   "examples": [
+    "Federal Reserve (FOMC)",
+    "US Treasury / Executive Branch",
+    "US Congress",
+    "SEC"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "arbiter",
+   "selection_rule": "Named state institution with rulemaking, rate-setting or reserve authority bearing on BTC",
+   "anti_examples": [
+    "抽象的'监管环境'",
+    "已被否决且无后续动议的法案本身"
+   ],
+   "agency_class": "sovereign_government",
+   "levers": [
+    "调整联邦基金利率",
+    "推动/否决 CLARITY、ARMA、BITCOIN 法案",
+    "SEC 出台 Regulation Crypto Assets",
+    "预算中性的储备购币"
+   ]
+  },
+  {
+   "name": "Other",
+   "description": "Supply/demand cohorts without legal personality: long-term holders, miners, sovereign/pension all...",
+   "attributes": [
+    {
+     "name": "cohort_type",
+     "type": "text",
+     "description": "long_term_holders / miners / institutional_allocators"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "accumulating / distributing / neutral"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high / medium / low price impact"
+    }
+   ],
+   "examples": [
+    "Long-term Bitcoin holders",
+    "Bitcoin miners",
+    "Sovereign wealth and pension allocators"
+   ],
+   "archetype": "collective",
+   "simulation_tier": 2,
+   "role_class": "stakeholder",
+   "selection_rule": "Aggregated on-chain or allocator cohort whose net buy/sell behavior moves price",
+   "anti_examples": [
+    "'市场情绪'等抽象概念",
+    "单个匿名钱包地址"
+   ],
+   "agency_class": "public_collective",
+   "levers": [
+    "增持/派发持仓",
+    "挖矿产出抛售节奏",
+    "配置 ETF 份额"
+   ]
+  },
+  {
+   "name": "Platform",
+   "description": "Market infrastructure: spot venues, custody providers, derivatives exchanges",
+   "attributes": [
+    {
+     "name": "platform_type",
+     "type": "text",
+     "description": "spot_exchange / derivatives_exchange / custody"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high / medium / low"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "Operating jurisdiction"
+    }
+   ],
+   "examples": [
+    "Coinbase",
+    "Kraken",
+    "Deribit",
+    "CME Group"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 2,
+   "role_class": "intermediary",
+   "selection_rule": "Named venue providing price discovery, custody or derivatives for BTC",
+   "anti_examples": [
+    "FRED 数据库（数据来源，非平台主体）",
+    "WSJ 行情页"
+   ],
+   "agency_class": "financial_institution",
+   "levers": [
+    "调整上币与流动性",
+    "期权到期与清算机制",
+    "托管政策"
+   ]
+  },
+  {
+   "name": "CryptoAsset",
+   "description": "The forecast target asset and directly linked crypto objects",
+   "attributes": [
+    {
+     "name": "ticker",
+     "type": "text",
+     "description": "Asset symbol, e.g. BTC"
+    },
+    {
+     "name": "current_price_usd",
+     "type": "text",
+     "description": "Latest anchor price in USD"
+    },
+    {
+     "name": "cycle_phase",
+     "type": "text",
+     "description": "post_peak_digestion / reflation / bear"
+    }
+   ],
+   "examples": [
+    "Bitcoin (BTC)"
+   ],
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "The crypto asset whose USD spot price is the settlement statistic",
+   "anti_examples": [
+    "'波动率'等抽象指标",
+    "板块主题如'AI币'"
+   ]
+  },
+  {
+   "name": "DerivativeInstrument",
+   "description": "Dated contracts and ETF vehicles whose prices/flows embed expectations about BTC",
+   "attributes": [
+    {
+     "name": "instrument_type",
+     "type": "text",
+     "description": "futures / spot_etf / options_index"
+    },
+    {
+     "name": "expiry_date",
+     "type": "text",
+     "description": "Contract expiry or settlement date"
+    },
+    {
+     "name": "last_price_usd",
+     "type": "text",
+     "description": "Latest quoted price or net assets"
+    }
+   ],
+   "examples": [
+    "CME BTCZ27 Dec 2027 futures",
+    "IBIT",
+    "FBTC",
+    "GBTC",
+    "Deribit DVOL"
+   ],
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Tradable instrument whose flows/price carry forecast signal about BTC at 2027-12-31",
+   "anti_examples": [
+    "概念性'ETF板块'",
+    "已退市合约"
+   ]
+  },
+  {
+   "name": "MacroIndicator",
+   "description": "Tracked macro series that constrain the BTC path: rates, M2, VIX, dollar index",
+   "attributes": [
+    {
+     "name": "series_id",
+     "type": "text",
+     "description": "e.g. DGS10, M2SL, VIXCLS, DTWEXBGS"
+    },
+    {
+     "name": "latest_value",
+     "type": "text",
+     "description": "Latest observation and date"
+    },
+    {
+     "name": "signal_direction",
+     "type": "text",
+     "description": "supportive / neutral / restrictive for BTC"
+    }
+   ],
+   "examples": [
+    "Fed funds rate",
+    "10-year Treasury yield",
+    "M2 YoY",
+    "VIX",
+    "Nominal Broad Dollar Index"
+   ],
+   "archetype": "signal",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Named quantitative macro series used as a signpost for the forecast",
+   "anti_examples": [
+    "'宏观环境'之类的笼统说法",
+    "无具体序列的新闻评论"
+   ]
+  },
+  {
+   "name": "LegislationRule",
+   "description": "Specific laws, bills and rules shaping BTC demand: GENIUS, CLARITY, ARMA, SEC proposals",
+   "attributes": [
+    {
+     "name": "status",
+     "type": "text",
+     "description": "enacted / proposed / failed_cloture / lapsed"
+    },
+    {
+     "name": "effective_date",
+     "type": "text",
+     "description": "Effective or key procedural date"
+    },
+    {
+     "name": "demand_impact",
+     "type": "text",
+     "description": "structural_bid / enabling / neutral"
+    }
+   ],
+   "examples": [
+    "GENIUS Act (P.L. 119-27)",
+    "CLARITY Act (H.R.3633)",
+    "BITCOIN Act",
+    "American Reserve Modernization Act",
+    "SEC Regulation Crypto Assets proposal"
+   ],
+   "archetype": "institution_rule",
+   "simulation_tier": 2,
+   "role_class": "arbiter",
+   "selection_rule": "Named statute, bill or regulatory rule with dated status affecting BTC markets",
+   "anti_examples": [
+    "'监管风险'抽象概念",
+    "未具名的政策传闻"
+   ]
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "DEPENDS_ON",
+   "description": "Source relies on target for custody, venue or price discovery",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Platform"
+    },
+    {
+     "source": "Organization",
+     "target": "Government"
+    },
+    {
+     "source": "Platform",
+     "target": "CryptoAsset"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "dependency_type",
+     "type": "text",
+     "description": "custody / price_discovery / licensing"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high / medium / low"
+    }
+   ],
+   "family": "dependency",
+   "valence": "directional",
+   "direction_semantics": "source 的运营依赖 target 提供的基础设施或授权"
+  },
+  {
+   "name": "BACKS",
+   "description": "Source supports or champions target's position or adoption",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Other"
+    },
+    {
+     "source": "Government",
+     "target": "CryptoAsset"
+    },
+    {
+     "source": "Organization",
+     "target": "LegislationRule"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive / neutral / negative"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high / medium / low"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Support start date if known"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "source 公开扶持 target（如发行商为机构配置者提供通道）"
+  },
+  {
+   "name": "COMPETES_WITH",
+   "description": "Source competes for the same flows or market share",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "DerivativeInstrument",
+     "target": "DerivativeInstrument"
+    },
+    {
+     "source": "Platform",
+     "target": "Platform"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high / medium / low"
+    },
+    {
+     "name": "market",
+     "type": "text",
+     "description": "spot_etf / derivatives / exchange"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "source 与 target 在同一资金池上竞争（对称关系）"
+  },
+  {
+   "name": "INFLUENCES",
+   "description": "Source shapes target's behavior, flows, price or expectations",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Organization",
+     "target": "Other"
+    },
+    {
+     "source": "Government",
+     "target": "CryptoAsset"
+    },
+    {
+     "source": "MacroIndicator",
+     "target": "CryptoAsset"
+    },
+    {
+     "source": "Platform",
+     "target": "CryptoAsset"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive / neutral / negative"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high / medium / low"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Transmission lag, e.g. months"
+    }
+   ],
+   "family": "influence",
+   "valence": "directional",
+   "direction_semantics": "source 的政策/数据/行为影响 target 的资金流或价格"
+  },
+  {
+   "name": "REGULATES",
+   "description": "Source holds rulemaking or oversight authority over target",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Platform"
+    },
+    {
+     "source": "Government",
+     "target": "CryptoAsset"
+    },
+    {
+     "source": "Government",
+     "target": "LegislationRule"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "US / EU / other"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high / medium / low"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Authority or rule start date"
+    }
+   ],
+   "family": "governance",
+   "valence": "directional",
+   "direction_semantics": "source 对 target 拥有监管/立法约束权"
+  },
+  {
+   "name": "INVESTS_IN",
+   "description": "Source allocates capital into target fund, instrument or asset",
+   "source_targets": [
+    {
+     "source": "Other",
+     "target": "Organization"
+    },
+    {
+     "source": "Other",
+     "target": "DerivativeInstrument"
+    },
+    {
+     "source": "Organization",
+     "target": "DerivativeInstrument"
+    },
+    {
+     "source": "Other",
+     "target": "CryptoAsset"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive / negative (net flow direction)"
+    },
+    {
+     "name": "position_scale",
+     "type": "text",
+     "description": "e.g. shares or USD size"
+    },
+    {
+     "name": "as_of_date",
+     "type": "text",
+     "description": "Latest disclosure date (13F/holdings)"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "source 向 target 出资/持有份额，资金由 source 流向 target"
+  },
+  {
+   "name": "SUPPLIES",
+   "description": "Source provides sell-side liquidity or mined supply to target venue/asset",
+   "source_targets": [
+    {
+     "source": "Other",
+     "target": "Platform"
+    },
+    {
+     "source": "Other",
+     "target": "CryptoAsset"
+    },
+    {
+     "source": "Platform",
+     "target": "DerivativeInstrument"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "supply_volume",
+     "type": "text",
+     "description": "BTC amount or USD volume"
+    },
+    {
+     "name": "direction",
+     "type": "text",
+     "description": "net_sell / net_accumulate"
+    },
+    {
+     "name": "as_of_date",
+     "type": "text",
+     "description": "Observation date"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "source 向 target 供应 BTC 流动性/算力供给"
+  },
+  {
+   "name": "CONSTRAINS",
+   "description": "Source limits or caps target's price path or policy space",
+   "source_targets": [
+    {
+     "source": "MacroIndicator",
+     "target": "CryptoAsset"
+    },
+    {
+     "source": "LegislationRule",
+     "target": "Government"
+    },
+    {
+     "source": "Other",
+     "target": "CryptoAsset"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "negative / positive constraint direction"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high / medium / low"
+    },
+    {
+     "name": "threshold",
+     "type": "text",
+     "description": "Constraint level, e.g. 10Y > 5%"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source 施加约束限制 target 的上行/下行空间"
+  },
+  {
+   "name": "TRIGGERS",
+   "description": "Source event or rule change catalyzes a demand or price regime shift in target",
+   "source_targets": [
+    {
+     "source": "LegislationRule",
+     "target": "CryptoAsset"
+    },
+    {
+     "source": "Government",
+     "target": "DerivativeInstrument"
+    },
+    {
+     "source": "MacroIndicator",
+     "target": "CryptoAsset"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "bullish / bearish"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Expected lag from trigger to effect"
+    },
+    {
+     "name": "trigger_date",
+     "type": "text",
+     "description": "Scheduled trigger date"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source 的事件/生效日触发 target 的资金流或价格反应"
+  },
+  {
+   "name": "TRACKS",
+   "description": "Source observes or prices the target, providing signal data",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "CryptoAsset"
+    },
+    {
+     "source": "DerivativeInstrument",
+     "target": "CryptoAsset"
+    },
+    {
+     "source": "Platform",
+     "target": "CryptoAsset"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "data_type",
+     "type": "text",
+     "description": "on_chain / price_fixing / flows / implied_vol"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high / medium / low reliability"
+    }
+   ],
+   "family": "information",
+   "valence": "neutral",
+   "direction_semantics": "source 观测/定价 target 并产出可追踪信号（数据流向 source）"
+  }
+ ],
+ "analysis_summary": "该预测问题以 BTC 现货（Coinbase/Kraken 合成价）2027-12-31 收盘价为结算统计，属市场/资产价格类客体问题，但核心驱动来自真实主体：监管与货币政策（Fed、SEC、Congress、Treasury）、机构资金通道（BlackRock、Fidelity、ETF 生态）、供给端群体（长期持有者、矿工、主权/养老金配置者）与市场基础设施（Coinbase、Kraken、Deribit、CME）。本体保留种子四类型（Organization/Government/Other/Platform），并新增 CryptoAsset（结算标的）、DerivativeInstrument（BTCZ27、IBIT 等承载预期的工具）、MacroIndicator（利率/M2/VIX 等信号）、LegislationRule（GENIUS/CLARITY/ARMA 等具名规则）。边类型保留全部七条种子关系，并补充 CONSTRAINS/TRIGGERS（因果族，带 sign/lag/threshold）与 TRACKS（信息族），以刻画 ETF 资金流、减半周期、宏观流动性与立法生效日如何传导到 2027 年末价格。"
+}

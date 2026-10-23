@@ -1,0 +1,292 @@
+2026-10-23T18:40:48.928214+00:00 [stage] runtime skill bundle: outcome=verified source_manifest_hash=e579d583714c93017a829a9effea5d2a866b1a9be0a5df7d87afa4473e2e2034 deployed_manifest_hash=e579d583714c93017a829a9effea5d2a866b1a9be0a5df7d87afa4473e2e2034 deployed_path=/Users/rogerlin/Downloads/DeepResearchForecast/deer-flow/skills/public
+2026-10-23T18:40:48.928476+00:00 [stage] runtime skill lazy-resource hashes: skill=actor-ontology-research {"references/actor-intelligence-contract.md":"668e01eb87d1c491eca03483e3ff80b0257749d954cada4945fcfc247a8e23aa","references/scoring-rubric.md":"570d71951cb2d3e2122028bdb351a22bd9fe96464e2bfcb157fe552586c82f78"}
+2026-10-23T18:40:48.928499+00:00 [stage] runtime skill lazy-resource hashes: skill=competitive-landscape-forecasting {"references/leadership-metrics.md":"73b4a54678c5b9c7d22b9056d1f34df98c0dfb1a2411370c19b9dd3c0c9904ba","references/persistence-and-share-dynamics.md":"d06d416ad14d8ad47cc804979465ccbacfabc2bf708548882003cc059f951f87","references/tech-race-indicators.md":"c6074ec73b3be65eef186ea655484e5aba6a0c15c3b72a57664855a0ff4514c1"}
+2026-10-23T18:40:48.928518+00:00 [stage] runtime skill lazy-resource hashes: skill=data-sources {"references/catalog-bis.md":"7c5d32739635a95125d853772ff56c4081ae575ad06440dd6154b0c38235236b","references/catalog-bls.md":"385155e89481d84088f960089c82d6909410da66c52ce5277d7b9e83ddad4228","references/catalog-fred.md":"57bc58b69616beb5bf3e03e3aa6ca139f638cc83ce9b956feebde12a39e29206","references/catalog-imf.md":"d3a1a42b44cf79c22e0a45f97032757a3a0df39a280064d9ee86a9ceecba2bc9","references/catalog-usgov.md":"c15282354d3970dd47239d8248ac8d69137ae543556ef8e55362fb172b2beda5","references/catalog-wb.md":"871b0cb84bc59eaef876dedb901db9619b5d9813e35bff5f0aedcd4701d86560","references/series-catalog.md":"569c0ec45ab3f645766c08fc5675591e241122d52c6e962e62b400b224da65cd"}
+2026-10-23T18:40:48.928533+00:00 [stage] runtime skill lazy-resource hashes: skill=data-visuals {"references/chart-patterns.md":"667f9207fb4afaef8d7ab20aa45aca4fbdfefd0b9262e557b3e3c0ddced6859d","scripts/render_data.py":"06ca497078857e15b4f07d1ee8edfc769a2330b2f37f0f6925cf239008b562b2"}
+2026-10-23T18:40:48.928547+00:00 [stage] runtime skill lazy-resource hashes: skill=deep-research {"references/final-dossier-contract.md":"6f2be6ed603ac5a2db7c1a52b581c06d0bfc36cab0de0d3770c870aa6dc0b92e","references/news-market-context.md":"61f294d467bb255b54e076cd8dc074aee8b13bca030f79114650f643dcbd1dc4","references/source-tradecraft.md":"e66e5db7d688355dec6bc925ae1812f78e6d390ae3ade40ebdecab127ef48042"}
+2026-10-23T18:40:48.928559+00:00 [stage] runtime skill lazy-resource hashes: skill=election-forecasting {"references/fundamentals-and-polls.md":"278fa9c3523dab981d3fc1bbaa04851621d5b1ea9cc780c308be5e4c03e4b8cc","references/non-us-elections.md":"df7f0d44e753fbae11044a834d8d2073b85eaeb529b8d24d1175c658b52c0938","references/us-election-mechanics.md":"0f3a42fa70c634f8c13cd1c5231c9fd19c402b11fcd398c49398407c645354c9"}
+2026-10-23T18:40:48.928570+00:00 [stage] runtime skill lazy-resource hashes: skill=financial-markets-forecasting {"references/empirical-and-volatility-base-rates.md":"5fcf896beac88fb321a3fd3e4376e08fc1a5c363047e63547b128a6d15098863","references/implied-distributions.md":"146cbd95b28a4f2430fcd5115cc68cca1c23bb801de9381d0bd98c03dd1408bd","references/listings-and-ipos.md":"94311213ac900a88a5367cd1bf48249b5795e7a812351158351cf0c0b554fdc3"}
+2026-10-23T18:40:48.928581+00:00 [stage] runtime skill lazy-resource hashes: skill=forecast-visuals {"references/chart-patterns.md":"a48316244d5293830ae42a5cfe40285a2a38d13f1da52c8949bee9a007130a60","scripts/render.py":"25d81fc98786644a5c3d72a2bab9980c09f063e4c162a124bb481ee94cccdeba"}
+2026-10-23T18:40:48.928591+00:00 [stage] runtime skill lazy-resource hashes: skill=geopolitical-forecasting {"references/conflict-base-rates.md":"8103207f91012df6800884e78716c40778d498d76d453e635db9b2ab13968d10","references/escalation-and-negotiation.md":"89a56f1988b79dde0e3dbf7073cbdb9b13aab6c79b74f071508ee64e043d307a","references/evidence-under-information-war.md":"5e70295008c764a165e9544bce30dd53f6794ecfaeae7a11c7a2c122026bba81"}
+2026-10-23T18:40:48.928605+00:00 [stage] runtime skill lazy-resource hashes: skill=industry-forecasting {"references/forecasting-methods.md":"d046d2692d510b3f8cf9917a00038ffefe9f9fed059653746ac6b82bdc6b7eff","references/outlook-reconciliation.md":"cd50927fbdb74d1a459d652bbe99504ab7e93afc3bf6ac6643f437e12b9384dd","references/reference-classes-and-lead-times.md":"626f2c50f2eabd7145386a3c3a3b04abc29e52253674e814a6ea9666b1f9d5e3"}
+2026-10-23T18:40:48.928619+00:00 [stage] runtime skill lazy-resource hashes: skill=industry-research {"references/cycles-and-capacity.md":"afdab895c62eb5e13928400809b0ab7a1d8cf8d07049cafe0a6fce6c416a8d43","references/industry-sources.md":"f12dbd5c47617abb290e9aae4ca39ffaf51839021e41df57e8a8273a095d3116","references/sectors-economy.md":"d8554ac27fd06934c6ad99f136ef917dfdcbbc26d827b6cd6ee16fae82f3ed5a","references/sectors-technology.md":"a85911b8b2dd9af422ebcdef16d892f8aa88b07fa55ab01c0eaba3969bdc7380","references/value-chain-and-sizing.md":"037eb1cc3b26701856b42802b2f1d4c52117c957b55342cc4520df34728850f9"}
+2026-10-23T18:40:48.928629+00:00 [stage] runtime skill lazy-resource hashes: skill=macro-research {"references/central-bank-reaction-functions.md":"233563c25b7f65b86497aa988063ca0266cf3f1d40e3d91228460b00d556fd23","references/macro-base-rates.md":"5ca2bcfb6585e3ed1eee40b00d0d67282a1c8b68bf9733bf1befb3512ee5460d","references/nowcasting-and-releases.md":"53ce7929a5c36ae1c934602dd39ec92b1cba77d2c1ca16b85d069b3f21584ba0"}
+2026-10-23T18:40:48.928638+00:00 [stage] runtime skill lazy-resource hashes: skill=policy-and-trade-forecasting {"references/signals-and-credibility.md":"c15e3827b90d6ccbbc90e80a4f32a51b3edb0ebc69e14ccbbbd9c3a529c590bd","references/trade-instruments.md":"242e1290dc4146dff6e1a8cc1b5b262d4542d23c7262e7ca5d29c2495b774293","references/us-process-and-base-rates.md":"f75007c73a6bcf100542995a46ec102aebfc52517d1d4ef1a94d9ca6a5d87936"}
+2026-10-23T18:40:48.928646+00:00 [stage] runtime skill lazy-resource hashes: skill=prediction-markets {}
+2026-10-23T18:40:48.928655+00:00 [stage] runtime skill lazy-resource hashes: skill=reference-class-forecasting {"references/base-rate-recipes.md":"f101b214ef371659423bb1c3d4cf67ca7ab943c48a7bd4949e4934c1d01bf16e","references/prediction-market-anchoring.md":"cb416e7c77a30695fbd4bfdfcb61d4a90679e80b3faba021226947c1b6a0ae38","references/probability-toolkit.md":"73c70e0323c495b56b3937019c0a3fab422ef44e93f4e346c92dd86560e19bff"}
+2026-10-23T18:40:48.928669+00:00 [stage] research engine: v3 (linear_research)
+2026-10-23T18:40:50.148680+00:00 [warn] RESEARCH_LINEAR_MODE=salvage is a legacy knob: v3 resumes its own identity-bound phases and never adopts a research_report.md it did not produce
+2026-10-23T18:40:55.207982+00:00 [stage] research:v3:plan start
+2026-10-23T18:41:01.039796+00:00 [usage] tokens in=1714 out=331 total=2045 phase=plan:plan:scope cached=0 cache_write=0 reasoning=0
+2026-10-23T18:41:01.040062+00:00 [tool] web_search Bitcoin price October 2026 Coinbase Kraken spot
+2026-10-23T18:41:01.040270+00:00 [tool] web_search Bitcoin spot ETF total holdings flows 2026 BlackRock IBIT Fidelity FBTC
+2026-10-23T18:41:01.040432+00:00 [tool] web_search Bitcoin realized volatility 2025 2026 30-day annualized
+2026-10-23T18:41:01.040516+00:00 [tool] web_search Bitcoin exchange reserves long-term holder supply 2026 Glassnode
+2026-10-23T18:41:03.366423+00:00 [result] web_search → 5 results
+2026-10-23T18:41:03.368171+00:00 [result] web_search → 5 results
+2026-10-23T18:41:03.368241+00:00 [result] web_search → 5 results
+2026-10-23T18:41:03.368310+00:00 [tool] web_search US Bitcoin strategic reserve executive order 2025 2026 status
+2026-10-23T18:41:03.373420+00:00 [result] web_search → 5 results
+2026-10-23T18:41:03.373519+00:00 [tool] web_search Bitcoin halving cycle historical drawdown 2026 bear market base rate
+2026-10-23T18:41:04.846202+00:00 [result] web_search → 5 results
+2026-10-23T18:41:05.164488+00:00 [result] web_search → 4 results
+2026-10-23T18:41:39.438059+00:00 [usage] tokens in=7338 out=2303 total=9641 phase=plan:plan:plan cached=1472 cache_write=0 reasoning=70
+2026-10-23T18:41:39.442675+00:00 [warn] gateway: plan:plan: JSON attempt 1 unusable (missing keys: sections, scenarios); reply began: '{"kiqs": [{"question": "What is the exact baseline: BTC/USD spot price on Coinbase and Kraken as of 2026-10-23, cumulative return across the 2024-2026 post-hal…'
+2026-10-23T18:42:13.019401+00:00 [usage] tokens in=7369 out=2330 total=9699 phase=plan:plan:plan:retry1 cached=7296 cache_write=0 reasoning=60
+2026-10-23T18:42:13.032339+00:00 [ok] v3: method skills financial-markets-forecasting, reference-class-forecasting (planner)
+2026-10-23T18:42:13.034337+00:00 [ok] research:v3:plan done (6 KIQs, 12 sections)
+2026-10-23T18:42:13.159760+00:00 [stage] research:v3:data start (5 series)
+2026-10-23T18:42:15.874114+00:00 [ok] research:v3:data done (stored=5, failed=0)
+2026-10-23T18:42:15.874535+00:00 [stage] research:v3:gather start (6 KIQs, workers=4)
+2026-10-23T18:42:15.874655+00:00 [tool] web_search Bitcoin price October 23 2026 Coinbase BTC USD
+2026-10-23T18:42:15.874716+00:00 [tool] web_search Bitcoin cycle top drawdown 2025 2026 halving epoch
+2026-10-23T18:42:15.874800+00:00 [tool] web_search Bitcoin historical drawdowns cycle peaks 2014 2018 2022 percent decline duration
+2026-10-23T18:42:15.874849+00:00 [tool] web_search Bitcoin 12-month price change distribution 2014 2026
+2026-10-23T18:42:17.514644+00:00 [result] web_search → 5 results
+2026-10-23T18:42:17.516404+00:00 [result] web_search → 5 results
+2026-10-23T18:42:17.516445+00:00 [tool] web_search Bitcoin ETF monthly net flows 2026 holdings institutional
+2026-10-23T18:42:17.516496+00:00 [tool] web_search BlackRock IBIT Fidelity FBTC holdings October 2026
+2026-10-23T18:42:17.629056+00:00 [result] web_search → 4 results
+2026-10-23T18:42:17.629121+00:00 [tool] web_search FOMC rate path 2027 dot plot September 2026
+2026-10-23T18:42:18.047029+00:00 [result] web_search → 5 results
+2026-10-23T18:42:18.047106+00:00 [tool] web_search M2 money supply growth 2026 liquidity Bitcoin
+2026-10-23T18:42:18.977780+00:00 [result] web_search → 5 results
+2026-10-23T18:42:18.977828+00:00 [tool] web_search US Strategic Bitcoin Reserve purchases 2026 status
+2026-10-23T18:42:19.049549+00:00 [result] web_search → 5 results
+2026-10-23T18:42:19.049611+00:00 [tool] web_search GENIUS Act stablecoin implementation Bitcoin demand
+2026-10-23T18:42:19.166286+00:00 [result] web_search → 5 results
+2026-10-23T18:42:19.166348+00:00 [tool] web_search Glassnode Bitcoin exchange reserves long-term holder supply October 2026
+2026-10-23T18:42:19.548293+00:00 [result] web_search → 5 results
+2026-10-23T18:42:19.548353+00:00 [tool] web_search Bitcoin miner selling halving 2026 hashrate revenue
+2026-10-23T18:43:17.563919+00:00 [result] web_search → 5 results
+2026-10-23T18:43:17.565196+00:00 [result] web_search → 5 results
+2026-10-23T18:43:17.629042+00:00 [result] web_search → 5 results
+2026-10-23T18:43:17.858980+00:00 [result] web_search → 5 results
+2026-10-23T18:43:22.666124+00:00 [usage] tokens in=3823 out=3 total=3826 phase=gather:gather:prime cached=0 cache_write=0 reasoning=0
+2026-10-23T18:43:27.404950+00:00 [usage] tokens in=6241 out=54 total=6295 phase=gather:K3:s1 cached=3776 cache_write=0 reasoning=0
+2026-10-23T18:43:27.405116+00:00 [tool] web_search US spot Bitcoin ETF net inflows 2026 year-to-date total IBIT FBTC holdings
+2026-10-23T18:43:27.405175+00:00 [tool] web_search 13F filings IBIT institutional holders pension sovereign wealth 2026 Bitcoin ETF
+2026-10-23T18:43:28.635244+00:00 [usage] tokens in=7208 out=102 total=7310 phase=gather:K2:s1 cached=3776 cache_write=0 reasoning=68
+2026-10-23T18:43:28.889638+00:00 [result] web_search → 5 results
+2026-10-23T18:43:29.042871+00:00 [result] web_search → 5 results
+2026-10-23T18:43:30.541644+00:00 [usage] tokens in=6531 out=270 total=6801 phase=gather:K1:s1 cached=3776 cache_write=0 reasoning=176
+2026-10-23T18:43:30.541797+00:00 [tool] web_search US spot bitcoin ETF total holdings BTC and net assets October 2026
+2026-10-23T18:43:30.541919+00:00 [tool] web_search bitcoin 30-day annualized realized volatility October 2026
+2026-10-23T18:43:30.542040+00:00 [tool] web_search bitcoin all-time high October 2025 $126,080 drawdown 2026
+2026-10-23T18:43:32.337647+00:00 [usage] tokens in=7869 out=328 total=8197 phase=gather:K4:s1 cached=3776 cache_write=0 reasoning=191
+2026-10-23T18:43:32.338016+00:00 [tool] web_fetch https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf
+2026-10-23T18:43:32.338182+00:00 [tool] web_fetch https://am.jpmorgan.com/us/en/asset-management/adv/insights/portfolio-insights/fixed-income/fixed-income-perspectives/fomc-statement-september-2026/
+2026-10-23T18:43:32.375315+00:00 [result] web_fetch → 2588/12092 chars [S60]
+2026-10-23T18:43:32.389125+00:00 [result] web_fetch → 2584/12055 chars [S59]
+2026-10-23T18:43:34.205680+00:00 [usage] tokens in=7428 out=105 total=7533 phase=gather:K3:s2 cached=6208 cache_write=0 reasoning=0
+2026-10-23T18:43:34.206013+00:00 [tool] web_fetch https://www.coinglass.com/etf/bitcoin
+2026-10-23T18:43:34.206135+00:00 [tool] web_fetch https://www.cfbenchmarks.com/blog/tracking-bitcoins-flows
+2026-10-23T18:43:35.645288+00:00 [result] web_fetch → 2571/12070 chars [S20]
+2026-10-23T18:43:36.396804+00:00 [result] web_fetch → 2596/12034 chars [S89]
+2026-10-23T18:43:42.095760+00:00 [usage] tokens in=9272 out=112 total=9384 phase=gather:K3:s3 cached=7424 cache_write=0 reasoning=0
+2026-10-23T18:43:42.096266+00:00 [tool] web_fetch https://www.pionline.com/asset-management/exchange-traded-funds/pi-blackrock-bitcoin-ibit-etf-sovereign-wealth-fund-endowment/
+2026-10-23T18:43:42.096391+00:00 [tool] web_search Bitcoin ETF 2025 full year net inflows total SoSoValue annual IBIT record
+2026-10-23T18:43:42.876297+00:00 [usage] tokens in=9705 out=444 total=10149 phase=gather:K4:s2 cached=7808 cache_write=0 reasoning=383
+2026-10-23T18:43:42.877594+00:00 [tool] web_search Bitcoin correlation M2 liquidity 2025 2026 analysis
+2026-10-23T18:43:42.909467+00:00 [usage] tokens in=9842 out=826 total=10668 phase=gather:K2:s2 cached=7168 cache_write=0 reasoning=765
+2026-10-23T18:43:42.909654+00:00 [tool] web_fetch https://www.galaxy.com/insights/research/bitcoin-four-year-cycle-where-is-the-bottom
+2026-10-23T18:43:44.991601+00:00 [result] web_fetch → 2586/12067 chars [S21]
+2026-10-23T18:43:45.696453+00:00 [result] web_fetch → 2557/7201 chars [S86]
+2026-10-23T18:43:50.460379+00:00 [usage] tokens in=10684 out=59 total=10743 phase=gather:K2:s3 cached=9792 cache_write=0 reasoning=0
+2026-10-23T18:43:50.460583+00:00 [tool] web_fetch https://www.galaxy.com/insights/research/bitcoin-four-year-cycle-where-is-the-bottom
+2026-10-23T18:43:50.470446+00:00 [result] web_fetch → 2581/12067 chars [S21] (stored copy)
+2026-10-23T18:43:53.697007+00:00 [usage] tokens in=11510 out=71 total=11581 phase=gather:K2:s4 cached=10624 cache_write=0 reasoning=0
+2026-10-23T18:43:53.697214+00:00 [tool] web_fetch https://www.galaxy.com/insights/research/bitcoin-four-year-cycle-where-is-the-bottom
+2026-10-23T18:43:53.711573+00:00 [result] web_fetch → 2581/12067 chars [S21] (stored copy)
+2026-10-23T18:44:17.567101+00:00 [result] web_search → 5 results
+2026-10-23T18:44:17.600877+00:00 [result] web_search → 5 results
+2026-10-23T18:44:17.650752+00:00 [result] web_search → 5 results
+2026-10-23T18:44:17.721639+00:00 [result] web_search → 5 results
+2026-10-23T18:44:17.955987+00:00 [result] web_search → 5 results
+2026-10-23T18:44:18.693199+00:00 [usage] tokens in=12378 out=1500 total=13878 phase=gather:K2:final cached=11456 cache_write=0 reasoning=0
+2026-10-23T18:44:18.749104+00:00 [ok] research:v3:gather K2 facts=12 verified=6 sources=4
+2026-10-23T18:44:22.699318+00:00 [usage] tokens in=10712 out=66 total=10778 phase=gather:K3:s4 cached=9216 cache_write=0 reasoning=0
+2026-10-23T18:44:22.699563+00:00 [tool] web_fetch https://www.ishares.com/us/products/333011/ishares-bitcoin-trust-etf
+2026-10-23T18:44:22.814072+00:00 [usage] tokens in=13122 out=61 total=13183 phase=gather:K4:s3 cached=9664 cache_write=0 reasoning=0
+2026-10-23T18:44:22.814414+00:00 [tool] web_fetch https://www.cfbenchmarks.com/blog/the-m2-bitcoin-relationship-what-the-data-actually-shows
+2026-10-23T18:44:22.951638+00:00 [usage] tokens in=8443 out=130 total=8573 phase=gather:K1:s2 cached=6528 cache_write=0 reasoning=0
+2026-10-23T18:44:22.952191+00:00 [tool] web_fetch https://www.coinglass.com/etf/bitcoin
+2026-10-23T18:44:22.952383+00:00 [tool] web_fetch https://247wallst.com/investing/cryptocurrency/2026/10/22/you-bought-bitcoin-at-its-126000-record-high-how-long-until-you-break-even/
+2026-10-23T18:44:22.979331+00:00 [result] web_fetch → 2571/12070 chars [S20] (stored copy)
+2026-10-23T18:44:24.021054+00:00 [result] web_fetch → 2588/12067 chars [S94]
+2026-10-23T18:44:24.387796+00:00 [result] web_fetch → 2586/12036 chars [S88]
+2026-10-23T18:44:25.793138+00:00 [result] web_fetch → 2591/12097 chars [S99]
+2026-10-23T18:44:26.049067+00:00 [usage] tokens in=6219 out=224 total=6443 phase=gather:K5:s1 cached=3776 cache_write=0 reasoning=64
+2026-10-23T18:44:26.049625+00:00 [tool] web_fetch https://en.wikipedia.org/wiki/U.S._Strategic_Bitcoin_Reserve
+2026-10-23T18:44:26.049790+00:00 [tool] web_fetch https://begich.house.gov/media/press-releases/congressman-nick-begich-leads-legislation-establish-strategic-bitcoin-reserve
+2026-10-23T18:44:26.049933+00:00 [tool] web_fetch https://home.treasury.gov/news/press-releases/sb0605
+2026-10-23T18:44:27.000124+00:00 [result] web_fetch → 2581/3935 chars [S78]
+2026-10-23T18:44:27.284620+00:00 [result] web_fetch → 2594/9301 chars [S74]
+2026-10-23T18:44:27.901583+00:00 [result] web_fetch → 2592/12046 chars [S28]
+2026-10-23T18:44:31.381776+00:00 [usage] tokens in=10525 out=202 total=10727 phase=gather:K1:s3 cached=8384 cache_write=0 reasoning=117
+2026-10-23T18:44:31.382111+00:00 [tool] web_fetch https://bitcoincalculator.tools/calculators/volatility
+2026-10-23T18:44:31.382226+00:00 [tool] web_fetch https://www.coinbase.com/converter/btc/usd
+2026-10-23T18:44:32.584777+00:00 [usage] tokens in=8392 out=77 total=8469 phase=gather:K5:s2 cached=6208 cache_write=0 reasoning=29
+2026-10-23T18:44:32.584917+00:00 [tool] web_search Strategic Bitcoin Reserve holdings 2026 BTC amount Treasury purchases
+2026-10-23T18:44:32.584996+00:00 [tool] web_search SEC crypto rules 2026 staking custody CLARITY Act market structure status
+2026-10-23T18:44:34.211676+00:00 [result] web_search → 5 results
+2026-10-23T18:44:42.186671+00:00 [result] web_fetch → FETCH_FAILED(jina_primary_failed_timeouterror)
+2026-10-23T18:44:42.190735+00:00 [result] web_fetch → FETCH_FAILED(jina_primary_failed_timeouterror)
+2026-10-23T18:44:47.064658+00:00 [usage] tokens in=10642 out=88 total=10730 phase=gather:K1:s4 cached=10496 cache_write=0 reasoning=0
+2026-10-23T18:44:47.064977+00:00 [tool] web_fetch https://www.theblock.co/data/crypto-markets/prices/annualized-btc-volatility-30d
+2026-10-23T18:44:47.065231+00:00 [tool] web_fetch https://bitflyer.com/en-us/bitcoin-chart
+2026-10-23T18:44:47.065402+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-10-23T18:44:50.628160+00:00 [result] web_fetch → 2454/12052 chars [S12]
+2026-10-23T18:44:52.523587+00:00 [usage] tokens in=11525 out=1836 total=13361 phase=gather:K3:s5 cached=10688 cache_write=0 reasoning=378
+2026-10-23T18:44:52.577557+00:00 [ok] research:v3:gather K3 facts=12 verified=6 sources=10
+2026-10-23T18:44:56.035029+00:00 [usage] tokens in=13822 out=2210 total=16032 phase=gather:K4:s4 cached=13120 cache_write=0 reasoning=506
+2026-10-23T18:44:56.129311+00:00 [ok] research:v3:gather K4 facts=18 verified=8 sources=8
+2026-10-23T18:44:56.948278+00:00 [usage] tokens in=6297 out=113 total=6410 phase=gather:K6:s1 cached=3776 cache_write=0 reasoning=0
+2026-10-23T18:44:56.948779+00:00 [tool] web_fetch https://research.glassnode.com/btc-market-pulse-week-41-2026/
+2026-10-23T18:44:56.948931+00:00 [tool] web_fetch https://research.glassnode.com/coinbase-glassnode-charting-crypto-q4-2026/
+2026-10-23T18:44:57.934907+00:00 [result] web_fetch → 2566/5761 chars [S6]
+2026-10-23T18:44:59.171622+00:00 [result] web_fetch → 2577/12029 chars [S85]
+2026-10-23T18:45:04.208416+00:00 [usage] tokens in=7772 out=83 total=7855 phase=gather:K6:s2 cached=6272 cache_write=0 reasoning=0
+2026-10-23T18:45:04.208774+00:00 [tool] web_fetch https://finance.yahoo.com/news/short-term-holder-bitcoin-supply-121101484.html
+2026-10-23T18:45:04.208843+00:00 [tool] web_search Bitcoin exchange reserves October 2026 Glassnode million BTC long-term holder supply
+2026-10-23T18:45:08.769105+00:00 [result] web_fetch → 2574/3901 chars [S83]
+2026-10-23T18:45:14.264260+00:00 [usage] tokens in=12150 out=1408 total=13558 phase=gather:K1:s5 cached=10624 cache_write=0 reasoning=39
+2026-10-23T18:45:14.269182+00:00 [ok] research:v3:gather K1 facts=13 verified=2 sources=11
+2026-10-23T18:45:17.912941+00:00 [result] web_search → 5 results
+2026-10-23T18:45:18.477721+00:00 [result] web_search → 5 results
+2026-10-23T18:45:23.093539+00:00 [usage] tokens in=9160 out=97 total=9257 phase=gather:K6:s3 cached=7744 cache_write=0 reasoning=0
+2026-10-23T18:45:23.093807+00:00 [tool] web_fetch https://www.smallworldfs.com/blog/2026/10/16/bitcoin-exchange-reserves-fall-in-2026-raising-questions-about-btc-prices/
+2026-10-23T18:45:23.093881+00:00 [tool] web_search crypto hack probability 2027 exchange failure risk stablecoin market cap October 2026
+2026-10-23T18:45:23.511325+00:00 [usage] tokens in=9469 out=114 total=9583 phase=gather:K5:s3 cached=8384 cache_write=0 reasoning=0
+2026-10-23T18:45:23.511698+00:00 [tool] web_fetch https://en.wikipedia.org/wiki/U.S._Strategic_Bitcoin_Reserve
+2026-10-23T18:45:23.511845+00:00 [tool] web_fetch https://www.sec.gov/newsroom/press-releases/2026-76-sec-proposes-new-regulation-crypto-assets
+2026-10-23T18:45:23.523273+00:00 [result] web_fetch → 2580/12046 chars [S28] (stored copy)
+2026-10-23T18:45:24.451257+00:00 [result] web_fetch → 2592/5422 chars [S113]
+2026-10-23T18:45:25.059166+00:00 [result] web_search → 5 results
+2026-10-23T18:45:25.470344+00:00 [result] web_fetch → 2583/3745 chars [S115]
+2026-10-23T18:45:29.093262+00:00 [usage] tokens in=10943 out=85 total=11028 phase=gather:K5:s4 cached=9408 cache_write=0 reasoning=33
+2026-10-23T18:45:29.093482+00:00 [tool] web_search CLARITY Act Senate status October 2026 vote market structure bill
+2026-10-23T18:45:29.093581+00:00 [tool] web_search crypto tax reform 2026 safe harbor like-kind exchange staking DeFi broker rules deferred
+2026-10-23T18:45:30.637777+00:00 [usage] tokens in=10450 out=71 total=10521 phase=gather:K6:s4 cached=9152 cache_write=0 reasoning=0
+2026-10-23T18:45:30.637969+00:00 [tool] web_fetch https://libertystreeteconomics.newyorkfed.org/2026/07/stablecoins-and-noncrypto-shocks-a-2026-update/
+2026-10-23T18:45:30.638060+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-10-23T18:45:30.821084+00:00 [result] web_search → 4 results
+2026-10-23T18:45:31.012604+00:00 [result] web_search → 4 results
+2026-10-23T18:45:52.924650+00:00 [usage] tokens in=10545 out=1410 total=11955 phase=gather:K6:s5 cached=10432 cache_write=0 reasoning=0
+2026-10-23T18:45:52.955817+00:00 [ok] research:v3:gather K6 facts=13 verified=7 sources=10
+2026-10-23T18:45:56.776282+00:00 [usage] tokens in=12066 out=1698 total=13764 phase=gather:K5:s5 cached=10880 cache_write=0 reasoning=215
+2026-10-23T18:45:56.811646+00:00 [ok] research:v3:gather K5 facts=14 verified=5 sources=16
+2026-10-23T18:45:56.814151+00:00 [stage] research:v3:gap round 1
+2026-10-23T18:46:06.020449+00:00 [usage] tokens in=5032 out=557 total=5589 phase=gap:gap:r1 cached=1280 cache_write=0 reasoning=47
+2026-10-23T18:46:07.732062+00:00 [stage] v3: gap round 1: official data for follow-ups (stored=1, failed=0)
+2026-10-23T18:46:07.732088+00:00 [stage] research:v3:gather start (3 KIQs, workers=4)
+2026-10-23T18:46:07.732191+00:00 [tool] web_search Deribit BTC December 2027 futures price implied vol October 2026
+2026-10-23T18:46:07.732254+00:00 [tool] web_search BTC 30-day realized volatility annualized October 2026 Deribit DVOL
+2026-10-23T18:46:07.732307+00:00 [tool] web_search US spot bitcoin ETF total BTC holdings October 2026 Farside SoSoValue
+2026-10-23T18:46:07.732427+00:00 [tool] web_search IBIT FBTC 13F filings Q3 2026 institutional hedge fund holdings
+2026-10-23T18:46:17.736831+00:00 [result] web_search → 5 results
+2026-10-23T18:46:17.741421+00:00 [result] web_search → 5 results
+2026-10-23T18:46:17.741471+00:00 [tool] web_search DTWEXBGS broad dollar index 2026
+2026-10-23T18:46:17.741524+00:00 [tool] web_search bitcoin correlation dollar index DXY 2025 2026
+2026-10-23T18:46:24.658580+00:00 [result] web_search → 5 results
+2026-10-23T18:46:24.791863+00:00 [result] web_search → 5 results
+2026-10-23T18:46:24.870812+00:00 [result] web_search → 5 results
+2026-10-23T18:46:24.881823+00:00 [result] web_search → 5 results
+2026-10-23T18:46:28.813848+00:00 [usage] tokens in=3823 out=3 total=3826 phase=gap:gather:prime cached=3776 cache_write=0 reasoning=0
+2026-10-23T18:46:31.418979+00:00 [usage] tokens in=6225 out=115 total=6340 phase=gap:G1F1:s1 cached=3776 cache_write=0 reasoning=26
+2026-10-23T18:46:31.419306+00:00 [tool] web_search Deribit BTC 27 December 2027 futures price October 2026
+2026-10-23T18:46:31.419397+00:00 [tool] web_search Bitcoin options implied volatility skew Deribit October 2026 30-day realized volatility
+2026-10-23T18:46:34.446358+00:00 [usage] tokens in=6206 out=147 total=6353 phase=gap:G1F2:s1 cached=3776 cache_write=0 reasoning=44
+2026-10-23T18:46:34.446737+00:00 [tool] web_fetch https://m.sosovalue.com/assets/etf/us-btc-spot
+2026-10-23T18:46:34.447037+00:00 [tool] web_fetch https://www.cfbenchmarks.com/blog/tracking-bitcoins-flows
+2026-10-23T18:46:34.458786+00:00 [result] web_fetch → 2582/12034 chars [S89] (stored copy)
+2026-10-23T18:46:35.792422+00:00 [usage] tokens in=7279 out=185 total=7464 phase=gap:G1F3:s1 cached=3776 cache_write=0 reasoning=128
+2026-10-23T18:46:35.792714+00:00 [tool] web_search Bitcoin DXY dollar index 12-month rolling correlation historical study
+2026-10-23T18:46:35.917685+00:00 [result] web_fetch → 2586/12090 chars [S55]
+2026-10-23T18:46:42.238555+00:00 [usage] tokens in=7996 out=205 total=8201 phase=gap:G1F2:s2 cached=6144 cache_write=0 reasoning=120
+2026-10-23T18:46:42.238893+00:00 [tool] web_fetch https://bitcoinforcorporations.com/bitcoin-etf-dashboard/
+2026-10-23T18:46:42.239083+00:00 [tool] web_search Q3 2026 13F IBIT hedge fund holdings Bitcoin ETF institutional filing November 2026
+2026-10-23T18:46:53.023393+00:00 [result] web_fetch → FETCH_FAILED(jina_primary_failed_timeouterror)
+2026-10-23T18:47:24.920571+00:00 [result] web_search → 5 results
+2026-10-23T18:47:24.923486+00:00 [result] web_search → 5 results
+2026-10-23T18:47:25.014377+00:00 [result] web_search → 5 results
+2026-10-23T18:47:25.071160+00:00 [result] web_search → 5 results
+2026-10-23T18:47:30.698394+00:00 [usage] tokens in=12155 out=89 total=12244 phase=gap:G1F3:s2 cached=7232 cache_write=0 reasoning=0
+2026-10-23T18:47:30.698825+00:00 [tool] web_fetch https://newhedge.io/bitcoin/dxy-correlation
+2026-10-23T18:47:30.698963+00:00 [tool] web_fetch https://www.spark.money/tools/bitcoin-correlation-calculator
+2026-10-23T18:47:31.039762+00:00 [usage] tokens in=8600 out=105 total=8705 phase=gap:G1F2:s3 cached=7936 cache_write=0 reasoning=0
+2026-10-23T18:47:31.040356+00:00 [tool] web_fetch https://farside.co.uk/btc/
+2026-10-23T18:47:31.040556+00:00 [tool] web_fetch https://www.advisorperspectives.com/coinshares-channel/q3-filings-advisors-led-institutional-bitcoin-growth
+2026-10-23T18:47:31.069295+00:00 [result] web_fetch → FETCH_FAILED(no_web_fetch_provider_was_available)
+2026-10-23T18:47:31.072329+00:00 [result] web_fetch → FETCH_FAILED(no_web_fetch_provider_was_available)
+2026-10-23T18:47:31.630905+00:00 [result] web_fetch → 2531/4704 chars [S151]
+2026-10-23T18:47:35.152260+00:00 [usage] tokens in=9997 out=149 total=10146 phase=gap:G1F1:s2 cached=6208 cache_write=0 reasoning=59
+2026-10-23T18:47:35.152577+00:00 [tool] web_fetch https://www.deribit.com/statistics/BTC/volatility-index
+2026-10-23T18:47:35.152779+00:00 [tool] web_search Kraken BTC/USD price October 23 2026
+2026-10-23T18:47:35.152879+00:00 [tool] web_search "Dec 2027" bitcoin futures price CME BTCZ27 premium annualized
+2026-10-23T18:47:35.773709+00:00 [usage] tokens in=8737 out=93 total=8830 phase=gap:G1F2:s4 cached=8576 cache_write=0 reasoning=0
+2026-10-23T18:47:35.774253+00:00 [tool] web_fetch https://www.etftrends.com/coinshares-content-hub/advisors-led-institutional-bitcoin-growth-q3-filings/
+2026-10-23T18:47:35.774467+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-10-23T18:47:35.774526+00:00 [tool] web_search "bitcoin ETF" total BTC held "721" OR total holdings October 2026 net assets
+2026-10-23T18:47:36.130644+00:00 [result] web_fetch → 1625/1625 chars [S136]
+2026-10-23T18:47:40.729134+00:00 [result] web_fetch → FETCH_FAILED(jina_primary_failed_timeouterror)
+2026-10-23T18:47:46.425561+00:00 [usage] tokens in=13210 out=144 total=13354 phase=gap:G1F3:s3 cached=12096 cache_write=0 reasoning=82
+2026-10-23T18:47:46.425771+00:00 [tool] web_fetch https://www.cmegroup.com/insights/economic-research/2025/why-is-bitcoin-moving-in-tandem-with-equities.html
+2026-10-23T18:47:47.665627+00:00 [result] web_fetch → 2595/12062 chars [S163]
+2026-10-23T18:48:21.827292+00:00 [result] web_search → 5 results
+2026-10-23T18:48:24.908792+00:00 [result] web_search → 5 results
+2026-10-23T18:48:25.492681+00:00 [result] web_search → 5 results
+2026-10-23T18:48:29.416814+00:00 [usage] tokens in=13907 out=1401 total=15308 phase=gap:G1F3:s4 cached=13184 cache_write=0 reasoning=102
+2026-10-23T18:48:29.461526+00:00 [ok] research:v3:gather G1F3 facts=13 verified=4 sources=5
+2026-10-23T18:48:31.439396+00:00 [usage] tokens in=11554 out=148 total=11702 phase=gap:G1F1:s3 cached=9984 cache_write=0 reasoning=43
+2026-10-23T18:48:31.439723+00:00 [tool] web_fetch https://cryptoticker.io/en/bitcoin-price-prediction-volatility-premium-20-october-2026/
+2026-10-23T18:48:31.439786+00:00 [tool] web_search Deribit bitcoin 31 December 2027 futures contract price "27DEC" or "Dec 2027" October 2026
+2026-10-23T18:48:31.439990+00:00 [result] web_search → SEARCH_BUDGET_EXHAUSTED
+2026-10-23T18:48:35.048038+00:00 [result] web_fetch → 2560/12055 chars [S137]
+2026-10-23T18:48:48.776162+00:00 [usage] tokens in=9397 out=1556 total=10953 phase=gap:G1F2:s5 cached=8704 cache_write=0 reasoning=157
+2026-10-23T18:48:48.781134+00:00 [ok] research:v3:gather G1F2 facts=11 verified=3 sources=11
+2026-10-23T18:49:01.189069+00:00 [usage] tokens in=12869 out=1531 total=14400 phase=gap:G1F1:s4 cached=11520 cache_write=0 reasoning=0
+2026-10-23T18:49:01.197454+00:00 [ok] research:v3:gather G1F1 facts=14 verified=2 sources=12
+2026-10-23T18:49:01.251022+00:00 [stage] research:v3:synthesize start (8 groups)
+2026-10-23T18:49:02.840181+00:00 [usage] tokens in=19945 out=16 total=19961 phase=synthesize:synth:prime cached=0 cache_write=0 reasoning=14
+2026-10-23T18:51:44.320212+00:00 [usage] tokens in=20832 out=13253 total=34085 phase=synthesize:synth:g3 cached=19904 cache_write=0 reasoning=11343
+2026-10-23T18:51:44.320822+00:00 [ok] research:v3:synthesize G3 written=2 fallback=0
+2026-10-23T18:51:56.663129+00:00 [usage] tokens in=20795 out=12060 total=32855 phase=synthesize:synth:g4 cached=19904 cache_write=0 reasoning=10421
+2026-10-23T18:51:56.663952+00:00 [ok] research:v3:synthesize G4 written=2 fallback=0
+2026-10-23T18:51:59.628765+00:00 [usage] tokens in=20932 out=13873 total=34805 phase=synthesize:synth:g2 cached=19904 cache_write=0 reasoning=11914
+2026-10-23T18:51:59.629406+00:00 [ok] research:v3:synthesize G2 written=2 fallback=0
+2026-10-23T18:52:28.041464+00:00 [usage] tokens in=20961 out=16737 total=37698 phase=synthesize:synth:g1 cached=19904 cache_write=0 reasoning=14735
+2026-10-23T18:52:28.042354+00:00 [ok] research:v3:synthesize G1 written=2 fallback=0
+2026-10-23T18:53:40.466369+00:00 [usage] tokens in=20782 out=9172 total=29954 phase=synthesize:synth:g5 cached=19904 cache_write=0 reasoning=8209
+2026-10-23T18:53:40.466825+00:00 [ok] research:v3:synthesize G5 written=1 fallback=0
+2026-10-23T18:53:50.443637+00:00 [usage] tokens in=20896 out=8756 total=29652 phase=synthesize:synth:g7 cached=19904 cache_write=0 reasoning=7611
+2026-10-23T18:53:50.444034+00:00 [ok] research:v3:synthesize G7 written=1 fallback=0
+2026-10-23T18:54:05.226966+00:00 [usage] tokens in=20829 out=6974 total=27803 phase=synthesize:synth:g8 cached=19904 cache_write=0 reasoning=5834
+2026-10-23T18:54:05.227511+00:00 [ok] research:v3:synthesize G8 written=1 fallback=0
+2026-10-23T18:54:58.961238+00:00 [usage] tokens in=21223 out=14668 total=35891 phase=synthesize:synth:g6 cached=19904 cache_write=0 reasoning=12692
+2026-10-23T18:54:58.961856+00:00 [ok] research:v3:synthesize G6 written=1 fallback=0
+2026-10-23T18:58:34.265643+00:00 [usage] tokens in=5414 out=17221 total=22635 phase=synthesize:synth:exec cached=2752 cache_write=0 reasoning=16200
+2026-10-23T18:58:34.268447+00:00 [ok] research:v3:synthesize done
+2026-10-23T18:58:34.277428+00:00 [stage] research:v3:qa start
+2026-10-23T18:58:36.348629+00:00 [ok] research:v3:qa passed=False failures=1 repaired=0
+2026-10-23T18:58:36.355199+00:00 [stage] research:v3:finalize start
+2026-10-23T18:58:36.380483+00:00 [ok] wrote research_report.md (63242 chars)
+2026-10-23T18:58:36.380503+00:00 [ok] wrote sources.json (68 sources)
+2026-10-23T19:01:03.759791+00:00 [usage] tokens in=17922 out=3 total=17925 phase=finalize:extract:prime cached=2752 cache_write=0 reasoning=0
+2026-10-23T19:02:43.715137+00:00 [usage] tokens in=18526 out=8420 total=26946 phase=finalize:extract:actors cached=17856 cache_write=0 reasoning=17
+2026-10-23T19:02:44.342133+00:00 [usage] tokens in=18216 out=7531 total=25747 phase=finalize:extract:facts cached=17856 cache_write=0 reasoning=11
+2026-10-23T19:03:06.181906+00:00 [usage] tokens in=18558 out=1477 total=20035 phase=finalize:extract:frame cached=17856 cache_write=0 reasoning=445
+2026-10-23T19:03:06.214504+00:00 [ok] wrote actors.json (16 actors)
+2026-10-23T19:03:06.214911+00:00 [ok] wrote timeline.json (32 events)
+2026-10-23T19:03:06.215589+00:00 [ok] wrote quantitative.json (48 rows)
+2026-10-23T19:03:06.216022+00:00 [ok] wrote contested.json (10 claims)
+2026-10-23T19:03:06.216180+00:00 [ok] research_quality=0.627 (grounding=0.426)
+2026-10-23T19:03:09.970881+00:00 [usage] tokens in=713 out=194 total=907 phase=prediction-market-query-derivation cached=0 cache_write=0 reasoning=0
+2026-10-23T19:03:09.971054+00:00 [ok] prediction markets: LLM derived 16 market-title queries
+2026-10-23T19:03:24.983173+00:00 [warn] prediction markets: no relevant active markets (queries=['Bitcoin price above $100,000 on December', 'Bitcoin price above $150,000 on December', 'Bitcoin below $60,000 in 2027', 'Bitcoin all-time high in 2027', 'Bitcoin ETF net inflows 2027 total', 'IBIT holdings above $75 billion in', 'FOMC rate cut January 2027', 'Fed funds rate at December 2027', 'CLARITY Act passed by January 2027', 'GENIUS Act licensing after January 2027', 'Stablecoin float above $400 billion in', 'Strategic Bitcoin Reserve purchases in 2027', 'MSTR Bitcoin holdings above 800,000 BTC', '10-year Treasury yield above 4.5% end-2027', 'Bitcoin halving cycle bottom in 2027', 'Bitcoin realized volatility above 60% in'])
+2026-10-23T19:03:24.987829+00:00 [warn] wrote prediction_markets.json (no_relevant_markets marker; no report section appended)
+2026-10-23T19:03:24.989603+00:00 [stage] research charts: rendering via /Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python render.py (out=/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_685795301752/handoff)
+2026-10-23T19:03:34.329979+00:00 [ok] research charts: embedded 8 chart(s) into research_report.md (Visual Annex)
+2026-10-23T19:03:34.330018+00:00 [ok] wrote charts.json (8 charts) + charts/ files
+2026-10-23T19:03:34.339021+00:00 [ok] wrote quantitative.json (52 rows, 7 from official data)
+2026-10-23T19:03:34.340965+00:00 [done] research complete (v3: 9 KIQs, 68 sources, 63426 chars)

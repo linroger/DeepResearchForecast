@@ -1,0 +1,76 @@
+{
+ "pipeline_id": "pipe_685795301752",
+ "report_id": "report_cda1aa15e5fe",
+ "simulation_id": "sim_79a5d9caf485",
+ "graph_id": "mirofish_d68f57f3414442f4",
+ "status": "completed",
+ "prompt": "Forecast the price of Bitcoin (USD, Coinbase/Kraken spot composite) as of December 31, 2027. Establish the baseline: current price as of late October 2026, the 2024-2026 cycle including the most recent halving epoch, ETF holdings, and realized volatility. Research and weigh the principal drivers: Spot ETF flows and institutional allocation trends; the 4-year halving cycle and historical drawdown base rates; regulatory shifts (US strategic reserve debates, stablecoin legislation); macro liquidity and rate path; exchange reserves and long-term holder supply; altcoin/liquidity spillovers. Deliverables: 3-5 mutually exclusive scenarios with probabilities, a most-likely trajectory, and at least 10 binary forecasts with concrete thresholds, counts or dates, each with a probability and resolution criteria anchored to verifiable sources.",
+ "created_at": "2026-10-23T18:40:48.639941+00:00",
+ "mode": "full",
+ "rounds": 14,
+ "personas": 10,
+ "has_actors": true,
+ "research_log": {
+  "line_count": 292,
+  "source_count": 1,
+  "complete": true,
+  "event_fidelity": "summarized_progress_events"
+ },
+ "dossier_assets": [
+  "research-charts/data_fred_cbbtcusd_3ac55fa174a994bc.png",
+  "research-charts/data_fred_dtwexbgs_08f046aea85a90af.png",
+  "research-charts/data_fred_vixcls_fa653096ca52897c.png",
+  "research-charts/data_bis_ws_cbpol_m_us_eae44f753af36114.png",
+  "research-charts/data_fred_dgs10_53b12b38e251b1e1.png",
+  "research-charts/data_fred_m2sl_27b1d235103a3b9a.png",
+  "research-charts/data_fred_m2sl_yoy_ec43d6fa8970eaed.png",
+  "research-charts/timeline.png",
+  "research-charts/timeline.html"
+ ],
+ "report_assets": [
+  "charts/binary_forecast_dotplot.png",
+  "charts/official_indicators.png",
+  "charts/official_series_nacppfalroattobc.png",
+  "charts/scenario_probabilities.png",
+  "charts/timeline_lanes.png"
+ ],
+ "dossier_languages": {
+  "en": "dossier.md"
+ },
+ "report_languages": {
+  "en": "report.md"
+ },
+ "artifact_sha256": {
+  "research_log.txt": "c5a0cdff5980b6b8abd2f496d658e9c573406660d6b924738704f96fa1e618fc",
+  "dossier.md": "c1fb9f19c66239da3df171f972fe9a258abae7b615578e7494ea5c615ce31b6a",
+  "actors.json": "846295227237022aa1287ee07d70591d559d0cc66b2feee0b8ffd5dacf2d04b4",
+  "sources.json": "c6c844a7d7bb25592c5f3435fd831f70636d60358cf05d05422ffe0a4b7343e8",
+  "ontology.json": "c76c2cb6d72159dfa2d5ae94e9f4b137b7e8bf62dc7d245f9f974443335c0bb7",
+  "graph.json": "f97f98046b3b5fe9b9553a16c79b7146d853a5155305beb9bdef7032f112195d",
+  "forum.json": "3465a409a5a11041ec35d73cecbea061ebf6a3529a78a43fbbaed77425779038",
+  "report.md": "d266683e6ebc7969abd715461c680a058a189acfa1ba2ea69cd9dbafe22eb5d9",
+  "research-charts/data_fred_cbbtcusd_3ac55fa174a994bc.png": "513e1963c28348e0a97ffd05c0a35e9297ac9ef64080215110c9e89a71151357",
+  "research-charts/data_fred_dtwexbgs_08f046aea85a90af.png": "d1048e342ecfbad10d72948edf34c0a6ccb5e022caf533eeb189b3fe2268a288",
+  "research-charts/data_fred_vixcls_fa653096ca52897c.png": "3a49da05701f88ef49e2f557c9ce936b6b7f245050f4f0938f408c6a9a8745de",
+  "research-charts/data_bis_ws_cbpol_m_us_eae44f753af36114.png": "7f5b06b156e107430cd2cedaa62053dddc0683d07e4a9357d7a62db40c343636",
+  "research-charts/data_fred_dgs10_53b12b38e251b1e1.png": "d830825e8712fa207f354d96bae8bf3d4519149f66db52efea0df0e087b1e41b",
+  "research-charts/data_fred_m2sl_27b1d235103a3b9a.png": "9be266a08dc758aeba01b875cff14bdaf33a455bae9ed1964d751cb97cabb317",
+  "research-charts/data_fred_m2sl_yoy_ec43d6fa8970eaed.png": "04bb665dd99bf9cca1cffe216d8d4a900d971142d486f87d90045fb2f4d9be06",
+  "research-charts/timeline.png": "e61bc4e62a4f6ae753ad980d982fe4ac4b4d5c83a3610a80b3fea24488df6c3d",
+  "research-charts/timeline.html": "8461304e31eef4087b2488b84ff9a71e08574f88a14a0131b8e840d6dfd3d6ce",
+  "charts/binary_forecast_dotplot.png": "f6ae0fc069e624f2f1869ea0106e09e35ce165ad8f3e63ff4d98d4c4b950d3ca",
+  "charts/official_indicators.png": "023fa75553fb7ee1dda2e2a3c4e81cebcaee93b60329e82ea6890d1d8b06788b",
+  "charts/official_series_nacppfalroattobc.png": "89a7b474ec8bd2d32f43410ef6f448e2f81da6584f841e075743204f387630e9",
+  "charts/scenario_probabilities.png": "cf3b1d415f76835036511827e93520016378f8d975650043342ee86edd1278f2",
+  "charts/timeline_lanes.png": "0dec840e89ccec0a5184d3b6ffa6fb0a6f0b6525315277d1a38ec22247638315"
+ },
+ "publication": {
+  "hard_passed": true,
+  "publish_passed": true,
+  "scenario_contract_valid": true,
+  "citation_coverage": 0.788,
+  "semantic_citations_passed": true,
+  "markdown_sha256": "5ba74c82b40ac4ea97dd3fe19f29ea2e0e4b62d60ef934b602494b0628f7aad7",
+  "forecast_sha256": "4dcb308e34ba5b37d568f9e476a054f5c8996ae43b4be8376844e8c4f21b5267"
+ }
+}

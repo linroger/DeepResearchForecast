@@ -1,0 +1,2297 @@
+{
+ "nodes": [
+  {
+   "id": "fe301088-19d5-455c-9f68-3649f572fe39",
+   "name": "Liberty Street Economics blog",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "The Federal Reserve Bank of New York's Liberty Street Economics blog updated its analysis of stablecoins and non-crypto shocks in July 2026, using the 2023 SVB failure and its impact on USDC as the case study.\nThe Liberty Street Economics blog is published by the Federal Reserve Bank of New York.\nThe Federal Reserve Bank of New York's Liberty Street Economics blog published a 2026 update on stablecoins and (non)crypto shocks bearing on Bitcoin."
+  },
+  {
+   "id": "fa791a5e-06ef-4ac2-91a7-ca6e18ce8fc1",
+   "name": "H.R.3633 Digital Asset Market Structure bill",
+   "labels": [
+    "LegislationRule"
+   ],
+   "summary": "H.R.3633 is a Digital Asset Market Structure bill introduced in the 119th Congress (2025-2026). It appears in a sourced source list of a Bitcoin price forecast report as [S52] (Text - H.R.3633 - 119th Congress). No status, effective date, or demand-impact details are provided in the available context; it is one of several 2025-2026 US crypto legislative and regulatory items alongside the GENIUS Act stablecoin law (P.L. 119) and SEC crypto asset regulation proposals.\nThe 119th Congress (2025-2026) introduced H.R.3633, the Digital Asset Market Structure bill (the CLARITY Act), which the Senate f"
+  },
+  {
+   "id": "f9ef8846-ea9a-44d4-a016-f8fc91b539ab",
+   "name": "Symmetry",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Symmetry exited IBIT's top-holder list entirely, per CF Benchmarks' 13F analysis of top-40 hedge funds"
+  },
+  {
+   "id": "f423c99e-6e9b-4576-85d9-369613d89a04",
+   "name": "US government",
+   "labels": [
+    "Government"
+   ],
+   "summary": "The March 6, 2025 executive order permits the US government to acquire BTC only via budget-neutral strategies, constraining a net-new government BTC purchase by 31 Dec 2027 (forecast #10, 20%).\nTreasury/White House announcements are the resolution source for whether a documented net-new US government BTC purchase occurs by 31 Dec 2027.\nThe ARMA bill of May 21, 2026 remains unintroduced-beyond-introduction, so it does not yet expand US government BTC acquisition authority beyond the budget-neutral executive order."
+  },
+  {
+   "id": "f3f5402c-3f15-4674-a747-acba5e4eb67f",
+   "name": "Federal Reserve Economic Data (FRED)",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "FRED publishes the Coinbase Bitcoin — United States series (monthly mean of daily data), with 80482.22 U.S. Dollars in 2026-09 and a latest daily value of 81225.62 on 2026-10-22.\nFRED publishes the 10-Year Treasury Constant Maturity yield series (monthly mean of daily data), 4.989% in 2026-09 and a latest daily 5.13% on 2026-10-21.\nFRED publishes US M2 (Billions of Dollars), at 23342.8 in 2026-08, +1250.2 (+5.7%) year over year.\nFRED publishes US M2 year-over-year percent change, 5.659% in 2026-08, +1.409 pp change.\nFRED publishes the CBOE Volatility Index (VIX), monthly mean of 15.7755 in 202"
+  },
+  {
+   "id": "f2369e2d-57fb-4022-87db-a7f7b2dd6ef0",
+   "name": "Galaxy Research",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Its amplitude-compression thesis (realized price at 43.7% of prior ATH) shapes the muted-replay reading of the drawdown base rate.\nGalaxy Research tracks Bitcoin's cycle drawdowns, reporting peak-to-trough series of 85% → 84% → 77% across successive cycles with every prior top followed by a bottom about 12–13 months later.\nGalaxy Research's June 9, 2026 report argued the Bitcoin bottom 'has not yet been found,' with a $40k–46k base-case low, because realized price sits at about 43.7% of the prior all-time high.\nGalaxy's $40k–46k bottom case independently supports the risk-neutral P(<$60,000)≈1"
+  },
+  {
+   "id": "ef892621-70af-40f0-93c0-9c024b8e84be",
+   "name": "Spark",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "Spark's correlation tool reports a typical BTC–dollar rolling correlation of -0.40 to -0.80 since 2014."
+  },
+  {
+   "id": "ef345793-e6df-4546-867d-c3aa3b91044e",
+   "name": "Deribit DVOL",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "Deribit DVOL printed 36.90 with IV Rank 6.7 on 2026-10-23, tracking BTC volatility"
+  },
+  {
+   "id": "edbb394e-5561-4702-af9a-605769021ba2",
+   "name": "BIS",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The BIS recorded the US policy rate at 3.875% per year at end-September 2026 versus 4.125% per year a year earlier — net 25 bps of easing over twelve months\nThe central bank policy rates series (CBPOL) for the United States is published by the Bank for International Settlements."
+  },
+  {
+   "id": "eaedfe28-db22-4654-923c-9ace0914877a",
+   "name": "WSJ",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "WSJ is the source of the CME BTCZ27 futures price used as the market-implied forward anchor: the contract last traded at $89,885.00 USD on 2026-10-23, trading through 31 December 2027, a ~10.6% premium over ~$81,300 spot (≈8.7% annualized), exceeding plausible dollar funding costs and thus embedding risk-neutral drift.\nWSJ market data reported the BTCZ27 December 2027 contract last traded at 89,885.00 USD on 2026-10-23."
+  },
+  {
+   "id": "ea309dae-2e95-4d30-acee-083969bf359d",
+   "name": "Nominal Broad U.S. Dollar Index",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The Nominal Broad U.S. Dollar Index at 119.2152 (Jan 2006=100, 2026-09, −0.678% year over year) is part of the official macro baseline for the Bitcoin forecast.\nThe Nominal Broad U.S. Dollar Index is an official FRED series, latest observation 119.2152 Index for 2026-09, down from a year earlier.\nThe Nominal Broad U.S. Dollar Index (DTWEXBGS) closing above 128.837 (its January 2025 peak) in any 2027 period would signal a dollar squeeze that undercuts the Institutional reflation scenario for Bitcoin.\nFRED publishes the Nominal Broad U.S. Dollar Index (series DTWEXBGS) as a tier-1 fetched source"
+  },
+  {
+   "id": "ea2406d3-dbce-47b8-a883-77194e0764ba",
+   "name": "CME",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "CME lists and trades the BTCZ27 futures contract through 31 December 2027, last traded at 89,885.00 USD on 2026-10-23\nCME research finds Bitcoin's daily correlation to the S&P 500 rose from 0.2 (January 2014–April 2025) to about 0.5 in 2020 and stayed elevated.\nCME's BTCZ27 December 2027 contract trades through 31 December 2027 and last traded at 89,885.00 USD per WSJ market data on 2026-10-23, implying roughly 10.6% contango (~8.7% annualized) over the Coinbase daily fixing of 81,225.62 USD on 2026-10-22.\nCME Group operates the Bitcoin futures calendar on which the BTCZ27 December 2027 contra"
+  },
+  {
+   "id": "e43eeb4c-e8a7-46d7-9b47-de3adbcf10d5",
+   "name": "Kraken",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Quoted $81,261.00 on 2026-10-23, tracking Coinbase within 0.1%; no official Kraken fixing retrieved.\nKraken price page quoted BTC at $81,261.00 with a 24h range of $81,236.09–$81,380.27, retrieved 2026-10-23\nCoinbase and Kraken prices are combined as a composite BTC/USD spot anchor of ≈$81,243, with modest venue dispersion between the two\nKraken's Bitcoin price page tracks the live BTC/USD price."
+  },
+  {
+   "id": "e3008f1f-c665-4582-aa3b-b6cd1d71c9cb",
+   "name": "13F filings",
+   "labels": [
+    "DerivativeInstrument"
+   ],
+   "summary": "Quarterly 13F filings (SEC publishes quarterly 13F data sets; due Nov 2026 and May 2027) reveal whether hedge-fund IBIT de-risking — top-40 funds cut holdings 28% from 114 million to 82 million shares by Q4 2025 — continued or reversed.\nThe SEC publishes quarterly 13F data sets that reveal hedge-fund IBIT holdings changes."
+  },
+  {
+   "id": "d0c3ace0-db8f-4386-8faf-7666353a1fe3",
+   "name": "S&P 500",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "Bitcoin's elevated ~0.5 daily correlation with the S&P 500 since 2020 is the channel through which a recession-triggered Liquidity shock would propagate to BTC."
+  },
+  {
+   "id": "cfdcf13f-df7f-4bcc-a79b-5fea7774af45",
+   "name": "US Treasury / Executive Branch",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Holds an estimated ~328,372 BTC (tracker-based, unconfirmed as reserve purchases); Bo Hines suggested gold sales as budget-neutral in March 2025, none documented.\nUS Treasury is implementing the GENIUS Act under a section 3 NPRM, with January 18, 2027 as the expected effective date for stablecoin licensing obligations and July 18, 2028 for barring unlicensed stablecoins offered to US persons.\nThe American Reserve Modernization Act of 2026 would codify the reserve in the US Treasury without taxpayer cost, with sales only to reduce national debt.\nTreasury/White House announcements are the resolu"
+  },
+  {
+   "id": "cf2d168f-a560-4ac2-b402-806bcedd6a48",
+   "name": "Grayscale Mini",
+   "labels": [
+    "DerivativeInstrument"
+   ],
+   "summary": "Grayscale Mini is a spot Bitcoin ETF holding 377.80K BTC with net assets of $5.42 billion per CoinGlass as of 2026-10-22."
+  },
+  {
+   "id": "cd131201-1ca4-440f-b55d-c6ead2553877",
+   "name": "FRED",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "FRED publishes the official \"Coinbase Bitcoin — United States\" series, whose latest stored observation is 80482.22 U.S. Dollars for 2026-09, down 29.083% from a year earlier.\nThe Nominal Broad U.S. Dollar Index is an official FRED series, latest observation 119.2152 Index for 2026-09, down from a year earlier.\nFRED's official monthly-mean Bitcoin series spans a stored five-year range from 16,942.7687 U.S. Dollars (2022-12) to 115,618.1861 U.S. Dollars (2025-07).\nFRED publishes the official CBOE Volatility Index (VIX) series, whose latest observation is marked down from a year earlier, near the"
+  },
+  {
+   "id": "cae298bb-b645-4709-a4b8-dd966d580f03",
+   "name": "March 6, 2025 executive order",
+   "labels": [
+    "LegislationRule"
+   ],
+   "summary": "The March 6, 2025 executive order permits the US government to acquire BTC only via budget-neutral strategies, constraining a net-new government BTC purchase by 31 Dec 2027 (forecast #10, 20%)."
+  },
+  {
+   "id": "c8ce717d-75a2-495e-9e8f-9cf7239b20bf",
+   "name": "CF Benchmarks",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "CF Benchmarks says US M2 liquidity expansion has historically fed Bitcoin price with lags \"measured in months,\" though this channel weakened through 2025-26. US M2 stood at 23,342.8 billion dollars (2026-08), +5.659% year over year.\nCF Benchmarks argues the lag from a Fed pivot to Bitcoin's response to M2 expansion is \"measured in months, not years\".\nCF Benchmarks finds the M2–BTC link weakened (Z-score −1.31, February 2026)."
+  },
+  {
+   "id": "c6b84d3e-366f-464b-afe1-3ce8dea00459",
+   "name": "VIX",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "VIX at 15.7755 (2026-09) shows current prices do not stress a liquidity-shock scenario taking BTC under $30,000\nThe VIX at 15.7755 Index (2026-09) indicates stress-free market conditions that the report says current Bitcoin prices do not reflect.\nVIX macro context favors a muted Bitcoin drawdown case: VIX was 27.34 in 2022-09 against 15.7755 in 2026-09 and 19.03 on 2026-10-22.\nFRED publishes the official CBOE Volatility Index (VIX) series, whose latest observation is marked down from a year earlier, near the bottom of the charted range.\nA VIX jump from 19.03 (2026-10-22) toward its 5-year high"
+  },
+  {
+   "id": "c12e2cef-f981-423b-9a90-102de9844119",
+   "name": "Sovereign wealth and pension allocators",
+   "labels": [],
+   "summary": "The durable-allocation cohort whose 13F-reported behavior through 2027 separates Institutional reflation from Range-bound digestion."
+  },
+  {
+   "id": "befa18ae-6b73-4890-b3f6-36c56331bab1",
+   "name": "NYU Stern V-Lab",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "NYU Stern V-Lab's GARCH one-day-ahead Bitcoin volatility forecast for 2026-10-22 was 33.44%.\nNYU Stern's V-Lab tracks Bitcoin-to-USD GARCH volatility analysis (VOL.BTCUSD:FOREX-R.GARCH), as of 2026-10-23."
+  },
+  {
+   "id": "bc0992fe-c50a-4607-bd24-05f3ab0e8d9f",
+   "name": "CoinDesk",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Crypto media outlet that reported Glassnode long-term holder data: LTH supply fell from 14,755,530 BTC in July 2025 to 14,302,998 BTC on November 16, 2025 (−452,532 BTC), and by mid-November 2025 about 2.8 million BTC sat with short-term holders at a loss — the most since the FTX collapse — while spot-ETF holdings fell only 3.6% from their 1.38-million-BTC peak (October 10, 2025) to 1.33 million BTC, indicating selling came from long-term holders rather than ETFs.\nCoinDesk reported that Deribit's 2026-09-23 quarterly expiry retired roughly $16 billion of about $43.5 billion open interest in a "
+  },
+  {
+   "id": "b82f85cf-3353-4e76-bab9-f472249e6e44",
+   "name": "Chairman Atkins",
+   "labels": [],
+   "summary": "Chairman Atkins says the SEC supports delivering the CLARITY Act and is acting via rulemaking meanwhile, after the CLARITY Act passed the House but a September 15, 2026 Senate cloture motion fell short (49–50 against 60 required, with a Tillis motion to reconsider)."
+  },
+  {
+   "id": "b4e9f054-1c80-4f5a-b1aa-4a8d2dd4da13",
+   "name": "CryptoTicker",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "CryptoTicker reported Bitcoin 30-day annualized realized volatility at about 20.2% as of 2026-10-20.\nCryptoTicker published an explainer on what the CLARITY Act does and where it stands."
+  },
+  {
+   "id": "b19f85e5-0453-4f77-8cda-32737a7d3e18",
+   "name": "Organization",
+   "labels": [
+    "Organization"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "b1862426-d776-41c8-bbd0-8452b0deb525",
+   "name": "Farallon",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Farallon cut its IBIT holdings by about 70% between Q3 2025 and Q4 2025, per CF Benchmarks' 13F analysis"
+  },
+  {
+   "id": "adf9d466-c09e-472f-9b54-96536607b443",
+   "name": "NUPL",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "Entity-adjusted NUPL only re-entered the 'Optimism/Anxiety' band, well below 'Belief/Denial', and NUPL eased from 13.6% to 12.8% in the week to mid-October 2026."
+  },
+  {
+   "id": "ab3c3c0d-da11-4645-98c9-966ea07c1138",
+   "name": "Bitcoin exchange reserves",
+   "labels": [
+    "Other"
+   ],
+   "summary": "Bitcoin exchange reserves fell in 2026 from 3.2 million to about 2.68 million BTC, raising questions about and impacting BTC prices.\nSmallWorldFS reported on the 2026 fall in Bitcoin exchange reserves and its impact on BTC prices in an October 16, 2026 blog post."
+  },
+  {
+   "id": "a6a59197-22ea-46d9-8551-f67a7aa460a6",
+   "name": "M2 (year-over-year % change) — United States",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "FRED publishes US M2 year-over-year percent change, 5.659% in 2026-08, +1.409 pp change."
+  },
+  {
+   "id": "a5095b27-a176-4b0b-81ec-30b7a8db8dd7",
+   "name": "USDC",
+   "labels": [
+    "CryptoAsset"
+   ],
+   "summary": "The GENIUS Act, signed July 18, 2025 (P.L. 119-27), permits stablecoin issuers under $10 billion to operate under state regimes, with licensing obligations expected effective January 18, 2027 and unlicensed stablecoins barred from US persons by July 18, 2028.\nThe New York Fed's July 2026 update flags stablecoin (USDC) depeg vulnerability to banking stress via the 2023 SVB–USDC case.\nThe 2023 SVB–USDC case demonstrates that banking stress at SVB caused USDC depeg vulnerability, per the New York Fed's July 2026 update.\nThe Federal Reserve Bank of New York's Liberty Street Economics blog updated "
+  },
+  {
+   "id": "956b7ec0-445e-49eb-925b-68c8537ca1c5",
+   "name": "Regulation Crypto Assets",
+   "labels": [
+    "LegislationRule"
+   ],
+   "summary": "The SEC proposed 'Regulation Crypto Assets' in 2026 — exemptions for offerings up to $5 million over four years and up to $75 million per 12-month period, plus a safe harbor, with a 60-day comment period — following its March 2026 interpretation.\nThe SEC may finalize its proposed Regulation Crypto Assets in Q3 2027, adding a policy bid."
+  },
+  {
+   "id": "94fa790a-9a4e-4eb0-868f-a7a42c7234db",
+   "name": "GBTC",
+   "labels": [
+    "DerivativeInstrument"
+   ],
+   "summary": "GBTC is a spot Bitcoin ETF holding 424.44K BTC with net assets of $10.23 billion per CoinGlass as of 2026-10-22.\nCoinGlass printed GBTC at $10.23 billion (424.44 thousand BTC) as of 2026-10-22.\nIBIT competes with GBTC ($10.23 billion, 424.44 thousand BTC per CoinGlass) for US spot Bitcoin ETF flows."
+  },
+  {
+   "id": "94b3e3a2-3d3d-4da0-8227-c63f9b0ce171",
+   "name": "US spot-ETF net flows",
+   "labels": [
+    "DerivativeInstrument"
+   ],
+   "summary": "Daily US spot-ETF net flows are a leading indicator to watch against the +$57.78 billion cumulative stock\nUS spot ETF net flows are a signpost for BTC: a positive full-2027 sum by 31 Dec 2027 confirms Institutional reflation (25%), while zero-net quarters confirm Range-bound digestion (35%).\nThree straight months of ETF net flows ≥ +$2B through Q1 2027 (week to 2026-09-25 saw +$2.4B) would confirm Institutional reflation for BTC, while renewed outflows would reopen the Post-cycle bear scenario."
+  },
+  {
+   "id": "8d09a951-3ff9-484d-ad02-28b306c7ec0c",
+   "name": "US spot ETFs",
+   "labels": [
+    "DerivativeInstrument"
+   ],
+   "summary": "US spot Bitcoin ETFs held net assets of $108.01 billion with cumulative net inflows of +$57.78 billion as of 2026-10-22; latest daily flow was −$635.60 million.\nCoinGlass tracks US spot Bitcoin ETF net assets, cumulative net inflows, and daily flows, reporting $108.01 billion net assets and +$57.78 billion cumulative net inflows (+721.78K BTC) as of 2026-10-22.\nSoSoValue data tracks US spot Bitcoin ETF flows, showing +$6.3 billion in Q3 2026, about $1 billion net for 2026 year-to-date, and March 2026's $1.32 billion as the first positive month since October 2025.\nCF Benchmarks notes the three-"
+  },
+  {
+   "id": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "name": "Federal Reserve (FOMC)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "US central bank; September 2026 FOMC raised the funds target range 25 bps to 3.75%-4.00%, and the US policy rate stood at 3.875% per year (2026-09, end of period). September 2026 SEP median projects the funds rate at 4.1% at end-2026 and 4.1% at end-2027, with 2027 central tendency 3.1%-4.4%; eight participants expect further hikes in 2027, six unchanged, four cuts. SEP projects median PCE inflation at 3.7% in 2026 falling to 2.4% in 2027, and raised 2026/2027 growth to 2.3%/2.4%. The rate path holding 4.1% through end-2027 removes the macro easing tailwind and weighs against the Fed-easing pr"
+  },
+  {
+   "id": "8cc32087-d2a8-4b37-b33e-16076aae184c",
+   "name": "24/7 Wall St.",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "24/7 Wall St. cited CryptoQuant for Bitcoin price and recovery data as of late October 2026 (~$81,881 on October 22, about 35% below the record).\n24/7 Wall St., citing CryptoQuant, reported the halving-epoch high of $126,080 set on October 6, 2025 and a June 2026 low around $58,000 for BTC, anchors for the range-bound median path."
+  },
+  {
+   "id": "8c028d72-d527-4f81-b9f6-16b736d274d1",
+   "name": "IBIT",
+   "labels": [
+    "DerivativeInstrument"
+   ],
+   "summary": "IBIT held 811,138.26040 BTC with a bitcoin market value of $66,188,663,046.71 as of 2026-10-22, per iShares' own disclosure.\niShares discloses IBIT's holdings, showing IBIT alone holding 811,138.26040 BTC worth $66.19 billion on 2026-10-22.\nIBIT is a US spot Bitcoin ETF whose value tracks Bitcoin holdings.\nDE Shaw cut its IBIT holdings from 9.7 million shares to 4.7 million shares between Q3 2025 and Q4 2025, per CF Benchmarks' 13F analysis\nBrevan Howard cut its IBIT stake 85% from its Q2 2025 peak while BTC was still above $90,000, per CF Benchmarks' 13F analysis\nFarallon cut its IBIT holding"
+  },
+  {
+   "id": "895c95af-d589-4cb1-a3d0-a146978dbada",
+   "name": "Short-term/long-term holder supply ratio",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The short-term/long-term holder supply ratio at 14.2% as of 2026-10, if it rises through 15% on a quarterly basis, warns of a BTC range breakdown."
+  },
+  {
+   "id": "883a2c88-5eb5-469d-9621-cead84dd79f5",
+   "name": "US dollar",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The Nominal Broad US dollar index was 119.2152 (Jan 2006=100) in September 2026 versus 120.0291 a year earlier (-0.678%), inside its five-year range of 113.4437–128.837 topped by the January 2025 peak."
+  },
+  {
+   "id": "8278d4d2-628f-4fd1-9fc8-0556d8d8006d",
+   "name": "Deribit",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Quarterly expiries (~$16B of ~$43.5B open interest retired on 2026-09-23) are positioning and gamma checkpoints; last listed BTC futures expire 24 Sep 2027 per CryptoStruct.\nDeribit's September 2026 expiry options book was reported call-heavy and its DVOL index printed 36.90 with IV Rank 6.7 on 2026-10-23 (unconfirmed reading)\nCryptoStruct reports that Deribit's last listed BTC futures expire on 24 September 2027, serving as a positioning checkpoint on the forecast path\nCoinDesk reported that Deribit's 2026-09-23 quarterly expiry retired roughly $16 billion of about $43.5 billion open interest"
+  },
+  {
+   "id": "811738bb-4657-4c48-b52a-325c2434430e",
+   "name": "Golden",
+   "labels": [],
+   "summary": "Representative Golden co-introduced the American Reserve Modernization Act of 2026 with Begich on May 21, 2026; its status beyond introduction is unknown."
+  },
+  {
+   "id": "7da14ee6-5238-4e80-a1b7-2842df0718bc",
+   "name": "BTCZ27",
+   "labels": [
+    "DerivativeInstrument"
+   ],
+   "summary": "CME lists and trades the BTCZ27 futures contract through 31 December 2027, last traded at 89,885.00 USD on 2026-10-23\nBTCZ27 futures track BTC pricing, trading at 89,885.00 USD on 2026-10-23 with ~8.7% annualized premium to the spot fixing\nThe $89,885 BTCZ27 forward sits inside the Range-bound digestion band ($60,000–$110,000); risk-neutral odds imply P(>$126,080)≈15% and P(<$60,000)≈17%, falsified if BTCZ27 flattens to spot on sustained outflows\nWSJ market data reported the BTCZ27 December 2027 contract last traded at 89,885.00 USD on 2026-10-23.\nCME BTCZ27, which trades and settles through 3"
+  },
+  {
+   "id": "77c6736a-122c-409c-808c-16a5cb5ddcc9",
+   "name": "US policy rate",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The US policy rate of 3.875% per year (2026-09) provides neutral macro support for Bitcoin price.\nThe US central bank policy rate of 3.875% per year (2026-09, −0.25 pp) is cited as neutral macro support influencing the Bitcoin forecast.\nWith the US policy rate at 3.875% (2026-09, end of period), the BTCZ27 forward's ≈8.7% annualized basis exceeds plausible dollar funding costs, so a positive risk-neutral drift is embedded.\nThe Fed's own median path holding the federal funds rate at 4.1% through end-2027 removes the macro tailwind presumed by the Institutional reflation scenario for BTC.\nThe FO"
+  },
+  {
+   "id": "760dc371-25da-4a9e-aee3-88ae2f186f84",
+   "name": "Brevan Howard",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Brevan Howard cut its IBIT stake 85% from its Q2 2025 peak while BTC was still above $90,000, per CF Benchmarks' 13F analysis"
+  },
+  {
+   "id": "727f5acd-adc1-4127-985d-6986600e1283",
+   "name": "FBTC",
+   "labels": [
+    "DerivativeInstrument"
+   ],
+   "summary": "FBTC is a US spot Bitcoin ETF with net assets of $14.92 billion per CoinGlass as of 2026-10-22.\nCoinGlass printed FBTC at $14.92 billion in net assets as of 2026-10-22.\nIBIT competes with FBTC ($14.92 billion net assets per CoinGlass) for US spot Bitcoin ETF flows."
+  },
+  {
+   "id": "723a72b1-c289-4c89-80a8-438dcf778bf5",
+   "name": "Bitcoin miners",
+   "labels": [],
+   "summary": "No primary miner-reserve or outflow figure for October 2026 exists in the record; limited capitulation sell pressure implied at ~$81,000."
+  },
+  {
+   "id": "71acbfd8-45c3-494d-9ebb-cbe516c9c833",
+   "name": "Institutional reflation",
+   "labels": [],
+   "summary": "The Fed's projected rate path holding the funds rate at 4.1% through end-2027 leans against the Fed-easing premise of the Institutional reflation scenario"
+  },
+  {
+   "id": "6c43631d-47a6-420e-ada4-ca0d25109ca5",
+   "name": "CryptoStruct",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "CryptoStruct reports that Deribit's last listed BTC futures expire on 24 September 2027, serving as a positioning checkpoint on the forecast path"
+  },
+  {
+   "id": "6b9db124-cc75-4634-811b-99cd20824b13",
+   "name": "The Block",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The Block defines realized volatility for Bitcoin as the standard deviation of the last 30 days' daily percentage changes.\nThe Block tracks Bitcoin's 30-day annualized volatility as market data (theblock.co/data/crypto-markets/prices/annualized-btc-volatility-30d), as of 2026-10-23."
+  },
+  {
+   "id": "69025bbb-7388-467e-8479-3aeacbd49e1a",
+   "name": "Spark Bitcoin Correlation Calculator",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "The Spark Bitcoin Correlation Calculator tracks Bitcoin's correlation versus stocks, gold, and bonds."
+  },
+  {
+   "id": "6114fb43-97cd-4f2a-aadc-916a43d6a736",
+   "name": "Liquidity shock",
+   "labels": [],
+   "summary": "A VIX jump from 19.03 (2026-10-22) toward its 5-year high of 31.9662 with futures backwardation would falsify/support the Liquidity shock scenario"
+  },
+  {
+   "id": "6091a815-e9af-42de-a8df-1d06db0513b0",
+   "name": "PCE inflation",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The Fed's September 2026 SEP projects median PCE inflation at 3.7% in 2026, falling to 2.4% in 2027"
+  },
+  {
+   "id": "5b130c93-0b0d-4f7f-96a1-a8a7d3f5b977",
+   "name": "DE Shaw",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "DE Shaw cut its IBIT holdings from 9.7 million shares to 4.7 million shares between Q3 2025 and Q4 2025, per CF Benchmarks' 13F analysis"
+  },
+  {
+   "id": "54e157d3-42cc-443f-8096-b619c307e15a",
+   "name": "Stablecoin issuers (Circle, Tether)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "GENIUS Act licensing obligations effective January 18, 2027; NY Fed (July 2026) flags depeg vulnerability to banking stress via the 2023 SVB-USDC case."
+  },
+  {
+   "id": "54d1a258-ec6b-4b54-96e7-5332c4fd0a87",
+   "name": "2026 SEC custody proposal",
+   "labels": [
+    "LegislationRule"
+   ],
+   "summary": "The SEC issued a 2026 custody proposal that would permit adviser self-custody in certain circumstances and state trust companies.\nThe SEC has a separate adviser-custody proposal pending alongside the proposed Regulation Crypto Assets."
+  },
+  {
+   "id": "54b803b4-5d51-4f1c-94ed-88d31c7a67f9",
+   "name": "Farside",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "Farside-derived monthly tallies showed US spot Bitcoin ETF net flows of −$3.5 billion in November 2025 and −$1.61 billion in January 2026.\nFarside is one of the trackers (with CoinGlass) used to resolve whether full-year 2027 US spot Bitcoin ETF net flows are positive.\nFarside Investors tracks US spot Bitcoin ETF flows in US$m by fund including IBIT (farside.co.uk/btc/), as of 2026-10-23."
+  },
+  {
+   "id": "54b4c12d-07e5-4b94-8385-4d98511ed80f",
+   "name": "Long-term Bitcoin holders",
+   "labels": [
+    "Other"
+   ],
+   "summary": "LTH supply fell 452,532 BTC (July-Nov 2025, Glassnode) driving the drawdown; regime has since flipped, with ~2.8M BTC having passed to short-term holders at a loss in November 2025.\nLong-term holders distributed BTC during the 2025 decline, with their supply falling by 452,532 BTC from 14,755,530 BTC in July 2025 to 14,302,998 BTC on November 16, 2025, indicating selling came from them rather than ETFs.\nThe regime flipped to re-accumulation: BTC supply dormant for more than one year kept growing through the Q3 2026 rally."
+  },
+  {
+   "id": "50f55edd-4a2f-48ce-adbf-15da13cd3206",
+   "name": "US Congress",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "119th Congress ends January 2027, forcing pass-or-lapse decisions on ARMA (Begich-Golden, May 21, 2026), the BITCOIN Act (1,000,000 BTC over five years) and CLARITY revival.\nThe 119th Congress (2025-2026) introduced H.R.3633, the Digital Asset Market Structure bill (the CLARITY Act), which the Senate failed to advance in September 2026."
+  },
+  {
+   "id": "4e9fb75f-9c86-4f1c-a2c3-2ed9d3323f05",
+   "name": "Glassnode / CryptoQuant",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Glassnode cautions wallet restructuring can move reserve estimates without trading; CryptoQuant data underpins the reserve and cycle readings cited throughout.\n24/7 Wall St. cited CryptoQuant for Bitcoin price and recovery data as of late October 2026 (~$81,881 on October 22, about 35% below the record).\nCryptoQuant tracks Bitcoin exchange reserves, which it reported fell from approximately 2.8 million BTC in February 2026 to 2.67 million BTC (a decline of around 130,000 BTC), per an October 16, 2026 report; as of October 14, 2026 reserves were still 1.7% below mid-September 2026 levels.\nGlass"
+  },
+  {
+   "id": "45406dfc-b69c-4a67-b515-4ff105217edc",
+   "name": "Government",
+   "labels": [
+    "Organization"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "42ed9860-3f56-4724-88cf-d53dd7804927",
+   "name": "IRS",
+   "labels": [
+    "Government"
+   ],
+   "summary": "IRS issued Rev. Proc. 2026-20 on October 9, 2026, providing a staking safe harbor for investment trusts.\nIRS issued Rev Proc 2026-20, a safe harbor for digital asset staking by investment trusts / crypto ETPs.\nRev Proc 2026-20 constrains IRS taxation of digital asset staking by providing a safe harbor for crypto ETP investment trusts."
+  },
+  {
+   "id": "4278fa36-52c3-416e-bd08-2f290ab03f3f",
+   "name": "SatsIntel",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "SatsIntel put 2026 year-to-date US spot Bitcoin ETF net flows at just +$15.5 million, versus +$934 million per SoSoValue-based reporting.\nSatsIntel provides a tracker of Bitcoin ETF flows by fund including IBIT, FBTC, GBTC and ARKB."
+  },
+  {
+   "id": "40356376-f2e6-4ef1-ba0e-7ceac0cc338a",
+   "name": "Begich",
+   "labels": [],
+   "summary": "Senator Begich (with Golden) introduced the American Reserve Modernization Act of 2026 on May 21, 2026, which would codify the Strategic Bitcoin Reserve in Treasury without taxpayer cost, with sales only to reduce national debt.\nCongressman Nick Begich leads legislation to establish a Strategic Bitcoin Reserve."
+  },
+  {
+   "id": "3de065b2-e682-4c05-b6ee-964f57123873",
+   "name": "Deribit BTC futures (inverse)",
+   "labels": [
+    "DerivativeInstrument"
+   ],
+   "summary": "Deribit's inverse BTC futures provide historical price-tracking data on BTC, per CryptoStruct's futures dataset."
+  },
+  {
+   "id": "38c1c42d-067a-4ad3-83b6-77730cd103b9",
+   "name": "coinpedia",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Coinpedia contests the tracker-based estimate of about 328,372 BTC in estimated federal holdings underlying the Strategic Bitcoin Reserve as of February 2026."
+  },
+  {
+   "id": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "name": "Coinbase",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Its daily fixing (81,225.62 USD, 2026-10-22) is the settlement series for the forecast's price binaries.\nCoinbase price pages printed BTC at $81,485.85 and a converter at $81,844.29 as of October 23, 6:21 AM\nCoinbase and Kraken prices are combined as a composite BTC/USD spot anchor of ≈$81,243, with modest venue dispersion between the two\nCoinbase's own pages printed Bitcoin at $81,485.85 and a converter at $81,844.29 as of October 23, 6:21 AM, providing price discovery for Bitcoin.\nCoinbase quotes and tracks Bitcoin spot prices, printing $81,485.85 on its own pages as of October 23, 2026.\nCoi"
+  },
+  {
+   "id": "372a426d-f1e2-4f3a-8099-b8b954bef8c9",
+   "name": "American Reserve Modernization Act of 2026",
+   "labels": [
+    "LegislationRule"
+   ],
+   "summary": "Senator Begich (with Golden) introduced the American Reserve Modernization Act of 2026 on May 21, 2026, which would codify the Strategic Bitcoin Reserve in Treasury without taxpayer cost, with sales only to reduce national debt.\nRepresentative Golden co-introduced the American Reserve Modernization Act of 2026 with Begich on May 21, 2026; its status beyond introduction is unknown.\nThe American Reserve Modernization Act of 2026 would codify the reserve in the US Treasury without taxpayer cost, with sales only to reduce national debt.\nPassage of the ARMA Act with purchase authority before the 11"
+  },
+  {
+   "id": "3691a858-c724-4c01-a576-72e40a6406fb",
+   "name": "Pensions & Investments",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Pensions & Investments documented a sovereign wealth fund and a university endowment holding IBIT as the fund reached $80 billion AUM in July 2025.\nPensions & Investments reported BlackRock's Bitcoin ETF (IBIT) hit $80B in AUM on the back of sizeable institutional interest including a sovereign wealth fund and a university endowment."
+  },
+  {
+   "id": "355eaceb-b525-444a-8ef8-e341d7be571a",
+   "name": "CoinGlass",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "CoinGlass tracks US spot Bitcoin ETF net assets, cumulative net inflows, and daily flows, reporting $108.01 billion net assets and +$57.78 billion cumulative net inflows (+721.78K BTC) as of 2026-10-22.\nCoinGlass reported IBIT (iShares Bitcoin Trust) as roughly three-fifths of the $108.01 billion US spot Bitcoin ETF complex as of 2026-10-22.\nCoinGlass printed FBTC at $14.92 billion in net assets as of 2026-10-22.\nCoinGlass printed GBTC at $10.23 billion (424.44 thousand BTC) as of 2026-10-22.\nCoinGlass annual sums are used as the series to determine whether 2027 US spot ETF net flow is positiv"
+  },
+  {
+   "id": "354d42c1-e0cc-4f55-b288-37a63349377d",
+   "name": "short-term holders",
+   "labels": [
+    "Other"
+   ],
+   "summary": "By mid-November 2025 about 2.8 million BTC sat with short-term holders at a loss — the most since the FTX collapse of November 2022 — with price roughly 25% below the record.\nIn the week to mid-October 2026 the short-term-to-long-term-holder supply ratio rose 4.2% to 14.2% (from 13.7%), near the top of its range, signalling rising speculative churn in BTC."
+  },
+  {
+   "id": "350d4db1-e3aa-4ccc-bd0c-fff701e82ce4",
+   "name": "SoSoValue",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "SoSoValue data tracks US spot Bitcoin ETF flows, showing +$6.3 billion in Q3 2026, about $1 billion net for 2026 year-to-date, and March 2026's $1.32 billion as the first positive month since October 2025.\nSoSoValue-based reporting showed US spot Bitcoin ETF year-to-date 2026 flows of +$934 million by 25 September, with March 2026's +$1.32 billion the first positive month since October 2025.\nSoSoValue operates a Bitcoin ETF dashboard providing daily data and charts of spot BTC ETF inflows and outflows."
+  },
+  {
+   "id": "3060e592-2852-4e97-ac2d-b077043026e1",
+   "name": "GENIUS Act",
+   "labels": [
+    "LegislationRule"
+   ],
+   "summary": "The GENIUS Act, signed July 18, 2025 (P.L. 119-27), permits stablecoin issuers under $10 billion to operate under state regimes, with licensing obligations expected effective January 18, 2027 and unlicensed stablecoins barred from US persons by July 18, 2028.\nUS Treasury is implementing the GENIUS Act under a section 3 NPRM, with January 18, 2027 as the expected effective date for stablecoin licensing obligations and July 18, 2028 for barring unlicensed stablecoins offered to US persons.\nGENIUS Act stablecoin licensing obligations begin January 18, 2027, opening a stablecoin growth channel for"
+  },
+  {
+   "id": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "BTC",
+   "labels": [
+    "CryptoAsset"
+   ],
+   "summary": "BTC trades around $81,243 (composite anchor, late Oct 2026): Coinbase FRED fixing 81,225.62 USD (2026-10-22), Kraken $81,261.00 (2026-10-23); Coinbase pages printed $81,485.85–$81,844.29. October 2025 cycle top was $126,080 (Oct 6, 2025); price fell ~54% to ~$58,000 by June 2026, then recovered ~31% over 90 days. Monthly mean 2026-09 was 80,482.22 USD, −29.083% YoY; five-year range 16,942.77 (2022-12) to 115,618.19 (2025-07). Historical daily-close drawdowns: −93% (2011), −84% (2014), −83% (2018), −77% (2022); Galaxy Research finds bottoms 12–13 months after tops; its June 9, 2026 report argue"
+  },
+  {
+   "id": "28704f36-ff92-40b1-b27a-6dda86b0ad66",
+   "name": "Orrick",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Orrick published analysis (October 2026) on the CLARITY Act stalling in the Senate and what's next for digital asset regulation."
+  },
+  {
+   "id": "22d88f65-8faf-4363-904d-6eb50bfb4615",
+   "name": "congress.gov",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "congress.gov enactment status is the resolution criterion for whether the CLARITY Act (H.R.3633) is enacted into law by 31 Dec 2027.\ncongress.gov tracks the enactment status of the GENIUS Act, showing Senate cloture failed September 15, 2026"
+  },
+  {
+   "id": "20d1e547-05b3-4270-8eaf-369c3ced0025",
+   "name": "SEC",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Chairman Atkins says the SEC supports delivering CLARITY and is acting via rulemaking meanwhile; IRS Rev. Proc. 2026-20 (Oct 9, 2026) provides a staking safe harbor.\nThe SEC proposed 'Regulation Crypto Assets' in 2026 — exemptions for offerings up to $5 million over four years and up to $75 million per 12-month period, plus a safe harbor, with a 60-day comment period — following its March 2026 interpretation.\nThe SEC issued a 2026 custody proposal that would permit adviser self-custody in certain circumstances and state trust companies.\nThe SEC, per Chairman Atkins, supports delivering the CLA"
+  },
+  {
+   "id": "2025b26b-de11-496c-b7bc-9cacbb3f4fb5",
+   "name": "M2",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "M2 money supply up 5.659% year-over-year (2026-08) provides neutral macro liquidity for Bitcoin.\nUS M2 at 23,342.8 billions of dollars (2026-08), up 5.659% year over year, feeds the macro liquidity baseline for the Bitcoin price forecast.\nUS M2 liquidity expansion (23342.8 Billions of Dollars in 2026-08, +5.659% YoY) has historically fed BTC with lags measured in months, though that channel weakened through 2025-26, per CF Benchmarks\nM2 year-over-year growth is a signpost for Bitcoin's path: M2 YoY below 3% alongside flat ETF flows in mid-2027 would support the Post-cycle bear scenario, while "
+  },
+  {
+   "id": "1f89370a-e503-4a9a-8273-08935ef63758",
+   "name": "MicroStrategy / Strategy (MSTR)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Named in the cast for reflexive leverage dynamics; no current holdings figure appears in the evidence."
+  },
+  {
+   "id": "1cfcd19e-34f0-485d-ae99-293e41ea3a8c",
+   "name": "NYU Stern V-Lab",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "NYU Stern V-Lab's GARCH one-day-ahead volatility forecast for the Coinbase Bitcoin series for 2026-10-22 was 33.44%."
+  },
+  {
+   "id": "16ccbb50-edd7-4083-928d-a8eb324fb971",
+   "name": "Fidelity (FBTC)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Fidelity Wise Origin Bitcoin Fund consolidates institutional demand as the number-two fund in the complex."
+  },
+  {
+   "id": "15842e38-2e04-4f62-8b4e-e1b6d605a2e5",
+   "name": "CLARITY Act",
+   "labels": [
+    "LegislationRule"
+   ],
+   "summary": "Chairman Atkins says the SEC supports delivering the CLARITY Act and is acting via rulemaking meanwhile, after the CLARITY Act passed the House but a September 15, 2026 Senate cloture motion fell short (49–50 against 60 required, with a Tillis motion to reconsider).\nThe SEC, per Chairman Atkins, supports delivering the CLARITY Act and is substituting rulemaking for stalled legislation after the Senate cloture motion failed on September 15, 2026.\nThe United States Senate has authority over the CLARITY Act, which failed cloture on September 15, 2026 and faces reconsideration (requiring cloture ≥"
+  },
+  {
+   "id": "131c4623-15c4-402a-ba62-df19baaf6a4b",
+   "name": "Other",
+   "labels": [],
+   "summary": ""
+  },
+  {
+   "id": "11885208-05f7-4d3d-a673-9bc282d85fc7",
+   "name": "Earnpark",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "Earnpark reported December 2025 US spot Bitcoin ETF flows of +$457 million, disputed against Farside's −$1.1 billion.\nEarnpark reported that Bitcoin ETF inflows hit $20B in 2026 and analyzed the top 3 drivers, as of 2026-10-23.\nEarnpark published analysis on record Bitcoin ETF inflows and top 3 drivers of demand in 2026."
+  },
+  {
+   "id": "111ba019-9f2c-440d-85da-438caef9a64b",
+   "name": "10-year Treasury",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The 10-year Treasury at 4.989% (2026-09) is a leading indicator to watch for BTC\nThe 10-year Treasury yield, at 4.989% in 2026-09 (+0.869 pp year over year), is part of the macro baseline shaping the Bitcoin price outlook.\nThe 10-year Treasury yield at 4.989% (2026-09; 5.13% daily on 2026-10-21) bounds plausible dollar funding costs below BTCZ27's ≈8.7% annualized basis premium.\nThe 10-year Treasury yield was 4.989% in September 2026 versus 4.12% in September 2025 (+0.869 pp), with 5.13% on 2026-10-21, per the official FRED series\nThe 10-year Treasury monthly yield is a signpost constraining B"
+  },
+  {
+   "id": "108a608d-ec9b-45a5-9402-4c449d58b122",
+   "name": "BlackRock (IBIT)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Dominant US spot Bitcoin ETF issuer via iShares Bitcoin Trust; roughly three-fifths of the $108.01B complex net assets."
+  },
+  {
+   "id": "0f991992-9060-4a25-b06e-1ad6d3ace3bc",
+   "name": "DLA Piper",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "DLA Piper published analysis (September 2026) on the Senate's failure to advance the CLARITY Act."
+  },
+  {
+   "id": "0f03a3e1-6250-4491-8d82-b8b5393a97dd",
+   "name": "Small World FS",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Small World FS reported (October 16, 2026) that Bitcoin exchange reserves fell from 3.2 million in 2026, impacting BTC prices."
+  },
+  {
+   "id": "08d67630-918a-4d61-8adb-5365015c15c9",
+   "name": "BITCOIN Act",
+   "labels": [
+    "LegislationRule"
+   ],
+   "summary": "The BITCOIN Act — 1,000,000 BTC over five years, reintroduced March 11, 2025 with 5 co-sponsors — would give the Strategic Bitcoin Reserve purchase power, but it has not become law.\nPassage of the BITCOIN Act with purchase authority would confirm a structural bid for Bitcoin; failure would remove a reflation lever.\nThe BITCOIN Act will either pass or lapse when the 119th Congress ends in January 2027, affecting the Institutional reflation scenario for BTC."
+  },
+  {
+   "id": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "Bitcoin",
+   "labels": [
+    "CryptoAsset"
+   ],
+   "summary": "Bitcoin (BTC/USD, Coinbase/Kraken composite) anchored at Coinbase fixing 81,225.62 USD (2026-10-22; Kraken $81,261.00 on 2026-10-23; composite ≈$81,243; Coinbase page $81,485.85, converter $81,844.29 on Oct 23; 2026-09 monthly mean 80,482.22, −29.083% YoY vs 113,487.32 in 2025-09). April-2024-halving epoch topped at $126,080 on October 6, 2025; fell ~54% to ~$58,000 by June 2026, then recovered ~31% in 90 days to ~$81,881 (Oct 22, 2026), ~35% below record. Five-year FRED range 16,942.77 (2022-12) to 115,618.19 (2025-07). Drawdown base rates: daily-close losses −93%, −84%, −83%, −77% (2011–2022"
+  },
+  {
+   "id": "050c0596-b186-4449-8b73-caab3992cb4d",
+   "name": "Platform",
+   "labels": [
+    "Organization"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "025cde56-38ac-45ca-a4b6-3f2b9916961b",
+   "name": "Fed's September 2026 SEP median",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The Fed's September 2026 SEP median projects 4.1% at end-2026 and 4.1% at end-2027, shaping macro expectations affecting Bitcoin.\nThe Fed's September 2026 SEP median projects the US policy rate at 4.1% at end-2026 and 4.1% at end-2027.\nThe SEP median end-2027 funds rate is the only rate anchor available for Bitcoin's 2027 path: a cut-heavy revision to ≤3.625% at the December 2026 SEP would confirm the easing premise of Institutional reflation — 25%, while ≥4.125% kills it.\nThe September 2026 SEP median projects 4.1% for end-2027, providing no policy-easing cushion on the Fed's own median path "
+  },
+  {
+   "id": "015a0e7f-2639-461b-a842-9845da8029cd",
+   "name": "TRM Labs",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "TRM Labs recorded a record 207 hack incidents with USD 972M in H1 2026 losses related to crypto\nTRM Labs monitors crypto hacks, reporting a record 207 hack incidents with USD 972M in H1 2026 losses in the crypto market."
+  },
+  {
+   "id": "00939f42-22a2-4484-937e-a399c5f6c2f9",
+   "name": "Bo Hines",
+   "labels": [],
+   "summary": "Bo Hines backed the Strategic Bitcoin Reserve by suggesting gold sales as a budget-neutral funding strategy on March 24, 2025; no such sale or open-market reserve purchase is documented."
+  }
+ ],
+ "links": [
+  {
+   "source": "c6b84d3e-366f-464b-afe1-3ce8dea00459",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "INFLUENCES",
+   "fact": "VIX macro context favors a muted Bitcoin drawdown case: VIX was 27.34 in 2022-09 against 15.7755 in 2026-09 and 19.03 on 2026-10-22."
+  },
+  {
+   "source": "77c6736a-122c-409c-808c-16a5cb5ddcc9",
+   "target": "7da14ee6-5238-4e80-a1b7-2842df0718bc",
+   "name": "CONSTRAINS",
+   "fact": "With the US policy rate at 3.875% (2026-09, end of period), the BTCZ27 forward's ≈8.7% annualized basis exceeds plausible dollar funding costs, so a positive risk-neutral drift is embedded."
+  },
+  {
+   "source": "7da14ee6-5238-4e80-a1b7-2842df0718bc",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "CME BTCZ27, which trades and settles through 31 December 2027 against BTC/USD, last traded at 89,885.00 USD on 2026-10-23"
+  },
+  {
+   "source": "54b4c12d-07e5-4b94-8385-4d98511ed80f",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "SUPPLIES",
+   "fact": "The regime flipped to re-accumulation: BTC supply dormant for more than one year kept growing through the Q3 2026 rally."
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Federal Reserve (FOMC) 亦称 Fed"
+  },
+  {
+   "source": "ef345793-e6df-4546-867d-c3aa3b91044e",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "DVOL implied volatility of 36.90 (unconfirmed) was used as the volatility input for the risk-neutral lognormal distribution of BTC/USD at the end-2027 horizon."
+  },
+  {
+   "source": "7da14ee6-5238-4e80-a1b7-2842df0718bc",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "CME's BTCZ27 December 2027 Bitcoin futures contract (prices per WSJ) tracks the Bitcoin USD price through 31 December 2027."
+  },
+  {
+   "source": "94b3e3a2-3d3d-4da0-8227-c63f9b0ce171",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "US spot ETF net flows are a signpost for BTC: a positive full-2027 sum by 31 Dec 2027 confirms Institutional reflation (25%), while zero-net quarters confirm Range-bound digestion (35%)."
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "6091a815-e9af-42de-a8df-1d06db0513b0",
+   "name": "PROJECTS",
+   "fact": "The Fed's September 2026 SEP projects median PCE inflation at 3.7% in 2026, falling to 2.4% in 2027"
+  },
+  {
+   "source": "c6b84d3e-366f-464b-afe1-3ce8dea00459",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "CONSTRAINS",
+   "fact": "VIX at 15.7755 (2026-09) shows current prices do not stress a liquidity-shock scenario taking BTC under $30,000"
+  },
+  {
+   "source": "f9ef8846-ea9a-44d4-a016-f8fc91b539ab",
+   "target": "8c028d72-d527-4f81-b9f6-16b736d274d1",
+   "name": "INVESTS_IN",
+   "fact": "Symmetry exited IBIT's top-holder list entirely, per CF Benchmarks' 13F analysis of top-40 hedge funds"
+  },
+  {
+   "source": "3060e592-2852-4e97-ac2d-b077043026e1",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRIGGERS",
+   "fact": "The GENIUS Act stablecoin bill was signed into law (P.L. 119), shaping the stablecoin/crypto regulatory framework relevant to Bitcoin."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "2025b26b-de11-496c-b7bc-9cacbb3f4fb5",
+   "name": "INFLUENCES",
+   "fact": "US M2 at 23,342.8 billions of dollars (2026-08), up 5.659% year over year, feeds the macro liquidity baseline for the Bitcoin price forecast."
+  },
+  {
+   "source": "54b803b4-5d51-4f1c-94ed-88d31c7a67f9",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "Farside is one of the trackers (with CoinGlass) used to resolve whether full-year 2027 US spot Bitcoin ETF net flows are positive."
+  },
+  {
+   "source": "015a0e7f-2639-461b-a842-9845da8029cd",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "TRM Labs monitors crypto hacks, reporting a record 207 hack incidents with USD 972M in H1 2026 losses in the crypto market."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "4e9fb75f-9c86-4f1c-a2c3-2ed9d3323f05",
+   "name": "DEPENDS_ON",
+   "fact": "Coinbase partnered with Glassnode on the 'Coinbase + Glassnode: Charting Crypto Q4 2026' research report."
+  },
+  {
+   "source": "8c028d72-d527-4f81-b9f6-16b736d274d1",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "IBIT is a US spot Bitcoin ETF whose value tracks Bitcoin holdings."
+  },
+  {
+   "source": "355eaceb-b525-444a-8ef8-e341d7be571a",
+   "target": "8c028d72-d527-4f81-b9f6-16b736d274d1",
+   "name": "TRACKS",
+   "fact": "CoinGlass reported IBIT (iShares Bitcoin Trust) as roughly three-fifths of the $108.01 billion US spot Bitcoin ETF complex as of 2026-10-22."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "e43eeb4c-e8a7-46d7-9b47-de3adbcf10d5",
+   "name": "TRACKS",
+   "fact": "Kraken spot at $81,261.00 on 2026-10-23 tracks the FRED Coinbase Bitcoin (CBBTCUSD) daily series, whose latest observation was 81,225.62 USD for 2026-10-22, within 0.1%."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "Coinbase's daily fixing for BTC was 81,225.62 USD on 2026-10-22, serving as the spot reference against the BTCZ27 contract's 89,885.00 USD print."
+  },
+  {
+   "source": "40356376-f2e6-4ef1-ba0e-7ceac0cc338a",
+   "target": "372a426d-f1e2-4f3a-8099-b8b954bef8c9",
+   "name": "AUTHORED",
+   "fact": "Senator Begich (with Golden) introduced the American Reserve Modernization Act of 2026 on May 21, 2026, which would codify the Strategic Bitcoin Reserve in Treasury without taxpayer cost, with sales only to reduce national debt."
+  },
+  {
+   "source": "8d09a951-3ff9-484d-ad02-28b306c7ec0c",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "INVESTS_IN",
+   "fact": "US spot Bitcoin ETFs held net assets of $108.01 billion with cumulative net inflows of +$57.78 billion as of 2026-10-22; latest daily flow was −$635.60 million."
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "108a608d-ec9b-45a5-9402-4c449d58b122",
+   "name": "INFLUENCES",
+   "fact": "SEP median 4.1% through end-2027 removes the easing tailwind the reflation scenario presumes（strength=0.6，valence=directional，polarity=0.00）"
+  },
+  {
+   "source": "015a0e7f-2639-461b-a842-9845da8029cd",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "TRM Labs recorded a record 207 hack incidents with USD 972M in H1 2026 losses related to crypto"
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "The Fed easing into 2027 is a precondition for the Institutional reflation scenario (25% probability) carrying BTC above its prior cycle high of $126,080"
+  },
+  {
+   "source": "4e9fb75f-9c86-4f1c-a2c3-2ed9d3323f05",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "CryptoQuant data, cited by 24/7 Wall St., provides the June 2026 low around $58,000 and the $126,080 October 2025 epoch high for BTC."
+  },
+  {
+   "source": "4e9fb75f-9c86-4f1c-a2c3-2ed9d3323f05",
+   "target": "54b4c12d-07e5-4b94-8385-4d98511ed80f",
+   "name": "INFLUENCES",
+   "fact": "LTH supply series and NUPL readings（strength=0.4，valence=neutral，polarity=0.00）"
+  },
+  {
+   "source": "ef345793-e6df-4546-867d-c3aa3b91044e",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "Deribit DVOL printed 36.90 with IV Rank 6.7 on 2026-10-23, tracking BTC volatility"
+  },
+  {
+   "source": "f3f5402c-3f15-4674-a747-acba5e4eb67f",
+   "target": "a6a59197-22ea-46d9-8551-f67a7aa460a6",
+   "name": "TRACKS",
+   "fact": "FRED publishes US M2 year-over-year percent change, 5.659% in 2026-08, +1.409 pp change."
+  },
+  {
+   "source": "3060e592-2852-4e97-ac2d-b077043026e1",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRIGGERS",
+   "fact": "GENIUS licensing starting Jan 18, 2027 is a factor in the 65% forecast that stablecoin market cap exceeds $323B at end-2027, a liquidity channel for BTC."
+  },
+  {
+   "source": "8c028d72-d527-4f81-b9f6-16b736d274d1",
+   "target": "94fa790a-9a4e-4eb0-868f-a7a42c7234db",
+   "name": "COMPETES_WITH",
+   "fact": "IBIT competes with GBTC ($10.23 billion, 424.44 thousand BTC per CoinGlass) for US spot Bitcoin ETF flows."
+  },
+  {
+   "source": "3060e592-2852-4e97-ac2d-b077043026e1",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRIGGERS",
+   "fact": "The GENIUS Act's licensing effective date of 2027-01-18 operates through the stablecoin dollar-liquidity channel and supports the Range-bound digestion (35%) scenario for BTC."
+  },
+  {
+   "source": "b82f85cf-3353-4e76-bab9-f472249e6e44",
+   "target": "15842e38-2e04-4f62-8b4e-e1b6d605a2e5",
+   "name": "BACKS",
+   "fact": "Chairman Atkins says the SEC supports delivering the CLARITY Act and is acting via rulemaking meanwhile, after the CLARITY Act passed the House but a September 15, 2026 Senate cloture motion fell short (49–50 against 60 required, with a Tillis motion to reconsider)."
+  },
+  {
+   "source": "ab3c3c0d-da11-4645-98c9-966ea07c1138",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "Bitcoin exchange reserves fell in 2026 from 3.2 million to about 2.68 million BTC, raising questions about and impacting BTC prices."
+  },
+  {
+   "source": "f2369e2d-57fb-4022-87db-a7f7b2dd6ef0",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "Galaxy Research's 2026-06-09 report gave a cycle-bottom base case of $40k–46k for BTC/USD (≈−51% drawdown), a cycle-bottom view rather than an end-2027 target."
+  },
+  {
+   "source": "8c028d72-d527-4f81-b9f6-16b736d274d1",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "INVESTS_IN",
+   "fact": "IBIT held 811,138.26040 BTC with a bitcoin market value of $66,188,663,046.71 as of 2026-10-22, per iShares' own disclosure."
+  },
+  {
+   "source": "8c028d72-d527-4f81-b9f6-16b736d274d1",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "IBIT is a spot Bitcoin ETF holding 811,138.26040 BTC; its AUM slid from $80 billion (July 2025) to $66.19 billion (2026-10-22) as BTC fell roughly 35% from the October 2025 record"
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Coinbase quotes and tracks Bitcoin spot prices, printing $81,485.85 on its own pages as of October 23, 2026."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "Coinbase price pages printed BTC at $81,485.85 and a converter at $81,844.29 as of October 23, 6:21 AM"
+  },
+  {
+   "source": "50f55edd-4a2f-48ce-adbf-15da13cd3206",
+   "target": "20d1e547-05b3-4270-8eaf-369c3ced0025",
+   "name": "REGULATES",
+   "fact": "SEC substituting rulemaking for stalled CLARITY legislation（strength=0.5，valence=neutral，polarity=0.00）"
+  },
+  {
+   "source": "8d09a951-3ff9-484d-ad02-28b306c7ec0c",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "SUPPLIES",
+   "fact": "Spot-ETF holdings of BTC fell only 3.6% from their 1.38-million-BTC peak of October 10, 2025 to 1.33 million BTC, showing the 2025 selling came from long-term holders rather than the ETFs."
+  },
+  {
+   "source": "cfdcf13f-df7f-4bcc-a79b-5fea7774af45",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "CONSTRAINS",
+   "fact": "Strategic Bitcoin Reserve purchase power for BTC is restricted to budget-neutral strategies with no purchase documented"
+  },
+  {
+   "source": "20d1e547-05b3-4270-8eaf-369c3ced0025",
+   "target": "956b7ec0-445e-49eb-925b-68c8537ca1c5",
+   "name": "REGULATES",
+   "fact": "The SEC may finalize its proposed Regulation Crypto Assets in Q3 2027, adding a policy bid."
+  },
+  {
+   "source": "111ba019-9f2c-440d-85da-438caef9a64b",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "CONSTRAINS",
+   "fact": "The 10-year Treasury yield at 4.989% (2026-09 monthly observation) with a 5.13% daily print on 2026-10-21, at the top of its five-year range, is the live hazard rate backup constraining BTC."
+  },
+  {
+   "source": "883a2c88-5eb5-469d-9621-cead84dd79f5",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "INFLUENCES",
+   "fact": "The Nominal Broad US dollar index was 119.2152 (Jan 2006=100) in September 2026 versus 120.0291 a year earlier (-0.678%), inside its five-year range of 113.4437–128.837 topped by the January 2025 peak."
+  },
+  {
+   "source": "94b3e3a2-3d3d-4da0-8227-c63f9b0ce171",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "Three straight months of ETF net flows ≥ +$2B through Q1 2027 (week to 2026-09-25 saw +$2.4B) would confirm Institutional reflation for BTC, while renewed outflows would reopen the Post-cycle bear scenario."
+  },
+  {
+   "source": "6b9db124-cc75-4634-811b-99cd20824b13",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "The Block defines realized volatility for Bitcoin as the standard deviation of the last 30 days' daily percentage changes."
+  },
+  {
+   "source": "e43eeb4c-e8a7-46d7-9b47-de3adbcf10d5",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Kraken quotes Bitcoin spot price of $81,261.00 on 2026-10-23."
+  },
+  {
+   "source": "50f55edd-4a2f-48ce-adbf-15da13cd3206",
+   "target": "54e157d3-42cc-443f-8096-b619c307e15a",
+   "name": "REGULATES",
+   "fact": "P.L. 119-27 signed July 18, 2025; Treasury implementation timeline（sign=+，strength=0.7，valence=neutral，polarity=0.30）"
+  },
+  {
+   "source": "354d42c1-e0cc-4f55-b288-37a63349377d",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "SUPPLIES",
+   "fact": "By mid-November 2025 about 2.8 million BTC sat with short-term holders at a loss — the most since the FTX collapse of November 2022 — with price roughly 25% below the record."
+  },
+  {
+   "source": "cfdcf13f-df7f-4bcc-a79b-5fea7774af45",
+   "target": "3060e592-2852-4e97-ac2d-b077043026e1",
+   "name": "REGULATES",
+   "fact": "US Treasury is implementing the GENIUS Act under a section 3 NPRM, with January 18, 2027 as the expected effective date for stablecoin licensing obligations and July 18, 2028 for barring unlicensed stablecoins offered to US persons."
+  },
+  {
+   "source": "350d4db1-e3aa-4ccc-bd0c-fff701e82ce4",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "SoSoValue-based reporting showed US spot Bitcoin ETF year-to-date 2026 flows of +$934 million by 25 September, with March 2026's +$1.32 billion the first positive month since October 2025."
+  },
+  {
+   "source": "cfdcf13f-df7f-4bcc-a79b-5fea7774af45",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "BACKS",
+   "fact": "The U.S. Strategic Bitcoin Reserve, established by a March 2025 White House presidential action, supports Bitcoin adoption as a government-held reserve asset."
+  },
+  {
+   "source": "2025b26b-de11-496c-b7bc-9cacbb3f4fb5",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "INFLUENCES",
+   "fact": "M2 year-over-year growth is a signpost for Bitcoin's path: M2 YoY below 3% alongside flat ETF flows in mid-2027 would support the Post-cycle bear scenario, while ≥5% supports liquidity expansion."
+  },
+  {
+   "source": "4e9fb75f-9c86-4f1c-a2c3-2ed9d3323f05",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Glassnode sees a dense Bitcoin cost-basis band just above spot that capped September 2026 highs."
+  },
+  {
+   "source": "4278fa36-52c3-416e-bd08-2f290ab03f3f",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "SatsIntel provides a tracker of Bitcoin ETF flows by fund including IBIT, FBTC, GBTC and ARKB."
+  },
+  {
+   "source": "811738bb-4657-4c48-b52a-325c2434430e",
+   "target": "372a426d-f1e2-4f3a-8099-b8b954bef8c9",
+   "name": "AUTHORED",
+   "fact": "Representative Golden co-introduced the American Reserve Modernization Act of 2026 with Begich on May 21, 2026; its status beyond introduction is unknown."
+  },
+  {
+   "source": "4e9fb75f-9c86-4f1c-a2c3-2ed9d3323f05",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "Glassnode data (via CoinDesk) tracks long-term holder supply of BTC, which fell from 14,755,530 BTC in July 2025 to 14,302,998 BTC on November 16, 2025."
+  },
+  {
+   "source": "111ba019-9f2c-440d-85da-438caef9a64b",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "CONSTRAINS",
+   "fact": "The 10-year Treasury monthly yield is a signpost constraining Bitcoin's scenario path: sustained yields above 5.0% in H1 2027 tighten toward Post-cycle bear — 30%, while yields below 4.5% support Range-bound digestion — 35%."
+  },
+  {
+   "source": "cfdcf13f-df7f-4bcc-a79b-5fea7774af45",
+   "target": "372a426d-f1e2-4f3a-8099-b8b954bef8c9",
+   "name": "BACKS",
+   "fact": "The American Reserve Modernization Act of 2026 (Begich–Golden, introduced May 21, 2026) would codify the Strategic Bitcoin Reserve in the Treasury without taxpayer cost, with sales only to reduce national debt; its status beyond introduction is unknown."
+  },
+  {
+   "source": "cd131201-1ca4-440f-b55d-c6ead2553877",
+   "target": "ea309dae-2e95-4d30-acee-083969bf359d",
+   "name": "SUPPLIES",
+   "fact": "FRED publishes the Nominal Broad U.S. Dollar Index (series DTWEXBGS) as a tier-1 fetched source, as of 2026-10-23."
+  },
+  {
+   "source": "77c6736a-122c-409c-808c-16a5cb5ddcc9",
+   "target": "edbb394e-5561-4702-af9a-605769021ba2",
+   "name": "PUBLISHED_BY",
+   "fact": "The central bank policy rates series (CBPOL) for the United States is published by the Bank for International Settlements."
+  },
+  {
+   "source": "54b4c12d-07e5-4b94-8385-4d98511ed80f",
+   "target": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "name": "SUPPLIES",
+   "fact": "2025 LTH distribution drove drawdown; exchange reserves at 2.67M BTC（sign=-，strength=0.6，valence=transactional，polarity=-0.20）"
+  },
+  {
+   "source": "e43eeb4c-e8a7-46d7-9b47-de3adbcf10d5",
+   "target": "050c0596-b186-4449-8b73-caab3992cb4d",
+   "name": "IS_A",
+   "fact": "Second reference venue in the composite price；- 角色定位: Second reference venue in the composite price；- 立场: Neutral market infrastructure；- 影响力: low；- 目标/动机: Order-flow market share；- 约束: Regulatory compliance；- 资源/能力: Spot liquidity；- 软肋/红线: Same hack/failure tail class；- 言行差异: Neutral infrastructure role.；- 已知事实/记忆: Consistent with Coinbase prints throughout.（simulation_tier=3，salience=0.30）"
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "The Fed's September 2026 SEP median path of 4.1% through end-2027 shapes the macro liquidity backdrop for BTC's price path"
+  },
+  {
+   "source": "4278fa36-52c3-416e-bd08-2f290ab03f3f",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "SatsIntel put 2026 year-to-date US spot Bitcoin ETF net flows at just +$15.5 million, versus +$934 million per SoSoValue-based reporting."
+  },
+  {
+   "source": "5b130c93-0b0d-4f7f-96a1-a8a7d3f5b977",
+   "target": "8c028d72-d527-4f81-b9f6-16b736d274d1",
+   "name": "INVESTS_IN",
+   "fact": "DE Shaw cut its IBIT holdings from 9.7 million shares to 4.7 million shares between Q3 2025 and Q4 2025, per CF Benchmarks' 13F analysis"
+  },
+  {
+   "source": "edbb394e-5561-4702-af9a-605769021ba2",
+   "target": "77c6736a-122c-409c-808c-16a5cb5ddcc9",
+   "name": "TRACKS",
+   "fact": "The BIS recorded the US policy rate at 3.875% per year at end-September 2026 versus 4.125% per year a year earlier — net 25 bps of easing over twelve months"
+  },
+  {
+   "source": "f3f5402c-3f15-4674-a747-acba5e4eb67f",
+   "target": "c6b84d3e-366f-464b-afe1-3ce8dea00459",
+   "name": "TRACKS",
+   "fact": "FRED publishes the CBOE Volatility Index (VIX), monthly mean of 15.7755 in 2026-09 with latest daily 19.03 on 2026-10-22, within a 5-year range of 12.67 to 31.9662."
+  },
+  {
+   "source": "c6b84d3e-366f-464b-afe1-3ce8dea00459",
+   "target": "7da14ee6-5238-4e80-a1b7-2842df0718bc",
+   "name": "INFLUENCES",
+   "fact": "VIX at 19.03 on 2026-10-22 makes the equity-stress trigger for the CME BTCZ27-implied scenario read distant"
+  },
+  {
+   "source": "77c6736a-122c-409c-808c-16a5cb5ddcc9",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "CONSTRAINS",
+   "fact": "The US policy rate of 3.875% per year (2026-09) provides neutral macro support for Bitcoin price."
+  },
+  {
+   "source": "355eaceb-b525-444a-8ef8-e341d7be571a",
+   "target": "94fa790a-9a4e-4eb0-868f-a7a42c7234db",
+   "name": "TRACKS",
+   "fact": "CoinGlass printed GBTC at $10.23 billion (424.44 thousand BTC) as of 2026-10-22."
+  },
+  {
+   "source": "cd131201-1ca4-440f-b55d-c6ead2553877",
+   "target": "ea309dae-2e95-4d30-acee-083969bf359d",
+   "name": "TRACKS",
+   "fact": "The Nominal Broad U.S. Dollar Index is an official FRED series, latest observation 119.2152 Index for 2026-09, down from a year earlier."
+  },
+  {
+   "source": "8278d4d2-628f-4fd1-9fc8-0556d8d8006d",
+   "target": "050c0596-b186-4449-8b73-caab3992cb4d",
+   "name": "IS_A",
+   "fact": "Dominant options market setting implied vol and skew；- 角色定位: Dominant options market setting implied vol and skew；- 立场: DVOL 36.90 with IV Rank 6.7 on 2026-10-23 (unconfirmed); September 2026 expiry book call-heavy；- 影响力: medium；- 目标/动机: Options market share；- 约束: Long-dated book is thin；- 资源/能力: Dominant options liquidity；- 软肋/红线: Vol risk premium (~18 points over realized) can compress；- 言行差异: N"
+  },
+  {
+   "source": "025cde56-38ac-45ca-a4b6-3f2b9916961b",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "CONSTRAINS",
+   "fact": "The SEP median end-2027 funds rate is the only rate anchor available for Bitcoin's 2027 path: a cut-heavy revision to ≤3.625% at the December 2026 SEP would confirm the easing premise of Institutional reflation — 25%, while ≥4.125% kills it."
+  },
+  {
+   "source": "16ccbb50-edd7-4083-928d-a8eb324fb971",
+   "target": "16ccbb50-edd7-4083-928d-a8eb324fb971",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Fidelity (FBTC) 亦称 Fidelity Wise Origin Bitcoin Fund"
+  },
+  {
+   "source": "22d88f65-8faf-4363-904d-6eb50bfb4615",
+   "target": "3060e592-2852-4e97-ac2d-b077043026e1",
+   "name": "TRACKS",
+   "fact": "congress.gov tracks the enactment status of the GENIUS Act, showing Senate cloture failed September 15, 2026"
+  },
+  {
+   "source": "3691a858-c724-4c01-a576-72e40a6406fb",
+   "target": "8c028d72-d527-4f81-b9f6-16b736d274d1",
+   "name": "BACKS",
+   "fact": "Pensions & Investments reported BlackRock's Bitcoin ETF (IBIT) hit $80B in AUM on the back of sizeable institutional interest including a sovereign wealth fund and a university endowment."
+  },
+  {
+   "source": "350d4db1-e3aa-4ccc-bd0c-fff701e82ce4",
+   "target": "8d09a951-3ff9-484d-ad02-28b306c7ec0c",
+   "name": "TRACKS",
+   "fact": "SoSoValue annual sums are used as the series to determine whether 2027 US spot ETF net flow is positive."
+  },
+  {
+   "source": "f2369e2d-57fb-4022-87db-a7f7b2dd6ef0",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Galaxy Research's June 9, 2026 report argued the Bitcoin bottom 'has not yet been found,' with a $40k–46k base-case low, because realized price sits at about 43.7% of the prior all-time high."
+  },
+  {
+   "source": "355eaceb-b525-444a-8ef8-e341d7be571a",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "CoinGlass tracks spot Bitcoin ETF net inflows and holdings."
+  },
+  {
+   "source": "f3f5402c-3f15-4674-a747-acba5e4eb67f",
+   "target": "ea309dae-2e95-4d30-acee-083969bf359d",
+   "name": "TRACKS",
+   "fact": "FRED publishes the Nominal Broad U.S. Dollar Index (Index Jan 2006=100), 119.2152 in 2026-09 with latest daily 121.4048 on 2026-10-16."
+  },
+  {
+   "source": "b1862426-d776-41c8-bbd0-8452b0deb525",
+   "target": "8c028d72-d527-4f81-b9f6-16b736d274d1",
+   "name": "INVESTS_IN",
+   "fact": "Farallon cut its IBIT holdings by about 70% between Q3 2025 and Q4 2025, per CF Benchmarks' 13F analysis"
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "name": "INFLUENCES",
+   "fact": "The Fed's Sept 2026 SEP median holds the funds rate at 4.1% at end-2027 with 8 hike / 6 hold / 4 cut dispersion, framing the 40% forecast of at least one 25bp Fed cut by the December 2027 FOMC."
+  },
+  {
+   "source": "ea2406d3-dbce-47b8-a883-77194e0764ba",
+   "target": "7da14ee6-5238-4e80-a1b7-2842df0718bc",
+   "name": "SUPPLIES",
+   "fact": "CME lists and trades the BTCZ27 futures contract through 31 December 2027, last traded at 89,885.00 USD on 2026-10-23"
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "e43eeb4c-e8a7-46d7-9b47-de3adbcf10d5",
+   "name": "COMPETES_WITH",
+   "fact": "Coinbase and Kraken prices are combined as a composite BTC/USD spot anchor of ≈$81,243, with modest venue dispersion between the two"
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "Coinbase's daily close is used as a signpost for BTC: a 2027 close below $58,000 (the June 2026 low) confirms Post-cycle bear; a new epoch high falsifies it."
+  },
+  {
+   "source": "111ba019-9f2c-440d-85da-438caef9a64b",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "CONSTRAINS",
+   "fact": "A 10-year Treasury yield at 4.989% (2026-09) is cited as a macro condition absent in prior halving epochs that weighs on the Institutional reflation scenario for Bitcoin."
+  },
+  {
+   "source": "77c6736a-122c-409c-808c-16a5cb5ddcc9",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "CONSTRAINS",
+   "fact": "The federal funds rate stands at 3.875% per year (2026-09, end of period), part of the calm-but-tight macro backdrop affecting BTC."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "77c6736a-122c-409c-808c-16a5cb5ddcc9",
+   "name": "INFLUENCES",
+   "fact": "The US central bank policy rate of 3.875% per year (2026-09, −0.25 pp) is cited as neutral macro support influencing the Bitcoin forecast."
+  },
+  {
+   "source": "befa18ae-6b73-4890-b3f6-36c56331bab1",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "NYU Stern's V-Lab tracks Bitcoin-to-USD GARCH volatility analysis (VOL.BTCUSD:FOREX-R.GARCH), as of 2026-10-23."
+  },
+  {
+   "source": "ef892621-70af-40f0-93c0-9c024b8e84be",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Spark's correlation tool reports a typical BTC–dollar rolling correlation of -0.40 to -0.80 since 2014."
+  },
+  {
+   "source": "7da14ee6-5238-4e80-a1b7-2842df0718bc",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "BTCZ27 futures track BTC pricing, trading at 89,885.00 USD on 2026-10-23 with ~8.7% annualized premium to the spot fixing"
+  },
+  {
+   "source": "eaedfe28-db22-4654-923c-9ace0914877a",
+   "target": "7da14ee6-5238-4e80-a1b7-2842df0718bc",
+   "name": "TRACKS",
+   "fact": "WSJ market data reported the BTCZ27 December 2027 contract last traded at 89,885.00 USD on 2026-10-23."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "SUPPLIES",
+   "fact": "Coinbase's own pages printed Bitcoin at $81,485.85 and a converter at $81,844.29 as of October 23, 6:21 AM, providing price discovery for Bitcoin."
+  },
+  {
+   "source": "20d1e547-05b3-4270-8eaf-369c3ced0025",
+   "target": "54d1a258-ec6b-4b54-96e7-5332c4fd0a87",
+   "name": "REGULATES",
+   "fact": "The SEC has a separate adviser-custody proposal pending alongside the proposed Regulation Crypto Assets."
+  },
+  {
+   "source": "355eaceb-b525-444a-8ef8-e341d7be571a",
+   "target": "8d09a951-3ff9-484d-ad02-28b306c7ec0c",
+   "name": "TRACKS",
+   "fact": "CoinGlass tracks US spot Bitcoin ETF net assets, cumulative net inflows, and daily flows, reporting $108.01 billion net assets and +$57.78 billion cumulative net inflows (+721.78K BTC) as of 2026-10-22."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "f2369e2d-57fb-4022-87db-a7f7b2dd6ef0",
+   "name": "TRACKS",
+   "fact": "Galaxy's drawdown and amplitude-compression analysis draws on the fred:CBBTCUSD stored series (post-peak monthly means and cycle drawdown depths) for its Bitcoin cycle thesis."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Coinbase BTC/USD monthly mean series tracks Bitcoin's price, showing Oct/Oct changes of 2018 −58%, 2019 +30.7%, 2020 +41.8%, 2021 +387%, 2022 −66%, 2023 +51.4%, 2024 +121%, 2025 +72.7%, and 2026 (partial) −26.9% (4 of 9 negative)."
+  },
+  {
+   "source": "ef345793-e6df-4546-867d-c3aa3b91044e",
+   "target": "7da14ee6-5238-4e80-a1b7-2842df0718bc",
+   "name": "INFLUENCES",
+   "fact": "A driftless lognormal at DVOL 36.90 applied to the CME BTCZ27 price implies risk-neutral P(<60,000) ≈17% and P(>126,080) ≈15% for BTC at end-2027."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "ea309dae-2e95-4d30-acee-083969bf359d",
+   "name": "INFLUENCES",
+   "fact": "The Nominal Broad U.S. Dollar Index at 119.2152 (Jan 2006=100, 2026-09, −0.678% year over year) is part of the official macro baseline for the Bitcoin forecast."
+  },
+  {
+   "source": "372a426d-f1e2-4f3a-8099-b8b954bef8c9",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "The ARMA reserve bill, introduced 2026-05-21, will either pass or lapse when the 119th Congress ends in January 2027, affecting the Institutional reflation leg for BTC."
+  },
+  {
+   "source": "7da14ee6-5238-4e80-a1b7-2842df0718bc",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "CME Dec 2027 futures (BTCZ27) last traded 89,885.00 USD per WSJ market data (2026-10-23), consistent with a Q4 2027 settlement range of $85k–$100k."
+  },
+  {
+   "source": "50f55edd-4a2f-48ce-adbf-15da13cd3206",
+   "target": "15842e38-2e04-4f62-8b4e-e1b6d605a2e5",
+   "name": "REGULATES",
+   "fact": "The United States Senate has authority over the CLARITY Act, which failed cloture on September 15, 2026 and faces reconsideration (requiring cloture ≥60 votes) during the 2026–2027 lame-duck session."
+  },
+  {
+   "source": "c12e2cef-f981-423b-9a90-102de9844119",
+   "target": "108a608d-ec9b-45a5-9402-4c449d58b122",
+   "name": "INVESTS_IN",
+   "fact": "Pensions & Investments documentation at $80B AUM, July 2025（sign=+，strength=0.6，valence=allied，polarity=0.70）"
+  },
+  {
+   "source": "6b9db124-cc75-4634-811b-99cd20824b13",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "The Block tracks Bitcoin's 30-day annualized volatility as market data (theblock.co/data/crypto-markets/prices/annualized-btc-volatility-30d), as of 2026-10-23."
+  },
+  {
+   "source": "20d1e547-05b3-4270-8eaf-369c3ced0025",
+   "target": "15842e38-2e04-4f62-8b4e-e1b6d605a2e5",
+   "name": "BACKS",
+   "fact": "The SEC, per Chairman Atkins, supports delivering the CLARITY Act and is substituting rulemaking for stalled legislation after the Senate cloture motion failed on September 15, 2026."
+  },
+  {
+   "source": "54b803b4-5d51-4f1c-94ed-88d31c7a67f9",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Farside-derived monthly tallies showed US spot Bitcoin ETF net flows of −$3.5 billion in November 2025 and −$1.61 billion in January 2026."
+  },
+  {
+   "source": "20d1e547-05b3-4270-8eaf-369c3ced0025",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "REGULATES",
+   "fact": "The SEC proposed new Regulation Crypto Assets and a companion proposal (2026-100) on how investment advisers and funds can custody crypto assets, asserting oversight of crypto assets including Bitcoin."
+  },
+  {
+   "source": "7da14ee6-5238-4e80-a1b7-2842df0718bc",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "The $89,885 BTCZ27 forward sits inside the Range-bound digestion band ($60,000–$110,000); risk-neutral odds imply P(>$126,080)≈15% and P(<$60,000)≈17%, falsified if BTCZ27 flattens to spot on sustained outflows"
+  },
+  {
+   "source": "16ccbb50-edd7-4083-928d-a8eb324fb971",
+   "target": "16ccbb50-edd7-4083-928d-a8eb324fb971",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Fidelity (FBTC) 亦称 FBTC"
+  },
+  {
+   "source": "f3f5402c-3f15-4674-a747-acba5e4eb67f",
+   "target": "111ba019-9f2c-440d-85da-438caef9a64b",
+   "name": "TRACKS",
+   "fact": "FRED publishes the 10-Year Treasury Constant Maturity yield series (monthly mean of daily data), 4.989% in 2026-09 and a latest daily 5.13% on 2026-10-21."
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "CONSTRAINS",
+   "fact": "The Fed's own median path holding the funds rate at 4.1% through end-2027 removes the macro tailwind for BTC that the Institutional reflation scenario presumes"
+  },
+  {
+   "source": "c8ce717d-75a2-495e-9e8f-9cf7239b20bf",
+   "target": "8d09a951-3ff9-484d-ad02-28b306c7ec0c",
+   "name": "TRACKS",
+   "fact": "CF Benchmarks notes the three-month correlation between Bitcoin ETFs and non-profitable tech reached 0.78, the 97th percentile since December 2014, on Goldman Sachs data."
+  },
+  {
+   "source": "025cde56-38ac-45ca-a4b6-3f2b9916961b",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "INFLUENCES",
+   "fact": "The Fed's September 2026 SEP median projects 4.1% at end-2026 and 4.1% at end-2027, shaping macro expectations affecting Bitcoin."
+  },
+  {
+   "source": "20d1e547-05b3-4270-8eaf-369c3ced0025",
+   "target": "e3008f1f-c665-4582-aa3b-b6cd1d71c9cb",
+   "name": "REGULATES",
+   "fact": "The SEC publishes quarterly 13F data sets that reveal hedge-fund IBIT holdings changes."
+  },
+  {
+   "source": "94b3e3a2-3d3d-4da0-8227-c63f9b0ce171",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "Daily US spot-ETF net flows are a leading indicator to watch against the +$57.78 billion cumulative stock"
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "94b3e3a2-3d3d-4da0-8227-c63f9b0ce171",
+   "name": "INFLUENCES",
+   "fact": "The Fed's policy path shapes the Institutional reflation scenario: ETF inflows must accelerate against Fed easing that the SEP median does not deliver (eight participants still see 2027 hikes), so Fed policy constrains BTC ETF flow expectations."
+  },
+  {
+   "source": "cd131201-1ca4-440f-b55d-c6ead2553877",
+   "target": "111ba019-9f2c-440d-85da-438caef9a64b",
+   "name": "TRACKS",
+   "fact": "The 10-year Treasury yield was 4.989% in September 2026 versus 4.12% in September 2025 (+0.869 pp), with 5.13% on 2026-10-21, per the official FRED series"
+  },
+  {
+   "source": "372a426d-f1e2-4f3a-8099-b8b954bef8c9",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRIGGERS",
+   "fact": "Passage of the ARMA Act with purchase authority before the 119th Congress ends in January 2027 would confirm a structural bid for Bitcoin; failure would remove a reflation lever."
+  },
+  {
+   "source": "ea2406d3-dbce-47b8-a883-77194e0764ba",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "SUPPLIES",
+   "fact": "CME's BTCZ27 December 2027 contract trades through 31 December 2027 and last traded at 89,885.00 USD per WSJ market data on 2026-10-23, implying roughly 10.6% contango (~8.7% annualized) over the Coinbase daily fixing of 81,225.62 USD on 2026-10-22."
+  },
+  {
+   "source": "3060e592-2852-4e97-ac2d-b077043026e1",
+   "target": "a5095b27-a176-4b0b-81ec-30b7a8db8dd7",
+   "name": "REGULATES",
+   "fact": "The GENIUS Act, signed July 18, 2025 (P.L. 119-27), permits stablecoin issuers under $10 billion to operate under state regimes, with licensing obligations expected effective January 18, 2027 and unlicensed stablecoins barred from US persons by July 18, 2028."
+  },
+  {
+   "source": "7da14ee6-5238-4e80-a1b7-2842df0718bc",
+   "target": "3060e592-2852-4e97-ac2d-b077043026e1",
+   "name": "TRIGGERS",
+   "fact": "CME BTCZ27's market-implied pricing is shaped by GENIUS Act licensing starting Jan 18, 2027 and stablecoin market cap thresholds, though GENIUS licensing relates to stablecoins rather than BTC directly"
+  },
+  {
+   "source": "42ed9860-3f56-4724-88cf-d53dd7804927",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "REGULATES",
+   "fact": "IRS issued Rev Proc 2026-20, a safe harbor for digital asset staking by investment trusts / crypto ETPs."
+  },
+  {
+   "source": "4e9fb75f-9c86-4f1c-a2c3-2ed9d3323f05",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "CryptoQuant tracks Bitcoin exchange reserves, which it reported fell from approximately 2.8 million BTC in February 2026 to 2.67 million BTC (a decline of around 130,000 BTC), per an October 16, 2026 report; as of October 14, 2026 reserves were still 1.7% below mid-September 2026 levels."
+  },
+  {
+   "source": "cfdcf13f-df7f-4bcc-a79b-5fea7774af45",
+   "target": "372a426d-f1e2-4f3a-8099-b8b954bef8c9",
+   "name": "REGULATES",
+   "fact": "The American Reserve Modernization Act of 2026 would codify the reserve in the US Treasury without taxpayer cost, with sales only to reduce national debt."
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "INFLUENCES",
+   "fact": "The Fed's September 2026 SEP median holds the funds rate at 4.1% through end-2027, capping Bitcoin's macro tailwind."
+  },
+  {
+   "source": "2025b26b-de11-496c-b7bc-9cacbb3f4fb5",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRIGGERS",
+   "fact": "M2 year-over-year growth of +5.659% (2026-08) is cited as reducing the odds of the Liquidity shock scenario for Bitcoin."
+  },
+  {
+   "source": "3060e592-2852-4e97-ac2d-b077043026e1",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRIGGERS",
+   "fact": "GENIUS Act stablecoin licensing obligations begin January 18, 2027, opening a stablecoin growth channel for Bitcoin consistent with the Range-bound digestion scenario."
+  },
+  {
+   "source": "20d1e547-05b3-4270-8eaf-369c3ced0025",
+   "target": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "name": "REGULATES",
+   "fact": "2026 adviser-custody proposal covering state trust companies（strength=0.5，valence=neutral，polarity=0.00）"
+  },
+  {
+   "source": "16ccbb50-edd7-4083-928d-a8eb324fb971",
+   "target": "108a608d-ec9b-45a5-9402-4c449d58b122",
+   "name": "COMPETES_WITH",
+   "fact": "Second and first spot ETF issuers（sign=-，strength=0.6，valence=adversarial，polarity=-0.30）"
+  },
+  {
+   "source": "22d88f65-8faf-4363-904d-6eb50bfb4615",
+   "target": "15842e38-2e04-4f62-8b4e-e1b6d605a2e5",
+   "name": "TRACKS",
+   "fact": "congress.gov enactment status is the resolution criterion for whether the CLARITY Act (H.R.3633) is enacted into law by 31 Dec 2027."
+  },
+  {
+   "source": "15842e38-2e04-4f62-8b4e-e1b6d605a2e5",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRIGGERS",
+   "fact": "Enactment of the CLARITY Act (H.R.3633) into law by 31 Dec 2027 (25% probability) is a potential regulatory catalyst; Senate cloture failed Sep 15, 2026."
+  },
+  {
+   "source": "15842e38-2e04-4f62-8b4e-e1b6d605a2e5",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRIGGERS",
+   "fact": "Any Senate reconsideration of the CLARITY Act in Q3 2027 could add a policy bid to Bitcoin."
+  },
+  {
+   "source": "2025b26b-de11-496c-b7bc-9cacbb3f4fb5",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "US M2 liquidity expansion (23342.8 Billions of Dollars in 2026-08, +5.659% YoY) has historically fed BTC with lags measured in months, though that channel weakened through 2025-26, per CF Benchmarks"
+  },
+  {
+   "source": "15842e38-2e04-4f62-8b4e-e1b6d605a2e5",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRIGGERS",
+   "fact": "Passage of the CLARITY Act would add a legitimacy channel supporting the Institutional reflation scenario for Bitcoin, potentially helping it clear the prior cycle high of $126,080."
+  },
+  {
+   "source": "6c43631d-47a6-420e-ada4-ca0d25109ca5",
+   "target": "8278d4d2-628f-4fd1-9fc8-0556d8d8006d",
+   "name": "REPORTS_ON",
+   "fact": "CryptoStruct reports that Deribit's last listed BTC futures expire on 24 September 2027, serving as a positioning checkpoint on the forecast path"
+  },
+  {
+   "source": "4e9fb75f-9c86-4f1c-a2c3-2ed9d3323f05",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "Glassnode research published 'Coinbase + Glassnode: Charting Crypto Q4 2026' and 'BTC Market Pulse: Week 41', tracking BTC on-chain metrics."
+  },
+  {
+   "source": "350d4db1-e3aa-4ccc-bd0c-fff701e82ce4",
+   "target": "8d09a951-3ff9-484d-ad02-28b306c7ec0c",
+   "name": "TRACKS",
+   "fact": "SoSoValue data tracks US spot Bitcoin ETF flows, showing +$6.3 billion in Q3 2026, about $1 billion net for 2026 year-to-date, and March 2026's $1.32 billion as the first positive month since October 2025."
+  },
+  {
+   "source": "c8ce717d-75a2-495e-9e8f-9cf7239b20bf",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "CF Benchmarks finds the M2–BTC link weakened (Z-score −1.31, February 2026)."
+  },
+  {
+   "source": "cfdcf13f-df7f-4bcc-a79b-5fea7774af45",
+   "target": "00939f42-22a2-4484-937e-a399c5f6c2f9",
+   "name": "BACKS",
+   "fact": "Bo Hines backed the Strategic Bitcoin Reserve by suggesting gold sales as a budget-neutral funding strategy on March 24, 2025; no such sale or open-market reserve purchase is documented."
+  },
+  {
+   "source": "bc0992fe-c50a-4607-bd24-05f3ab0e8d9f",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "CoinDesk reported on Bitcoin's $16 billion quarterly options settlement arriving with a call-heavy book (2026-09-23)."
+  },
+  {
+   "source": "108a608d-ec9b-45a5-9402-4c449d58b122",
+   "target": "8c028d72-d527-4f81-b9f6-16b736d274d1",
+   "name": "BACKS",
+   "fact": "iShares discloses IBIT's holdings, showing IBIT alone holding 811,138.26040 BTC worth $66.19 billion on 2026-10-22."
+  },
+  {
+   "source": "77c6736a-122c-409c-808c-16a5cb5ddcc9",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "CONSTRAINS",
+   "fact": "The Fed's own median path holding the federal funds rate at 4.1% through end-2027 removes the macro tailwind presumed by the Institutional reflation scenario for BTC."
+  },
+  {
+   "source": "cf2d168f-a560-4ac2-b402-806bcedd6a48",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Grayscale Mini is a spot Bitcoin ETF holding 377.80K BTC with net assets of $5.42 billion per CoinGlass as of 2026-10-22."
+  },
+  {
+   "source": "111ba019-9f2c-440d-85da-438caef9a64b",
+   "target": "7da14ee6-5238-4e80-a1b7-2842df0718bc",
+   "name": "CONSTRAINS",
+   "fact": "The 10-year Treasury yield at 4.989% (2026-09; 5.13% daily on 2026-10-21) bounds plausible dollar funding costs below BTCZ27's ≈8.7% annualized basis premium."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Coinbase provides the daily fixing for Bitcoin price, quoting 81,225.62 U.S. Dollars on 2026-10-22 (monthly observation 80,482.22 USD for 2026-09)."
+  },
+  {
+   "source": "cd131201-1ca4-440f-b55d-c6ead2553877",
+   "target": "c6b84d3e-366f-464b-afe1-3ce8dea00459",
+   "name": "SUPPLIES",
+   "fact": "FRED publishes the official CBOE Volatility Index (VIX) series, whose latest observation is marked down from a year earlier, near the bottom of the charted range."
+  },
+  {
+   "source": "8278d4d2-628f-4fd1-9fc8-0556d8d8006d",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "Deribit's September 2026 expiry options book was reported call-heavy and its DVOL index printed 36.90 with IV Rank 6.7 on 2026-10-23 (unconfirmed reading)"
+  },
+  {
+   "source": "2025b26b-de11-496c-b7bc-9cacbb3f4fb5",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "INFLUENCES",
+   "fact": "M2 money supply up 5.659% year-over-year (2026-08) provides neutral macro liquidity for Bitcoin."
+  },
+  {
+   "source": "4e9fb75f-9c86-4f1c-a2c3-2ed9d3323f05",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "Per CryptoQuant data, BTC exchange reserves fell from ~2.8 million BTC in February 2026 to 2.67 million BTC, a supply-squeeze input ahead of the April 2027 third anniversary of the April 2024 halving."
+  },
+  {
+   "source": "77c6736a-122c-409c-808c-16a5cb5ddcc9",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "CONSTRAINS",
+   "fact": "The September 2026 SEP median holds the funds rate at 4.1% through end-2027, an adjustment that weighs against the Institutional reflation scenario for Bitcoin."
+  },
+  {
+   "source": "723a72b1-c289-4c89-80a8-438dcf778bf5",
+   "target": "131c4623-15c4-402a-ba62-df19baaf6a4b",
+   "name": "IS_A",
+   "fact": "Post-halving sell-pressure channel; muted at current prices；- 角色定位: Post-halving sell-pressure channel; muted at current prices；- 立场: No capitulation signal: hosting-industry estimate implies 42-60% margins at $0.07/kWh with sub-15 J/TH hardware (secondary claim)；- 影响力: low；- 目标/动机: Margin preservation；- 约束: Post-halving revenue halving；- 资源/能力: Hashrate and reserves (unquantified)；- 软肋/红线: Price "
+  },
+  {
+   "source": "08d67630-918a-4d61-8adb-5365015c15c9",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "The BITCOIN Act will either pass or lapse when the 119th Congress ends in January 2027, affecting the Institutional reflation scenario for BTC."
+  },
+  {
+   "source": "025cde56-38ac-45ca-a4b6-3f2b9916961b",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "CONSTRAINS",
+   "fact": "The September 2026 SEP median projects 4.1% for end-2027, providing no policy-easing cushion on the Fed's own median path for BTC."
+  },
+  {
+   "source": "108a608d-ec9b-45a5-9402-4c449d58b122",
+   "target": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "name": "DEPENDS_ON",
+   "fact": "Coinbase custodies for most ETFs and supplies the CBBTCUSD settlement series（sign=+，strength=0.8，valence=transactional，polarity=0.40）"
+  },
+  {
+   "source": "025cde56-38ac-45ca-a4b6-3f2b9916961b",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "CONSTRAINS",
+   "fact": "The SEP median end-2027 rate at or below 3.9% in 2027 SEP releases would restore BTC's reflation rate leg, while a 4.1% hold kills the Institutional reflation scenario."
+  },
+  {
+   "source": "cfdcf13f-df7f-4bcc-a79b-5fea7774af45",
+   "target": "38c1c42d-067a-4ad3-83b6-77730cd103b9",
+   "name": "TRACKS",
+   "fact": "Coinpedia contests the tracker-based estimate of about 328,372 BTC in estimated federal holdings underlying the Strategic Bitcoin Reserve as of February 2026."
+  },
+  {
+   "source": "50f55edd-4a2f-48ce-adbf-15da13cd3206",
+   "target": "3060e592-2852-4e97-ac2d-b077043026e1",
+   "name": "REGULATES",
+   "fact": "Senate cloture on the GENIUS Act failed on September 15, 2026, leaving the bill unenacted per congress.gov enactment status"
+  },
+  {
+   "source": "8278d4d2-628f-4fd1-9fc8-0556d8d8006d",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Deribit publishes the Bitcoin Volatility Index (DVOL) statistics page for Bitcoin."
+  },
+  {
+   "source": "cfdcf13f-df7f-4bcc-a79b-5fea7774af45",
+   "target": "f423c99e-6e9b-4576-85d9-369613d89a04",
+   "name": "DEPENDS_ON",
+   "fact": "Treasury/White House announcements are the resolution source for whether a documented net-new US government BTC purchase occurs by 31 Dec 2027."
+  },
+  {
+   "source": "20d1e547-05b3-4270-8eaf-369c3ced0025",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRIGGERS",
+   "fact": "Possible SEC finalization of proposed Regulation Crypto Assets in Q3 2027 could add a policy bid to Bitcoin."
+  },
+  {
+   "source": "54b803b4-5d51-4f1c-94ed-88d31c7a67f9",
+   "target": "8c028d72-d527-4f81-b9f6-16b736d274d1",
+   "name": "TRACKS",
+   "fact": "Farside Investors tracks US spot Bitcoin ETF flows in US$m by fund including IBIT (farside.co.uk/btc/), as of 2026-10-23."
+  },
+  {
+   "source": "8278d4d2-628f-4fd1-9fc8-0556d8d8006d",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "SUPPLIES",
+   "fact": "Deribit lists BTC futures and quarterly options with the last listed BTC futures expiring 24 September 2027, providing positioning and gamma checkpoints"
+  },
+  {
+   "source": "350d4db1-e3aa-4ccc-bd0c-fff701e82ce4",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "SoSoValue operates a Bitcoin ETF dashboard providing daily data and charts of spot BTC ETF inflows and outflows."
+  },
+  {
+   "source": "ea309dae-2e95-4d30-acee-083969bf359d",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "CONSTRAINS",
+   "fact": "The Nominal Broad U.S. Dollar Index (DTWEXBGS) closing above 128.837 (its January 2025 peak) in any 2027 period would signal a dollar squeeze that undercuts the Institutional reflation scenario for Bitcoin."
+  },
+  {
+   "source": "54b4c12d-07e5-4b94-8385-4d98511ed80f",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "SUPPLIES",
+   "fact": "Long-term holders distributed BTC during the 2025 decline, with their supply falling by 452,532 BTC from 14,755,530 BTC in July 2025 to 14,302,998 BTC on November 16, 2025, indicating selling came from them rather than ETFs."
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "2025b26b-de11-496c-b7bc-9cacbb3f4fb5",
+   "name": "INFLUENCES",
+   "fact": "CF Benchmarks links a Fed pivot to subsequent M2 expansion, with Bitcoin responding with a lag measured in months rather than years."
+  },
+  {
+   "source": "372a426d-f1e2-4f3a-8099-b8b954bef8c9",
+   "target": "f423c99e-6e9b-4576-85d9-369613d89a04",
+   "name": "CONSTRAINS",
+   "fact": "The ARMA bill of May 21, 2026 remains unintroduced-beyond-introduction, so it does not yet expand US government BTC acquisition authority beyond the budget-neutral executive order."
+  },
+  {
+   "source": "cfdcf13f-df7f-4bcc-a79b-5fea7774af45",
+   "target": "3060e592-2852-4e97-ac2d-b077043026e1",
+   "name": "REGULATES",
+   "fact": "The U.S. Department of the Treasury seeks public comment on GENIUS Act proposed rulemaking (press release sb0605)."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "8278d4d2-628f-4fd1-9fc8-0556d8d8006d",
+   "name": "BACKS",
+   "fact": "Deribit is described as 'Deribit by Coinbase', indicating Coinbase's backing of the Deribit platform."
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "025cde56-38ac-45ca-a4b6-3f2b9916961b",
+   "name": "PUBLISHED",
+   "fact": "The Fed's September 2026 SEP median projects the US policy rate at 4.1% at end-2026 and 4.1% at end-2027."
+  },
+  {
+   "source": "c6b84d3e-366f-464b-afe1-3ce8dea00459",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRIGGERS",
+   "fact": "A VIX jump from 19.03 (2026-10-22) toward its 5-year high of 31.9662 with futures backwardation would trigger the Liquidity-shock scenario for BTC (sub-$30,000 spike)"
+  },
+  {
+   "source": "f3f5402c-3f15-4674-a747-acba5e4eb67f",
+   "target": "2025b26b-de11-496c-b7bc-9cacbb3f4fb5",
+   "name": "TRACKS",
+   "fact": "FRED publishes US M2 (Billions of Dollars), at 23342.8 in 2026-08, +1250.2 (+5.7%) year over year."
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Federal Reserve (FOMC) 亦称 FOMC"
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "1cfcd19e-34f0-485d-ae99-293e41ea3a8c",
+   "name": "TRACKS",
+   "fact": "NYU Stern V-Lab's GARCH one-day-ahead volatility forecast for the Coinbase Bitcoin series for 2026-10-22 was 33.44%."
+  },
+  {
+   "source": "8d09a951-3ff9-484d-ad02-28b306c7ec0c",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Spot Bitcoin ETF demand has 'cooled' and 2026 flows are near net-zero (about +$1B YTD per SoSoValue via Yahoo; +$15.5M per SatsIntel), so no flow impulse into Bitcoin."
+  },
+  {
+   "source": "f2369e2d-57fb-4022-87db-a7f7b2dd6ef0",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Galaxy Research tracks Bitcoin's cycle drawdowns, reporting peak-to-trough series of 85% → 84% → 77% across successive cycles with every prior top followed by a bottom about 12–13 months later."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "111ba019-9f2c-440d-85da-438caef9a64b",
+   "name": "INFLUENCES",
+   "fact": "The 10-year Treasury yield, at 4.989% in 2026-09 (+0.869 pp year over year), is part of the macro baseline shaping the Bitcoin price outlook."
+  },
+  {
+   "source": "69025bbb-7388-467e-8479-3aeacbd49e1a",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "The Spark Bitcoin Correlation Calculator tracks Bitcoin's correlation versus stocks, gold, and bonds."
+  },
+  {
+   "source": "cd131201-1ca4-440f-b55d-c6ead2553877",
+   "target": "2025b26b-de11-496c-b7bc-9cacbb3f4fb5",
+   "name": "TRACKS",
+   "fact": "FRED publishes the official M2 — United States series (M2SL) and its year-over-year % change series, with the latest observations marked up from a year earlier, the highest in the charted period."
+  },
+  {
+   "source": "0f991992-9060-4a25-b06e-1ad6d3ace3bc",
+   "target": "15842e38-2e04-4f62-8b4e-e1b6d605a2e5",
+   "name": "TRACKS",
+   "fact": "DLA Piper published analysis (September 2026) on the Senate's failure to advance the CLARITY Act."
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "7da14ee6-5238-4e80-a1b7-2842df0718bc",
+   "name": "INFLUENCES",
+   "fact": "A flat Fed funds rate at 4.1% into 2028 would falsify the Institutional reflation scenario implied by CME BTCZ27 pricing"
+  },
+  {
+   "source": "ea2406d3-dbce-47b8-a883-77194e0764ba",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "CME Group publishes economic research on why Bitcoin is moving in tandem with equities."
+  },
+  {
+   "source": "108a608d-ec9b-45a5-9402-4c449d58b122",
+   "target": "c12e2cef-f981-423b-9a90-102de9844119",
+   "name": "BACKS",
+   "fact": "CF Benchmarks 13F analysis: marginal holder shifted to durable allocators（sign=+，strength=0.7，valence=allied，polarity=0.70）"
+  },
+  {
+   "source": "20d1e547-05b3-4270-8eaf-369c3ced0025",
+   "target": "54d1a258-ec6b-4b54-96e7-5332c4fd0a87",
+   "name": "REGULATES",
+   "fact": "The SEC issued a 2026 custody proposal that would permit adviser self-custody in certain circumstances and state trust companies."
+  },
+  {
+   "source": "4278fa36-52c3-416e-bd08-2f290ab03f3f",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "SatsIntel publishes Bitcoin ETF flows by fund, covering IBIT, FBTC, GBTC and ARKB (satsintel.io/en/etfs/flows), as of 2026-10-23."
+  },
+  {
+   "source": "111ba019-9f2c-440d-85da-438caef9a64b",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "CONSTRAINS",
+   "fact": "A 10-year Treasury yield sustained above 5% in H1 2027 would reinforce a range/bear outcome for BTC, while below ~4.5% would aid reflation; the yield was 4.989% in 2026-09."
+  },
+  {
+   "source": "fe301088-19d5-455c-9f68-3649f572fe39",
+   "target": "a5095b27-a176-4b0b-81ec-30b7a8db8dd7",
+   "name": "TRACKS",
+   "fact": "The Federal Reserve Bank of New York's Liberty Street Economics blog updated its analysis of stablecoins and non-crypto shocks in July 2026, using the 2023 SVB failure and its impact on USDC as the case study."
+  },
+  {
+   "source": "e3008f1f-c665-4582-aa3b-b6cd1d71c9cb",
+   "target": "8c028d72-d527-4f81-b9f6-16b736d274d1",
+   "name": "TRACKS",
+   "fact": "Quarterly 13F filings (SEC publishes quarterly 13F data sets; due Nov 2026 and May 2027) reveal whether hedge-fund IBIT de-risking — top-40 funds cut holdings 28% from 114 million to 82 million shares by Q4 2025 — continued or reversed."
+  },
+  {
+   "source": "e43eeb4c-e8a7-46d7-9b47-de3adbcf10d5",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Kraken's Bitcoin price page tracks the live BTC/USD price."
+  },
+  {
+   "source": "1f89370a-e503-4a9a-8273-08935ef63758",
+   "target": "1f89370a-e503-4a9a-8273-08935ef63758",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "MicroStrategy / Strategy (MSTR) 亦称 MSTR"
+  },
+  {
+   "source": "c6b84d3e-366f-464b-afe1-3ce8dea00459",
+   "target": "6114fb43-97cd-4f2a-aadc-916a43d6a736",
+   "name": "TRIGGERS",
+   "fact": "A VIX jump from 19.03 (2026-10-22) toward its 5-year high of 31.9662 with futures backwardation would falsify/support the Liquidity shock scenario"
+  },
+  {
+   "source": "ea2406d3-dbce-47b8-a883-77194e0764ba",
+   "target": "7da14ee6-5238-4e80-a1b7-2842df0718bc",
+   "name": "SUPPLIES",
+   "fact": "CME Group operates the Bitcoin futures calendar on which the BTCZ27 December 2027 contract trades."
+  },
+  {
+   "source": "c8ce717d-75a2-495e-9e8f-9cf7239b20bf",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "INFLUENCES",
+   "fact": "CF Benchmarks argues the lag from a Fed pivot to Bitcoin's response to M2 expansion is \"measured in months, not years\"."
+  },
+  {
+   "source": "b4e9f054-1c80-4f5a-b1aa-4a8d2dd4da13",
+   "target": "15842e38-2e04-4f62-8b4e-e1b6d605a2e5",
+   "name": "TRACKS",
+   "fact": "CryptoTicker published an explainer on what the CLARITY Act does and where it stands."
+  },
+  {
+   "source": "cd131201-1ca4-440f-b55d-c6ead2553877",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "FRED's official monthly-mean Bitcoin series spans a stored five-year range from 16,942.7687 U.S. Dollars (2022-12) to 115,618.1861 U.S. Dollars (2025-07)."
+  },
+  {
+   "source": "50f55edd-4a2f-48ce-adbf-15da13cd3206",
+   "target": "fa791a5e-06ef-4ac2-91a7-ca6e18ce8fc1",
+   "name": "BACKS",
+   "fact": "The 119th Congress (2025-2026) introduced H.R.3633, the Digital Asset Market Structure bill (the CLARITY Act), which the Senate failed to advance in September 2026."
+  },
+  {
+   "source": "760dc371-25da-4a9e-aee3-88ae2f186f84",
+   "target": "8c028d72-d527-4f81-b9f6-16b736d274d1",
+   "name": "INVESTS_IN",
+   "fact": "Brevan Howard cut its IBIT stake 85% from its Q2 2025 peak while BTC was still above $90,000, per CF Benchmarks' 13F analysis"
+  },
+  {
+   "source": "c8ce717d-75a2-495e-9e8f-9cf7239b20bf",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "CF Benchmarks publishes 'Tracking Bitcoin's Flows' analysis tracking Bitcoin flows."
+  },
+  {
+   "source": "bc0992fe-c50a-4607-bd24-05f3ab0e8d9f",
+   "target": "8278d4d2-628f-4fd1-9fc8-0556d8d8006d",
+   "name": "REPORTS_ON",
+   "fact": "CoinDesk reported that Deribit's 2026-09-23 quarterly expiry retired roughly $16 billion of about $43.5 billion open interest in a call-heavy book"
+  },
+  {
+   "source": "11885208-05f7-4d3d-a673-9bc282d85fc7",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Earnpark published analysis on record Bitcoin ETF inflows and top 3 drivers of demand in 2026."
+  },
+  {
+   "source": "111ba019-9f2c-440d-85da-438caef9a64b",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "CONSTRAINS",
+   "fact": "The 10-year Treasury at 4.989% (2026-09) and 5.13% (2026-10-21) caps Bitcoin's re-rating."
+  },
+  {
+   "source": "cfdcf13f-df7f-4bcc-a79b-5fea7774af45",
+   "target": "40356376-f2e6-4ef1-ba0e-7ceac0cc338a",
+   "name": "BACKS",
+   "fact": "Congressman Nick Begich leads legislation to establish a Strategic Bitcoin Reserve."
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "77c6736a-122c-409c-808c-16a5cb5ddcc9",
+   "name": "PROJECTS",
+   "fact": "The Fed's September 2026 SEP median projects the funds rate at 4.1% at end-2026 and 4.1% at end-2027, with 2027 central tendency of 3.1%-4.4%; eight participants expect further hikes in 2027, six unchanged, four cuts"
+  },
+  {
+   "source": "94fa790a-9a4e-4eb0-868f-a7a42c7234db",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "GBTC is a spot Bitcoin ETF holding 424.44K BTC with net assets of $10.23 billion per CoinGlass as of 2026-10-22."
+  },
+  {
+   "source": "ef345793-e6df-4546-867d-c3aa3b91044e",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "The Bitcoin Volatility Index (DVOL) measures Bitcoin's implied volatility on Deribit."
+  },
+  {
+   "source": "354d42c1-e0cc-4f55-b288-37a63349377d",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "In the week to mid-October 2026 the short-term-to-long-term-holder supply ratio rose 4.2% to 14.2% (from 13.7%), near the top of its range, signalling rising speculative churn in BTC."
+  },
+  {
+   "source": "d0c3ace0-db8f-4386-8faf-7666353a1fe3",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "INFLUENCES",
+   "fact": "Bitcoin's elevated ~0.5 daily correlation with the S&P 500 since 2020 is the channel through which a recession-triggered Liquidity shock would propagate to BTC."
+  },
+  {
+   "source": "28704f36-ff92-40b1-b27a-6dda86b0ad66",
+   "target": "15842e38-2e04-4f62-8b4e-e1b6d605a2e5",
+   "name": "TRACKS",
+   "fact": "Orrick published analysis (October 2026) on the CLARITY Act stalling in the Senate and what's next for digital asset regulation."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "cd131201-1ca4-440f-b55d-c6ead2553877",
+   "name": "TRACKS",
+   "fact": "FRED publishes the official \"Coinbase Bitcoin — United States\" series, whose latest stored observation is 80482.22 U.S. Dollars for 2026-09, down 29.083% from a year earlier."
+  },
+  {
+   "source": "cae298bb-b645-4709-a4b8-dd966d580f03",
+   "target": "f423c99e-6e9b-4576-85d9-369613d89a04",
+   "name": "CONSTRAINS",
+   "fact": "The March 6, 2025 executive order permits the US government to acquire BTC only via budget-neutral strategies, constraining a net-new government BTC purchase by 31 Dec 2027 (forecast #10, 20%)."
+  },
+  {
+   "source": "025cde56-38ac-45ca-a4b6-3f2b9916961b",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "A SEP 2027 median rate below 4.1% (checked at Mar/Jun 2027 SEP) would confirm the Institutional reflation scenario for BTC, while holding at 4.1% keeps Range-bound digestion; the Fed's median path currently holds at 4.1%."
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "The Fed raised its 2026/2027 growth projections to 2.3%/2.4% in the September 2026 SEP, a path under which a recessionary turn opening the Liquidity shock scenario for BTC is not expected."
+  },
+  {
+   "source": "3de065b2-e682-4c05-b6ee-964f57123873",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "Deribit's inverse BTC futures provide historical price-tracking data on BTC, per CryptoStruct's futures dataset."
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "77c6736a-122c-409c-808c-16a5cb5ddcc9",
+   "name": "RAISED",
+   "fact": "The FOMC raised the federal funds target range by 25 bps to 3.75%-4.00% at its September 2026 meeting"
+  },
+  {
+   "source": "355eaceb-b525-444a-8ef8-e341d7be571a",
+   "target": "727f5acd-adc1-4127-985d-6986600e1283",
+   "name": "TRACKS",
+   "fact": "CoinGlass printed FBTC at $14.92 billion in net assets as of 2026-10-22."
+  },
+  {
+   "source": "cfdcf13f-df7f-4bcc-a79b-5fea7774af45",
+   "target": "45406dfc-b69c-4a67-b515-4ff105217edc",
+   "name": "IS_A",
+   "fact": "Strategic Bitcoin Reserve custodian-policy actor; no purchase power；- 角色定位: Strategic Bitcoin Reserve custodian-policy actor; no purchase power；- 立场: Executive order of March 6, 2025 capitalizes reserve with existing holdings, bars sales, permits only budget-neutral acquisition；- 影响力: medium；- 目标/动机: Maintain reserve without taxpayer cost；- 约束: No legislated purchase authority；- 资源/能力: ~328,372 BT"
+  },
+  {
+   "source": "b4e9f054-1c80-4f5a-b1aa-4a8d2dd4da13",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "CryptoTicker reported Bitcoin 30-day annualized realized volatility at about 20.2% as of 2026-10-20."
+  },
+  {
+   "source": "111ba019-9f2c-440d-85da-438caef9a64b",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "The 10-year Treasury at 4.989% (2026-09) is a leading indicator to watch for BTC"
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "FRED series 'Coinbase Bitcoin — United States' recorded a BTC fixing of 81,225.62 USD on daily observation 2026-10-22"
+  },
+  {
+   "source": "cfdcf13f-df7f-4bcc-a79b-5fea7774af45",
+   "target": "08d67630-918a-4d61-8adb-5365015c15c9",
+   "name": "BACKS",
+   "fact": "The BITCOIN Act — 1,000,000 BTC over five years, reintroduced March 11, 2025 with 5 co-sponsors — would give the Strategic Bitcoin Reserve purchase power, but it has not become law."
+  },
+  {
+   "source": "355eaceb-b525-444a-8ef8-e341d7be571a",
+   "target": "8d09a951-3ff9-484d-ad02-28b306c7ec0c",
+   "name": "TRACKS",
+   "fact": "CoinGlass annual sums are used as the series to determine whether 2027 US spot ETF net flow is positive, a binary mapped to the Institutional reflation scenario (25%)."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "c6b84d3e-366f-464b-afe1-3ce8dea00459",
+   "name": "INFLUENCES",
+   "fact": "The VIX at 15.7755 Index (2026-09) indicates stress-free market conditions that the report says current Bitcoin prices do not reflect."
+  },
+  {
+   "source": "15842e38-2e04-4f62-8b4e-e1b6d605a2e5",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "The CLARITY Act (H.R.3633) market-structure bill constitutes the legislative leg of the Institutional reflation scenario for BTC; Senate cloture fell short on 2026-09-15 (49-50 against the 60 required) with a reconsideration motion pending."
+  },
+  {
+   "source": "2025b26b-de11-496c-b7bc-9cacbb3f4fb5",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "INFLUENCES",
+   "fact": "CF Benchmarks argues the lag from a Fed pivot to Bitcoin's response to M2 expansion is measured in months, not years, though the liquidity-to-BTC transmission weakened through 2025-26."
+  },
+  {
+   "source": "108a608d-ec9b-45a5-9402-4c449d58b122",
+   "target": "108a608d-ec9b-45a5-9402-4c449d58b122",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "BlackRock (IBIT) 亦称 IBIT"
+  },
+  {
+   "source": "8cc32087-d2a8-4b37-b33e-16076aae184c",
+   "target": "4e9fb75f-9c86-4f1c-a2c3-2ed9d3323f05",
+   "name": "DEPENDS_ON",
+   "fact": "24/7 Wall St. cited CryptoQuant for Bitcoin price and recovery data as of late October 2026 (~$81,881 on October 22, about 35% below the record)."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "f3f5402c-3f15-4674-a747-acba5e4eb67f",
+   "name": "TRACKS",
+   "fact": "FRED publishes the Coinbase Bitcoin — United States series (monthly mean of daily data), with 80482.22 U.S. Dollars in 2026-09 and a latest daily value of 81225.62 on 2026-10-22."
+  },
+  {
+   "source": "c6b84d3e-366f-464b-afe1-3ce8dea00459",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "CONSTRAINS",
+   "fact": "A VIX close above its 5-year high of 31.9662 (set 2025-04) in any 2027 close flags the Liquidity shock (10%) scenario for BTC."
+  },
+  {
+   "source": "ea2406d3-dbce-47b8-a883-77194e0764ba",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "CME research finds Bitcoin's daily correlation to the S&P 500 rose from 0.2 (January 2014–April 2025) to about 0.5 in 2020 and stayed elevated."
+  },
+  {
+   "source": "11885208-05f7-4d3d-a673-9bc282d85fc7",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Earnpark reported December 2025 US spot Bitcoin ETF flows of +$457 million, disputed against Farside's −$1.1 billion."
+  },
+  {
+   "source": "f2369e2d-57fb-4022-87db-a7f7b2dd6ef0",
+   "target": "b19f85e5-0453-4f77-8cda-32737a7d3e18",
+   "name": "IS_A",
+   "fact": "Cited cycle analyst whose base case frames the bear branch；- 角色定位: Cited cycle analyst whose base case frames the bear branch；- 立场: As of June 9, 2026: cycle bottom 'not yet found', base-case low $40k-46k; peak-to-trough series 85%->84%->77%; every prior bottom 12-13 months after top；- 影响力: medium；- 目标/动机: Influential research；- 约束: Forecast, not observation；- 资源/能力: Cycle database and methodology"
+  },
+  {
+   "source": "1f89370a-e503-4a9a-8273-08935ef63758",
+   "target": "b19f85e5-0453-4f77-8cda-32737a7d3e18",
+   "name": "IS_A",
+   "fact": "Largest corporate holder; leverage and issuance set reflexive price dynamics；- 角色定位: Largest corporate holder; leverage and issuance set reflexive price dynamics；- 立场: Not detailed in current evidence beyond role designation；- 影响力: medium；- 目标/动机: Accumulate Bitcoin via levered issuance；- 约束: Leverage amplifies drawdowns；Equity-issuance dependence；- 资源/能力: Largest corporate BTC position (size unqu"
+  },
+  {
+   "source": "f2369e2d-57fb-4022-87db-a7f7b2dd6ef0",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "CONSTRAINS",
+   "fact": "Galaxy's $40k–46k bottom case independently supports the risk-neutral P(<$60,000)≈17% scenario for BTC; falsified if the reported June 2026 low near $58,000 holds with resumed inflows"
+  },
+  {
+   "source": "c8ce717d-75a2-495e-9e8f-9cf7239b20bf",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "CF Benchmarks says the M2 liquidity channel has historically fed BTC with lags measured in months, though it weakened through 2025-26"
+  },
+  {
+   "source": "727f5acd-adc1-4127-985d-6986600e1283",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "FBTC is a US spot Bitcoin ETF with net assets of $14.92 billion per CoinGlass as of 2026-10-22."
+  },
+  {
+   "source": "08d67630-918a-4d61-8adb-5365015c15c9",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRIGGERS",
+   "fact": "Passage of the BITCOIN Act with purchase authority would confirm a structural bid for Bitcoin; failure would remove a reflation lever."
+  },
+  {
+   "source": "adf9d466-c09e-472f-9b54-96536607b443",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "Entity-adjusted NUPL only re-entered the 'Optimism/Anxiety' band, well below 'Belief/Denial', and NUPL eased from 13.6% to 12.8% in the week to mid-October 2026."
+  },
+  {
+   "source": "fe301088-19d5-455c-9f68-3649f572fe39",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "The Federal Reserve Bank of New York's Liberty Street Economics blog published a 2026 update on stablecoins and (non)crypto shocks bearing on Bitcoin."
+  },
+  {
+   "source": "befa18ae-6b73-4890-b3f6-36c56331bab1",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "NYU Stern V-Lab's GARCH one-day-ahead Bitcoin volatility forecast for 2026-10-22 was 33.44%."
+  },
+  {
+   "source": "1f89370a-e503-4a9a-8273-08935ef63758",
+   "target": "1f89370a-e503-4a9a-8273-08935ef63758",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "MicroStrategy / Strategy (MSTR) 亦称 Strategy"
+  },
+  {
+   "source": "c8ce717d-75a2-495e-9e8f-9cf7239b20bf",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "CF Benchmarks calculates Bitcoin's Z-score versus its M2 fair value, which swung from +1.48 in January 2025 to -1.31 by February 2026 even as M2 re-expanded."
+  },
+  {
+   "source": "355eaceb-b525-444a-8ef8-e341d7be571a",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "CoinGlass (with Farside) cumulative US spot Bitcoin ETF flows is the resolution source for the forecast of positive full-year 2027 net flows."
+  },
+  {
+   "source": "2025b26b-de11-496c-b7bc-9cacbb3f4fb5",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "US M2, at 23,342.8 Billions of Dollars in 2026-08 and +5.659% year over year, has historically fed BTC prices with lags measured in months per CF Benchmarks, though that channel weakened through 2025-26."
+  },
+  {
+   "source": "11885208-05f7-4d3d-a673-9bc282d85fc7",
+   "target": "8d09a951-3ff9-484d-ad02-28b306c7ec0c",
+   "name": "TRACKS",
+   "fact": "Earnpark reported that Bitcoin ETF inflows hit $20B in 2026 and analyzed the top 3 drivers, as of 2026-10-23."
+  },
+  {
+   "source": "20d1e547-05b3-4270-8eaf-369c3ced0025",
+   "target": "956b7ec0-445e-49eb-925b-68c8537ca1c5",
+   "name": "REGULATES",
+   "fact": "The SEC proposed 'Regulation Crypto Assets' in 2026 — exemptions for offerings up to $5 million over four years and up to $75 million per 12-month period, plus a safe harbor, with a 60-day comment period — following its March 2026 interpretation."
+  },
+  {
+   "source": "4e9fb75f-9c86-4f1c-a2c3-2ed9d3323f05",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Glassnode tracks Bitcoin on-chain metrics and cautions that wallet restructuring and incomplete address identification can move exchange-reserve estimates without actual trading occurring."
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "025cde56-38ac-45ca-a4b6-3f2b9916961b",
+   "name": "PUBLISHES",
+   "fact": "The Federal Reserve published the Summary of Economic Projections on September 16, 2026 (fomcprojtabl20260916.pdf)."
+  },
+  {
+   "source": "385d8f0f-fc0c-41de-a337-68648f58f2cc",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "The Coinbase Bitcoin Price Index (CBBTCUSD) series tracks the USD price of Bitcoin."
+  },
+  {
+   "source": "8c028d72-d527-4f81-b9f6-16b736d274d1",
+   "target": "727f5acd-adc1-4127-985d-6986600e1283",
+   "name": "COMPETES_WITH",
+   "fact": "IBIT competes with FBTC ($14.92 billion net assets per CoinGlass) for US spot Bitcoin ETF flows."
+  },
+  {
+   "source": "e43eeb4c-e8a7-46d7-9b47-de3adbcf10d5",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "Kraken price page quoted BTC at $81,261.00 with a 24h range of $81,236.09–$81,380.27, retrieved 2026-10-23"
+  },
+  {
+   "source": "8cc32087-d2a8-4b37-b33e-16076aae184c",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "TRACKS",
+   "fact": "24/7 Wall St., citing CryptoQuant, reported the halving-epoch high of $126,080 set on October 6, 2025 and a June 2026 low around $58,000 for BTC, anchors for the range-bound median path."
+  },
+  {
+   "source": "0f03a3e1-6250-4491-8d82-b8b5393a97dd",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "TRACKS",
+   "fact": "Small World FS reported (October 16, 2026) that Bitcoin exchange reserves fell from 3.2 million in 2026, impacting BTC prices."
+  },
+  {
+   "source": "8cfdf591-3740-4d17-8202-35a944b59f3c",
+   "target": "71acbfd8-45c3-494d-9ebb-cbe516c9c833",
+   "name": "CONSTRAINS",
+   "fact": "The Fed's projected rate path holding the funds rate at 4.1% through end-2027 leans against the Fed-easing premise of the Institutional reflation scenario"
+  },
+  {
+   "source": "cfdcf13f-df7f-4bcc-a79b-5fea7774af45",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "INVESTS_IN",
+   "fact": "The Strategic Bitcoin Reserve executive order signed March 6, 2025 capitalizes the reserve with bitcoin the government already holds, bars sales, and authorizes no taxpayer-funded purchases; estimated federal holdings of about 328,372 BTC as of February 2026 are a tracker-based estimate, which coinpedia contests."
+  },
+  {
+   "source": "2025b26b-de11-496c-b7bc-9cacbb3f4fb5",
+   "target": "06447837-f77f-4605-983a-ba5e4620f410",
+   "name": "CONSTRAINS",
+   "fact": "M2 growth of 5.659% year over year (2026-08) is a floor for Bitcoin, though CF Benchmarks finds the M2–BTC link weakened (Z-score −1.31, February 2026)."
+  },
+  {
+   "source": "895c95af-d589-4cb1-a3d0-a146978dbada",
+   "target": "2fb49030-40c3-4aed-a89c-cbceb241d6c5",
+   "name": "INFLUENCES",
+   "fact": "The short-term/long-term holder supply ratio at 14.2% as of 2026-10, if it rises through 15% on a quarterly basis, warns of a BTC range breakdown."
+  }
+ ],
+ "graph_id": "mirofish_d68f57f3414442f4"
+}

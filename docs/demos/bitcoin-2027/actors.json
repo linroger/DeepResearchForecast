@@ -1,0 +1,2580 @@
+{
+  "central_question": "What will the USD spot price of Bitcoin (Coinbase/Kraken composite) be at the official close of 31 December 2027?",
+  "as_of_date": "2026-10-23",
+  "situation_brief": {
+    "current_situation": "BTC trades at ~$81,225.62 (Coinbase FRED close, 2026-10-22) with Kraken at $81,261.00 (2026-10-23), about 35% below the halving-epoch high of $126,080 set October 6, 2025, after a ~54% drawdown to ~$58,000 in June 2026 and a ~31% 90-day recovery. US spot ETFs hold $108.01B net assets with +$57.78B cumulative inflows but near-flat 2026 flows (~+$1B YTD). 30-day realized vol is ~20-23%.",
+    "context": "The April 2024 halving epoch topped in October 2025; Galaxy finds every prior cycle bottomed 12-13 months after its top, placing the decisive window inside the horizon. Macro is neutral-tight: Fed funds 3.875% (2026-09), SEP median projects 4.1% through end-2027, 10-year Treasury 4.989%, M2 +5.659% YoY, VIX 15.78-19.03. CME BTCZ27 (Dec 2027) last traded 89,885.00 USD, ~8.7% annualized contango.",
+    "dynamics": "ETF marginal buyer shifted from hedge funds (top-40 cut IBIT 28% by Q4 2025) to advisors, sovereigns and endowments; Q3 2026 inflows rebounded to +$6.3B after months of outflows. On-chain regime flipped to re-accumulation: exchange reserves fell to 2.67M BTC, dormant supply growing, but short-term holder churn rising (STH/LTH ratio 14.2%) and an overhead cost-basis band capped September highs. SEC substitutes rulemaking (Regulation Crypto Assets, custody) for stalled CLARITY legislation; GENIUS Act licensing starts January 18, 2027; Strategic Bitcoin Reserve has no purchase power.",
+    "fault_lines": [
+      "Whether the June 2026 low (~$58,000) holds against the historical 12-13-month post-peak bottom window and Galaxy's $40k-46k base-case",
+      "Whether ETF flows reaccelerate (reflation) or stall (range) after the 2025-26 hedge-fund exodus",
+      "Fed path: SEP median holds 4.1% through 2027 while 8 participants see hikes and 4 see cuts",
+      "10-year Treasury at top of its 5-year range (4.989%) vs M2 growth of 5.659% as competing macro forces",
+      "Weakened M2-BTC transmission (Z-score -1.31) and elevated BTC-equity correlation (0.5-0.78) recouple BTC to equity risk appetite",
+      "CLARITY Act Senate cloture failure (49-50) and pending reconsideration; ARMA/BITCOIN reserve bills undelivered"
+    ],
+    "catalysts": [
+      "December 2026 FOMC and SEP revision to end-2027 median rate",
+      "119th Congress ends January 2027: ARMA, BITCOIN Act and CLARITY revival pass or lapse",
+      "GENIUS Act licensing obligations effective January 18, 2027",
+      "November 2026 and May 2027 quarterly 13F filings on IBIT/FBTC hedge-fund positioning",
+      "June 2027: twelve months past the June 2026 low — break below ~$58,000 confirms Post-cycle bear",
+      "SEC finalization of proposed Regulation Crypto Assets and custody rule in 2027",
+      "CME BTCZ27 last trade and settlement on 31 December 2027"
+    ]
+  },
+  "actors": [
+    {
+      "name": "BlackRock (IBIT)",
+      "type": "Organization",
+      "role": "Largest spot ETF issuer holding 811,138.26040 BTC ($66.19B market value, 2026-10-22)",
+      "stance": "Accumulating institutional channel; AUM fell from $80B (July 2025) to $66.19B on price and hedge-fund outflows",
+      "description": "Dominant US spot Bitcoin ETF issuer via iShares Bitcoin Trust; roughly three-fifths of the $108.01B complex net assets.",
+      "stated_vs_revealed": "Publicly supportive of Bitcoin institutionalization; revealed behavior shows AUM decline driven partly by flows, partly price.",
+      "memory": "IBIT reached $80B AUM in July 2025 with a sovereign wealth fund and university endowment among holders; Q4 2025 saw a 28% top-40 hedge-fund cut.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "iShares Bitcoin Trust",
+        "IBIT"
+      ],
+      "goals": [
+        "Grow and retain ETF AUM",
+        "Deepen institutional (advisor, sovereign, endowment) adoption"
+      ],
+      "constraints": [
+        "Hedge-fund de-risking cut top-40 holdings 28% by Q4 2025",
+        "Creation/redemption mechanics transmit outflows directly to spot selling"
+      ],
+      "assets": [
+        "811,138.26040 BTC in IBIT",
+        "Distribution reach and brand with institutional allocators"
+      ],
+      "vulnerabilities": [
+        "Concentrated daily-flow leadership (other funds bled while IBIT drew $665.2M around Oct 19, 2026)"
+      ],
+      "incentives": [
+        {
+          "driver": "Fee income on AUM",
+          "gains_if": "ETF inflows reaccelerate and price recovers toward $126,080+",
+          "loses_if": "Sustained outflows and range-bound or bear price action",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Institutional access",
+          "Scale and liquidity"
+        ],
+        "beliefs": [
+          "Bitcoin belongs in regulated ETF wrappers"
+        ],
+        "identity": "World's largest asset manager entering the Bitcoin market",
+        "frame": "ETF flows as the structural demand channel"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "Largest holder and dominant flow channel; daily disclosures are a leading indicator"
+      }
+    },
+    {
+      "name": "Fidelity (FBTC)",
+      "type": "Organization",
+      "role": "Second-largest spot ETF issuer ($14.92B net assets)",
+      "stance": "Retaining institutional demand alongside IBIT",
+      "description": "Fidelity Wise Origin Bitcoin Fund consolidates institutional demand as the number-two fund in the complex.",
+      "stated_vs_revealed": "Consistent institutional-custody positioning.",
+      "memory": "Held second place throughout the 2025-26 flow deceleration.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "FBTC",
+        "Fidelity Wise Origin Bitcoin Fund"
+      ],
+      "goals": [
+        "Compete for institutional ETF flows"
+      ],
+      "constraints": [
+        "Complex-wide flows near flat in 2026"
+      ],
+      "assets": [
+        "$14.92B net assets in FBTC"
+      ],
+      "vulnerabilities": [
+        "Same flow-deceleration dynamics as the complex"
+      ],
+      "incentives": [
+        {
+          "driver": "Fee income and client retention",
+          "gains_if": "Institutional allocation broadens in 2027",
+          "loses_if": "Flows stay stalled",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Integrated brokerage and custody"
+        ],
+        "beliefs": [
+          "Advisors will build permanent Bitcoin allocations"
+        ],
+        "identity": "Second dominant ETF issuer",
+        "frame": "Consolidate institutional demand"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.7,
+        "basis": "Second-largest fund; consolidates but does not dominate flows"
+      }
+    },
+    {
+      "name": "Federal Reserve (FOMC)",
+      "type": "Government",
+      "role": "Sets the policy rate and liquidity conditions for BTC's macro tailwind/headwind",
+      "stance": "Holding: raised target range to 3.75%-4.00% in September 2026; SEP median 4.1% at end-2026 and end-2027",
+      "description": "Rate path arbiter: September 2026 SEP shows dispersion of 8 hikes / 6 holds / 4 cuts for 2027, 2027 central tendency 3.1%-4.4%, PCE inflation projected 3.7% (2026) falling to 2.4% (2027).",
+      "stated_vs_revealed": "SEP median holds rates; the four cut-expecters reveal internal disagreement.",
+      "memory": "Net 25bps of easing over the twelve months to September 2026, then a September 2026 hike.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "arbiter",
+      "aliases": [
+        "FOMC",
+        "Fed"
+      ],
+      "goals": [
+        "Price stability and maximum employment"
+      ],
+      "constraints": [
+        "Inflation projected above target in 2026",
+        "Raised 2026/2027 growth forecasts to 2.3%/2.4%"
+      ],
+      "assets": [
+        "Policy rate at 3.875% (2026-09)",
+        "Balance sheet and liquidity tools"
+      ],
+      "vulnerabilities": [
+        "A recessionary turn would force cuts that also mark the Liquidity shock branch"
+      ],
+      "incentives": [
+        {
+          "driver": "Mandate fulfillment",
+          "gains_if": "n/a (policy actor)",
+          "loses_if": "n/a",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Data dependence",
+          "Mandate symmetry"
+        ],
+        "beliefs": [
+          "Inflation returns toward 2.4% in 2027"
+        ],
+        "identity": "Central bank",
+        "frame": "Restrictive-but-stable policy through 2027"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 1,
+        "score": 0.9,
+        "basis": "SEP median path is the single macro discriminator between scenarios"
+      }
+    },
+    {
+      "name": "US Treasury / Executive Branch",
+      "type": "Government",
+      "role": "Strategic Bitcoin Reserve custodian-policy actor; no purchase power",
+      "stance": "Executive order of March 6, 2025 capitalizes reserve with existing holdings, bars sales, permits only budget-neutral acquisition",
+      "description": "Holds an estimated ~328,372 BTC (tracker-based, unconfirmed as reserve purchases); Bo Hines suggested gold sales as budget-neutral in March 2025, none documented.",
+      "stated_vs_revealed": "Supportive rhetoric; no open-market purchase documented.",
+      "memory": "March 6, 2025 executive order; May 21, 2026 ARMA bill referred to Congress.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Strategic Bitcoin Reserve"
+      ],
+      "goals": [
+        "Maintain reserve without taxpayer cost"
+      ],
+      "constraints": [
+        "No legislated purchase authority"
+      ],
+      "assets": [
+        "~328,372 BTC estimated federal holdings"
+      ],
+      "vulnerabilities": [
+        "Reserve premise contested; purchases require Congress"
+      ],
+      "incentives": [
+        {
+          "driver": "Policy signal without fiscal cost",
+          "gains_if": "Budget-neutral acquisition strategies materialize",
+          "loses_if": "Legislation fails and reserve stays symbolic",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Budget neutrality"
+        ],
+        "beliefs": [
+          "Bitcoin as strategic reserve asset"
+        ],
+        "identity": "Executive policy actor",
+        "frame": "Symbolic reserve pending legislation"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "A purchase-authority law would be the structural bid for reflation; currently dormant"
+      }
+    },
+    {
+      "name": "US Congress",
+      "type": "Government",
+      "role": "Legislates stablecoin (GENIUS), market-structure (CLARITY) and reserve purchase bills",
+      "stance": "Mixed: CLARITY passed the House but Senate cloture failed 49-50 on Sept 15, 2026; BITCOIN Act and ARMA unintroduced-beyond-introduction",
+      "description": "119th Congress ends January 2027, forcing pass-or-lapse decisions on ARMA (Begich-Golden, May 21, 2026), the BITCOIN Act (1,000,000 BTC over five years) and CLARITY revival.",
+      "stated_vs_revealed": "Pro-crypto rhetoric vs failed cloture vote.",
+      "memory": "GENIUS Act signed July 18, 2025 (P.L. 119-27); CLARITY cloture failed Sept 15, 2026.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "arbiter",
+      "aliases": [
+        "Senate",
+        "House"
+      ],
+      "goals": [
+        "Legislate crypto market structure and reserve authority on partisan terms"
+      ],
+      "constraints": [
+        "60-vote Senate cloture threshold",
+        "Lame-duck calendar pressure"
+      ],
+      "assets": [
+        "Legislative authority over reserve purchases and stablecoin law"
+      ],
+      "vulnerabilities": [
+        "Cloture arithmetic; Tillis reconsideration motion pending"
+      ],
+      "incentives": [
+        {
+          "driver": "Coalition politics",
+          "gains_if": "Compromise enactment delivers legitimacy channel",
+          "loses_if": "Gridlock leaves SEC rulemaking as the only channel",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Legislative control of digital-asset policy"
+        ],
+        "beliefs": [
+          "Market-structure clarity needed"
+        ],
+        "identity": "Legislature",
+        "frame": "Contested crypto legislation"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.75,
+        "basis": "January 2027 deadline creates dated catalysts with large policy impact"
+      }
+    },
+    {
+      "name": "SEC",
+      "type": "Government",
+      "role": "Rulemaking substitute for stalled legislation",
+      "stance": "Active: proposed Regulation Crypto Assets in 2026 (offerings up to $5M over four years, $75M per 12 months, safe harbor, 60-day comment period) and an adviser-custody proposal",
+      "description": "Chairman Atkins says the SEC supports delivering CLARITY and is acting via rulemaking meanwhile; IRS Rev. Proc. 2026-20 (Oct 9, 2026) provides a staking safe harbor.",
+      "stated_vs_revealed": "Publicly pro-clarity; revealed action is incremental proposals.",
+      "memory": "March 2026 interpretation preceded the Regulation Crypto Assets proposal.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Deliver crypto rules via administrative action"
+      ],
+      "constraints": [
+        "Comment periods and litigation risk"
+      ],
+      "assets": [
+        "Rulemaking authority"
+      ],
+      "vulnerabilities": [
+        "Rules can be superseded or challenged if CLARITY passes"
+      ],
+      "incentives": [
+        {
+          "driver": "Regulatory mandate",
+          "gains_if": "Finalized rules expand compliant issuance and custody",
+          "loses_if": "Rules delayed or struck",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Investor protection",
+          "Disclosure"
+        ],
+        "beliefs": [
+          "Rulemaking can substitute for legislation"
+        ],
+        "identity": "Securities regulator",
+        "frame": "Administrative clarity"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.55,
+        "basis": "2027 finalization is a possible but modest policy bid"
+      }
+    },
+    {
+      "name": "Long-term Bitcoin holders",
+      "type": "Other",
+      "role": "Supply-swing cohort: distributed in 2025, re-accumulating through Q3 2026",
+      "stance": "Re-accumulation: supply dormant >1 year growing; entity-adjusted NUPL only in Optimism/Anxiety band",
+      "description": "LTH supply fell 452,532 BTC (July-Nov 2025, Glassnode) driving the drawdown; regime has since flipped, with ~2.8M BTC having passed to short-term holders at a loss in November 2025.",
+      "stated_vs_revealed": "HODL identity; revealed 2025 distribution shows conviction is cyclical.",
+      "memory": "2025 distribution and 2026 re-accumulation both on record.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "LTHs",
+        "HODL cohort"
+      ],
+      "goals": [
+        "Preserve and grow holdings"
+      ],
+      "constraints": [
+        "Cost-basis band above spot capped September 2026 highs"
+      ],
+      "assets": [
+        "~14.3M BTC long-term holder supply (Nov 2025 trough level)"
+      ],
+      "vulnerabilities": [
+        "A break of 2026 lows could trigger renewed distribution into a Post-cycle bear"
+      ],
+      "incentives": [
+        {
+          "driver": "Conviction and wealth preservation",
+          "gains_if": "Holding tightens float and supports range floor",
+          "loses_if": "Capitulation reopens deep drawdown",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Scarcity",
+          "Self-custody ethos"
+        ],
+        "beliefs": [
+          "Four-year cycle and supply compression"
+        ],
+        "identity": "Native Bitcoin accumulator base",
+        "frame": "Cycle timing"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.85,
+        "basis": "Their distribution-vs-accumulation switch is a named falsifier of the supply-squeeze view"
+      }
+    },
+    {
+      "name": "Bitcoin miners",
+      "type": "Other",
+      "role": "Post-halving sell-pressure channel; muted at current prices",
+      "stance": "No capitulation signal: hosting-industry estimate implies 42-60% margins at $0.07/kWh with sub-15 J/TH hardware (secondary claim)",
+      "description": "No primary miner-reserve or outflow figure for October 2026 exists in the record; limited capitulation sell pressure implied at ~$81,000.",
+      "stated_vs_revealed": "n/a; only secondary margin estimates available.",
+      "memory": "April 2024 halving epoch; third anniversary April 2027.",
+      "influence": "low",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "goals": [
+        "Margin preservation"
+      ],
+      "constraints": [
+        "Post-halving revenue halving"
+      ],
+      "assets": [
+        "Hashrate and reserves (unquantified)"
+      ],
+      "vulnerabilities": [
+        "Price fall toward $40k-46k would compress margins toward capitulation"
+      ],
+      "incentives": [
+        {
+          "driver": "Operating margin",
+          "gains_if": "Price holds above cost basis",
+          "loses_if": "Deep bear forces reserve sales",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Operational efficiency"
+        ],
+        "beliefs": [
+          "Efficient hardware defers capitulation"
+        ],
+        "identity": "Industrial supply side",
+        "frame": "Cost curves"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.35,
+        "basis": "Secondary evidence only; low current marginal pressure"
+      }
+    },
+    {
+      "name": "Coinbase",
+      "type": "Platform",
+      "role": "Reference price venue (FRED CBBTCUSD) and custody for most ETFs",
+      "stance": "Neutral market infrastructure",
+      "description": "Its daily fixing (81,225.62 USD, 2026-10-22) is the settlement series for the forecast's price binaries.",
+      "stated_vs_revealed": "Neutral infrastructure role.",
+      "memory": "FTX collapse of November 2022 remains the reference exchange-failure episode.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "intermediary",
+      "aliases": [
+        "CBBTCUSD"
+      ],
+      "goals": [
+        "Reliable price discovery and custody business"
+      ],
+      "constraints": [
+        "Fiduciary custody obligations"
+      ],
+      "assets": [
+        "ETF custody relationships",
+        "Reference price series"
+      ],
+      "vulnerabilities": [
+        "Exchange-failure/hack tail risk shared across venues"
+      ],
+      "incentives": [
+        {
+          "driver": "Fee and custody revenue",
+          "gains_if": "ETF complex grows",
+          "loses_if": "Outflows or a custody incident",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Compliance",
+          "Liquidity"
+        ],
+        "beliefs": [
+          "Institutional custody is durable"
+        ],
+        "identity": "Top US spot venue",
+        "frame": "Market infrastructure"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "Settlement venue for the forecast statistic"
+      }
+    },
+    {
+      "name": "Kraken",
+      "type": "Platform",
+      "role": "Second reference venue in the composite price",
+      "stance": "Neutral market infrastructure",
+      "description": "Quoted $81,261.00 on 2026-10-23, tracking Coinbase within 0.1%; no official Kraken fixing retrieved.",
+      "stated_vs_revealed": "Neutral infrastructure role.",
+      "memory": "Consistent with Coinbase prints throughout.",
+      "influence": "low",
+      "simulation_tier": 3,
+      "role_class": "intermediary",
+      "goals": [
+        "Order-flow market share"
+      ],
+      "constraints": [
+        "Regulatory compliance"
+      ],
+      "assets": [
+        "Spot liquidity"
+      ],
+      "vulnerabilities": [
+        "Same hack/failure tail class"
+      ],
+      "incentives": [
+        {
+          "driver": "Trading fees",
+          "gains_if": "Volume expands",
+          "loses_if": "Risk-off volume collapse",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Market integrity"
+        ],
+        "beliefs": [
+          "Venue competition"
+        ],
+        "identity": "Second reference venue",
+        "frame": "Infrastructure"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.3,
+        "basis": "Price composite component only"
+      }
+    },
+    {
+      "name": "MicroStrategy / Strategy (MSTR)",
+      "type": "Organization",
+      "role": "Largest corporate holder; leverage and issuance set reflexive price dynamics",
+      "stance": "Not detailed in current evidence beyond role designation",
+      "description": "Named in the cast for reflexive leverage dynamics; no current holdings figure appears in the evidence.",
+      "stated_vs_revealed": "Unknown from evidence.",
+      "memory": "No episode details in the evidence record.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "MSTR",
+        "Strategy"
+      ],
+      "goals": [
+        "Accumulate Bitcoin via levered issuance"
+      ],
+      "constraints": [
+        "Leverage amplifies drawdowns",
+        "Equity-issuance dependence"
+      ],
+      "assets": [
+        "Largest corporate BTC position (size unquantified in evidence)"
+      ],
+      "vulnerabilities": [
+        "Forced selling or dilution spiral in a deep bear"
+      ],
+      "incentives": [
+        {
+          "driver": "Leveraged BTC exposure",
+          "gains_if": "Reflation scenario raises NAV and issuance capacity",
+          "loses_if": "Bear market stresses leverage",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Bitcoin as treasury standard"
+        ],
+        "beliefs": [
+          "BTC appreciates long-term"
+        ],
+        "identity": "Leveraged corporate accumulator",
+        "frame": "Reflexivity"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 2,
+        "score": 0.45,
+        "basis": "Tracked actor with reflexive dynamics; no current data in evidence"
+      }
+    },
+    {
+      "name": "Glassnode / CryptoQuant",
+      "type": "Organization",
+      "role": "Authoritative on-chain reserve and holder data providers",
+      "stance": "Observational: reserves 2.67M BTC (down ~130,000 from Feb 2026); LTH re-accumulation; dense cost-basis band above spot",
+      "description": "Glassnode cautions wallet restructuring can move reserve estimates without trading; CryptoQuant data underpins the reserve and cycle readings cited throughout.",
+      "stated_vs_revealed": "Neutral data providers.",
+      "memory": "Glassnode supplied LTH supply series (14,755,530 to 14,302,998 BTC, 2025).",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "amplifier",
+      "goals": [
+        "Reliable on-chain metrics"
+      ],
+      "constraints": [
+        "Methodological caveats on address identification"
+      ],
+      "assets": [
+        "On-chain analytics datasets"
+      ],
+      "vulnerabilities": [
+        "Estimate revisions"
+      ],
+      "incentives": [
+        {
+          "driver": "Data subscription business",
+          "gains_if": "Metrics remain the consensus reference",
+          "loses_if": "Methodology discredited",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "On-chain transparency"
+        ],
+        "beliefs": [
+          "Supply metrics explain cycles"
+        ],
+        "identity": "Market data vendors",
+        "frame": "Observation"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "Their readings are the falsifiable supply indicators in signposts"
+      }
+    },
+    {
+      "name": "Sovereign wealth and pension allocators",
+      "type": "Other",
+      "role": "Marginal institutional demand for 2026-2027 ETF flows",
+      "stance": "Entering: a sovereign wealth fund and a university endowment documented in IBIT at $80B AUM (July 2025); advisors, sovereigns and endowments displacing hedge funds as marginal holders",
+      "description": "The durable-allocation cohort whose 13F-reported behavior through 2027 separates Institutional reflation from Range-bound digestion.",
+      "stated_vs_revealed": "Documented small sovereign/endowment positions; scale of future allocations unknown.",
+      "memory": "Entered during 2025 while hedge funds exited.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Investment advisors",
+        "Endowments"
+      ],
+      "goals": [
+        "Permanent, diversified allocations"
+      ],
+      "constraints": [
+        "Fiduciary and mandate limits"
+      ],
+      "assets": [
+        "Large patient pools of capital"
+      ],
+      "vulnerabilities": [
+        "Risk-off mandates can force exit in Liquidity shock"
+      ],
+      "incentives": [
+        {
+          "driver": "Portfolio diversification",
+          "gains_if": "BTC performs as diversifier; allocations grow",
+          "loses_if": "Deep drawdown discredits the allocation",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Prudence",
+          "Diversification"
+        ],
+        "beliefs": [
+          "Small BTC allocations improve portfolios"
+        ],
+        "identity": "Institutional allocators",
+        "frame": "Portfolio construction"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "Their Q2-Q3 2026 13F positions are the named single discriminator between the two central scenarios"
+      }
+    },
+    {
+      "name": "Stablecoin issuers (Circle, Tether)",
+      "type": "Organization",
+      "role": "Channel dollar liquidity into crypto; ~$308-323B market cap in late 2026",
+      "stance": "Expanding under GENIUS implementation; market cap below its 2026 peak",
+      "description": "GENIUS Act licensing obligations effective January 18, 2027; NY Fed (July 2026) flags depeg vulnerability to banking stress via the 2023 SVB-USDC case.",
+      "stated_vs_revealed": "Growth-oriented; depeg tail acknowledged by official observers.",
+      "memory": "2023 SVB-USDC depeg remains the case study.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "intermediary",
+      "aliases": [
+        "Circle",
+        "Tether"
+      ],
+      "goals": [
+        "Grow licensed stablecoin float"
+      ],
+      "constraints": [
+        "Licensing obligations from Jan 18, 2027; unlicensed issuance barred from July 18, 2028"
+      ],
+      "assets": [
+        "$308-323B stablecoin float"
+      ],
+      "vulnerabilities": [
+        "Depeg triggered by ordinary banking stress, per NY Fed analysis"
+      ],
+      "incentives": [
+        {
+          "driver": "Reserve income and float growth",
+          "gains_if": "Stablecoin cap exceeds $323B by end-2027",
+          "loses_if": "Banking stress causes a depeg",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Dollar digitization"
+        ],
+        "beliefs": [
+          "Stable demand grows with crypto activity"
+        ],
+        "identity": "Dollar liquidity intermediaries",
+        "frame": "Payments and reserves"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.45,
+        "basis": "Supports the range scenario's liquidity channel; depeg is a documented hazard"
+      }
+    },
+    {
+      "name": "Deribit",
+      "type": "Platform",
+      "role": "Dominant options market setting implied vol and skew",
+      "stance": "DVOL 36.90 with IV Rank 6.7 on 2026-10-23 (unconfirmed); September 2026 expiry book call-heavy",
+      "description": "Quarterly expiries (~$16B of ~$43.5B open interest retired on 2026-09-23) are positioning and gamma checkpoints; last listed BTC futures expire 24 Sep 2027 per CryptoStruct.",
+      "stated_vs_revealed": "Neutral venue; positioning reads speculative.",
+      "memory": "Call-heavy Sept 2026 book on record.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "amplifier",
+      "goals": [
+        "Options market share"
+      ],
+      "constraints": [
+        "Long-dated book is thin"
+      ],
+      "assets": [
+        "Dominant options liquidity"
+      ],
+      "vulnerabilities": [
+        "Vol risk premium (~18 points over realized) can compress"
+      ],
+      "incentives": [
+        {
+          "driver": "Volume and fees",
+          "gains_if": "Volatility expands activity",
+          "loses_if": "Vol stays depressed",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Price discovery in vol"
+        ],
+        "beliefs": [
+          "n/a"
+        ],
+        "identity": "Options venue",
+        "frame": "Volatility market"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.4,
+        "basis": "Implied-vol inputs and expiry checkpoints"
+      }
+    },
+    {
+      "name": "Galaxy Research",
+      "type": "Organization",
+      "role": "Cited cycle analyst whose base case frames the bear branch",
+      "stance": "As of June 9, 2026: cycle bottom 'not yet found', base-case low $40k-46k; peak-to-trough series 85%->84%->77%; every prior bottom 12-13 months after top",
+      "description": "Its amplitude-compression thesis (realized price at 43.7% of prior ATH) shapes the muted-replay reading of the drawdown base rate.",
+      "stated_vs_revealed": "Consistent published cycle framework.",
+      "memory": "June 9, 2026 report is the anchor document.",
+      "influence": "medium",
+      "simulation_tier": 4,
+      "role_class": "amplifier",
+      "goals": [
+        "Influential research"
+      ],
+      "constraints": [
+        "Forecast, not observation"
+      ],
+      "assets": [
+        "Cycle database and methodology"
+      ],
+      "vulnerabilities": [
+        "Thesis falsified by a monthly mean below $40k-46k"
+      ],
+      "incentives": [
+        {
+          "driver": "Research reputation",
+          "gains_if": "Bottom call proves correct",
+          "loses_if": "Market re-rates above the range first",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Historical base rates"
+        ],
+        "beliefs": [
+          "Amplitude compression with rising dollar floors"
+        ],
+        "identity": "Crypto research house",
+        "frame": "Four-year cycle"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 4,
+        "score": 0.5,
+        "basis": "Analytical input, not an actor with market power"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source": "BlackRock (IBIT)",
+      "target": "Coinbase",
+      "type": "DEPENDS_ON",
+      "relation_label": "Custody and reference pricing",
+      "since": "2024",
+      "basis": "Coinbase custodies for most ETFs and supplies the CBBTCUSD settlement series",
+      "valence": "transactional",
+      "polarity": 0.4,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "BlackRock (IBIT)",
+      "target": "Sovereign wealth and pension allocators",
+      "type": "BACKS",
+      "relation_label": "Institutional distribution to advisors, sovereigns, endowments",
+      "since": "2025",
+      "basis": "CF Benchmarks 13F analysis: marginal holder shifted to durable allocators",
+      "valence": "allied",
+      "polarity": 0.7,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "Fidelity (FBTC)",
+      "target": "BlackRock (IBIT)",
+      "type": "COMPETES_WITH",
+      "relation_label": "Contest for institutional ETF flows",
+      "since": "2024",
+      "basis": "Second and first spot ETF issuers",
+      "polarity": -0.3,
+      "strength": 0.6,
+      "sign": "-"
+    },
+    {
+      "source": "Federal Reserve (FOMC)",
+      "target": "BlackRock (IBIT)",
+      "type": "INFLUENCES",
+      "relation_label": "Rate path sets ETF flow regime",
+      "basis": "SEP median 4.1% through end-2027 removes the easing tailwind the reflation scenario presumes",
+      "valence": "directional",
+      "polarity": 0.0,
+      "strength": 0.6
+    },
+    {
+      "source": "US Congress",
+      "target": "SEC",
+      "type": "REGULATES",
+      "relation_label": "Legislation would supersede SEC rulemaking",
+      "basis": "SEC substituting rulemaking for stalled CLARITY legislation",
+      "valence": "neutral",
+      "polarity": 0.0,
+      "strength": 0.5
+    },
+    {
+      "source": "US Congress",
+      "target": "Stablecoin issuers (Circle, Tether)",
+      "type": "REGULATES",
+      "relation_label": "GENIUS Act licensing from Jan 18, 2027",
+      "since": "2025-07-18",
+      "basis": "P.L. 119-27 signed July 18, 2025; Treasury implementation timeline",
+      "valence": "neutral",
+      "polarity": 0.3,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "Sovereign wealth and pension allocators",
+      "target": "BlackRock (IBIT)",
+      "type": "INVESTS_IN",
+      "relation_label": "Documented sovereign and endowment positions",
+      "since": "2025",
+      "basis": "Pensions & Investments documentation at $80B AUM, July 2025",
+      "valence": "allied",
+      "polarity": 0.7,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "Long-term Bitcoin holders",
+      "target": "Coinbase",
+      "type": "SUPPLIES",
+      "relation_label": "Distribution or accumulation moves exchange float",
+      "basis": "2025 LTH distribution drove drawdown; exchange reserves at 2.67M BTC",
+      "valence": "transactional",
+      "polarity": -0.2,
+      "strength": 0.6,
+      "sign": "-"
+    },
+    {
+      "source": "Glassnode / CryptoQuant",
+      "target": "Long-term Bitcoin holders",
+      "type": "INFLUENCES",
+      "relation_label": "Metrics quantify holder cohorts",
+      "basis": "LTH supply series and NUPL readings",
+      "valence": "neutral",
+      "polarity": 0.0,
+      "strength": 0.4
+    },
+    {
+      "source": "SEC",
+      "target": "Coinbase",
+      "type": "REGULATES",
+      "relation_label": "Custody and trading rules",
+      "basis": "2026 adviser-custody proposal covering state trust companies",
+      "valence": "neutral",
+      "polarity": 0.0,
+      "strength": 0.5
+    }
+  ],
+  "hot_topics": [
+    "ETF flow reacceleration vs stall (Q3 2026 +$6.3B against near-flat 2026 YTD)",
+    "June 2026 low ~$58,000 holding or breaking within the historical 12-13-month post-peak bottom window",
+    "Fed SEP median 4.1% through end-2027 vs dispersion (8 hikes/6 holds/4 cuts)",
+    "CLARITY Act reconsideration and the January 2027 end of the 119th Congress",
+    "GENIUS Act licensing effective January 18, 2027 and stablecoin float growth past $323B",
+    "Strategic Bitcoin Reserve purchase power (ARMA/BITCOIN Act) undelivered",
+    "10-year Treasury at top of 5-year range (4.989%) vs M2 +5.659% YoY",
+    "Rising short-term-holder churn (STH/LTH 14.2%) and overhead cost-basis band",
+    "Hack losses (record 207 incidents, USD 972M H1 2026) without published 2027 hazard probabilities",
+    "CME BTCZ27 at 89,885.00 USD as the market-implied centre inside the range band"
+  ],
+  "key_events": [
+    {
+      "date": "2024-04",
+      "event": "Bitcoin halving epoch began (April 2024 halving)",
+      "staleness_days": 935,
+      "is_stale": true
+    },
+    {
+      "date": "2025-03-06",
+      "event": "Executive order signed establishing the Strategic Bitcoin Reserve, capitalized with existing government bitcoin, barring sales, authorizing no taxpayer-funded purchases",
+      "staleness_days": 596,
+      "is_stale": true
+    },
+    {
+      "date": "2025-03-11",
+      "event": "BITCOIN Act (1,000,000 BTC over five years) reintroduced with 5 co-sponsors",
+      "staleness_days": 591,
+      "is_stale": true
+    },
+    {
+      "date": "2025-03-24",
+      "event": "Bo Hines suggested gold sales as a budget-neutral reserve funding strategy",
+      "staleness_days": 578,
+      "is_stale": true
+    },
+    {
+      "date": "2025-07",
+      "event": "IBIT reached $80 billion AUM; P&I documented a sovereign wealth fund and a university endowment among holders",
+      "staleness_days": 479,
+      "is_stale": true
+    },
+    {
+      "date": "2025-07-18",
+      "event": "GENIUS Act signed (P.L. 119-27), permitting stablecoin issuers under $10 billion to operate under state regimes",
+      "staleness_days": 462,
+      "is_stale": true
+    },
+    {
+      "date": "2025-10-06",
+      "event": "Bitcoin halving-epoch cycle high of $126,080 set",
+      "staleness_days": 382,
+      "is_stale": true
+    },
+    {
+      "date": "2025-10-10",
+      "event": "Spot-ETF holdings peaked at 1.38 million BTC",
+      "staleness_days": 378,
+      "is_stale": true
+    },
+    {
+      "date": "2025-11",
+      "event": "US spot ETF net flow of −$3.5 billion (Farside-derived); long-term holder supply at 14,302,998 BTC on Nov 16; ~2.8 million BTC with short-term holders at a loss, most since FTX",
+      "staleness_days": 356,
+      "is_stale": false
+    },
+    {
+      "date": "2025-11-16",
+      "event": "Long-term holder supply fell to 14,302,998 BTC from 14,755,530 BTC in July 2025 (−452,532 BTC)",
+      "staleness_days": 341,
+      "is_stale": false
+    },
+    {
+      "date": "2026-01",
+      "event": "US spot ETF net flow of −$1.61 billion in January 2026 (Farside)",
+      "staleness_days": 295,
+      "is_stale": false
+    },
+    {
+      "date": "2026-02",
+      "event": "Bitcoin's M2 fair-value Z-score at −1.31 (CF Benchmarks)",
+      "staleness_days": 264,
+      "is_stale": false
+    },
+    {
+      "date": "2026-02",
+      "event": "Estimated federal bitcoin holdings of about 328,372 BTC (tracker-based estimate)",
+      "staleness_days": 264,
+      "is_stale": false
+    },
+    {
+      "date": "2026-03",
+      "event": "US spot ETF monthly net flow +$1.32 billion, first positive month since October 2025",
+      "staleness_days": 236,
+      "is_stale": false
+    },
+    {
+      "date": "2026-05-21",
+      "event": "American Reserve Modernization Act of 2026 (Begich–Golden) introduced",
+      "staleness_days": 155,
+      "is_stale": false
+    },
+    {
+      "date": "2026-06-09",
+      "event": "Galaxy Research report argued the cycle bottom 'has not yet been found,' base-case low $40k–46k",
+      "staleness_days": 136,
+      "is_stale": false
+    },
+    {
+      "date": "2026-06",
+      "event": "Bitcoin fell to about $58,000, roughly 54% below the October 2025 record",
+      "staleness_days": 144,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07",
+      "event": "New York Fed Liberty Street Economics updated stablecoin depeg analysis (SVB–USDC 2023 case)",
+      "staleness_days": 114,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-15",
+      "event": "Senate cloture on the CLARITY Act (H.R.3633) reportedly fell short 49–50; Tillis motion to reconsider pending",
+      "staleness_days": 38,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-23",
+      "event": "Deribit quarterly expiry retired ~$16B of ~$43.5B open interest in a call-heavy book",
+      "staleness_days": 30,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09",
+      "event": "FOMC raised the federal funds target range 25 bps to 3.75%–4.00%; September 2026 SEP released",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-09",
+      "event": "IRS Rev. Proc. 2026-20 staking safe harbor issued, superseding Rev. Proc. 2025-31",
+      "staleness_days": 14,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-14",
+      "event": "Exchange reserves still 1.7% below mid-September 2026 levels",
+      "staleness_days": 9,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-16",
+      "event": "Report citing CryptoQuant: exchange reserves fell from ~2.8M BTC (Feb 2026) to 2.67M BTC",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-20",
+      "event": "Compilation put September 2026 crypto hacks at $766 million, worst month of the year",
+      "staleness_days": 3,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-21",
+      "event": "10-year Treasury daily yield printed 5.13%",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-22",
+      "event": "FRED CBBTCUSD daily close 81,225.62 USD; IBIT held 811,138.26040 BTC; US spot ETF net assets $108.01B, latest daily flow −$635.60M; NYU Stern V-Lab GARCH forecast 33.44%",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-23",
+      "event": "Kraken quoted $81,261.00; CME BTCZ27 last traded 89,885.00 USD per WSJ",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "date": "2027-01-18",
+      "event": "Expected effective date of GENIUS Act licensing obligations",
+      "staleness_days": -87,
+      "is_stale": false
+    },
+    {
+      "date": "2027-01",
+      "event": "119th Congress (2025-2026) ends; ARMA, BITCOIN Act and CLARITY revival pass or lapse",
+      "staleness_days": -70,
+      "is_stale": false
+    },
+    {
+      "date": "2027-09-24",
+      "event": "Deribit's last listed BTC futures expire",
+      "staleness_days": -336,
+      "is_stale": false
+    },
+    {
+      "date": "2027-12-31",
+      "event": "CME BTCZ27 last trade and settlement; forecast settlement date",
+      "staleness_days": -434,
+      "is_stale": false
+    }
+  ],
+  "quantitative_facts": [
+    {
+      "metric": "BTC/USD Coinbase daily price",
+      "value": "81,225.62",
+      "series": "FRED CBBTCUSD",
+      "unit": "U.S. Dollars",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "United States",
+      "definition": "Daily fixing",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/CBBTCUSD",
+      "tier": "S1",
+      "value_num": 81225.62,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "BTC/USD Kraken spot",
+      "value": "81,261.00",
+      "series": "Kraken price page",
+      "unit": "USD",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "United States",
+      "definition": "Retrieved quote, 24h range 81,236.09–81,380.27",
+      "source": "Kraken",
+      "value_type": "actual",
+      "source_url": "https://www.kraken.com/prices/bitcoin",
+      "tier": "S3",
+      "value_num": 81261.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Kraken",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "BTC/USD Coinbase monthly mean",
+      "value": "80482.22",
+      "series": "FRED CBBTCUSD",
+      "unit": "U.S. Dollars",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Monthly mean, −29.083% year-on-year",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/CBBTCUSD",
+      "tier": "S1",
+      "value_num": 80482.22,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "Halving-epoch cycle high",
+      "value": "126,080",
+      "series": "—",
+      "unit": "USD",
+      "as_of_date": "2025-10-06",
+      "period_end": "2025-10-06",
+      "geography": "global",
+      "definition": "Epoch high, widely reported",
+      "source": "24/7 Wall St. / prior high reports",
+      "value_type": "actual",
+      "source_url": "https://finance.yahoo.com/markets/crypto/articles/bitcoin-peaked-126-080-october-091605452.html",
+      "tier": "S3",
+      "value_num": 126080.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "24/7 Wall St. / prior high reports",
+      "staleness_days": 382,
+      "is_stale": true
+    },
+    {
+      "metric": "June 2026 cycle low",
+      "value": "58000",
+      "series": "—",
+      "unit": "USD (about)",
+      "as_of_date": "2026-06",
+      "period_end": "2026-06",
+      "geography": "global",
+      "definition": "Reported low, ~54% below record",
+      "source": "24/7 Wall St. citing CryptoQuant",
+      "value_type": "actual",
+      "source_url": "https://247wallst.com/investing/cryptocurrency/2026/10/22/you-bought-bitcoin-at-its-126000-record-high-how-long-until-you-break-even/",
+      "tier": "S3",
+      "value_num": 58000.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "24/7 Wall St. citing CryptoQuant",
+      "staleness_days": 144,
+      "is_stale": false
+    },
+    {
+      "metric": "US spot ETF total net assets",
+      "value": "108.01",
+      "series": "CoinGlass",
+      "unit": "billion USD",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "United States",
+      "definition": "Total net assets of US spot Bitcoin ETFs",
+      "source": "CoinGlass",
+      "value_type": "actual",
+      "source_url": "https://www.coinglass.com/etf/bitcoin",
+      "tier": "S3",
+      "value_num": 108.01,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "CoinGlass",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "US spot ETF cumulative net inflows",
+      "value": "+57.78",
+      "series": "CoinGlass",
+      "unit": "billion USD",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "United States",
+      "definition": "Cumulative net inflows (+721.78K BTC)",
+      "source": "CoinGlass",
+      "value_type": "actual",
+      "source_url": "https://www.coinglass.com/etf/bitcoin",
+      "tier": "S3",
+      "value_num": 57.78,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "CoinGlass",
+      "metric_family": "cumulative deployment",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "Latest daily ETF net flow",
+      "value": "−635.60",
+      "series": "CoinGlass",
+      "unit": "million USD",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "United States",
+      "definition": "Latest daily flow",
+      "source": "CoinGlass",
+      "value_type": "actual",
+      "source_url": "https://www.coinglass.com/etf/bitcoin",
+      "tier": "S3",
+      "value_num": 635.6,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "CoinGlass",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "IBIT bitcoin holdings",
+      "value": "811,138.26040",
+      "series": "iShares disclosure",
+      "unit": "BTC",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "United States",
+      "definition": "IBIT BTC held; market value $66,188,663,046.71",
+      "source": "iShares",
+      "value_type": "actual",
+      "source_url": "https://www.ishares.com/us/products/333011/ishares-bitcoin-trust-etf",
+      "tier": "S3",
+      "value_num": 811138.2604,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "iShares",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "FBTC net assets",
+      "value": "14.92",
+      "series": "CoinGlass",
+      "unit": "billion USD",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "United States",
+      "definition": "Fidelity FBTC net assets",
+      "source": "CoinGlass",
+      "value_type": "actual",
+      "source_url": "https://www.coinglass.com/etf/bitcoin",
+      "tier": "S3",
+      "value_num": 14.92,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "CoinGlass",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "GBTC net assets",
+      "value": "10.23",
+      "series": "CoinGlass",
+      "unit": "billion USD",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "United States",
+      "definition": "424.44K BTC",
+      "source": "CoinGlass",
+      "value_type": "actual",
+      "source_url": "https://www.coinglass.com/etf/bitcoin",
+      "tier": "S3",
+      "value_num": 10.23,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "CoinGlass",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "Grayscale Mini net assets",
+      "value": "5.42",
+      "series": "CoinGlass",
+      "unit": "billion USD",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "United States",
+      "definition": "377.80K BTC",
+      "source": "CoinGlass",
+      "value_type": "actual",
+      "source_url": "https://www.coinglass.com/etf/bitcoin",
+      "tier": "S3",
+      "value_num": 5.42,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "CoinGlass",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "30-day annualized realized volatility",
+      "value": "20.2",
+      "series": "CryptoTicker",
+      "unit": "%",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-10-20",
+      "geography": "global",
+      "definition": "30-day annualized realized vol",
+      "source": "CryptoTicker",
+      "value_type": "estimate",
+      "source_url": "https://cryptoticker.io/en/bitcoin-price-prediction-volatility-premium-20-october-2026/",
+      "tier": "S3",
+      "value_num": 20.2,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "CryptoTicker",
+      "staleness_days": 3,
+      "is_stale": false
+    },
+    {
+      "metric": "30-day annualized realized volatility (alternative)",
+      "value": "22.7",
+      "series": "live calculator",
+      "unit": "%",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "global",
+      "definition": "Snapshot reading",
+      "source": "live calculator",
+      "value_type": "estimate",
+      "source_url": "https://bitcoincalculator.tools/calculators/volatility",
+      "tier": "S3",
+      "value_num": 22.7,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "live calculator",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "GARCH one-day-ahead vol forecast",
+      "value": "33.44",
+      "series": "NYU Stern V-Lab",
+      "unit": "%",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "global",
+      "definition": "GARCH forecast for next day",
+      "source": "NYU Stern V-Lab",
+      "value_type": "forecast",
+      "source_url": "https://vlab.stern.nyu.edu/volatility/VOL.BTCUSD%3AFOREX-R.GARCH",
+      "tier": "S3",
+      "value_num": 33.44,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "NYU Stern V-Lab",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "30-day implied volatility",
+      "value": "38.3",
+      "series": "—",
+      "unit": "%",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-10-20",
+      "geography": "global",
+      "definition": "Implied vs 20.2% realized implies ~18-point risk premium",
+      "source": "CryptoTicker",
+      "value_type": "estimate",
+      "source_url": "https://cryptoticker.io/en/bitcoin-price-prediction-volatility-premium-20-october-2026/",
+      "tier": "S3",
+      "value_num": 38.3,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "CryptoTicker",
+      "staleness_days": 3,
+      "is_stale": false
+    },
+    {
+      "metric": "US central bank policy rate",
+      "value": "3.875",
+      "series": "BIS policy rates",
+      "unit": "% per year",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "End of period; −25 bps YoY",
+      "source": "BIS",
+      "value_type": "actual",
+      "source_url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US",
+      "tier": "S1",
+      "value_num": 3.875,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "BIS",
+      "metric_family": "growth rate",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "SEP median end-2027 funds rate",
+      "value": "4.1",
+      "series": "Fed SEP",
+      "unit": "%",
+      "as_of_date": "2026-09",
+      "period_end": "2027-12",
+      "geography": "United States",
+      "definition": "Median projection; also 4.1% at end-2026",
+      "source": "Federal Reserve",
+      "value_type": "forecast",
+      "source_url": "https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf",
+      "tier": "S1",
+      "value_num": 4.1,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Federal Reserve",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "10-year Treasury yield (monthly)",
+      "value": "4.989",
+      "series": "FRED DGS10",
+      "unit": "%",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "+0.869 pp YoY; 5.13% daily on 2026-10-21",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 4.989,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "metric_family": "growth rate",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "US M2",
+      "value": "23342.8",
+      "series": "FRED M2SL",
+      "unit": "Billions of Dollars",
+      "as_of_date": "2026-08",
+      "period_end": "2026-08",
+      "geography": "United States",
+      "definition": "Level, +5.659% YoY",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/M2SL",
+      "tier": "S1",
+      "value_num": 23342.8,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "metric_family": "growth rate",
+      "staleness_days": 83,
+      "is_stale": false
+    },
+    {
+      "metric": "VIX",
+      "value": "15.7755",
+      "series": "FRED VIXCLS",
+      "unit": "Index",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Monthly observation; 19.03 on 2026-10-22",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/VIXCLS",
+      "tier": "S1",
+      "value_num": 15.7755,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "Nominal Broad US Dollar Index",
+      "value": "119.2152",
+      "series": "FRED DTWEXBGS",
+      "unit": "Index (Jan 2006=100)",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "−0.678% YoY; 5-year range 113.4437–128.837",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DTWEXBGS",
+      "tier": "S1",
+      "value_num": 119.2152,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "metric_family": "growth rate",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "CME BTCZ27 last trade",
+      "value": "89,885.00",
+      "series": "WSJ market data",
+      "unit": "USD",
+      "as_of_date": "2026-10-23",
+      "period_end": "2027-12-31",
+      "geography": "United States",
+      "definition": "Dec 2027 futures; ~10.6% contango, ~8.7% annualized vs fixing (derived)",
+      "source": "WSJ",
+      "value_type": "actual",
+      "source_url": "https://www.wsj.com/market-data/quotes/futures/BTCZ27",
+      "tier": "S2",
+      "value_num": 89885.0,
+      "year": 2027,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "WSJ",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Cycle peak-to-trough drawdown series",
+      "value": "85% → 84% → 77%",
+      "series": "Galaxy Research",
+      "unit": "%",
+      "as_of_date": "2026-06-09",
+      "period_end": "2020",
+      "geography": "global",
+      "definition": "Successive cycle drawdowns; bottoms 12–13 months after tops",
+      "source": "Galaxy Research",
+      "value_type": "actual",
+      "source_url": "https://www.galaxy.com/insights/research/bitcoin-four-year-cycle-where-is-the-bottom",
+      "tier": "S3",
+      "value_num": 85.0,
+      "year": 2020,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Galaxy Research",
+      "staleness_days": 136,
+      "is_stale": false
+    },
+    {
+      "metric": "Daily-close drawdowns >80%",
+      "value": "−93%, −84%, −83%, −77%",
+      "series": "drawdown calculator",
+      "unit": "%",
+      "as_of_date": "2022",
+      "period_end": "2022",
+      "geography": "global",
+      "definition": "2011, 2014, 2018, 2022 all-time-high drawdowns on daily closes",
+      "source": "undated drawdown-calculator snapshot",
+      "value_type": "actual",
+      "source_url": "https://bitcoincalculator.tools/calculators/drawdown",
+      "tier": "S3",
+      "value_num": 93.0,
+      "year": 2022,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "undated drawdown-calculator snapshot",
+      "staleness_days": 1756,
+      "is_stale": true
+    },
+    {
+      "metric": "Galaxy base-case cycle bottom",
+      "value": "40k–46k",
+      "series": "Galaxy Research",
+      "unit": "USD",
+      "as_of_date": "2026-06-09",
+      "geography": "global",
+      "definition": "Bottom 'not yet found'; realized price ~43.7% of prior ATH",
+      "source": "Galaxy Research",
+      "value_type": "forecast",
+      "source_url": "https://www.galaxy.com/insights/research/bitcoin-four-year-cycle-where-is-the-bottom",
+      "tier": "S3",
+      "value_num": 40.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Galaxy Research",
+      "staleness_days": 136,
+      "is_stale": false
+    },
+    {
+      "metric": "Monthly ETF flow November 2025",
+      "value": "−3.5",
+      "series": "Farside-derived",
+      "unit": "billion USD",
+      "as_of_date": "2025-11",
+      "period_end": "2025-11",
+      "geography": "United States",
+      "definition": "Monthly net flow",
+      "source": "Farside",
+      "value_type": "actual",
+      "source_url": "https://farside.co.uk/btc/",
+      "tier": "S3",
+      "value_num": 3.5,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Farside",
+      "staleness_days": 356,
+      "is_stale": false
+    },
+    {
+      "metric": "Monthly ETF flow January 2026",
+      "value": "−1.61",
+      "series": "Farside-derived",
+      "unit": "billion USD",
+      "as_of_date": "2026-01",
+      "period_end": "2026-01",
+      "geography": "United States",
+      "definition": "Monthly net flow",
+      "source": "Farside",
+      "value_type": "actual",
+      "source_url": "https://farside.co.uk/btc/",
+      "tier": "S3",
+      "value_num": 1.61,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Farside",
+      "staleness_days": 295,
+      "is_stale": false
+    },
+    {
+      "metric": "March 2026 ETF flow",
+      "value": "+1.32",
+      "series": "SoSoValue data",
+      "unit": "billion USD",
+      "as_of_date": "2026-03",
+      "period_end": "2026-03",
+      "geography": "United States",
+      "definition": "First positive month since October 2025",
+      "source": "SoSoValue",
+      "value_type": "actual",
+      "source_url": "https://bitcoinfoundation.org/news/altcoins/btc-eth-etfs/",
+      "tier": "S3",
+      "value_num": 1.32,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "SoSoValue",
+      "staleness_days": 236,
+      "is_stale": false
+    },
+    {
+      "metric": "2026 YTD ETF flow",
+      "value": "+934",
+      "series": "SoSoValue via Yahoo",
+      "unit": "million USD",
+      "as_of_date": "2026-09-25",
+      "period_end": "2026-09-25",
+      "geography": "United States",
+      "definition": "YTD 2026; vs −$5.8B YTD in early July",
+      "source": "SoSoValue-based reporting",
+      "value_type": "actual",
+      "source_url": "https://bitcoinfoundation.org/news/bitcoin/bitcoin-etf-inflows-hit-2-4-billion-is-btc-setting-up-for-another-major-rally/",
+      "tier": "S3",
+      "value_num": 934.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "SoSoValue-based reporting",
+      "staleness_days": 28,
+      "is_stale": false
+    },
+    {
+      "metric": "Q3 2026 ETF flow",
+      "value": "6.3",
+      "series": "SoSoValue",
+      "unit": "billion USD",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-Q3",
+      "geography": "United States",
+      "definition": "Quarterly net inflow",
+      "source": "SoSoValue",
+      "value_type": "actual",
+      "source_url": "https://finance.yahoo.com/markets/crypto/articles/bitcoin-etfs-took-6-3-161157834.html",
+      "tier": "S3",
+      "value_num": 6.3,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "SoSoValue",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "All-time ETF net inflow (second tracker)",
+      "value": "+54.79",
+      "series": "SatsIntel",
+      "unit": "billion USD",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "United States",
+      "definition": "Alternative tracker reading; also +$15.5M YTD 2026",
+      "source": "SatsIntel",
+      "value_type": "actual",
+      "source_url": "https://www.satsintel.io/en/etfs/flows",
+      "tier": "S3",
+      "value_num": 54.79,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "SatsIntel",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "Top-40 hedge fund IBIT holdings",
+      "value": "114 million → 82 million shares (−28%)",
+      "series": "CF Benchmarks 13F",
+      "unit": "shares",
+      "as_of_date": "2025-Q4",
+      "period_end": "2025-Q4",
+      "geography": "United States",
+      "definition": "Q3 2025 to Q4 2025; Brevan Howard −85% from Q2 2025 peak; DE Shaw 9.7M→4.7M",
+      "source": "CF Benchmarks",
+      "value_type": "actual",
+      "source_url": "https://www.cfbenchmarks.com/blog/tracking-bitcoins-flows",
+      "tier": "S3",
+      "value_num": 114.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "CF Benchmarks",
+      "staleness_days": 660,
+      "is_stale": true
+    },
+    {
+      "metric": "Exchange reserves",
+      "value": "2.67",
+      "series": "CryptoQuant",
+      "unit": "million BTC",
+      "as_of_date": "2026-10-16",
+      "period_end": "2026-10-14",
+      "geography": "global",
+      "definition": "Down ~130,000 BTC from ~2.8M in Feb 2026; still 1.7% below mid-Sept 2026",
+      "source": "CryptoQuant via report",
+      "value_type": "actual",
+      "source_url": "https://www.smallworldfs.com/blog/2026/10/16/bitcoin-exchange-reserves-fall-in-2026-raising-questions-about-btc-prices/",
+      "tier": "S3",
+      "value_num": 2.67,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "CryptoQuant via report",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "metric": "Long-term holder supply change",
+      "value": "−452,532",
+      "series": "Glassnode via CoinDesk",
+      "unit": "BTC",
+      "as_of_date": "2025-11-16",
+      "period_end": "2025-11-16",
+      "geography": "global",
+      "definition": "From 14,755,530 BTC (July 2025) to 14,302,998 BTC",
+      "source": "Glassnode via CoinDesk",
+      "value_type": "actual",
+      "source_url": "https://finance.yahoo.com/news/short-term-holder-bitcoin-supply-121101484.html",
+      "tier": "S3",
+      "value_num": 452532.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Glassnode via CoinDesk",
+      "staleness_days": 341,
+      "is_stale": false
+    },
+    {
+      "metric": "Spot-ETF holdings decline from peak",
+      "value": "3.6%",
+      "series": "—",
+      "unit": "%",
+      "as_of_date": "2025-11-15",
+      "period_end": "2025-11-15",
+      "geography": "United States",
+      "definition": "From 1.38M BTC peak (2025-10-10) to 1.33M BTC",
+      "source": "CoinDesk",
+      "value_type": "actual",
+      "source_url": "https://finance.yahoo.com/news/short-term-holder-bitcoin-supply-121101484.html",
+      "tier": "S3",
+      "value_num": 3.6,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "CoinDesk",
+      "staleness_days": 342,
+      "is_stale": false
+    },
+    {
+      "metric": "Short-term/long-term holder supply ratio",
+      "value": "14.2",
+      "series": "—",
+      "unit": "%",
+      "as_of_date": "2026-10-15",
+      "period_end": "week to mid-Oct 2026",
+      "geography": "global",
+      "definition": "Rose 4.2% from 13.7%; NUPL eased 13.6%→12.8%; ~3/4 of supply in profit",
+      "source": "on-chain report",
+      "value_type": "actual",
+      "source_url": "https://research.glassnode.com/btc-market-pulse-week-41-2026/",
+      "tier": "S3",
+      "value_num": 14.2,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "on-chain report",
+      "staleness_days": 8,
+      "is_stale": false
+    },
+    {
+      "metric": "Stablecoin market capitalization",
+      "value": "308–323",
+      "series": "—",
+      "unit": "billion USD",
+      "as_of_date": "2026-10",
+      "period_end": "2026-10",
+      "geography": "global",
+      "definition": "Range across sources and dates, below 2026 peak",
+      "source": "industry blog summary",
+      "value_type": "estimate",
+      "source_url": "https://spacedev.io/blog/cryptocurrency-trends-2027",
+      "tier": "S3",
+      "value_num": 315.5,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "industry blog summary",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "H1 2026 crypto hack losses",
+      "value": "972",
+      "series": "TRM Labs",
+      "unit": "million USD",
+      "as_of_date": "2026-06-30",
+      "period_end": "2026-H1",
+      "geography": "global",
+      "definition": "Record 207 hack incidents",
+      "source": "TRM Labs",
+      "value_type": "actual",
+      "source_url": "https://www.trmlabs.com/resources/blog/h1-2026-crypto-hacks-reach-record-high-as-losses-fall-below-usd-1-billion",
+      "tier": "S3",
+      "value_num": 972.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "TRM Labs",
+      "staleness_days": 115,
+      "is_stale": false
+    },
+    {
+      "metric": "September 2026 hack losses",
+      "value": "766",
+      "series": "compilation",
+      "unit": "million USD",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-09",
+      "geography": "global",
+      "definition": "Worst month of the year",
+      "source": "compilation dated October 20, 2026",
+      "value_type": "estimate",
+      "source_url": "https://shattered.io/september-2026-crypto-hacks-766-million-worst-month/",
+      "tier": "S3",
+      "value_num": 766.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "compilation dated October 20, 2026",
+      "staleness_days": 3,
+      "is_stale": false
+    },
+    {
+      "metric": "Deribit DVOL",
+      "value": "36.90",
+      "series": "Deribit",
+      "unit": "index",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "global",
+      "definition": "IV Rank 6.7; unconfirmed reading",
+      "source": "Deribit",
+      "value_type": "estimate",
+      "source_url": "https://www.deribit.com/statistics/BTC/volatility-index",
+      "tier": "S3",
+      "value_num": 36.9,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Deribit",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Estimated federal BTC holdings",
+      "value": "328,372",
+      "series": "tracker",
+      "unit": "BTC",
+      "as_of_date": "2026-02",
+      "period_end": "2026-02",
+      "geography": "United States",
+      "definition": "Tracker-based estimate of total government holdings",
+      "source": "tracker estimate",
+      "value_type": "estimate",
+      "source_url": "https://en.wikipedia.org/wiki/U.S._Strategic_Bitcoin_Reserve",
+      "tier": "S3",
+      "value_num": 328372.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "tracker estimate",
+      "staleness_days": 264,
+      "is_stale": false
+    },
+    {
+      "metric": "BTC–S&P 500 daily correlation",
+      "value": "0.2 → ~0.5",
+      "series": "CME research",
+      "unit": "correlation",
+      "as_of_date": "2025",
+      "period_end": "2025",
+      "geography": "global",
+      "definition": "Jan 2014–Apr 2025 baseline 0.2, ~0.5 in 2020 and stayed elevated",
+      "source": "CME research",
+      "value_type": "actual",
+      "source_url": "https://www.cmegroup.com/insights/economic-research/2025/why-is-bitcoin-moving-in-tandem-with-equities.html",
+      "tier": "S3",
+      "value_num": 0.2,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "CME research",
+      "staleness_days": 660,
+      "is_stale": true
+    },
+    {
+      "metric": "Bitcoin ETF vs non-profitable tech 3-month correlation",
+      "value": "0.78",
+      "series": "Goldman via CF Benchmarks",
+      "unit": "correlation",
+      "as_of_date": "2026-02",
+      "period_end": "2026-02",
+      "geography": "United States",
+      "definition": "97th percentile since December 2014",
+      "source": "CF Benchmarks citing Goldman",
+      "value_type": "actual",
+      "source_url": "https://www.cfbenchmarks.com/blog/the-m2-bitcoin-relationship-what-the-data-actually-shows",
+      "tier": "S3",
+      "value_num": 0.78,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "CF Benchmarks citing Goldman",
+      "staleness_days": 264,
+      "is_stale": false
+    },
+    {
+      "metric": "Monthly mean five-year range",
+      "value": "16,942.7687–115,618.1861",
+      "series": "FRED CBBTCUSD",
+      "unit": "U.S. Dollars",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Low 2022-12, high 2025-07",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/CBBTCUSD",
+      "tier": "S1",
+      "value_num": 66280.4774,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "Week-to Sept 25 2026 ETF flow",
+      "value": "+2.4",
+      "series": "SoSoValue-based",
+      "unit": "billion USD",
+      "as_of_date": "2026-09-25",
+      "period_end": "week to 2026-09-25",
+      "geography": "United States",
+      "definition": "Weekly net inflow; $2.97B over 7 trading days to Sept 26",
+      "source": "SoSoValue-based reporting",
+      "value_type": "actual",
+      "source_url": "https://bitcoinfoundation.org/news/bitcoin/bitcoin-etf-inflows-hit-2-4-billion-is-btc-setting-up-for-another-major-rally/",
+      "tier": "S3",
+      "value_num": 2.4,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "SoSoValue-based reporting",
+      "staleness_days": 28,
+      "is_stale": false
+    },
+    {
+      "metric": "BTCI 12-month yield",
+      "value": "45",
+      "series": "CF Benchmarks",
+      "unit": "% (above)",
+      "as_of_date": "2026",
+      "period_end": "2026",
+      "geography": "United States",
+      "definition": "Covered-call ETF 12-month yield above 45%",
+      "source": "CF Benchmarks",
+      "value_type": "actual",
+      "source_url": "https://www.cfbenchmarks.com/blog/tracking-bitcoins-flows",
+      "tier": "S3",
+      "value_num": 45.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "CF Benchmarks",
+      "staleness_days": 295,
+      "is_stale": false
+    },
+    {
+      "metric": "2027 FOMC participant dispersion",
+      "value": "8 hikes / 6 unchanged / 4 cuts",
+      "series": "Fed SEP",
+      "unit": "participants",
+      "as_of_date": "2026-09",
+      "period_end": "2027",
+      "geography": "United States",
+      "definition": "2027 central tendency 3.1%–4.4%; PCE 3.7% in 2026 falling to 2.4% in 2027",
+      "source": "Federal Reserve",
+      "value_type": "forecast",
+      "source_url": "https://am.jpmorgan.com/us/en/asset-management/adv/insights/portfolio-insights/fixed-income/fixed-income-perspectives/fomc-statement-september-2026/",
+      "tier": "S3",
+      "value_num": 8.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Federal Reserve",
+      "staleness_days": 52,
+      "is_stale": false
+    }
+  ],
+  "contested_claims": [
+    {
+      "claim": "December 2025 US spot ETF net flow",
+      "positions": [
+        {
+          "stance": "+$457 million",
+          "sources": [
+            "https://earnpark.com/en/posts/record-bitcoin-etf-inflows-whats-driving-the-demand-analysis/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "−$1.1 billion",
+          "sources": [
+            "https://farside.co.uk/btc/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different flow trackers (Earnpark vs Farside) with different fund coverage and methodologies"
+    },
+    {
+      "claim": "2026 year-to-date ETF net flow",
+      "positions": [
+        {
+          "stance": "+$934 million by 25 September (SoSoValue-based)",
+          "sources": [
+            "https://bitcoinfoundation.org/news/bitcoin/bitcoin-etf-inflows-hit-2-4-billion-is-btc-setting-up-for-another-major-rally/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "+$15.5 million by 22 October",
+          "sources": [
+            "https://www.satsintel.io/en/etfs/flows"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Tracker and measurement-date differences; near-zero either way"
+    },
+    {
+      "claim": "All-time cumulative US spot ETF net inflow",
+      "positions": [
+        {
+          "stance": "+$57.78 billion",
+          "sources": [
+            "https://www.coinglass.com/etf/bitcoin"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "+$54.79 billion",
+          "sources": [
+            "https://www.satsintel.io/en/etfs/flows"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different tracker methodologies and reconciliation of early-2024 launch flows"
+    },
+    {
+      "claim": "Federal government bitcoin holdings (~328,372 BTC as of February 2026)",
+      "positions": [
+        {
+          "stance": "tracker-based estimate of total government holdings, not confirmed reserve purchases",
+          "sources": [
+            "https://en.wikipedia.org/wiki/U.S._Strategic_Bitcoin_Reserve"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "contested by coinpedia",
+          "sources": [
+            "https://coinpedia.org/research-report/u-s-strategic-bitcoin-reserve-why-328372-btc-isnt-the-full-story/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Estimation of wallet attribution; distinction between total holdings and the reserve"
+    },
+    {
+      "claim": "Whether the June 2026 low (~$58,000) was the cycle bottom",
+      "positions": [
+        {
+          "stance": "Galaxy (June 9, 2026): bottom 'has not yet been found'; base-case low $40k–46k",
+          "sources": [
+            "https://www.galaxy.com/insights/research/bitcoin-four-year-cycle-where-is-the-bottom"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Recovery of ~31% over 90 days with re-accumulation regime suggests the low held",
+          "sources": [
+            "https://247wallst.com/investing/cryptocurrency/2026/10/22/you-bought-bitcoin-at-its-126000-record-high-how-long-until-you-break-even/",
+            "https://research.glassnode.com/coinbase-glassnode-charting-crypto-q4-2026/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different frameworks: realized-price distance from ATH vs price/on-chain regime indicators; Galaxy's view predates the recovery"
+    },
+    {
+      "claim": "Exchange reserves trajectory (claim of fall from ~3.2M BTC in early 2024)",
+      "positions": [
+        {
+          "stance": "CryptoQuant: ~2.8M BTC Feb 2026 → 2.67M BTC Oct 2026",
+          "sources": [
+            "https://www.smallworldfs.com/blog/2026/10/16/bitcoin-exchange-reserves-fall-in-2026-raising-questions-about-btc-prices/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "uncorroborated social-media claim of ~3.2M BTC in early 2024",
+          "sources": [
+            "https://www.facebook.com/61589272514349/posts/bitcoin-exchange-reserves-fall-from-32-million-to-about-268-million-btcthe-amoun/122123941431309083/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Methodological differences in address attribution; Glassnode cautions wallet restructuring can move estimates without trading"
+    },
+    {
+      "claim": "Complex-wide ETF BTC holdings figure",
+      "positions": [
+        {
+          "stance": "721.78K BTC is cumulative net inflow, not total holdings; IBIT alone holds 811,138.26 BTC so the stock is larger and unconfirmed",
+          "sources": [
+            "https://www.coinglass.com/etf/bitcoin",
+            "https://www.ishares.com/us/products/333011/ishares-bitcoin-trust-etf"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "CoinGlass labels the figure as cumulative net inflow; no complex-wide stock figure was retrieved"
+    },
+    {
+      "claim": "Deribit DVOL of 36.90 on 2026-10-23",
+      "positions": [
+        {
+          "stance": "DVOL printed 36.90 with IV Rank 6.7 — unconfirmed reading",
+          "sources": [
+            "https://www.deribit.com/statistics/BTC/volatility-index"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Reading not corroborated by a fetched primary page; used with caution in lognormal estimates"
+    },
+    {
+      "claim": "Cycle drawdown depth convention",
+      "positions": [
+        {
+          "stance": "Galaxy: peak-to-trough 85% → 84% → 77% across three cycles",
+          "sources": [
+            "https://www.galaxy.com/insights/research/bitcoin-four-year-cycle-where-is-the-bottom"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "drawdown calculator: daily-close losses −93%, −84%, −83%, −77% across 2011–2022 (four >80% drawdowns)",
+          "sources": [
+            "https://bitcoincalculator.tools/calculators/drawdown"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different cycle definitions, price conventions (intraday vs daily close) and periods covered; calculator covers 2011, Galaxy's series starts 2012"
+    },
+    {
+      "claim": "Senate cloture vote on CLARITY Act, September 15, 2026",
+      "positions": [
+        {
+          "stance": "cloture fell short 49–50 against 60 required, per secondary reports, with a Tillis motion to reconsider",
+          "sources": [
+            "https://www.congress.gov/bill/119th-congress/house-bill/3633/text",
+            "https://www.dlapiper.com/en-us/insights/publications/2026/09/senate-fails-to-advance-the-clarity-act",
+            "https://www.orrick.com/en/Insights/2026/10/The-CLARITY-Act-Stalls-in-the-Senate-Whats-Next-for-Digital-Asset-Regulation"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Report rests on secondary reports of the vote; no primary roll-call fetched"
+    }
+  ],
+  "forecast_inputs": {
+    "scenarios": [
+      {
+        "name": "Institutional reflation",
+        "probability": 0.25,
+        "narrative": "ETF inflows reaccelerate and the Fed eases into 2027, carrying BTC above its prior cycle high ($126,080) and ending 2027 above $150,000; prior: post-halving-year gains in 3 of 4 epochs."
+      },
+      {
+        "name": "Range-bound digestion",
+        "probability": 0.35,
+        "narrative": "BTC chops between roughly $60,000 and $110,000 through 2027 as ETF flows stall and macro liquidity stays neutral, ending within ±30% of the current ~$81,000; prior: 12-month moves within one sigma (~68%) at ~40-50% annualized vol."
+      },
+      {
+        "name": "Post-cycle bear",
+        "probability": 0.3,
+        "narrative": "The 2025 cycle top holds and the historical 70-80% drawdown pattern replays in muted form, with BTC ending 2027 between $35,000 and $60,000; prior: drawdowns of >60% followed every prior cycle peak."
+      },
+      {
+        "name": "Liquidity shock",
+        "probability": 0.1,
+        "narrative": "A recession or credit event forces risk-off liquidation, briefly taking BTC under $30,000 before a recovery, ending 2027 near $40,000; prior: US recession began in about 1 of 6.5 years since 1948."
+      }
+    ],
+    "base_rates": [
+      {
+        "reference_class": "Coinbase BTC/USD monthly mean, 12-month (Oct/Oct) change negative, 2017-2026, n=9",
+        "outcome_frequency": "4 of 9",
+        "basis": "FRED CBBTCUSD monthly means [S3]"
+      },
+      {
+        "reference_class": "Cycle peak-to-trough daily-close drawdown below −60% after each cycle peak, 2011-2022",
+        "outcome_frequency": "4 of 4 (−93%, −84%, −83%, −77%)",
+        "basis": "drawdown-calculator snapshot [S10]"
+      },
+      {
+        "reference_class": "Galaxy cycle peak-to-trough depth series across successive cycles",
+        "outcome_frequency": "85% → 84% → 77% across 3 cycles",
+        "basis": "Galaxy Research [S9]"
+      },
+      {
+        "reference_class": "12-month (Oct/Oct) change within ±30%, 2017-2026, n=9",
+        "outcome_frequency": "1 of 9 (2019's +30.7% marginally outside)",
+        "basis": "FRED CBBTCUSD monthly means [S3]"
+      },
+      {
+        "reference_class": "Cycle bottom occurring about 12-13 months after cycle top",
+        "outcome_frequency": "every prior top was followed by a bottom about 12-13 months later",
+        "basis": "Galaxy Research [S9]"
+      },
+      {
+        "reference_class": "US recession onset, since 1948",
+        "outcome_frequency": "about 1 of 6.5 years since 1948",
+        "basis": "run brief prior cited in the report's scenario frame"
+      }
+    ],
+    "drivers": [
+      {
+        "variable": "US spot ETF net flows",
+        "direction": "up",
+        "why_it_matters": "sticky $108.01B institutional stock with reaccelerating inflows (+$6.3B in Q3 2026 after near-zero YTD) is the marginal bid separating reflation from range [S5][S23][S34]"
+      },
+      {
+        "variable": "Fed funds rate path to end-2027",
+        "direction": "down when easing",
+        "why_it_matters": "September 2026 SEP median holds 4.1% at end-2027, removing the macro tailwind reflation presumes [S7][S14]"
+      },
+      {
+        "variable": "10-year Treasury yield",
+        "direction": "down when yields fall",
+        "why_it_matters": "at 4.989% (2026-09) and the top of its five-year range it caps risk-asset re-rating [S17]"
+      },
+      {
+        "variable": "M2 growth",
+        "direction": "up",
+        "why_it_matters": "+5.659% YoY (2026-08) liquidity support, though the M2-BTC link weakened (Z-score −1.31, February 2026) [S8][S29][S39]"
+      },
+      {
+        "variable": "Exchange reserves and dormant supply",
+        "direction": "up",
+        "why_it_matters": "reserves fell ~130,000 BTC to 2.67 million BTC, thinning sell-side float [S60]"
+      },
+      {
+        "variable": "Long-term holder supply and overhead cost basis",
+        "direction": "up (floor) / caps upside",
+        "why_it_matters": "re-accumulation regime puts a floor while a dense cost-basis band just above spot capped September highs [S63][S64]"
+      },
+      {
+        "variable": "Legislation (CLARITY, reserve purchase authority, GENIUS licensing)",
+        "direction": "up",
+        "why_it_matters": "cloture failed September 15, 2026 and the reserve lacks purchase power; passage would add a structural bid [S52][S15][S47]"
+      },
+      {
+        "variable": "Risk-neutral drift in CME BTCZ27",
+        "direction": "up",
+        "why_it_matters": "the Dec 2027 future at 89,885.00 USD sits inside the range band and leans against the sub-$60,000 tails [S13]"
+      }
+    ],
+    "risks": [
+      {
+        "event": "US recession or credit event forcing risk-off liquidation",
+        "probability": "about 1 of 6.5 years",
+        "per": "since 1948",
+        "source": "",
+        "effects": [
+          {
+            "metric": "BTC/USD Coinbase daily price",
+            "change": "",
+            "direction": "down"
+          }
+        ],
+        "affects": [
+          "Federal Reserve (FOMC)",
+          "US spot Bitcoin ETFs",
+          "Long-term Bitcoin holders"
+        ],
+        "recurring": false
+      }
+    ],
+    "indicators": [
+      {
+        "indicator": "Coinbase Bitcoin — United States (fred:CBBTCUSD)",
+        "series": "fred:CBBTCUSD",
+        "latest_value": 80482.22,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "U.S. Dollars",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S3"
+      },
+      {
+        "indicator": "Central bank policy rates - United States - Monthly - End of period (bis:WS_CBPOL/M.US)",
+        "series": "bis:WS_CBPOL/M.US",
+        "latest_value": 3.875,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Per cent per year",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S6"
+      },
+      {
+        "indicator": "M2 (year-over-year % change) — United States (fred:M2SL#yoy)",
+        "series": "fred:M2SL#yoy",
+        "latest_value": 5.6589084127717015,
+        "latest_date": "2026-08-31",
+        "latest_period": "2026-08",
+        "status": "observed",
+        "units": "Percent change from year ago",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-08",
+        "source_ref": "S8"
+      },
+      {
+        "indicator": "CBOE Volatility Index: VIX — United States (fred:VIXCLS)",
+        "series": "fred:VIXCLS",
+        "latest_value": 15.775454545454545,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Index",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S11"
+      },
+      {
+        "indicator": "Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis (fred:DGS10)",
+        "series": "fred:DGS10",
+        "latest_value": 4.989047619047619,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S17"
+      },
+      {
+        "indicator": "M2 — United States (fred:M2SL)",
+        "series": "fred:M2SL",
+        "latest_value": 23342.8,
+        "latest_date": "2026-08-31",
+        "latest_period": "2026-08",
+        "status": "observed",
+        "units": "Billions of Dollars",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-08",
+        "source_ref": "S29"
+      },
+      {
+        "indicator": "Nominal Broad U.S. Dollar Index (fred:DTWEXBGS)",
+        "series": "fred:DTWEXBGS",
+        "latest_value": 119.2152238095238,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Index Jan 2006=100",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S30"
+      }
+    ]
+  }
+}

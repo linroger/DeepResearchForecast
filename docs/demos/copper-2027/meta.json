@@ -1,0 +1,82 @@
+{
+ "pipeline_id": "pipe_6b4e7fb7f9dc",
+ "report_id": "report_a9d67f7febed",
+ "simulation_id": "sim_ce2567356956",
+ "graph_id": "mirofish_4122ab2446324df5",
+ "status": "completed",
+ "prompt": "Forecast the price of copper (USD per tonne, LME cash settlement) as of December 31, 2027. Establish the baseline: current LME price as of late October 2026, 2024-2026 trajectory, and current inventories. Research and weigh the principal drivers: Mine supply disruptions and grades (Chile, Peru, Panama/Cobre restart odds); new project pipelines (Kamoa-Kakula, El Tejon etc.); smelting capacity and TC/RC collapse; demand from grids, EVs, datacenters and construction (China property vs electrification); substitution and scrap; COMEX/LME spread and US tariff policy on metals. Deliverables: 3-5 mutually exclusive scenarios with probabilities, a most-likely trajectory, and at least 10 binary forecasts with concrete thresholds, counts or dates, each with a probability and resolution criteria anchored to verifiable sources.",
+ "created_at": "2026-10-23T18:40:48.639873+00:00",
+ "mode": "full",
+ "rounds": 14,
+ "personas": 13,
+ "has_actors": true,
+ "research_log": {
+  "line_count": 315,
+  "source_count": 1,
+  "complete": true,
+  "event_fidelity": "summarized_progress_events"
+ },
+ "dossier_assets": [
+  "research-charts/data_fred_pcoppusdm_62370e387e48b4df.png",
+  "research-charts/data_imf_pcps_g001_pcopp_usd_a_bc30d69a3cc3f4bb.png",
+  "research-charts/data_fred_tcu_29c10e2acbf23e8e.png",
+  "research-charts/data_usgov_eia_electricity_sales_us_all_0ea02785af4ca1ad.png",
+  "research-charts/timeline.png",
+  "research-charts/timeline.html",
+  "research-charts/quant_metrics.png",
+  "research-charts/quant_metrics.html"
+ ],
+ "report_assets": [
+  "charts/binary_forecast_dotplot.png",
+  "charts/official_indicators.png",
+  "charts/official_series_keakmrspafocalad.png",
+  "charts/official_series_mtclkemacbfmnese.png",
+  "charts/metric_trajectories.png",
+  "charts/regional_comparison.png",
+  "charts/quantitative_claims.png",
+  "charts/scenario_probabilities.png",
+  "charts/timeline_lanes.png"
+ ],
+ "dossier_languages": {
+  "en": "dossier.md"
+ },
+ "report_languages": {
+  "en": "report.md"
+ },
+ "artifact_sha256": {
+  "research_log.txt": "33d2ca2e1bb239a72eef24d8b26f9f3419c0437bddba06369a414702e4ef07e9",
+  "dossier.md": "3c42b874d8359fc7063d0751104a22c93e208076afa8a2c9a6e4b10ed3ff0ced",
+  "actors.json": "b02fc29b1631a9e3ab3daf6811df21e0a4ce5d4f47ff07b09c7054b01e50651a",
+  "sources.json": "5a05f4ff9d2cb98f169cc247cc6418ef1a9391e1baa793f9d69367a1927c59f0",
+  "ontology.json": "8228a927f663d6098f3d53b89a22cffefb104ca2274f485c24e5da38f2b2e3a1",
+  "graph.json": "c0994151a3e5588f83288478de69a9ec41e39c19f21d8d7e18f9eb473dfed33a",
+  "forum.json": "9960ce514a71941e795a1b5c60b5ff72b3f94461bbbc94a02edbd5ef46057887",
+  "report.md": "dd15ed848306dbdfe7ecdad301895997291f41a4222cae0930755565b3eb0129",
+  "research-charts/data_fred_pcoppusdm_62370e387e48b4df.png": "49915739e9dc61b5e7da84e600d196534b2276e817bdb212827ce61e1181fda7",
+  "research-charts/data_imf_pcps_g001_pcopp_usd_a_bc30d69a3cc3f4bb.png": "bfff2335922023fc820e4e9a53e2d0d25873f5fb1675b0f624ebc79dd13678fd",
+  "research-charts/data_fred_tcu_29c10e2acbf23e8e.png": "1c048481e447c59a8c8930e973f3dbf381caa7120e8d288c30eadbac0e86fc79",
+  "research-charts/data_usgov_eia_electricity_sales_us_all_0ea02785af4ca1ad.png": "12e40b403578045804d199e75e5eebb2f91984be4896fbd82be4b5f28db356ad",
+  "research-charts/timeline.png": "a9049cf4702d78cad044d0b0bfc728cd04430e96f7620adcf19bb97e26a3dc3c",
+  "research-charts/timeline.html": "a0371f3decd3c00068571b09df8de12b07325468be3a7f4b8f29b443e5d5f88f",
+  "research-charts/quant_metrics.png": "88a97350748c28ece58e8291222f3b87ab5fce82caf81142989fe9e1b3f71392",
+  "research-charts/quant_metrics.html": "0df39a1f04cdcdc6852c9205b4865bd58e5b33b8f83eeec09312287998e26873",
+  "charts/binary_forecast_dotplot.png": "a39894835d67f0c016798e751e46f49848fb62b942912d8ca5d49a7d41553c53",
+  "charts/official_indicators.png": "bff5697e1661d3724461b4f6c4eb8456c6bd0c4decc977aa7172ac0c0245200b",
+  "charts/official_series_keakmrspafocalad.png": "988c8e573510beff815d803a4e005b253990855612df02ac74445ebe5232c5c7",
+  "charts/official_series_mtclkemacbfmnese.png": "2c3c5383b66022254bc0e91be56864495a6a8e4ddec56af1dd1e016571368d7e",
+  "charts/metric_trajectories.png": "db048024fce77ecb82ba529a6a142e73922df7f7924455c4de141204eafa977b",
+  "charts/regional_comparison.png": "7f32977507220d3938ed4285250c5fc0e58a8d1a3dd4870f5d531ebbadbe5bd3",
+  "charts/quantitative_claims.png": "0c0a81fdf42616a88ca4eb10a325d58ad6748177a8cadc30bd761a6775e08a32",
+  "charts/scenario_probabilities.png": "a4c2f19db6e24a2167c14ee0bba9aeaae8cbd164102b5e72935961ef49e26bcb",
+  "charts/timeline_lanes.png": "40d3f57281e54c52376049cc8c749ced31d3970ef883a292f957a0edf28c6722"
+ },
+ "publication": {
+  "hard_passed": true,
+  "publish_passed": true,
+  "scenario_contract_valid": true,
+  "citation_coverage": 0.8,
+  "semantic_citations_passed": true,
+  "markdown_sha256": "6ca24def085968f6ea54c760c7d63b37264201cd32d7409cd21ac863e81d2e24",
+  "forecast_sha256": "f0dff26d1d13989502e6415befe466ca726b04865ba499b3e3ee2de280a1cb8e"
+ }
+}

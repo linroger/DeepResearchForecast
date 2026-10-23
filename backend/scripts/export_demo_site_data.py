@@ -75,6 +75,9 @@ RUNS = {
     # added 2026-09-29 — GLM-5.3 run with the per-round reply step; English report
     # with a published Chinese variant
     "quantum-2040": "pipe_6c4190b31f0b",
+    # added 2026-10-23 — 25-topic battery runs #3/#4 (standard depth, GLM-5.3)
+    "copper-2027": "pipe_6b4e7fb7f9dc",
+    "bitcoin-2027": "pipe_685795301752",
 }
 LANGUAGES = ("en", "zh")
 
