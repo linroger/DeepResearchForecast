@@ -1,5 +1,7 @@
 # Pipeline improvement ideas — reflexive simulation, deep research, evaluation, systems
 
+> Follow-up: [first-principles review](first-principles-review.md) rechecks the current source, corrects several earlier shortcuts, and provides a proposed architecture and testable sequence. The historical measurements and effort estimates below are not fresh verification.
+
 **Status:** proposals, 2026-10-23. Nothing here is implemented or decided.
 **Method:** four specialist readers (world-model realism, deep research, forecasting/evaluation, systems) each read the relevant code and handoff records and proposed ranked ideas with file anchors, cost, validation and risks. This document is the synthesis and ranking; the panel's raw output is in the session's workflow journal `wf_fddb743c-a0e`. Load-bearing claims marked ✓ were re-checked against the tree on 2026-10-23; claims marked (panel) were not independently re-verified.
 
