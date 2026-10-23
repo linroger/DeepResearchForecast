@@ -1,6 +1,6 @@
 # Research-grounded main merge
 
-Status: Verified; non-forced main publication is the final delivery step. The user explicitly authorized committing, pushing and merging the completed research-grounded branch to main.
+Status: Complete. Source merged, verified and published to main without force. The user explicitly authorized committing, pushing and merging the completed research-grounded branch to main.
 
 ## Plan and acceptance
 Merge source 53fc9283 onto freshly fetched legacy/main dac62ef6 in an isolated checkout. Preserve both histories and all newer main forecast-contract, recovery, translation and publication behavior. Resolve overlapping source edits, independently review the merge, run guarded affected and cross-stage acceptance plus frontend checks where source changes require them, then create a merge commit and push main without force. If main advances, incorporate and revalidate the additional changes before pushing. Verify remote ancestry and a clean integration worktree. Preserve primary source files and index byte-for-byte; do not restart active services.
@@ -48,3 +48,7 @@ The final89-module backend suite passed2296/2296 in262.25seconds, with no failur
 ```text
 Read this handoff and verification.json. Confirm remote main contains source53fc9283 and upstream31a424d0, and inspect the latest Git log for the delivered merge. The primary checkout still contains unrelated staged/dirty work and may have active forecasts; this merge does not authorize restarting or replacing it. Use the earlier research-grounded-prepare adoption runbook if the user later requests live adoption. Keep offline implementation acceptance separate from prospective forecast accuracy.
 ```
+
+## Remote delivery complete
+
+2026-10-23: Integration merge cacb7daed1891c8e6833c9f38b86750f17c51657 retains parents dac62ef6 and53fc9283. Merge2b4129f9f73ad643eb94110dc59b599de5700e7d also includes upstream31a424d0; its only application-tree difference is LICENSE. Atomic non-forced push updated legacy/main and created codex/research-grounded-main-merge at2b4129f9. Remote refs were verified. The final documentation commit records this receipt without changing any tested application bytes. Runtime remains on the preserved primary checkout; no service restart or live adoption occurred.

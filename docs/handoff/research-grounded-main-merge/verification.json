@@ -1,6 +1,6 @@
 {
   "schema": "research-grounded-main-merge/v1",
-  "status": "verified_for_main_publication",
+  "status": "merged_and_pushed_to_main",
   "feature_head": "53fc9283dd7facfa8b3c9545181f744168b6d4cd",
   "initial_main": "dac62ef64215c06c8cc51e3825cc51144ee9907f",
   "upstream_addition": "31a424d0f604267deec2d80856e68ce2e13a00b9",
@@ -190,5 +190,14 @@
     "backend/tests/test_world_report_consumers.py",
     "backend/tests/test_world_track_records.py",
     "backend/tests/test_world_update.py"
-  ]
+  ],
+  "delivery": {
+    "integration_merge": "cacb7daed1891c8e6833c9f38b86750f17c51657",
+    "upstream_merge": "2b4129f9f73ad643eb94110dc59b599de5700e7d",
+    "remote": "legacy",
+    "main_push": "atomic_non_forced_succeeded",
+    "remote_main_verified": "2b4129f9f73ad643eb94110dc59b599de5700e7d",
+    "integration_branch": "codex/research-grounded-main-merge",
+    "runtime_source_unchanged": true
+  }
 }
