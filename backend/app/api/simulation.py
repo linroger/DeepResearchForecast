@@ -2432,29 +2432,13 @@ def _record_publication(sim_dir: str):
     Served only when ``simulation_record_contract.is_published`` holds (an audit exists,
     passed, and carries no hard issue); the status names why it is withheld otherwise.
     """
-    import hashlib
     from ..services import simulation_record_contract as _rc
-    audit = _rc.load_audit(sim_dir)
-    if audit is None:
-        return False, "not_audited"
-    status = str(audit.get("publication_status") or "failed")
-    if audit.get("hard_issues"):
-        status = "failed"
-    published = _rc.is_published(sim_dir)
-    if published and audit.get("sha256"):
-        # the audit covers one set of bytes; a record rewritten after its audit is unaudited
-        try:
-            with open(_rc.record_paths(sim_dir)["json"], "rb") as fh:
-                on_disk = hashlib.sha256(fh.read()).hexdigest()
-        except OSError:
-            return False, "not_audited"
-        if on_disk != str(audit.get("sha256")):
-            return False, "stale_audit"
-    return published, status
+    record, status = _rc.load_published_record(sim_dir)
+    return record is not None, status
 
 
 def _record_route_preamble(simulation_id: str):
-    """Shared containment for the record routes: ``(sim_dir, paths, error_response)``.
+    """Shared containment for the record routes: ``(sim_dir, record, error_response)``.
 
     Same posture as the world-state route — realpath containment under
     OASIS_SIMULATION_DATA_DIR, the record file a regular file only (symlinks refused),
@@ -2471,14 +2455,14 @@ def _record_route_preamble(simulation_id: str):
         return None, None, (jsonify({"success": False, "error": "模拟事后记录尚未生成"}), 404)
     if os.path.getsize(paths["json"]) > WORLD_STATE_MAX_BYTES:
         return None, None, (jsonify({"success": False, "error": "模拟事后记录文件超出大小上限"}), 413)
-    published, status = _record_publication(sim_dir)
-    if not published:
+    record, status = _rc.load_published_record(sim_dir)
+    if record is None:
         return None, None, (jsonify({
             "success": False,
             "error": "模拟事后记录未通过审计门，不予提供（见 simulation_record_audit.json）",
             "publication_status": status,
         }), 409)
-    return sim_dir, paths, None
+    return sim_dir, record, None
 
 
 @simulation_bp.route('/<simulation_id>/record', methods=['GET'])
@@ -2492,13 +2476,9 @@ def get_simulation_record(simulation_id: str):
     refusal and size bounds as for ``/world-state``.
     """
     try:
-        from ..services import simulation_record_contract as _rc
-        sim_dir, _paths, error = _record_route_preamble(simulation_id)
+        sim_dir, record, error = _record_route_preamble(simulation_id)
         if error is not None:
             return error
-        record = _rc.load_record(sim_dir)
-        if record is None:
-            return jsonify({"success": False, "error": "模拟事后记录解析失败"}), 500
         return jsonify({"success": True, "data": record})
     except Exception as e:
         logger.error(f"读取模拟事后记录失败: {str(e)}")
@@ -2509,30 +2489,17 @@ def get_simulation_record(simulation_id: str):
 def get_simulation_record_markdown(simulation_id: str):
     """The record's deterministic Markdown rendering as ``text/markdown``.
 
-    ``?lang=zh`` serves ``simulation_record.zh.md``; anything else serves the English
-    rendering (``simulation_record.md`` when the run's language is English, otherwise
-    rendered deterministically from the gate-passed JSON — no translation call).  Same
-    404 / 409 / containment behaviour as ``/record``.
+    Render ``zh`` or ``en`` from the same verified JSON snapshot used by ``/record``.
+    Both stored renderings must still match their audit seals. No translation call
+    or unchecked cache read is made. Same 404 / 409 containment behaviour as ``/record``.
     """
     try:
-        from ..services import simulation_record_contract as _rc
-        sim_dir, paths, error = _record_route_preamble(simulation_id)
+        sim_dir, record, error = _record_route_preamble(simulation_id)
         if error is not None:
             return error
         want_zh = str(request.args.get("lang", "") or "").strip().lower().startswith("zh")
-        record = _rc.load_record(sim_dir)
-        if record is None:
-            return jsonify({"success": False, "error": "模拟事后记录解析失败"}), 500
-        record_zh = str(record.get("language") or "").lower().startswith("zh")
-        path = paths["md_zh"] if want_zh else (paths["md"] if not record_zh else None)
-        text = None
-        if path and not os.path.islink(path) and os.path.isfile(path) \
-                and os.path.getsize(path) <= WORLD_STATE_MAX_BYTES:
-            with open(path, "r", encoding="utf-8") as f:
-                text = f.read()
-        if text is None:
-            from ..services.simulation_record import render_markdown
-            text = render_markdown(record, "zh" if want_zh else "en")
+        from ..services.simulation_record import render_markdown
+        text = render_markdown(record, "zh" if want_zh else "en")
         response = Response(text, mimetype="text/markdown; charset=utf-8")
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Content-Disposition"] = (

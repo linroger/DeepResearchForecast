@@ -8819,6 +8819,7 @@ class PipelineOrchestrator:
         else:
             self._wait_world_simulation(state, sim.simulation_id, upd)
         self._require_run_completion_evidence(state, sim.simulation_id, None, False)
+        self._publish_simulation_record(state, sim.simulation_id, regenerate=False)
         self._complete_stage(state, STAGE_RUN, "World horizon committed", reused=completed)
         return sim
 
@@ -8827,7 +8828,7 @@ class PipelineOrchestrator:
         cancel = self._cancel_events.get(state.pipeline_id)
         if cancel is not None and cancel.is_set():
             raise PipelineCancelled("World run cancelled before launch")
-        SimulationRunner.start_simulation(simulation_id)
+        SimulationRunner.start_simulation(simulation_id, finalize_record=False)
         try:
             last_round, last_progress = -1, time.monotonic()
             stall = float(getattr(Config, "PIPELINE_RUN_STALL_S", 1800) or 1800)
@@ -10052,6 +10053,7 @@ class PipelineOrchestrator:
         if run is None or run.runner_status != RunnerStatus.COMPLETED:
             self._wait_world_simulation(state, child.simulation_id, lambda pct, message: None)
         WorldSimulationService.require_complete(child.simulation_id)
+        self._publish_simulation_record(state, child.simulation_id, regenerate=False, register=False)
         row["status"] = "world_completed"
         PipelineManager.save(state)
         return child
@@ -10110,7 +10112,7 @@ class PipelineOrchestrator:
                 max_rounds=max_rounds,  # PREP-1: 集成种子跑同样按真实执行窗排期
                 research_language=state.options.get("research_language"),  # PREP-4
             )
-            run_kwargs: dict[str, Any] = {"platform": "parallel", "sim_seed": int(seed)}
+            run_kwargs: dict[str, Any] = {"platform": "parallel", "sim_seed": int(seed), "finalize_record": False}
             if max_rounds:
                 run_kwargs["max_rounds"] = int(max_rounds)
             # Foglamp WP1 (1A/1B)：读 run 钉住的安全政策（默认已为 false——观察图不得吃反馈）。
@@ -10174,7 +10176,8 @@ class PipelineOrchestrator:
                 except Exception:  # noqa: BLE001
                     pass
             try:
-                SimulationRunner.write_run_summary(sim_id)
+                seed_summary = SimulationRunner.write_run_summary(sim_id)
+                SimulationRunner.reconcile_completed_record_state(sim_id, run_state=rs, summary=seed_summary)
             except Exception:  # noqa: BLE001
                 pass
             # ADR 0003 (S1.3): the seed run's after-action record, right after its run_summary
@@ -10388,54 +10391,8 @@ class PipelineOrchestrator:
         self._flush_run_telemetry(state)
 
     @staticmethod
-    def _reconcile_completed_simulation_state(
-        sim_state: Any,
-        run_state: Any = None,
-        run_summary: Any = None,
-    ) -> None:
-        """Copy authoritative terminal RUN fields into the durable simulation state.
-
-        ``SimulationState`` is the API-facing record while ``SimulationRunState``
-        is the runtime authority.  Updating only the former's top-level status
-        produced impossible records (completed with round 0 and both platforms
-        not_started).  This helper makes the terminal projection explicit and
-        testable without coupling it to pipeline I/O.
-        """
-        sim_state.status = SimulationStatus.COMPLETED
-        round_candidates = [getattr(run_state, "current_round", None)]
-        if isinstance(run_summary, dict):
-            round_candidates.append(run_summary.get("rounds_executed"))
-        parsed_rounds = []
-        for candidate in round_candidates:
-            try:
-                parsed_rounds.append(max(0, int(candidate or 0)))
-            except (TypeError, ValueError):
-                continue
-        sim_state.current_round = max(parsed_rounds, default=0)
-        for platform in ("twitter", "reddit"):
-            enabled_raw = getattr(run_state, f"{platform}_enabled", None)
-            enabled = bool(
-                getattr(sim_state, f"enable_{platform}", False)
-                if enabled_raw is None else enabled_raw
-            )
-            completed_raw = getattr(run_state, f"{platform}_completed", None)
-            if not enabled:
-                platform_status = "disabled"
-            elif completed_raw is not None:
-                platform_status = "completed" if bool(completed_raw) else "incomplete"
-            else:
-                # Aggregate rounds prove that *some* simulation work completed,
-                # not that every enabled lane reached its terminal checkpoint.
-                # Preserve an existing explicit terminal projection when one is
-                # available; otherwise expose the missing evidence honestly.
-                existing = str(
-                    getattr(sim_state, f"{platform}_status", "") or ""
-                ).strip()
-                platform_status = (
-                    existing if existing not in {"", "not_started"} else "unknown"
-                )
-            setattr(sim_state, f"{platform}_status", platform_status)
-        sim_state.error = getattr(run_state, "error", None) or None
+    def _reconcile_completed_simulation_state(sim_state, run_state=None, run_summary=None) -> None:
+        SimulationRunner.reconcile_completed_simulation_state(sim_state, run_state, run_summary)
 
     # ---------------------------------------------------------------- S1 health gate
     # The corpus review found 8/13 runs reported status=completed/100%/error=null while
@@ -11126,6 +11083,11 @@ class PipelineOrchestrator:
         recorded: list[tuple[str, str]] = []
 
         def add_if(name: str, path: Optional[str]) -> bool:
+            if name == "simulation_record":
+                from .simulation_record_contract import load_published_record
+                if not path or load_published_record(os.path.dirname(path))[0] is None:
+                    state.artifacts.pop(name, None)
+                    return False
             if path and os.path.exists(path) and os.path.getsize(path) > 0:
                 state.artifacts[name] = path
                 state.artifacts.pop(f"{name}_partial", None)
@@ -11262,6 +11224,9 @@ class PipelineOrchestrator:
             candidates_by_name.setdefault(name, []).append(path)
 
         for name, candidates in candidates_by_name.items():
+            if stage == STAGE_RUN and name == "simulation_record":
+                # Optional derivative damage is repaired after paid RUN reuse.
+                continue
             entry = manifest.get(name)
             if not isinstance(entry, dict):
                 continue  # 该产物未登记（可选 / 老清单）→ 不校验
@@ -11374,6 +11339,9 @@ class PipelineOrchestrator:
         status_value = getattr(status, "value", status)
         if status_value != SimulationStatus.COMPLETED.value:
             return False
+        run_state = SimulationRunner.get_run_state(sim_id)
+        if run_state is not None and not SimulationRunner._terminal_artifacts_ready(run_state):
+            return False
 
         summary_path = os.path.join(
             SimulationRunner.RUN_STATE_DIR, sim_id, "run_summary.json")
@@ -11466,6 +11434,8 @@ class PipelineOrchestrator:
             missing = self._sim_platform_completion_missing(sim_id, rs)
             if missing:
                 return False, "missing_simulation_end:" + ",".join(missing)
+            if rs is not None and not SimulationRunner._terminal_artifacts_ready(rs):
+                return False, "terminal_artifacts_not_ready"
             summary_path = os.path.join(sim_dir, "run_summary.json")
             if os.path.exists(summary_path):
                 summary = _read_json(summary_path)
@@ -11529,6 +11499,8 @@ class PipelineOrchestrator:
             WorldSimulationService.require_complete(sim_id)
             return
         missing = self._sim_platform_completion_missing(sim_id, run_state)
+        if run_state is not None and not SimulationRunner._terminal_artifacts_ready(run_state):
+            raise RuntimeError("模拟终态产物尚未完成：缺少当前运行的 terminal artifacts 标记")
         if missing:
             raise RuntimeError(
                 "模拟未产出完成证据：启用平台缺少 simulation_end 完成标记"
@@ -11577,6 +11549,17 @@ class PipelineOrchestrator:
             if entry is not None:
                 manifest["run_summary"] = entry
                 PipelineManager.write_artifact_manifest(state.pipeline_id, manifest)
+        # state.json is a sealed record input: reconcile before compiling, and
+        # avoid changing its updated_at when reusing an already terminal projection.
+        try:
+            SimulationRunner.reconcile_completed_record_state(
+                simulation_id, run_state=SimulationRunner.get_run_state(simulation_id),
+                summary=_read_json(summary_path))
+        except Exception as error:
+            # The valid summary remains RUN evidence; projection/record repair
+            # must never turn an optional derivative failure into a paid rerun.
+            logger.warning("[%s] record state projection unavailable: %s", state.pipeline_id, error)
+            return True
         # ADR 0003 (S1.3): the Simulation After-Action Record follows run_summary on this
         # path too (new run and reuse alike); a reused run keeps its audited record bytes.
         self._publish_simulation_record(
@@ -11597,42 +11580,30 @@ class PipelineOrchestrator:
 
         Degrades safely by contract: the record is a ``simulated`` record class and never a
         stage or publication gate, so any failure here is logged at warning and the RUN
-        stage continues without it.  ``regenerate=False`` keeps an existing audited record
-        (reused runs keep their bytes); ``register`` adds the ``simulation_record`` artifact
+        stage continues without it. ``regenerate`` remains a caller compatibility
+        argument: valid records keep their bytes, stale ones repair deterministically.
+        ``register`` adds the ``simulation_record`` artifact
         pointer and manifest entry beside ``run_summary``.
         """
-        if not bool(getattr(Config, "SIM_RECORD_ENABLED", True)):
-            return False
         sim_dir = os.path.join(SimulationRunner.RUN_STATE_DIR, simulation_id)
         try:
-            from . import simulation_record_contract as _rc
-            from .simulation_record import build_record, write_record
-            from .simulation_record_gate import audit_record
-            paths = _rc.record_paths(sim_dir)
-            reuse = (not regenerate and _rc.load_record(sim_dir) is not None
-                     and _rc.load_audit(sim_dir) is not None)
-            if not reuse:
-                engine = str(state.options.get("simulation_engine") or "")
-                record = build_record(
-                    sim_dir,
-                    language=state.options.get("research_language"),
-                    engine_hint="world-v1" if engine == "world-v1" else None,
-                )
-                write_record(sim_dir, record)
-                audit = audit_record(sim_dir, record)
-                logger.info(
-                    "[%s] simulation record written (%s, %s period(s), gate %s, %d hard issue(s))",
-                    state.pipeline_id, record.get("engine"), record.get("rounds_committed"),
-                    audit.get("publication_status"), len(audit.get("hard_issues") or []),
-                )
-            if not os.path.isfile(paths["json"]):
+            engine = str(state.options.get("simulation_engine") or "")
+            published = SimulationRunner.publish_simulation_record(
+                simulation_id, language=state.options.get("research_language"),
+                engine_hint="world-v1" if engine == "world-v1" else None)
+            if not published:
+                if register:
+                    state.artifacts.pop("simulation_record", None)
+                    state.artifacts.pop("simulation_record_partial", None)
+                    PipelineManager.save(state)
                 return False
+            path = os.path.join(sim_dir, "simulation_record.json")
             if register:
-                state.artifacts["simulation_record"] = paths["json"]
+                state.artifacts["simulation_record"] = path
                 PipelineManager.save(state)
                 if bool(getattr(Config, "PIPELINE_VALIDATE_ARTIFACTS", True)):
                     manifest = PipelineManager.load_artifact_manifest(state.pipeline_id)
-                    entry = _manifest_entry_for("simulation_record", paths["json"], STAGE_RUN)
+                    entry = _manifest_entry_for("simulation_record", path, STAGE_RUN)
                     if entry is not None:
                         manifest["simulation_record"] = entry
                         PipelineManager.write_artifact_manifest(state.pipeline_id, manifest)
@@ -14600,7 +14571,7 @@ class PipelineOrchestrator:
                     _run_completion_message = "模拟已恢复"
                 else:
                     upd(2, "启动 OASIS 模拟…")
-                    run_kwargs: dict[str, Any] = {"platform": "parallel"}
+                    run_kwargs: dict[str, Any] = {"platform": "parallel", "finalize_record": False}
                     # T3.7: 每次运行的 max_rounds 优先，否则用 Config.OASIS_DEFAULT_MAX_ROUNDS（0→None=跑满）。
                     # CAL：日历模式运行期不注入默认上限——轮数由 temporal_config.n_rounds 定，
                     # 用户显式 max_rounds 也已在配置生成期粗化粒度（运行器会忽略并告警）。
@@ -14763,35 +14734,8 @@ class PipelineOrchestrator:
                     state, sim_state.simulation_id, _gate_rs, _run_summary_published,
                 )
 
-                # Reconcile both freshly executed and reused RUNs. The successful EV
-                # resume proved that a valid reused summary can coexist with a stale
-                # API-facing state.json at round 0; reuse must repair that projection
-                # just as a fresh run does.
-                try:
-                    _terminal_rs = (
-                        SimulationRunner.get_run_state(sim_state.simulation_id)
-                        if run_stage_done else rs
-                    )
-                    _summary_path = os.path.join(
-                        SimulationRunner.RUN_STATE_DIR,
-                        sim_state.simulation_id,
-                        "run_summary.json",
-                    )
-                    _terminal_summary = (
-                        _read_json(_summary_path) if _run_summary_published else None
-                    )
-                    ss = sim_manager.get_simulation(sim_state.simulation_id)
-                    if ss is not None:
-                        self._reconcile_completed_simulation_state(
-                            ss, _terminal_rs, _terminal_summary,
-                        )
-                        sim_manager._save_simulation_state(ss)
-                except Exception as _state_sync_err:  # noqa: BLE001
-                    logger.warning(
-                        "[%s] 同步终态 simulation state 失败: %s",
-                        state.pipeline_id,
-                        _state_sync_err,
-                    )
+                # The summary publisher reconciles state.json before sealing the
+                # record. Do not rewrite that sealed input again here.
 
                 # Completion now follows the final summary publication, so the stage
                 # manifest and status describe the same durable boundary.

@@ -32,14 +32,50 @@ export function slugify(text) {
     .slice(0, 80) || 'h'
 }
 
-// 相对资源地址解析（图片/链接）：绝对 http(s)/data 原样；以 / 开头的同源绝对路径原样；
-// 其它显式协议（javascript: 等）拒绝为空串；相对路径（如 'charts/xxx.png'）交给 resolve()
-// 重写到 API base。无 resolve 时相对路径无法定位 → 返回空串（调用方据此退化）。
-function safeAssetUrl(url, resolve) {
-  if (/^(https?:|data:)/i.test(url)) return url
-  if (/^\//.test(url)) return url
-  if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return ''   // 未知/危险协议一律拒绝
-  return resolve ? (resolve(url) || '') : ''
+// Validate both authored and resolver-provided URLs; escaping alone cannot reject schemes.
+function safeAssetUrl(value, resolve, image = false) {
+  if (typeof value !== 'string' || !value || /[\u0000-\u0020\u007f\\]/.test(value)) return ''
+  if (/^https?:\/\//i.test(value) || /^\//.test(value)) return value
+  if (!image && /^(mailto:|#)/i.test(value)) return value
+  if (image && /^data:image\/(?:png|jpeg|gif|webp|avif);base64,[a-z0-9+/=]+$/i.test(value)) return value
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return ''
+  return resolve ? safeAssetUrl(resolve(value), null, image) : ''
+}
+
+function openingFence(line) {
+  const match = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/)
+  if (!match || (match[1][0] === '`' && match[2].includes('`'))) return null
+  return match[1]
+}
+
+function closesFence(line, fence) {
+  const match = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/)
+  return Boolean(match && match[1][0] === fence[0] && match[1].length >= fence.length)
+}
+
+// Preserve offsets for marked-block extraction. All consumers use the same fence/comment
+// grammar, so headings, reference discovery and bridge parsing agree with rendered code.
+function* markdownLines(md) {
+  let fence = null
+  let inComment = false
+  for (const match of String(md).matchAll(/[^\r\n]*(?:\r\n|\r|\n|$)/g)) {
+    if (!match[0]) continue
+    const line = match[0].replace(/[\r\n]+$/, '')
+    const row = { line, start: match.index, end: match.index + line.length, kind: 'text' }
+    if (fence) {
+      row.kind = 'code'
+      if (closesFence(line, fence)) fence = null
+    } else if (inComment) {
+      row.kind = 'comment-body'
+      if (line.includes('-->')) inComment = false
+    } else if ((fence = openingFence(line))) {
+      row.kind = 'code'
+    } else if (/^\s*<!--/.test(line)) {
+      row.kind = 'comment'
+      inComment = !line.includes('-->')
+    }
+    yield row
+  }
 }
 
 // ---------- CITE-1：引文标记（[S3] / [S3-a]）可点击化 ----------
@@ -59,10 +95,8 @@ function citeKey(n, letter) {
 // 围栏代码块内的内容不参与判定（与 renderMarkdown 的 fence 分支一致）。
 function detectRefAnchors(lines) {
   let inRefs = false
-  let inFence = false
-  for (const line of lines) {
-    if (/^```/.test(line)) { inFence = !inFence; continue }
-    if (inFence) continue
+  for (const { line, kind } of markdownLines(lines.join('\n'))) {
+    if (kind !== 'text') continue
     const h = line.match(/^(#{1,6})\s+(.*)$/)
     if (h) { inRefs = REF_HEADING_RE.test(h[2]); continue }
     if (inRefs && /^\s*([-*+]|\d+\.)\s+\[S\d+(-[A-Za-z])?\]/.test(line)) return true
@@ -70,62 +104,62 @@ function detectRefAnchors(lines) {
   return false
 }
 
-// Inline formatting on an already-escaped string.
-// opts.resolveUrl(rel) —— 可选：把报告内相对资源路径（charts/…）重写为可访问 URL。
-// 提供时图片渲染为 <img>；不提供时保持历史行为（图片退化为 alt 文本，供 Dossier 等无资源上下文复用）。
-// opts.interactiveHref(rel) —— 可选（VIZ-2，manifest 驱动）：charts/<x>.png 存在交互式 .html
-// 孪生时返回其可访问 URL → 图片下方追加「交互版 Interactive」新标签页链接；返回空串则不追加。
-// opts.citations —— 可选（CITE-1）：{ 'S3': '来源标题…' } 映射，为引文上标提供 hover 提示。
+function emphasis(text) {
+  return text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+}
+
+// Only source text is parsed. Generated tags, attributes and code spans are opaque to
+// subsequent markdown rules (including citation and emphasis substitution).
 function renderInline(text, opts) {
-  const resolve = opts && typeof opts.resolveUrl === 'function' ? opts.resolveUrl : null
-  const interactive = opts && typeof opts.interactiveHref === 'function' ? opts.interactiveHref : null
-  let t = text
-  // 图片：有 resolveUrl 时渲染 <img>（相对 charts/… 重写到 API base，PNG 图表得以显示）；
-  // 否则退化为 alt 文本（与历史一致，避免 Dossier 等上下文出现坏图）。
-  if (resolve) {
-    t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g, (m, alt, url) => {
-      const src = safeAssetUrl(url, resolve)
-      if (!src) return alt
-      const img = `<img class="md-img" src="${src}" alt="${alt}" loading="lazy" />`
-      // VIZ-2：交互孪生链接只来自 viz_manifest（调用方校验路径），绝不注入 markdown 内任意 HTML。
-      const ihref = interactive ? (interactive(url) || '') : ''
-      if (ihref) {
-        return `<span class="md-img-wrap">${img}<a class="md-img-interactive" href="${ihref}" target="_blank" rel="noopener noreferrer">交互版 Interactive ↗</a></span>`
-      }
-      return img
-    })
-  } else {
-    t = t.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+  const resolve = typeof opts?.resolveUrl === 'function' ? opts.resolveUrl : null
+  const interactive = typeof opts?.interactiveHref === 'function' ? opts.interactiveHref : null
+  let t = String(text)
+  let prefix = '\u0000MDTOKEN'
+  while (t.includes(prefix)) prefix += 'X'
+  const tokenRe = new RegExp(`${prefix}(\\d+)\u0000`, 'g')
+  const fragments = []
+  const restore = (value, literal = false) => value.replace(tokenRe, (_, index) =>
+    literal ? fragments[index].literal : fragments[index].html)
+  const stash = (html, literal) => {
+    const token = `${prefix}${fragments.length}\u0000`
+    fragments.push({ html, literal })
+    return token
   }
-  // CITE-1：引文标记 [S3] / [S3-a] → 阅读流内不打扰的上标引用。
-  // 仅当本文档存在可锚定的 References 条目（opts._citeAnchors，由 renderMarkdown 预扫描）
-  // 时生成跳转链接；否则退化为纯上标。hover 提示取自可选的 opts.citations 映射。
-  t = t.replace(CITE_RE, (m, n, letter) => {
+  t = t.replace(/(`+)([^]*?)\1(?!`)/g, (all, ticks, code) =>
+    stash('<code>' + escapeHtml(code) + '</code>', all))
+  // A single nested bracket level admits source markers in labels/alt text.
+  const imageRe = /!\[((?:[^\[\]]|\[[^\[\]]*\])*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
+  t = t.replace(imageRe, (all, alt, url) => {
+    const plainAlt = escapeHtml(restore(alt, true))
+    const src = resolve && !url.includes(prefix) ? safeAssetUrl(url, resolve, true) : ''
+    if (!src) return stash(plainAlt, restore(alt, true))
+    const img = `<img class="md-img" src="${escapeHtml(src)}" alt="${plainAlt}" loading="lazy" />`
+    const ihref = interactive ? safeAssetUrl(interactive(url), null) : ''
+    const html = ihref
+      ? `<span class="md-img-wrap">${img}<a class="md-img-interactive" href="${escapeHtml(ihref)}" target="_blank" rel="noopener noreferrer">交互版 Interactive ↗</a></span>`
+      : img
+    return stash(html, all)
+  })
+  const linkRe = /\[((?:[^\[\]]|\[[^\[\]]*\])+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
+  t = t.replace(linkRe, (all, label, url) => {
+    const clean = restore(emphasis(escapeHtml(label.replace(/^citation:/i, ''))))
+    const href = (!url.includes(prefix) && safeAssetUrl(url, resolve)) || '#'
+    const external = /^(https?:|\/\/)/i.test(href)
+    return stash(`<a href="${escapeHtml(href)}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>${clean}</a>`, all)
+  })
+  t = t.replace(CITE_RE, (all, n, letter) => {
     const key = citeKey(n, letter)
-    const cite = opts && opts.citations ? opts.citations[key] : null
-    const tipRaw = cite == null ? '' : (typeof cite === 'string' ? cite : String(cite.title || ''))
-    const titleAttr = tipRaw ? ` title="${escapeHtml(tipRaw)}"` : ''
+    const cite = opts?.citations?.[key]
+    const tip = cite == null ? '' : (typeof cite === 'string' ? cite : String(cite.title || ''))
+    const title = tip ? ` title="${escapeHtml(tip)}"` : ''
     const label = n + (letter ? letter.slice(1).toLowerCase() : '')
-    if (opts && opts._citeAnchors) {
-      return `<sup class="md-cite"><a href="#ref-${key}"${titleAttr}>${label}</a></sup>`
-    }
-    return `<sup class="md-cite"${titleAttr}>${label}</sup>`
+    return stash(opts?._citeAnchors
+      ? `<sup class="md-cite"><a href="#ref-${key}"${title}>${label}</a></sup>`
+      : `<sup class="md-cite"${title}>${label}</sup>`, all)
   })
-  // links: [label](url)  — also handles [citation:Label](url)
-  t = t.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g, (m, label, url) => {
-    const clean = label.replace(/^citation:/i, '')
-    const safeUrl = /^(https?:|mailto:|#|\/)/i.test(url)
-      ? url
-      : (resolve ? (safeAssetUrl(url, resolve) || '#') : '#')
-    const external = /^https?:/i.test(safeUrl)
-    return `<a href="${safeUrl}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>${clean}</a>`
-  })
-  // bold then italic then inline code
-  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-  t = t.replace(/__([^_]+)__/g, '<strong>$1</strong>')
-  t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
-  t = t.replace(/`([^`]+)`/g, '<code>$1</code>')
-  return t
+  return restore(emphasis(escapeHtml(t)))
 }
 
 function renderTable(rows, opts) {
@@ -134,13 +168,13 @@ function renderTable(rows, opts) {
   const header = parseRow(rows[0])
   const body = rows.slice(2) // skip header + separator
   let html = '<table class="md-table"><thead><tr>'
-  header.forEach(h => { html += `<th>${renderInline(escapeHtml(h), opts)}</th>` })
+  header.forEach(h => { html += `<th>${renderInline(h, opts)}</th>` })
   html += '</tr></thead><tbody>'
   body.forEach(line => {
     if (!line.trim()) return
     const cells = parseRow(line)
     html += '<tr>'
-    cells.forEach(c => { html += `<td>${renderInline(escapeHtml(c), opts)}</td>` })
+    cells.forEach(c => { html += `<td>${renderInline(c, opts)}</td>` })
     html += '</tr>'
   })
   html += '</tbody></table>'
@@ -166,7 +200,7 @@ export function renderMarkdown(md, opts) {
 
   const flushParagraph = (buf) => {
     if (buf.length) {
-      out.push('<p>' + renderInline(escapeHtml(buf.join(' ')), o) + '</p>')
+      out.push('<p>' + renderInline(buf.join(' '), o) + '</p>')
       buf.length = 0
     }
   }
@@ -176,12 +210,12 @@ export function renderMarkdown(md, opts) {
     let line = lines[i]
 
     // fenced code block
-    const fence = line.match(/^```(\w*)\s*$/)
+    const fence = openingFence(line)
     if (fence) {
       flushParagraph(paraBuf)
       const code = []
       i++
-      while (i < lines.length && !/^```\s*$/.test(lines[i])) { code.push(lines[i]); i++ }
+      while (i < lines.length && !closesFence(lines[i], fence)) { code.push(lines[i]); i++ }
       i++ // closing fence
       out.push('<pre class="md-pre"><code>' + escapeHtml(code.join('\n')) + '</code></pre>')
       continue
@@ -201,7 +235,7 @@ export function renderMarkdown(md, opts) {
     if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]) && lines[i + 1].includes('-')) {
       flushParagraph(paraBuf)
       const tbl = []
-      while (i < lines.length && /\|/.test(lines[i]) && lines[i].trim()) { tbl.push(lines[i]); i++ }
+      while (i < lines.length && /\|/.test(lines[i]) && lines[i].trim() && !openingFence(lines[i])) { tbl.push(lines[i]); i++ }
       out.push(renderTable(tbl, o))
       continue
     }
@@ -215,7 +249,7 @@ export function renderMarkdown(md, opts) {
       // CITE-1：进入/离开 References 类章节（决定后续列表条目是否生成 ref 锚点）。
       inRefs = REF_HEADING_RE.test(text)
       const id = slugify(text)
-      out.push(`<h${level} id="${id}" class="md-h md-h${level}">${renderInline(escapeHtml(text), o)}</h${level}>`)
+      out.push(`<h${level} id="${id}" class="md-h md-h${level}">${renderInline(text, o)}</h${level}>`)
       i++
       continue
     }
@@ -236,7 +270,7 @@ export function renderMarkdown(md, opts) {
         quote.push(lines[i].replace(/^\s*>\s?/, ''))
         i++
       }
-      out.push('<blockquote class="md-quote">' + renderInline(escapeHtml(quote.join(' ')), o) + '</blockquote>')
+      out.push('<blockquote class="md-quote">' + renderInline(quote.join(' '), o) + '</blockquote>')
       continue
     }
 
@@ -255,9 +289,9 @@ export function renderMarkdown(md, opts) {
           const key = citeKey(rm[1], rm[2])
           const idAttr = usedRefIds.has(key) ? '' : ` id="ref-${key}"`
           usedRefIds.add(key)
-          out.push(`<li${idAttr} class="md-ref"><span class="md-ref-tag">${key}</span> ` + renderInline(escapeHtml(rm[3]), o) + '</li>')
+          out.push(`<li${idAttr} class="md-ref"><span class="md-ref-tag">${key}</span> ` + renderInline(rm[3], o) + '</li>')
         } else {
-          out.push('<li>' + renderInline(escapeHtml(item), o) + '</li>')
+          out.push('<li>' + renderInline(item, o) + '</li>')
         }
         i++
       }
@@ -287,34 +321,59 @@ export function renderMarkdown(md, opts) {
 export function extractHeadings(md) {
   if (!md) return []
   const out = []
-  String(md).split('\n').forEach(line => {
+  for (const { line, kind } of markdownLines(md)) {
+    if (kind !== 'text') continue
     const h = line.match(/^(#{1,6})\s+(.*)$/)
     if (h) {
-      const text = h[2].replace(/\s+#*\s*$/, '').replace(/[*_`]/g, '').trim()
-      if (text) out.push({ level: h[1].length, text, id: slugify(text) })
+      const raw = h[2].replace(/\s+#*\s*$/, '')
+      const text = raw.replace(/[*_`]/g, '').trim()
+      if (text) out.push({ level: h[1].length, text, id: slugify(raw) })
     }
-  })
+  }
   return out
 }
 
 /**
- * Split `md` around the first block fenced by a pair of marker lines (for example the
- * report's `<!-- sim-bridge:start -->` / `<!-- sim-bridge:end -->` pair from ADR 0003).
- * Returns { before, inner, after } with the markers removed, or null when the pair is
- * absent or out of order, so callers fall back to rendering the document as one piece.
- * The markers themselves are HTML comments, which renderMarkdown drops anyway.
+ * Classify a single marked block. Only standalone markers outside code/comments count.
+ * Invalid boundaries are distinct from absent markers: consumers must not silently
+ * display ambiguous simulated content as ordinary report prose.
  */
-export function splitMarkedBlock(md, startMarker, endMarker) {
+export function parseMarkedBlock(md, startMarker, endMarker) {
   const src = String(md || '')
-  if (!src || !startMarker || !endMarker) return null
-  const start = src.indexOf(startMarker)
-  if (start < 0) return null
-  const innerStart = start + startMarker.length
-  const end = src.indexOf(endMarker, innerStart)
-  if (end < 0) return null
-  return {
-    before: src.slice(0, start),
-    inner: src.slice(innerStart, end),
-    after: src.slice(end + endMarker.length)
+  if (!src || !startMarker || !endMarker || startMarker === endMarker) return { status: 'absent' }
+  let prefixLength = 0
+  while (prefixLength < startMarker.length && startMarker[prefixLength] === endMarker[prefixLength]) prefixLength++
+  const shared = startMarker.slice(0, prefixLength)
+  const markerPrefix = shared.endsWith(':') ? shared : ''
+  const markers = []
+  for (const row of markdownLines(src)) {
+    if (row.kind === 'code' || row.kind === 'comment-body') continue
+    // Inline code examples are literal too. Malformed marker comments (including an
+    // unfinished start marker) remain invalid, rather than concealing a second block.
+    if (row.kind === 'comment' && !row.line.trimStart().startsWith(markerPrefix || startMarker)
+      && !row.line.trimStart().startsWith(endMarker)) continue
+    const prose = row.line.replace(/(`+)([^]*?)\1(?!`)/g, '')
+    if (!prose.includes(startMarker) && !prose.includes(endMarker)
+      && !(markerPrefix && prose.includes(markerPrefix))) continue
+    const marker = row.line.trim()
+    if (marker !== startMarker && marker !== endMarker) return { status: 'invalid' }
+    const start = row.start + row.line.indexOf(marker)
+    markers.push({ marker, start, end: start + marker.length })
   }
+  if (!markers.length) return { status: 'absent' }
+  if (markers.length !== 2 || markers[0].marker !== startMarker || markers[1].marker !== endMarker) {
+    return { status: 'invalid' }
+  }
+  return {
+    status: 'valid',
+    before: src.slice(0, markers[0].start),
+    inner: src.slice(markers[0].end, markers[1].start),
+    after: src.slice(markers[1].end),
+  }
+}
+
+/** Compatibility helper for consumers that only need a valid split. */
+export function splitMarkedBlock(md, startMarker, endMarker) {
+  const { status, ...split } = parseMarkedBlock(md, startMarker, endMarker)
+  return status === 'valid' ? split : null
 }

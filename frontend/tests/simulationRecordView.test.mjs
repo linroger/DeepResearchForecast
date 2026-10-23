@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import * as vue from 'vue'
 import { renderToString } from 'vue/server-renderer'
@@ -9,6 +9,8 @@ import * as simRecord from '../src/utils/simRecord.js'
 import * as world from '../src/utils/worldSimulationView.js'
 import * as feedRounds from '../src/utils/feedRounds.js'
 import { compileSfc } from './sfcHarness.mjs'
+const translationHarness = new URL('./simulationTranslationHarness.mjs', import.meta.url)
+const overlay = existsSync(translationHarness) ? (await import(translationHarness.href)).overlay : {}
 
 // T12 (ADR 0003, design §6): the real SimulationRecordView.vue renders a gate-passed
 // simulation-record/v1 through Vue's server renderer — the banner verbatim, the health line,
@@ -271,7 +273,7 @@ test('the fixed caveat and label strings in SimulationView match sim_provenance'
 })
 
 // ---------- SimulationView: the record is the default view after completion ----------
-function mountSimulationView(t, { api = {}, lang = 'en' } = {}) {
+function mountSimulationView(t, { api = {}, lang = 'en', stageStatus = '', openRecordRequest = 0 } = {}) {
   i18n.locale.value = lang
   const calls = []
   const emitted = []
@@ -295,6 +297,7 @@ function mountSimulationView(t, { api = {}, lang = 'en' } = {}) {
     vue: { ...vue, onUnmounted: fn => cleanups.push(fn) },
     '../../i18n': i18n,
     '../../api/simulation': actual,
+    '../../utils/overlayTranslation': overlay,
     '../../utils/worldSimulationView': world,
     '../../utils/feedRounds': feedRounds,
     '../../utils/simRecord': simRecord,
@@ -303,7 +306,7 @@ function mountSimulationView(t, { api = {}, lang = 'en' } = {}) {
     './SimulationRecordView.vue': { default: { props: ['record'], template: '<div class="sim-record-view">{{ record && record.simulation_id }}</div>' } },
   }
   const component = buildSimulationView(imports)
-  const props = vue.reactive({ simulationId: 'sim_1' })
+  const props = vue.reactive({ simulationId: 'sim_1', stageStatus, openRecordRequest })
   const scope = vue.effectScope()
   const state = scope.run(() => component.setup(props, {
     expose() {}, emit: (name, payload) => emitted.push([name, payload]), attrs: {}, slots: {},
@@ -478,4 +481,188 @@ test('world-v1 runs re-ask for a missing record the same bounded number of times
 test('the record acceptance literals are the backend constants', () => {
   assert.equal(simRecord.RECORD_SCHEMA, pyConst('RECORD_SCHEMA'))
   assert.equal(simRecord.RECORD_CLASS, pyConst('RECORD_CLASS'))
+})
+
+for (const engine of ['oasis-legacy', 'world-v1']) {
+  test(`${engine}: Stage 5 completion re-arms record loading after earlier retries stopped`, async t => {
+    let available = false
+    const h = mountSimulationView(t, { stageStatus: 'pending', api: {
+      getSimulation: async id => ({ success: true, data: { simulation_id: id, simulation_engine: engine } }),
+      fetchRecord: async () => available
+        ? { record: RECORD_EN, status: 200, publicationStatus: 'passed' }
+        : { record: null, status: 404, publicationStatus: 'absent' },
+    } })
+    await settle()
+    for (let i = 0; i < 5; i++) await h.state.loadAll()
+    h.props.stageStatus = 'running'
+    await settle()
+    assert.equal(h.calls.filter(key => key === 'fetchRecord').length, 0, 'do not spend publication retries before Stage 5 finalizes')
+    available = true
+    h.props.stageStatus = 'completed'
+    await settle()
+    assert.equal(h.state.record.value?.simulation_id, RECORD_EN.simulation_id)
+    assert.equal(h.state.showRecord.value, true)
+    assert.match((await h.render()).html, /class="sim-record-view"/)
+  })
+}
+
+test('the report record request selects Record again and retries an exhausted or failed publication read', async t => {
+  let available = false
+  const h = mountSimulationView(t, { api: { fetchRecord: async () => available
+    ? { record: RECORD_EN, status: 200, publicationStatus: 'passed' }
+    : { record: null, status: 409, publicationStatus: 'failed' } } })
+  await settle()
+  h.state.showRecord.value = false
+  available = true
+  h.props.openRecordRequest++
+  await settle()
+  assert.equal(h.state.showRecord.value, true)
+  assert.match((await h.render()).html, /class="sim-record-view"/)
+})
+
+test('a pending audit is retried, but a failed or stale audit remains unavailable', async t => {
+  for (const publicationStatus of ['not_audited', 'failed', 'stale_audit']) {
+    const h = mountSimulationView(t, { api: { fetchRecord: async () => ({ record: null, status: 409, publicationStatus }) } })
+    await settle()
+    assert.deepEqual(h.timers, publicationStatus === 'not_audited' ? [15000] : [])
+    assert.equal(h.state.record.value, null)
+  }
+})
+
+test('switching simulation ignores a delayed record even if transport cannot abort', async t => {
+  let finish
+  const h = mountSimulationView(t, { api: { fetchRecord: id => id === 'sim_1'
+    ? new Promise(resolve => { finish = resolve })
+    : Promise.resolve({ record: null, status: 409, publicationStatus: 'failed' }) } })
+  await settle()
+  h.props.simulationId = 'sim_2'
+  await settle()
+  finish({ record: RECORD_EN, status: 200, publicationStatus: 'passed' })
+  await settle()
+  assert.equal(h.state.record.value, null)
+  assert.deepEqual(h.emitted.at(-1), ['record-state', { available: false, status: 409 }])
+})
+
+test('record quantities preserve small values and precision; Chinese rendering escapes source text', async t => {
+  const rec = structuredClone(RECORD_ZH)
+  rec.periods[0].facts_changed[0] = {
+    variable: '<img src=x onerror=alert(1)>', from: 0.000012345, to: 1.23456789,
+    unit: '万吨', cause: '<script>bad()</script>',
+  }
+  rec.overall.final_variables[0] = { name: '变化', seed_value: 0, final_value: 0.000012345, unit: '万吨' }
+  rec.periods[0].narrative = '<svg onload=alert(1)>'
+  const h = mountRecord(t, rec, 'zh')
+  const r = await h.render()
+  assert.match(r.text, /0\.000012345 万吨 → 1\.23456789 万吨/)
+  assert.match(r.text, /变化 0 万吨 0\.000012345 万吨/)
+  assert.match(r.html, /&lt;img src=x onerror=alert\(1\)&gt;/)
+  assert.doesNotMatch(r.html, /<script|<svg|<img/)
+  assert.ok(r.text.includes(SIM_BANNER_ZH))
+})
+
+// Shapes emitted by _periods_reflexive / _periods_world_v1, rather than the early
+// S2 fixture sketch. Exercise those producer fields through the actual SFC.
+test('compiler-shaped public moves, offers, red lines and alliances retain their meaning in both languages', async t => {
+  const rec = structuredClone(RECORD_EN)
+  const p = rec.periods[0]
+  p.moves = [{ actor: '甲', option: '谈判', magnitude: 0, terms: '阶段性降税',
+    commitment: { text: '履行协议', due_periods: 0 } }]
+  p.offers = [{ from_actor: '甲', to_actor: '乙', kind: 'talks', status: 'accepted', terms: '保留原始条款' }]
+  p.red_lines_crossed = [{ actor: '甲', by: '乙', red_line: '不得增加关税' }]
+  p.alliances = [{ kind: 'alliance_move', actor: '甲', move: 'join', target: '丙' },
+    { kind: 'relationship', source: '甲', target: '乙', from: 'cooperative', to: 'hostile' }]
+  const h = mountRecord(t, rec)
+  let r = await h.render()
+  assert.match(r.text, /甲 → 乙 talks 保留原始条款/)
+  assert.match(r.text, /甲: 不得增加关税.*乙/)
+  assert.match(r.text, /甲: join → 丙/)
+  assert.match(r.text, /甲 → 乙: cooperative → hostile/)
+  assert.match(r.text, /due in periods 0/)
+  assert.match(r.text, /terms: 阶段性降税/)
+  i18n.locale.value = 'zh'
+  r = await h.render()
+  assert.match(r.text, /到期时段数 0/)
+  assert.match(r.text, /条款: 阶段性降税/)
+  assert.match(r.text, /甲: 不得增加关税.*越线方: 乙/)
+  assert.doesNotMatch(r.text, /\[object Object\]/)
+})
+
+test('world-v1 compiler explicitly marks periods without an arbiter as not mechanical-only', async t => {
+  const rec = structuredClone(RECORD_EN)
+  rec.engine = 'world-v1'
+  rec.periods[0].arbiter_status = 'not_applicable'
+  rec.periods[0].mechanical_only = false
+  const h = mountRecord(t, rec)
+  const r = await h.render()
+  assert.match(r.text, /arbiter: not_applicable/)
+  assert.doesNotMatch(r.text, /mechanical only/)
+})
+
+
+test('world record conflicts offer an explicit retry, which revalidates before showing the record', async t => {
+  let available = false
+  const h = mountSimulationView(t, { api: {
+    getSimulation: async id => ({ success: true, data: { simulation_id: id, simulation_engine: 'world-v1' } }),
+    fetchRecord: async () => available ? { record: RECORD_EN, status: 200, publicationStatus: 'passed' }
+      : { record: null, status: 409, publicationStatus: 'failed' },
+  } })
+  await settle()
+  const before = await h.render()
+  assert.match(before.text, /not passed its current publication check/)
+  assert.match(before.html, /<button[^>]*>Retry record<\/button>/)
+  assert.deepEqual(h.timers, [])
+  available = true
+  await h.state.retryRecord()
+  assert.match((await h.render()).html, /class="sim-record-view"/)
+  assert.doesNotMatch((await h.render()).text, /Retry record/)
+})
+
+test('a new world generation cannot retain the old record on a transport failure', async t => {
+  let generation = 'first'
+  const h = mountSimulationView(t, { api: {
+    getSimulation: async id => ({ success: true, data: { simulation_id: id, simulation_engine: 'world-v1', world_generation_id: generation } }),
+    fetchRecord: async () => {
+      if (generation === 'first') return { record: RECORD_EN, status: 200, publicationStatus: 'passed' }
+      throw new Error('offline')
+    },
+  } })
+  await settle()
+  assert.ok(h.state.record.value)
+  generation = 'second'
+  await h.state.loadAll()
+  assert.equal(h.state.record.value, null)
+  assert.equal(h.state.worldGenerationId.value, 'second')
+  assert.deepEqual(h.emitted.at(-1), ['record-state', { available: false, status: 'error' }])
+})
+
+
+test('adapter limitations remain visible in the header, including thin records and health stubs', async t => {
+  for (const source of [RECORD_EN, HOLLOW]) {
+    const rec = structuredClone(source)
+    rec.engine = 'oasis-hours'
+    rec.limits.notes = ['No world model ran (oasis-hours).', '<script>raw source note</script>']
+    const h = mountRecord(t, rec)
+    const r = await h.render()
+    assert.match(r.text, /No world model ran \(oasis-hours\)\./)
+    assert.match(r.html, /&lt;script&gt;raw source note&lt;\/script&gt;/)
+    assert.doesNotMatch(r.html, /<script>/)
+  }
+})
+
+
+test('producer stubs with unknown validity never render period accounts or shares', async t => {
+  for (const explicitStub of [true, false]) {
+    const rec = structuredClone(RECORD_EN)
+    rec.health.validity = 'unknown'
+    if (explicitStub) rec.limits.stub = true
+    const h = mountRecord(t, rec)
+    const r = await h.render()
+    assert.match(r.html, /class="rec-unusable"/)
+    assert.match(r.text, /not usable \(status: unknown\)/)
+    assert.equal(r.ticks.length, 0)
+    assert.doesNotMatch(r.text, /Arbiter narrative|Simulated outcome shares|No consequential move/)
+  }
+  const rec = structuredClone(RECORD_EN)
+  rec.limits.stub = true
+  assert.equal(simRecord.isUnusableRecord(rec), true, 'the producer stub flag is authoritative')
 })

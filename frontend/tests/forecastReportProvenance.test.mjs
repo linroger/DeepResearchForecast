@@ -149,7 +149,7 @@ test('a record reference adds the anchor card, whose button asks the parent for 
   const opened = []
   const sha = 'a1b2c3d4'.repeat(8)
   const { html, state } = await render({
-    extra: { simulation_record_ref: { sha256: sha, url: '/api/simulation/sim_1/record' } },
+    extra: { forecast_effect: 'diagnostic_only', simulation_record_ref: { sha256: sha, url: '/api/simulation/sim_1/record' } },
     onOpen: payload => opened.push(payload),
   })
   assert.equal(count(html, 'class="sim-record-anchor"'), 1)
@@ -191,7 +191,7 @@ test('the binary table carries the research-only footnote with the policy from t
 test('the Chinese interface words the legend, the bridge label and the footnote in Chinese', async () => {
   const { html } = await render({
     locale: 'zh', markdownContent: BRIDGED_MD, forecast: { binary_forecasts: BINARIES },
-    extra: { forecast_effect: 'diagnostic_only', simulation_record_ref: { sha256: 'b'.repeat(64) } },
+    extra: { forecast_effect: 'diagnostic_only', simulation_record_ref: { sha256: 'b'.repeat(64), url: '/api/simulation/sim_1/record' } },
   })
   const body = text(html)
   assert.match(body, /观察事实 \[S#\] 预测（作者判断） 模拟（模型推演，非证据）/)
@@ -201,7 +201,7 @@ test('the Chinese interface words the legend, the bridge label and the footnote 
   assert.ok(html.includes('aria-label="来源图例"'))
 })
 
-test('splitMarkedBlock finds the first fenced block and refuses a missing or inverted pair', () => {
+test('splitMarkedBlock finds exactly one standalone block and refuses a missing or inverted pair', () => {
   const split = markdown.splitMarkedBlock('a\n<!-- s -->\nmid\n<!-- e -->\nz', '<!-- s -->', '<!-- e -->')
   assert.deepEqual(split, { before: 'a\n', inner: '\nmid\n', after: '\nz' })
   assert.equal(markdown.splitMarkedBlock('no markers', '<!-- s -->', '<!-- e -->'), null)
@@ -214,7 +214,7 @@ test('splitMarkedBlock finds the first fenced block and refuses a missing or inv
 })
 
 
-test('an unclosed code fence before the bridge never leaks the slot token; the labelled box still renders once (S2 review)', async () => {
+test('an unclosed code fence keeps marker examples literal instead of promoting them to a bridge', async () => {
   const md = [
     '# Title', '', 'Intro with a citation [S1].', '', '```', 'an unclosed fence', '',
     BRIDGE_START, `## ${BRIDGE_TITLE_EN}`, '', SIM_BANNER_EN, '', BRIDGE_END, '',
@@ -222,7 +222,142 @@ test('an unclosed code fence before the bridge never leaks the slot token; the l
   ].join('\n')
   const { html } = await render({ markdownContent: md })
   assert.equal(count(html, 'SIMBRIDGESLOT'), 0)
-  assert.equal(count(html, 'class="sim-bridge"'), 1)
-  assert.equal(count(html, 'sim-bridge:start'), 0)
+  assert.equal(count(html, 'class="sim-bridge"'), 0)
+  assert.equal(count(html, 'sim-bridge:start'), 1)
   assert.ok(text(html).includes(SIM_BANNER_EN))
+})
+
+test('no_update withholds stale bridge prose, navigation and record actions for every policy carrier', async () => {
+  const ref = { sha256: 'a'.repeat(64), url: '/api/simulation/sim_1/record' }
+  const carriers = [
+    { extra: { forecast_effect: ' NO_UPDATE ' } },
+    { forecast: { simulation_bridge: { forecast_effect: 'no_update' } } },
+    { forecast: { forecast_effect: 'no_update' } },
+  ]
+  for (const carrier of carriers) {
+    const opened = []
+    const { html, state } = await render({
+      markdownContent: BRIDGED_MD, ...carrier,
+      extra: { simulation_record_ref: ref, ...carrier.extra }, onOpen: x => opened.push(x),
+    })
+    assert.doesNotMatch(html, /class="sim-bridge"|class="sim-record-anchor"|Truce holds|what the exercise explored/)
+    assert.equal(count(html, 'class="nav-item"'), 3)
+    assert.match(html, /href="#ref-S1"/)
+    state.openSimulationRecord()
+    assert.deepEqual(opened, [])
+    assert.doesNotMatch(state.renderPartial(BRIDGE_MD), /Truce holds/)
+  }
+})
+
+test('duplicate, nested, orphaned and non-standalone bridge markers never expose unlabelled simulation prose', async () => {
+  const malformed = [
+    `${BRIDGE_MD}\n\n${BRIDGE_MD}`,
+    `${BRIDGE_START}\n${BRIDGE_MD}\n${BRIDGE_END}`,
+    `${BRIDGE_START}\nSecret simulated assertion`,
+    `Secret simulated assertion\n${BRIDGE_END}`,
+    `${BRIDGE_END}\n${BRIDGE_MD}`,
+    `prefix ${BRIDGE_START}\nSecret simulated assertion\n${BRIDGE_END}`,
+    '<!-- sim-bridge:start\nSecret simulated assertion\n<!-- sim-bridge:end -->',
+  ]
+  for (const md of malformed) {
+    const { html, state } = await render({ markdownContent: `# Outlook\n\n${md}` })
+    assert.doesNotMatch(html, /Truce holds|Secret simulated assertion|class="sim-bridge"/)
+    assert.match(text(html), /simulation section.*invalid/i)
+    assert.equal(state.headings.value.length, 0)
+    assert.doesNotMatch(state.renderPartial(md), /Truce holds|Secret simulated assertion/)
+  }
+})
+
+test('literal bridge examples in code fences cannot be promoted to simulated records', async () => {
+  for (const [open, close] of [['```md', '```'], ['~~~md', '~~~'], ['````', '````'], ['  ```', '  ```']]) {
+    const { html, state } = await render({ markdownContent: `# Outlook\n\n${open}\n${BRIDGE_MD}\n${close}\n\n## Real section` })
+    assert.equal(count(html, 'class="sim-bridge"'), 0)
+    assert.equal(state.bridgeSplit.value, null)
+    assert.deepEqual(state.headings.value.map(h => h.text), ['Outlook', 'Real section'])
+  }
+})
+
+test('the bridge slot cannot collide with report prose or rewrite currency replacement sequences', async () => {
+  const { html } = await render({ markdownContent: `# Outlook\n\nSIMBRIDGESLOT4c9e1b\n\n## Before\n\n${BRIDGE_MD.replace('Brent at $26', () => 'Brent at $26, $&, $\' and $$')}\n\n## After` })
+  assert.equal(count(html, 'class="sim-bridge"'), 1)
+  assert.ok(html.indexOf('id="before"') < html.indexOf('class="sim-bridge"'))
+  assert.ok(html.indexOf('class="sim-bridge"') < html.indexOf('id="after"'))
+  assert.equal(count(html, 'SIMBRIDGESLOT4c9e1b'), 1, 'literal report text survives exactly once')
+  assert.match(text(html), /\$26, \$&, \$' and \$\$/)
+})
+
+test('record anchors require the gate hash and a local record route before emitting navigation', async () => {
+  const sha256 = 'a'.repeat(64)
+  for (const ref of [
+    { sha256 }, { url: '/api/simulation/sim_1/record' },
+    { sha256: 'bad hash', url: '/api/simulation/sim_1/record' },
+    { sha256, url: 'javascript:alert(1)' }, { sha256, url: 'https://evil.test/record' },
+    { sha256, url: '/api/simulation/../record' },
+    { sha256, url: '/api/simulation/sim_1/record?redirect=evil' },
+  ]) {
+    const opened = []
+    const { html, state } = await render({ extra: { simulation_record_ref: ref }, onOpen: x => opened.push(x) })
+    assert.equal(count(html, 'class="sim-record-anchor"'), 0, JSON.stringify(ref))
+    state.openSimulationRecord()
+    assert.deepEqual(opened, [])
+  }
+})
+
+test('policy footnotes disclose validated_update as the disabled alias and preserve source precedence', async () => {
+  const forecast = { binary_forecasts: BINARIES, forecast_effect: 'legacy_prompt', simulation_bridge: { forecast_effect: 'no_update' } }
+  let r = await render({ forecast, extra: { forecast_effect: ' VALIDATED_UPDATE ' } })
+  assert.match(text(r.html), /policy: diagnostic_only; requested: validated_update/)
+  r = await render({ forecast, extra: { forecast_effect: 'future_policy' } })
+  assert.match(text(r.html), /Forecast policy: future_policy/)
+  assert.doesNotMatch(text(r.html), /research evidence only/)
+  r = await render({ forecast: { binary_forecasts: BINARIES, forecast_effect: 'legacy_prompt' } })
+  assert.match(text(r.html), /simulation signals entered probability extraction/)
+  r = await render({ locale: 'zh', forecast, extra: { forecast_effect: 'validated_update' } })
+  assert.match(text(r.html), /策略：diagnostic_only；请求：validated_update/)
+})
+
+test('gate-passed record anchors do not assert probability isolation for legacy or unknown policies', async () => {
+  for (const policy of ['', 'legacy_prompt', 'future_policy']) {
+    const { html } = await render({ extra: {
+      forecast_effect: policy,
+      simulation_record_ref: { sha256: 'a'.repeat(64), url: '/api/simulation/sim_1/record' },
+    } })
+    const card = html.match(/<div class="sim-record-anchor">[^]*?<\/div>/)[0]
+    assert.match(text(card), /simulated record: not evidence\)/)
+    assert.doesNotMatch(text(card), /not an input to any probability/)
+  }
+})
+
+test('raw markup and citation-like asset names remain safe through the actual bridge consumer', async () => {
+  const body = [BRIDGE_START, '## Exercise', '<img src=x onerror=alert(1)>',
+    '![literal [S1]](https://example.com/__chart__[S1].png)',
+    '[open](data:text/html;base64,PHNjcmlwdD4=)', '`[S1] **literal**`', BRIDGE_END].join('\n')
+  const { html, state } = await render({ markdownContent: `# Report\n\n${body}` })
+  assert.equal(count(html, 'class="sim-bridge"'), 1)
+  assert.doesNotMatch(html, /<img src=x|href="data:|src="[^"\n]*<(?:sup|strong)/)
+  assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/)
+  assert.match(html, /src="https:\/\/example.com\/__chart__\[S1\]\.png"/)
+  assert.match(html, /<code>\[S1\] \*\*literal\*\*<\/code>/)
+  assert.equal(count(state.renderPartial(body), 'class="sim-bridge"'), 1)
+})
+
+test('comment and inline-code examples do not claim bridge authority, and CRLF markers retain their position', async () => {
+  const example = `# Report\n\n<!-- example ${BRIDGE_START} ${BRIDGE_END} -->\n\n\`${BRIDGE_START}\` and \`${BRIDGE_END}\`\n\n## Real`
+  const r = await render({ markdownContent: example })
+  assert.equal(count(r.html, 'class="sim-bridge"'), 0)
+  assert.equal(r.state.bridgeSplit.value, null)
+  assert.deepEqual(r.state.headings.value.map(h => h.text), ['Report', 'Real'])
+  const crlf = await render({ markdownContent: BRIDGED_MD.replace(/\n/g, '\r\n') })
+  assert.equal(count(crlf.html, 'class="sim-bridge"'), 1)
+  assert.equal(count(crlf.html, 'id="ref-S1"'), 1)
+})
+
+test('a fence opener containing a pipe after a table keeps bridge examples literal under both policies', async () => {
+  const md = '| Column |\n|---|\n```md | example\n<!-- sim-bridge:start -->\n## Simulated finding\nSIMULATION_ONLY_90_PERCENT\n<!-- sim-bridge:end -->\n```'
+  for (const policy of ['diagnostic_only', 'no_update']) {
+    const { html } = await render({ markdownContent: md, extra: { forecast_effect: policy } })
+    assert.match(html, /<pre class="md-pre"><code>&lt;!-- sim-bridge:start --&gt;/)
+    assert.doesNotMatch(html, /<p>SIMULATION_ONLY_90_PERCENT<\/p>/)
+    assert.equal(count(html, 'class="sim-bridge"'), 0)
+  }
 })

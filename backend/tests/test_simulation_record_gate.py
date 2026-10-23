@@ -291,7 +291,7 @@ def test_gate_never_raises_and_fails_closed_on_garbage(tmp_path, run):
     audit = gate.audit_record(str(empty), record, write=False)
     assert any(h.startswith("G1") and "not committed" in h for h in audit["hard_issues"])
     # the private-rationale comparison follows a symlink nowhere
-    os.symlink(FIXTURES / "reflexive3" / "world_actions.jsonl", empty / "world_actions.jsonl")
+    os.symlink(Path(sim_dir) / "world_actions.jsonl", empty / "world_actions.jsonl")
     assert gate._Sources(str(empty)).actions == []
 
 

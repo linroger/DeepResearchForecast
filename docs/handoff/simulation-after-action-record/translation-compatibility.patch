@@ -1,0 +1,189 @@
+--- a/backend/app/services/report_agent.py
++++ b/backend/app/services/report_agent.py
+@@ -9503,7 +9503,28 @@
+         from .model_translation import ENGINE, valid_document_receipt, structure_issues
+         from .forecast_extractor import _norm_citation_tag, validate_citation_markers
+ 
++        source_document, variant_document = source_md, variant_md
++        bridge_audit = self._translation_simulation_provenance(
++            report_id, source_md, variant_md, source_lang, target_lang)
++        envelope_ok = all(part["bytes_match"] for part in bridge_audit.values())
++        world = ReportManager.load_world_result(report_id)
++        if world:
++            source_md = _world_prose(source_md, render_world_pathway(world["result"], chinese=source_lang == "zh"))
++        source_md = _sim_prose(source_md)
++        if world or _sim_bridge_blocks(source_document):
++            rows = proof.get("sections") if isinstance(proof, dict) else None
++            if isinstance(rows, list) and all(isinstance(row, dict) and isinstance(row.get("target"), str) for row in rows):
++                variant_md = "\n\n".join(row["target"] for row in rows).strip() + "\n"
++                if world:
++                    expected = _insert_world_appendix(variant_md, render_world_pathway(world["result"], chinese=target_lang == "zh"))
++                else:
++                    expected = self._insert_sim_bridge_variant(report_id, source_document, variant_md, chinese=target_lang == "zh")
++                envelope_ok = envelope_ok and expected == variant_document
++            else:
++                envelope_ok = False
+         issues = structure_issues(source_md, variant_md)
++        if not envelope_ok:
++            issues.append("translation simulation bridge differs from admitted deterministic provenance")
+         reviewed = valid_document_receipt(source_md, variant_md, target_lang, proof)
+         if not reviewed:
+             issues.append("translation has no complete source-bound semantic review")
+@@ -9535,8 +9556,8 @@
+             if any(row.get("url_valid") is not True or not _citation_url_ok(str(row.get("url") or ""))
+                    for row in by_tag.values()):
+                 issues.append("primary citation map contains invalid source URLs")
+-        source_sha = hashlib.sha256(source_md.encode("utf-8")).hexdigest()
+-        target_sha = hashlib.sha256(variant_md.encode("utf-8")).hexdigest()
++        source_sha = hashlib.sha256(source_document.encode("utf-8")).hexdigest()
++        target_sha = hashlib.sha256(variant_document.encode("utf-8")).hexdigest()
+         citations = {"schema_version": 2, "report_id": report_id, "grammar": "[S<n>]",
+             "language": target_lang, "source_language": source_lang,
+             "source_artifact": "citations.json", "source_markdown_sha256": source_sha,
+@@ -9548,9 +9569,9 @@
+             "policy_version": int(getattr(Config, "REPORT_FINAL_AUDIT_POLICY_VERSION", 3)),
+             "report_id": report_id, "language": target_lang, "source_language": source_lang,
+             "audited_at": datetime.now(timezone.utc).isoformat(), "read_only": True,
+-            "markdown_chars": len(variant_md), "source_markdown_sha256": source_sha,
++            "markdown_chars": len(variant_document), "source_markdown_sha256": source_sha,
+             "markdown_sha256": target_sha, "translator_version": ENGINE,
+-            "model_translation": proof, "fact_fidelity": {"passed": reviewed,
++            "model_translation": proof, "simulation_bridge": bridge_audit, "fact_fidelity": {"passed": reviewed,
+                 "method": "separate model review of source and translation",
+                 "limitation": "model review can err; canonical typed facts are copied separately"},
+             "section_parity": {"passed": not structure_issues(source_md, variant_md)},
+@@ -11194,7 +11215,7 @@
+             _progress(min(89, 5 + int(80 * len(result) / max(1, len(chunks)))),
+                       "translating and reviewing complete sections")
+         translated_md, model_proof = translate_document(
+-            self.llm, md, str(tgt_code), on_progress=model_progress)
++            self.llm, translation_md, str(tgt_code), on_progress=model_progress)
+         citation_drift = []
+         folder = ReportManager._get_report_folder(report_id)
+         out_path = ReportManager._get_report_translation_path(report_id, tgt_code)
+@@ -11218,7 +11239,7 @@
+         # no-op 守卫：译文为空、或与原文在「空白归一」意义上完全相同（如整篇翻译退化为原文）。
+         def _collapse(t: str) -> str:
+             return re.sub(r"\s+", " ", t or "").strip()
+-        if not translated_md.strip() or _collapse(translated_md) == _collapse(md):
++        if not translated_md.strip() or _collapse(translated_md) == _collapse(translation_md):
+             if not keep_existing_on_failure:
+                 _remove_stale_variant()
+             ReportManager._set_translation_runtime_status(
+@@ -16929,7 +16950,11 @@
+                 try:
+                     with open(cls._get_report_markdown_path(report_id), encoding="utf-8") as source_file:
+                         current_source = source_file.read()
+-                    if not valid_document_receipt(current_source, markdown, lang, audit.get("model_translation")):
++                    checker = ReportAgent.__new__(ReportAgent)
++                    proof_audit, _ = checker._audit_model_translation_variant(
++                        report_id, current_source, markdown, source_lang, lang,
++                        {}, audit.get("model_translation"), enforce_citations=False)
++                    if not proof_audit["hard_passed"]:
+                         result["reasons"].append("language semantic review is missing or differs from current bytes")
+                 except (OSError, ValueError, TypeError):
+                     result["reasons"].append("language semantic review source unavailable")
+--- a/frontend/tests/simulationMandarinTranslation.test.mjs
++++ b/frontend/tests/simulationMandarinTranslation.test.mjs
+@@ -8,6 +8,7 @@
+ import * as world from '../src/utils/worldSimulationView.js'
+ import * as worldState from '../src/utils/worldState.js'
+ import * as feedRounds from '../src/utils/feedRounds.js'
++import * as simRecord from '../src/utils/simRecord.js'
+ import { compileSfc } from './sfcHarness.mjs'
+ import { loadOverlay } from './simulationTranslationHarness.mjs'
+ 
+@@ -244,6 +245,7 @@
+   assert.equal(JSON.stringify(source), copy)
+ })
+ 
++const buildRecord = compileSfc(new URL('../src/components/research/SimulationRecordView.vue', import.meta.url))
+ const buildLegacy = compileSfc(new URL('../src/components/research/SimulationView.vue', import.meta.url))
+ const buildPanel = compileSfc(new URL('../src/components/research/WorldStatePanel.vue', import.meta.url))
+ const buildWorld = compileSfc(new URL('../src/components/research/WorldSimulationView.vue', import.meta.url))
+@@ -254,6 +256,8 @@
+   const component = builder({
+     vue: { ...vue, onMounted: () => {}, onUnmounted: fn => cleanups.push(fn), useId: () => 'mandarin-simulation-test' },
+     '../../i18n': i18n, '../../utils/overlayTranslation': http.module, '../../utils/worldSimulationView': world,
++    '../../utils/simRecord': simRecord,
++    './SimulationRecordView.vue': { default: buildRecord({ vue, '../../i18n': i18n, '../../utils/simRecord': simRecord }) },
+     '../../utils/worldState': worldState, '../../utils/feedRounds': feedRounds, '../../api/simulation': api,
+     './WorldStatePanel.vue': { default: { props: ['language'], template: '<aside>{{ language }}</aside>' } },
+     './WorldSimulationView.vue': { default: { props: ['language'], template: '<aside>{{ language }}</aside>' } },
+@@ -279,6 +283,7 @@
+     getAgentStats: async () => ({ data: { total_posts: 1234 } }),
+     getRunStatus: async () => ({ data: { runner_status: 'completed', current_round: 2, total_rounds: 2 } }),
+     getFeedRounds: async () => ({ data: { rounds: [{ round: 2, period_label: '2026-10' }] } }),
++    fetchRecord: async () => ({ record: null, status: 404, publicationStatus: 'absent' }),
+   }
+ }
+ 
+@@ -392,3 +397,48 @@
+   h.state.translation.toggle(); await settle()
+   assert.match(prose(await h.render()), /Crowd Simulation/)
+ })
++
++test('legacy translation controls and feedback belong only to Live view; the published record stays verbatim', async t => {
++  const record = JSON.parse(readFileSync(new URL('./fixtures/sim/simulation_record.en.json', import.meta.url), 'utf8'))
++  record.periods[0].narrative = 'Published record prose stays verbatim.'
++  let failed = true
++  const h = mount(t, buildLegacy, { api: {
++    ...legacyApi(),
++    fetchRecord: async () => ({ record, status: 200, publicationStatus: 'passed' }),
++  }, start: async (id, lang, force, options) => {
++    if (force) failed = false
++    return response(id, lang, options, failed
++      ? { status: 'failed', issues: ['translation integrity failed'], translations: [], pending: options.texts.length }
++      : { translations: options.texts.map(source => ({ source, text: LEGACY_TEXT[source] || source, source_sha256: sha(source) })) })
++  } })
++  await settle()
++  assert.equal(h.state.showRecord.value, true)
++  let html = await h.render()
++  assert.match(html, /class="sim-record"/)
++  assert.match(prose(html), /Published record prose stays verbatim\./)
++  assert.doesNotMatch(prose(html), /翻译整个模拟|原文 \/ English|重试翻译|Retry translation/)
++  assert.equal(h.calls.length, 0)
++
++  h.state.showRecord.value = false
++  html = await h.render()
++  assert.match(prose(html), /中文 · 翻译整个模拟/)
++  h.state.translation.toggle(); await settle()
++  html = await h.render()
++  assert.match(prose(html), /重试翻译/)
++  assert.match(prose(html), /The tariff stays at 12%/)
++  assert.ok(h.calls.every(call => !call.options.texts?.includes(record.periods[0].narrative)))
++
++  h.state.showRecord.value = true
++  html = await h.render()
++  assert.match(prose(html), /Published record prose stays verbatim\./)
++  assert.doesNotMatch(html, /class="sv-translation"/)
++  assert.doesNotMatch(prose(html), /翻译整个模拟|原文 \/ English|重试翻译|Retry translation/)
++
++  h.state.showRecord.value = false
++  assert.match(prose(await h.render()), /重试翻译/)
++  await h.state.translation.retry()
++  assert.equal(h.calls.at(-1).force, true)
++  assert.match(prose(await h.render()), /关税维持在 12%。/)
++  assert.match(prose(await h.render()), /原文 \/ English/)
++  assert.equal(i18n.locale.value, 'en', 'the existing local language switch remains independent')
++})
+--- a/frontend/src/components/research/SimulationView.vue
++++ b/frontend/src/components/research/SimulationView.vue
+@@ -47,7 +47,7 @@
+       </div>
+ 
+       <div class="sv-controls">
+-        <button type="button" class="refresh-btn" :aria-pressed="translation.lang.value === 'zh'"
++        <button v-if="!record || !showRecord" type="button" class="refresh-btn" :aria-pressed="translation.lang.value === 'zh'"
+           @click="translation.toggle">{{ translation.lang.value === 'zh' ? '原文 / English' : '中文 · 翻译整个模拟' }}</button>
+         <!-- ADR 0003: Record | Live view toggle, present only once a gate-passed record exists -->
+         <div v-if="record" class="segmented" role="tablist" :aria-label="L('视图选择', 'Select view')">
+@@ -90,7 +90,7 @@
+       </div>
+     </header>
+ 
+-    <div v-if="translation.feedback.value" class="sv-translation" role="status" aria-live="polite">
++    <div v-if="(!record || !showRecord) && translation.feedback.value" class="sv-translation" role="status" aria-live="polite">
+       <span>{{ translation.feedback.value }}</span>
+       <button v-if="translation.retryable.value" type="button" @click="translation.retry" :disabled="translation.busy.value">{{ L('重试翻译', 'Retry translation') }}</button>
+       <details v-if="translation.issues.value.length"><summary>{{ L('翻译详情', 'Translation details') }}</summary><ul><li v-for="issue in translation.issues.value" :key="issue">{{ issue }}</li></ul></details>

@@ -398,8 +398,8 @@ for (const stale of ['success', 'envelope', 'reject']) {
 test('world API preserves round zero and sends only the chosen view/cursor with cancellation', async () => {
   const source = readFileSync(new URL('../src/api/simulation.js', import.meta.url), 'utf8')
   const calls = []
-  const api = new Function('service', source.replace("import service from './index'", '').replaceAll('export const ', 'const ')
-    + '\nreturn { getWorldSimulation, getSimulation };')({ get: (...args) => { calls.push(args); return Promise.resolve({ success: true }) } })
+  const api = new Function('service', 'isSimulationRecord', source.replace("import service from './index'", '').replace("import { isSimulationRecord } from '../utils/simRecord'", '').replaceAll('export const ', 'const ')
+    + '\nreturn { getWorldSimulation, getSimulation };')({ get: (...args) => { calls.push(args); return Promise.resolve({ success: true }) } }, simRecord.isSimulationRecord)
   const controller = new AbortController()
   await api.getWorldSimulation('sim/a', { view: 'actor', actorId: 'actor A', round: 0, revision: 'rev1' }, { signal: controller.signal, timeout: 20000 })
   assert.equal(calls[0][0], '/api/simulation/sim%2Fa/world')

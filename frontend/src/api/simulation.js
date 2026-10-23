@@ -1,4 +1,5 @@
 import service from './index'
+import { isSimulationRecord } from '../utils/simRecord'
 
 // EXECPLAN2 F-10-12: 创建/准备/启动/采访均为非幂等 POST，绝不自动重试 —— 否则首请求其实
 // 成功、客户端误判超时重试，会造成重复创建/重复启动等副作用。仅 GET/状态轮询可重试。
@@ -199,8 +200,10 @@ export const fetchRecord = async (simulationId, options = {}) => {
     const body = res && typeof res === 'object' && res.data && typeof res.data === 'object' && res.data.schema
       ? res.data
       : res
-    const record = body && typeof body === 'object' && !Array.isArray(body) ? body : null
-    return { record, status: 200, publicationStatus: record ? 'passed' : 'invalid' }
+    if (res?.success === false || !isSimulationRecord(body) || body.simulation_id !== simulationId) {
+      throw new Error('Invalid simulation record response')
+    }
+    return { record: body, status: 200, publicationStatus: 'passed' }
   } catch (error) {
     const unavailable = recordUnavailable(error)
     if (!unavailable) throw error

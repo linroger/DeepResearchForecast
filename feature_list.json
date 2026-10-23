@@ -298,5 +298,19 @@
       "Exercise stale/tampered generations, old handoffs, disabled behavior, multi-track merges and scenario reuse without provider refetch or actor/world-state privilege expansion."
     ],
     "passes": true
+  },
+  {
+    "id": "feature_simulation_record_provenance_v1",
+    "category": "forecast-provenance",
+    "description": "Publish a faithful public-only per-period simulation record and a deterministic labelled report bridge while keeping research-based forecast prompts and probabilities isolated from simulated trajectories.",
+    "steps": [
+      "Complete or reuse an OASIS or world-v1 run; compile and gate its after-action record without rerunning a simulation for a missing derivative.",
+      "Open the Simulation record and switch periods to inspect public moves, state changes, commitments and limits; reject stale/failed records through every API route.",
+      "Generate reports from two different simulated trajectories over identical research; verify identical research prompts, probabilities and prose outside the bridge.",
+      "Verify diagnostic_only produces exactly one validated bridge and no_update omits simulated report content and links while retaining the separate record.",
+      "Reject private material, fabricated citations, modified seals, malformed bridge fences and translated bridge substitutions.",
+      "Exercise browser record navigation plus relevant guarded backend/frontend scenarios and build on the delivered source; distinguish this proof from live model quality/calibration."
+    ],
+    "passes": true
   }
 ]

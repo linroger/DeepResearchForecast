@@ -241,8 +241,10 @@
                   </template>
                 </div>
               </div>
-              <SimulationView v-show="activeTab==='sim'" :simulation-id="simulationId" @record-state="onSimRecordState" />
-              <ForecastReport v-show="activeTab==='report'" :report-id="reportId" @open-simulation-record="pickTab('sim')" />
+              <div v-show="activeTab==='sim'" class="simulation-pane">
+                <SimulationView :simulation-id="simulationId" :stage-status="stages.run?.status || ''" :open-record-request="openRecordRequest" @record-state="onSimRecordState" />
+              </div>
+              <ForecastReport v-show="activeTab==='report'" :report-id="reportId" @open-simulation-record="openSimulationRecord" />
             </div>
           </div>
         </div>
@@ -435,6 +437,7 @@ const activeTab = ref('log')
 const userPickedTab = ref(false)
 // ADR 0003: the Simulation tab badge says "record ready" once SimulationView has a gate-passed record.
 const simRecordReady = ref(false)
+const openRecordRequest = ref(0)
 const graphData = ref(null)
 const graphLoading = ref(false)
 const graphMax = ref(false)
@@ -515,6 +518,11 @@ const tabs = computed(() => {
 function toggleLocale() { setLocale(locale.value === 'en' ? 'zh' : 'en') }
 function onProviderChanged() { return checkPreflight() }
 function onSimRecordState(state) { simRecordReady.value = !!(state && state.available) }
+function openSimulationRecord() {
+  if (!simulationId.value) return
+  openRecordRequest.value += 1
+  pickTab('sim')
+}
 
 function pickTab(key) {
   const t = tabs.value.find(x => x.key === key)

@@ -15,6 +15,9 @@
         <div><dt>{{ L('语言', 'language') }}</dt><dd>{{ rec.language || '—' }}</dd></div>
       </dl>
       <p class="rec-health mono" :class="{ 'rec-health-bad': unusable }">{{ healthLine }}</p>
+      <ul v-if="limits.notes.length" class="rec-notes">
+        <li v-for="(note, i) in limits.notes" :key="'note-' + i">{{ note }}</li>
+      </ul>
       <div v-if="unusable" class="rec-unusable" role="alert">
         <p class="rec-unusable-text">{{ unusableText }}</p>
         <table class="rec-table rec-health-table">
@@ -76,8 +79,9 @@
                 <span v-if="m.magnitude !== null" class="rec-mag mono">{{ L('力度', 'magnitude') }} {{ m.magnitude }}</span>
                 <q v-if="m.publicStatement" class="rec-stmt">{{ m.publicStatement }}</q>
                 <span v-if="m.commitment" class="rec-commit">
-                  {{ L('承诺', 'commitment') }}: {{ m.commitment.text }}<template v-if="m.commitment.due"> · {{ L('到期', 'due') }} {{ m.commitment.due }}</template>
+                  {{ L('承诺', 'commitment') }}: {{ m.commitment.text }}<template v-if="m.commitment.duePeriods !== null"> · {{ L('到期时段数', 'due in periods') }} {{ m.commitment.duePeriods }}</template><template v-if="m.commitment.due"> · {{ L('到期', 'due') }} {{ m.commitment.due }}</template>
                 </span>
+                <span v-if="m.terms" class="rec-terms">{{ L('条款', 'terms') }}: {{ m.terms }}</span>
               </li>
               <li v-if="period.heldPosition.length" class="rec-held">
                 <span class="rec-kind mono">{{ L('观望', 'held') }}</span><span>{{ period.heldPosition.join(', ') }}</span>
@@ -114,7 +118,7 @@
             </div>
             <ul class="rec-list">
               <li v-for="(r, i) in period.redLinesCrossed" :key="'rl' + i" class="rec-event ev-red-line">
-                <span class="rec-kind mono">{{ L('越过红线', 'red line crossed') }}</span><span>{{ r }}</span>
+                <span class="rec-kind mono">{{ L('越过红线', 'red line crossed') }}</span><span>{{ r.text }}<template v-if="r.by"> · {{ L('越线方', 'crossed by') }}: {{ r.by }}</template></span>
               </li>
               <li v-for="(s, i) in period.shocksFired" :key="'sh' + i" class="rec-event ev-shock">
                 <span class="rec-kind mono">{{ L('冲击', 'shock') }}</span><span>{{ s }}</span>
@@ -348,7 +352,7 @@ const healthLine = computed(() => {
 
 const unusableText = computed(() => {
   const h = health.value
-  const reason = h.validity !== 'unknown' && h.validity !== 'valid' ? h.validity : h.health
+  const reason = h.validity !== 'valid' ? h.validity : h.health
   return L(
     `本次推演不可用（状态：${reason}）。记录仅含健康表；未生成叙事，也没有可供阅读的时段账目。`,
     `This exercise was not usable (status: ${reason}). The record carries the health table only; no narrative was generated and there is no period account to read.`
@@ -416,6 +420,7 @@ function trackRecordLine(r) {
 .rec-meta dt { color: var(--faint); }
 .rec-meta dd { margin: 0; }
 .rec-health { margin: 0; font-size: 11.5px; color: var(--muted); }
+.rec-notes { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.5; }
 .rec-health-bad { color: var(--err); }
 .rec-unusable { border: 1px solid var(--err); background: #FEF2F2; padding: 10px 12px; }
 .rec-unusable-text { margin: 0 0 8px; color: var(--err); font-weight: 600; font-size: 13px; }

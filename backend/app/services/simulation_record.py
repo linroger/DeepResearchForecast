@@ -396,6 +396,7 @@ class _Artifacts:
         if not sim_dir or not os.path.isdir(sim_dir):
             raise RecordBuildError(f"simulation directory does not exist: {sim_dir!r}")
         self.dir = os.path.realpath(sim_dir)
+        self.errors: List[str] = []
         self.run_summary = self._json("run_summary.json")
         self.world_state = self._json("world_state.json")
         self.trajectory = self._json("world_state_trajectory.json")
@@ -422,7 +423,10 @@ class _Artifacts:
         candidate = os.path.join(self.dir, name)
         if os.path.commonpath([os.path.realpath(candidate), self.dir]) != self.dir:
             return None
-        if os.path.islink(candidate) or not os.path.isfile(candidate):
+        if os.path.islink(candidate):
+            self.errors.append(f"unsafe artifact: {name}")
+            return None
+        if not os.path.isfile(candidate):
             return None
         return candidate
 
@@ -437,8 +441,12 @@ class _Artifacts:
             with open(path, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
         except (OSError, ValueError):
+            self.errors.append(f"unreadable artifact: {name}")
             return {}
-        return data if isinstance(data, dict) else {}
+        if not isinstance(data, dict):
+            self.errors.append(f"invalid object: {name}")
+            return {}
+        return data
 
     def _jsonl(self, name: str) -> List[Dict[str, Any]]:
         path = self.path(name)
@@ -454,10 +462,14 @@ class _Artifacts:
                     try:
                         row = json.loads(line)
                     except ValueError:
+                        self.errors.append(f"invalid row: {name}")
                         continue
                     if isinstance(row, dict):
                         rows.append(row)
+                    else:
+                        self.errors.append(f"invalid row: {name}")
         except OSError:
+            self.errors.append(f"unreadable artifact: {name}")
             return []
         return rows
 
@@ -471,7 +483,10 @@ class _Artifacts:
         containment as every other artifact (regular files only, symlinks refused).  The
         export is written by ``results.export_result`` at completion; the record never opens
         the world store."""
-        self.world_result = self._json("world_result.json")
+        raw = self._json("world_result.json")
+        self.world_result = rc.public_world_result(raw)
+        if raw and raw.get("view") != "public":
+            self.errors.append("world_result.json is not a public projection")
         self.world_spec = self._json("world_spec.json")
 
     @property
@@ -491,8 +506,8 @@ class _Artifacts:
             rnd = _as_int(row.get("round"))
             if rnd is None or rnd <= 0:
                 continue
-            if row.get("scenario_round_status") not in (None, "committed"):
-                continue
+            # The world period commits even when the separate scenario-share
+            # channel abstains/fails. Its status must not erase the period.
             by_round[rnd] = row
         return [by_round[r] for r in sorted(by_round)]
 
@@ -507,7 +522,7 @@ def resolve_engine(art: _Artifacts, hint: Optional[str] = None) -> str:
         return "world-v1"
     if hint_text in ("oasis-reflexive", "oasis-inband", "oasis-hours"):
         return hint_text
-    if art.committed_history():
+    if art.committed_history() or art.world_state or art.exists("world_state_history.jsonl"):
         return "oasis-reflexive"
     mode = str(art.temporal.get("mode") or art.trajectory.get("mode") or "").lower()
     if mode == "calendar" or art.digest:
@@ -958,8 +973,14 @@ def _turning_points(periods: Sequence[Dict[str, Any]], lang: str) -> List[Dict[s
                 candidates.append((rnd, 1, why, {"round": rnd, "why": why, "ref": offer["ref"]}))
         for fact in section.get("facts_changed") or []:
             a, b = fact.get("from"), fact.get("to")
-            if _is_number(a) and _is_number(b) and a != b:
-                rel = abs(float(b) - float(a)) / max(abs(float(a)), 1e-9)
+            if isinstance(a, bool) or isinstance(b, bool):
+                continue
+            try:
+                before, after = Decimal(str(a)), Decimal(str(b))
+            except InvalidOperation:
+                continue
+            if before.is_finite() and after.is_finite() and before != after:
+                rel = abs(after - before) / max(abs(before), Decimal("1e-9"))
                 changes.append((rel, rnd, fact))
     changes.sort(key=lambda c: (-c[0], c[1], str(c[2].get("variable"))))
     for _rel, rnd, fact in changes[:TURNING_POINT_VARIABLE_CHANGES]:
@@ -992,11 +1013,8 @@ def _world_v1_periods(art: _Artifacts, lang: str, *, stub: bool) -> List[Dict[st
     for event in _list(result.get("events")):
         if isinstance(event, dict) and _as_int(event.get("round")) is not None:
             events.setdefault(int(event["round"]), []).append(event)
-    world = result.get("world") if isinstance(result.get("world"), dict) else {}
-    interactions = world.get("interactions") if isinstance(world.get("interactions"), dict) else {}
-    commitments = world.get("commitments") if isinstance(world.get("commitments"), dict) else {}
     periods: List[Dict[str, Any]] = []
-    for rnd in range(1, committed + 1):
+    for rnd in sorted(r for r in by_round if 0 < r <= committed):
         row = by_round.get(rnd, {})
         spec_period = spec_periods[rnd - 1] if rnd - 1 < len(spec_periods) else {}
         at = _text(row.get("simulatedAt"), 40)
@@ -1015,6 +1033,10 @@ def _world_v1_periods(art: _Artifacts, lang: str, *, stub: bool) -> List[Dict[st
             periods.append(section)
             continue
         previous = by_round.get(rnd - 1, {})
+        interactions = row.get("interactions", {})
+        commitments = row.get("commitments", {})
+        previous_interactions = previous.get("interactions", {})
+        previous_commitments = previous.get("commitments", {})
         for bucket in ("metrics", "rules"):
             now_values = row.get(bucket) if isinstance(row.get(bucket), dict) else {}
             before_values = previous.get(bucket) if isinstance(previous.get(bucket), dict) else {}
@@ -1038,13 +1060,23 @@ def _world_v1_periods(art: _Artifacts, lang: str, *, stub: bool) -> List[Dict[st
                                       "ref": {"file": "world_result.json", "round": rnd,
                                               "id": _text(event.get("eventId"), 160) or f"round:{rnd}"}})
         for iid, inter in sorted(interactions.items()):
-            if not isinstance(inter, dict) or _as_int(inter.get("createdRound")) != rnd:
+            if not isinstance(inter, dict):
+                continue
+            before = previous_interactions.get(iid, {})
+            if before and all(before.get(k) == inter.get(k) for k in ("status", "terms")):
                 continue
             recipients = [names.get(str(r), str(r)) for r in _list(inter.get("recipientIds"))]
+            if inter.get("kind") == "message":
+                section["events"].append({
+                    "kind": "message", "actors": [names.get(str(inter.get("proposerId")), ""), *recipients],
+                    "text": _text(json.dumps(inter.get("terms"), ensure_ascii=False, sort_keys=True), 600),
+                    "ref": {"file": "world_result.json", "round": rnd, "id": str(iid)},
+                })
+                continue
             section["offers"].append({
                 "id": str(iid), "from_actor": names.get(str(inter.get("proposerId")), _text(inter.get("proposerId"), 80)),
                 "to_actor": ", ".join(recipients), "kind": _text(inter.get("templateId"), 80),
-                "status": _text(inter.get("status"), 40), "previous": None,
+                "status": _text(inter.get("status"), 40), "previous": before.get("status"),
                 "terms": _text(json.dumps(inter.get("terms"), ensure_ascii=False, sort_keys=True)
                                if isinstance(inter.get("terms"), (dict, list)) else inter.get("terms"), 600),
                 "event": None,
@@ -1053,8 +1085,8 @@ def _world_v1_periods(art: _Artifacts, lang: str, *, stub: bool) -> List[Dict[st
         for cid, com in sorted(commitments.items()):
             if not isinstance(com, dict):
                 continue
-            created = _text(com.get("createdAt"), 40)[:10]
-            if created and created == label:
+            before = previous_commitments.get(cid, {})
+            if not before or before.get("status") != com.get("status"):
                 actor = names.get(str(com.get("actorId")), _text(com.get("actorId"), 80))
                 section["events"].append({"kind": "commitment", "actors": [actor],
                                           "text": f"{actor}: {_text(com.get('kind'), 60)} ({_text(com.get('status'), 40)})",
@@ -1310,6 +1342,10 @@ def _default_llm() -> Any:
 def _apply_synthesis(record: Dict[str, Any], sim_dir: str, llm: Any) -> None:
     """One bounded call; the synthesis is kept only when it adds no gate hard issue."""
     from .simulation_record_gate import audit_record
+    skeleton_issues = audit_record(sim_dir, record, write=False).get("hard_issues") or []
+    if skeleton_issues:
+        record["limits"]["synthesis_dropped"] = "gate: deterministic skeleton failed audit"
+        return
     try:
         client = llm if llm is not None else _default_llm()
         raw = client.chat(messages=_synthesis_prompt(record), temperature=0.2, max_tokens=_SYNTHESIS_MAX_TOKENS)
@@ -1321,12 +1357,10 @@ def _apply_synthesis(record: Dict[str, Any], sim_dir: str, llm: Any) -> None:
     if synthesis is None:
         record["limits"]["synthesis_dropped"] = reason
         return
-    skeleton_issues = set(audit_record(sim_dir, record, write=False).get("hard_issues") or [])
     candidate = json.loads(json.dumps(record, ensure_ascii=False))
     candidate["overall"]["synthesis"] = synthesis
     candidate["limits"]["synthesis_dropped"] = None
-    new_issues = [i for i in (audit_record(sim_dir, candidate, write=False).get("hard_issues") or [])
-                  if i not in skeleton_issues]
+    new_issues = audit_record(sim_dir, candidate, write=False).get("hard_issues") or []
     if new_issues:
         record["limits"]["synthesis_dropped"] = f"gate: {new_issues[0]}"
         return
@@ -1351,10 +1385,15 @@ def build_record(sim_dir: str, *, language: Optional[str] = None, engine_hint: O
 
     health = _text(art.run_summary.get("simulation_health"), 40) or "unknown"
     if engine == "world-v1":
-        validity = "valid" if art.world_result.get("completed") else ("unknown" if not art.world_result else "inconclusive")
+        validity = rc.world_result_validity(art.world_result)
+        # The native world-v1 producer has no OASIS run_summary.json.
+        if not art.run_summary:
+            health = "ok" if validity == "valid" else "truncated"
     else:
         validity = decision_channel_validity(art.trajectory)
-    stub = health in rc.HEALTH_STUB_VALUES or validity != "valid"
+    if art.errors:
+        validity = "invalid"
+    stub = health not in ("ok", "llm_degraded") or validity != "valid"
     degraded = health == "llm_degraded"
 
     if engine == "oasis-reflexive":
@@ -1447,7 +1486,8 @@ def build_record(sim_dir: str, *, language: Optional[str] = None, engine_hint: O
             "generator": "deterministic",
             "text": L["stub_sentence"].format(health=health, validity=validity),
             "claims": [{"paragraph": 0, "refs": [p["refs"][0] for p in periods[:1]] or
-                        [{"file": "run_summary.json", "round": 0, "id": "health"}]}],
+                        ([{"file": "world_result.json", "round": 0, "id": "round:0"}] if engine == "world-v1"
+                         else [{"file": "run_summary.json", "round": 0, "id": "health"}])}],
         }
         record["limits"]["synthesis_dropped"] = f"health stub ({health}; validity {validity})"
         return record
@@ -1740,15 +1780,11 @@ def render_markdown(record: Dict[str, Any], lang: Optional[str] = None) -> str:
 def record_json_bytes(record: Dict[str, Any]) -> bytes:
     """Canonical bytes of ``simulation_record.json`` — the gate's serialization, so the
     audit's SHA-256 is the SHA-256 of the file on disk."""
-    from .simulation_record_gate import record_bytes
-    return record_bytes(record)
+    return rc.record_bytes(record)
 
 
 def _atomic_write(path: str, data: bytes) -> None:
-    tmp = f"{path}.tmp-{os.getpid()}"
-    with open(tmp, "wb") as fh:
-        fh.write(data)
-    os.replace(tmp, path)
+    rc.atomic_write(path, data)
 
 
 def write_record(sim_dir: str, record: Dict[str, Any]) -> Dict[str, str]:

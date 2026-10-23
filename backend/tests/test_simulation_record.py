@@ -325,7 +325,7 @@ def _imports_of(path: Path):
                 yield f"{node.module or ''}.{alias.name}"
 
 
-def test_compiler_imports_nothing_from_the_report_or_research_planes():
+def test_compiler_imports_nothing_from_the_report_or_research_planes(tmp_path):
     names = list(_imports_of(BACKEND / "app" / "services" / "simulation_record.py"))
     assert names
     for name in names:
@@ -337,11 +337,17 @@ def test_compiler_imports_nothing_from_the_report_or_research_planes():
         assert not any(bad in name for bad in FORBIDDEN_IMPORTS), name
     # a fresh interpreter: importing the compiler loads none of those modules
     code = ("import sys\n"
+            "sys.path.insert(0, %r)\n" % str(BACKEND) +
             "import app.services.simulation_record, app.services.simulation_record_gate\n"
             "bad = sorted(m for m in sys.modules if m.startswith('app.') and any(k in m for k in %r))\n"
             "print('|'.join(bad))" % (FORBIDDEN_IMPORTS,))
     env = dict(os.environ, DRF_TEST_PROCESS="1")
-    out = subprocess.run([sys.executable, "-c", code], cwd=str(BACKEND), env=env,
+    script = tmp_path / "record_import_probe.py"
+    script.write_text(code, encoding="utf-8")
+    guard = sys.modules.get("main_offline_guard")
+    if guard is not None:
+        guard.allow_python_script(script)
+    out = subprocess.run([sys.executable, str(script)], cwd=str(tmp_path), env=env,
                          capture_output=True, text=True, timeout=120)
     assert out.returncode == 0, out.stderr[-2000:]
     assert out.stdout.strip() == "", out.stdout
@@ -398,10 +404,10 @@ def _write_world_v1(sim_dir: Path) -> None:
             "periods": [{"start": "2030-01-01T00:00:00Z", "end": "2030-01-02T00:00:00Z"},
                         {"start": "2030-01-02T00:00:00Z", "end": "2030-01-03T00:00:00Z"}],
             "actors": [{"actorId": "producer", "name": "Producer"}, {"actorId": "buyer", "name": "Buyer"}]}
-    metric = lambda v: {"value": v, "unit": "goods_per_day"}  # noqa: E731
+    metric = lambda v: {"value": v, "unit": "goods_per_day", "visibility": {"kind": "public"}}  # noqa: E731
     result = {"schemaVersion": "world-result/v1", "engine": "world-v1", "simulationId": "sim_w1", "completed": True,
               "committedRound": 2, "totalRounds": 2, "asOf": "2030-01-01T00:00:00Z", "horizon": "2030-01-03T00:00:00Z",
-              "forecastEffect": "diagnostic_only",
+              "forecastEffect": "diagnostic_only", "view": "public", "round": 2,
               "world": {"metrics": {"capacity": metric("7")}, "rules": {"permit": {"value": True}},
                         "interactions": {"i1": {"proposerId": "buyer", "recipientIds": ["producer"], "templateId": "purchase",
                                                 "status": "accepted", "createdRound": 1, "terms": {"quantity": "2", "price": "5"}}},
@@ -415,6 +421,15 @@ def _write_world_v1(sim_dir: Path) -> None:
                          {"round": 2, "eventId": "e2", "kind": "investment", "actorId": "producer", "description": "Capacity expanded",
                           "details": {"delta": "3"}}]}
     _write_json(sim_dir / "world_spec.json", spec)
+    for snapshot in [result["world"], *result["trajectory"]]:
+        for bucket in ("rules", "interactions", "commitments"):
+            for row in snapshot.get(bucket, {}).values():
+                row["visibility"] = {"kind": "public"}
+    for event in result["events"]:
+        event["visibility"] = {"kind": "public"}
+    for row in result["trajectory"][1:]:
+        row["interactions"] = json.loads(json.dumps(result["world"]["interactions"]))
+        row["commitments"] = json.loads(json.dumps(result["world"]["commitments"]))
     _write_json(sim_dir / "world_result.json", result)
     _write_json(sim_dir / "state.json", {"simulation_id": "sim_w1", "simulation_engine": "world-v1"})
     _write_json(sim_dir / "run_summary.json", {"simulation_id": "sim_w1", "simulation_health": "ok"})
@@ -505,13 +520,13 @@ def test_s2_fixture_records_satisfy_the_shape_contract(name):
     assert "private_rationale" not in json.dumps(record)
 
 
-def test_s2_english_fixture_passes_the_gate_against_the_run_it_was_compiled_from(tmp_path):
-    """The dashboard fixture was compiled from the same three rounds; its refs (``h1``,
-    ``a1_0``, ``world.variables[...]`` paths) resolve and every number traces."""
+def test_illustrative_s2_fixture_is_not_a_faithful_compilation(tmp_path):
+    """The hand-authored dashboard example is not a publishable source projection."""
     sim_dir = _copy_reflexive(tmp_path)
     record = _read_json(FIXTURES / "s2" / "simulation_record.en.json")
     audit = gate.audit_record(sim_dir, record, write=False)
-    assert audit["publication_status"] == "passed", audit["hard_issues"]
+    assert audit["publication_status"] == "failed"
+    assert any("differs from the artifact projection" in h for h in audit["hard_issues"])
     # the Chinese twin replaces the arbiter narratives with short Chinese ones, so it is a
     # shape fixture for the Chinese interface, not a record of this run: the gate says so
     zh = _read_json(FIXTURES / "s2" / "simulation_record.zh.json")

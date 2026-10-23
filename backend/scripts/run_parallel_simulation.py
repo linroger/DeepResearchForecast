@@ -7197,6 +7197,15 @@ async def run_reddit_simulation(
     return result
 
 
+def _publish_terminal_artifacts_ready(simulation_dir: str) -> None:
+    """Release the parent only after world/post-hoc artifacts have finished writing."""
+    token = os.environ.get("SIM_TERMINAL_ARTIFACTS_TOKEN")
+    if token:
+        from app.utils.atomic import write_json_atomic
+        write_json_atomic(os.path.join(simulation_dir, "simulation_artifacts_ready.json"),
+                          {"schema": "simulation-artifacts-ready/v1", "run_token": token})
+
+
 async def main():
     parser = argparse.ArgumentParser(description='OASIS双平台并行模拟')
     parser.add_argument(
@@ -7462,6 +7471,8 @@ async def main():
                     f"share={_oc.get('leader_share')} converged_at={_res.get('converged_at')}")
         except Exception as _dc_err:  # noqa: BLE001
             log_manager.error(f"决策通道演化失败（已隔离，不影响模拟结果）: {_dc_err}")
+
+    _publish_terminal_artifacts_ready(simulation_dir)
 
     # 是否进入等待命令模式
     if wait_for_commands:

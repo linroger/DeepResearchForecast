@@ -825,6 +825,20 @@ def get_artifact(pipeline_id: str, name: str):
     data = PipelineManager.load(pipeline_id)
     if data is None:
         return jsonify({"success": False, "error": "管线不存在"}), 404
+    if name in {"simulation_record", "simulation_record_partial"}:
+        # This derivative has a publication gate, unlike ordinary research JSON.
+        # Resolve it by the pipeline's simulation identity, never by a stored path.
+        from .simulation import _contained_sim_dir
+        from ..services import simulation_record_contract as record_contract
+        sim_dir = _contained_sim_dir(data.get("simulation_id") or "")
+        if sim_dir is None:
+            return jsonify({"success": False, "error": "模拟事后记录尚未生成"}), 404
+        record, status = record_contract.load_published_record(sim_dir)
+        if record is None:
+            missing = not os.path.isfile(record_contract.record_paths(sim_dir)["json"])
+            return jsonify({"success": False, "error": "模拟事后记录尚未通过发布审计",
+                            "publication_status": status}), 404 if missing else 409
+        return jsonify({"success": True, "data": {"name": name, "content": record}})
     artifacts = (data.get("artifacts") or {})
     path = artifacts.get(name)
     # Live scans store provisional assets as <name>_partial; chart URLs stay

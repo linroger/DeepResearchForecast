@@ -51,8 +51,12 @@ def test_chinese_rendering_is_byte_stable_with_numeric_heading_and_table_parity(
     assert en != zh
     assert zh.startswith(sp.BRIDGE_START + "\n## " + sp.BRIDGE_TITLE_ZH) and zh.endswith(sp.BRIDGE_END)
     assert sp.SIM_BANNER_ZH in zh and sp.SIM_BANNER_EN not in zh
-    assert sp.CHART_OUTCOME_SHARES_ZH in zh and sp.CHART_WORLD_VARIABLES_ZH in zh
-    assert ra._SIM_BRIDGE_TEXT["zh"]["unchanged"].format(policy="diagnostic_only") in zh
+    if name == "hollow":
+        assert sp.CHART_OUTCOME_SHARES_ZH not in zh and sp.CHART_WORLD_VARIABLES_ZH not in zh
+        assert ra._SIM_BRIDGE_TEXT["zh"]["shares_h"] not in zh
+    else:
+        assert sp.CHART_OUTCOME_SHARES_ZH in zh and sp.CHART_WORLD_VARIABLES_ZH in zh
+        assert ra._SIM_BRIDGE_TEXT["zh"]["unchanged"].format(policy="diagnostic_only") in zh
     # every number in the bridge agrees between the two languages (dates/amounts canonicalized
     # exactly as the translation publication audit does), as do heading levels and table rows
     assert ReportAgent._translation_fact_multiset(en) == ReportAgent._translation_fact_multiset(zh)
@@ -188,5 +192,75 @@ def test_translated_variant_carries_the_rerendered_chinese_bridge(report_config,
     assert (ReportAgent._translation_fact_multiset(report.markdown_content)
             == ReportAgent._translation_fact_multiset(zh_md))
     audit = json.loads(Path(ReportManager._get_report_final_audit_path(report.report_id, "zh")).read_text())
-    assert audit["number_parity"]["passed"] is True and audit["section_parity"]["passed"] is True
-    assert audit["table_parity"]["passed"] is True
+    assert audit["section_parity"]["passed"] is True
+    assert all(part["bytes_match"] for part in audit["simulation_bridge"].values())
+    if "model_translation" in audit:
+        from app.services.model_translation import valid_document_receipt
+        proof = audit["model_translation"]
+        target_body = "\n\n".join(row["target"] for row in proof["sections"]).strip() + "\n"
+        assert valid_document_receipt(ra._sim_prose(report.markdown_content), target_body, "zh", proof)
+        assert audit["fact_fidelity"]["passed"] is True
+        assert all(token not in json.dumps(model.calls) for token in TOKENS)
+        assert status["available"] is True, status
+    else:
+        assert audit["number_parity"]["passed"] is True
+        assert audit["table_parity"]["passed"] is True
+
+
+@pytest.mark.parametrize('injected', [
+    sp.BRIDGE_START + '\n模拟结果显示需求增长。\n' + sp.BRIDGE_END,
+    sp.BRIDGE_START + '\n模拟结果显示需求增长。',
+    sp.BRIDGE_END,
+])
+def test_translation_cannot_invent_a_lint_exempt_bridge(report_config, injected):
+    agent = make_agent('sim_variant_rejected', ScriptedModel())
+    audit, _ = agent._audit_translation_variant(
+        'report_variant_rejected', '# Outlook\n\nObserved facts.',
+        '# 展望\n\n观察事实。\n' + injected, 'en', 'zh', enforce_citations=False)
+    assert not audit['hard_passed']
+    assert any('simulation bridge' in issue for issue in audit['issues'])
+
+
+def test_translation_bridge_must_match_exact_target_bytes(report_config):
+    write_sim(Path(Config.OASIS_SIMULATION_DATA_DIR), 'sim_variant_tampered',
+              shares={'Expansion': 0.44, 'Status quo': 0.56}, token=TOKENS[0])
+    agent = make_agent('sim_variant_tampered', ScriptedModel())
+    rid = 'report_variant_tampered'
+    en = agent._render_sim_bridge_for_report(rid, chinese=False)
+    zh = agent._render_sim_bridge_for_report(rid, chinese=True)
+    good, _ = agent._audit_translation_variant(rid, en, zh, 'en', 'zh', enforce_citations=False)
+    assert good['hard_passed'], good['issues']
+    bad, _ = agent._audit_translation_variant(rid, en, zh.replace('声明假设下的模拟', '这是现实观察事实'),
+                                             'en', 'zh', enforce_citations=False)
+    assert not bad['hard_passed']
+    assert any('simulation bridge' in issue for issue in bad['issues'])
+
+
+@pytest.mark.skipif(not hasattr(ReportAgent, '_audit_model_translation_variant'),
+                    reason='reviewed model translator is an independent working-tree integration')
+def test_model_review_receipt_cannot_authorize_a_changed_bridge(report_config):
+    from app.services.model_translation import translate_document
+    write_sim(Path(Config.OASIS_SIMULATION_DATA_DIR), 'sim_model_bridge_gate',
+              shares={'Expansion': 0.44, 'Status quo': 0.56}, token=TOKENS[0])
+    agent = make_agent('sim_model_bridge_gate', ScriptedModel())
+    rid = 'report_model_bridge_gate'
+    source_body = '# Outlook\n\nThe ministry reports capacity of 25 MW.\n'
+    en = agent._render_sim_bridge_for_report(rid, chinese=False)
+    source = ra._insert_sim_bridge(source_body, en)
+    translated, proof = translate_document(agent.llm, ra._sim_prose(source), 'zh')
+    target = agent._insert_sim_bridge_variant(rid, source, translated, chinese=True)
+    audit, _ = agent._audit_translation_variant(rid, source, target, 'en', 'zh',
+                                               enforce_citations=False, model_proof=proof)
+    assert audit['hard_passed'], audit['issues']
+    for changed in (target.replace('声明假设下的模拟', '这是现实观察事实'),
+                    target + sp.BRIDGE_START, target + '\n未经审阅的额外断言。\n'):
+        audit, _ = agent._audit_translation_variant(rid, source, changed, 'en', 'zh',
+                                                   enforce_citations=False, model_proof=proof)
+        assert not audit['hard_passed']
+        assert any('simulation bridge' in issue for issue in audit['issues'])
+    # Valid prose review is not permission to invent a bridge for a bridge-free primary.
+    source_body = ra._sim_prose(source)
+    audit, _ = agent._audit_translation_variant(rid, source_body, target, 'en', 'zh',
+                                               enforce_citations=False, model_proof=proof)
+    assert not audit['hard_passed']
+    assert any('simulation bridge' in issue for issue in audit['issues'])

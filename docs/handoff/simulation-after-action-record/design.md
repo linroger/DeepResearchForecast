@@ -411,3 +411,17 @@ Recorded here so §3–§6 can stay the target design. Commits are on `claude/si
 | ADR acceptance | One live default-engine run with exactly one bridge block; one live `no_update` run | Still owed (fixtures only); the record's LLM synthesis path is exercised with a fake client only | Needs the owner's paid run |
 
 Verification at the S0 tip (clean worktree): 7,707 passed, 9 failed, 19 errors, 1,668 skipped; every failure reproduces at the base commit except one Kaleido probe that the standalone-import fix resolved. Adversarial review (3 lenses, 25 confirmed findings, 2 refuted): the blocker and all majors are fixed in the follow-up commits listed in handoff.md.
+
+
+### Completion deltas — Codex continuation (2026-10-23)
+
+The latest implementation and acceptance authority is completion.md plus verification.json. Historical slice tables above explain the initial implementation, not unresolved exceptions.
+
+- All non-legacy writer inputs, including outline sweeps, direct simulation tools and community fallback, are isolated. T1 now feeds nonempty distinct simulation content through the real report workflow and real record compiler/gate.
+- Record publication uses a checked JSON snapshot with canonical JSON, Markdown and source-input seals. Native world export validity is verified before compilation/reuse and its manifest participates in the source seal. State lifecycle timestamps do not invalidate consumed identity fields.
+- Native, OASIS, seed, reuse and standalone terminal paths share record publication. A per-launch artifact barrier prevents completion before post-hoc writes. Missing derivatives never force a paid RUN replay; repairs suppress repeat synthesis, including Markdown-only migrations.
+- The missing-record bridge fallback uses an audited deterministic projection rather than unchecked raw strings. A failed projection is health-only. No_update and unknown provenance cannot expose record links. Malformed markers and changed translated envelopes fail publication.
+- The composed newer Mandarin translation engine keeps its model-review receipts attached to the exact prose-only pair, then checks deterministic reinsertion against full public bytes. Its unrelated implementation remains owned by the existing working changes; scoped compatibility hunks are recorded in translation-compatibility.patch.
+- Dashboard fields follow real producer shapes; late completion, generation switches, stale responses, rejected audits, retry and Record/Live navigation have actual SFC consumer tests. Record narration remains verbatim in version 1; the live-view translation control does not claim to translate the record.
+
+The record gate establishes faithful reporting of the exercise, not historical truth, model realism or calibration. Source delivery and operational acceptance remain distinct in the handoff.

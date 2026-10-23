@@ -1,6 +1,6 @@
 # ADR 0003 — Simulation After-Action Record and the Forecast-Report Bridge
 
-- **Status:** Proposed (drafted 2026-10-22; awaiting owner acceptance)
+- **Status:** Implemented and verified offline; fresh-provider operational acceptance remains open (owner requested completion on 2026-10-23)
 - **Date:** 2026-10-22
 - **Design and change list:** `docs/handoff/simulation-after-action-record/design.md`
 - **Continuity record:** `docs/handoff/simulation-after-action-record/handoff.md`
@@ -131,25 +131,38 @@ sanctioned place, so it is either hidden or disguised.
 
 ## Implementation status (2026-10-23)
 
-- **Where.** Branch `claude/sim-provenance-impl` (integration; S2–S4 merged) on top of
-  `claude/sim-provenance-s0` (S0 and its review fixes). Nothing pushed.
-- **Done.** S0 constants, chart titles, brief disclosure, lint flipped from relabelling to
-  removal, one attribution rule, header alignment, defaults, what-if labels; S1 record
-  compiler, deterministic gate G1–G9, orchestrator wiring, record routes; S2 dashboard record
-  view, legend, bridge box, research-only footnote; S3 fenced bridge, prompt isolation on the
-  default engine, section-aware lint with the canonical label as a hard pattern outside the
-  fence, interview tool removal, final-audit bridge checks, report payload fields, T1
-  byte-identical prompt test; S4 README (EN/ZH), demo-site intro and pre-policy badge,
-  design.md §10 deltas. Three adversarial reviews (S0, S2, S1+S3) with every confirmed finding
-  fixed or recorded as a deliberate deviation in design.md §10.
-- **Verification.** Integrated full backend suite in a clean worktree: 7,801 passed, 8 failed,
-  19 errors, 1,667 skipped; every failure and error reproduces at the base commit except one
-  found and fixed on the branch. Frontend 290/290 and `vite build` green.
-- **Owed before Accepted.** One live default-engine run whose published report carries exactly
-  one bridge block and whose Simulation tab shows a gate-passed record; one live `no_update`
-  run with neither; the record's LLM synthesis exercised against a real provider; the
-  `plan_outline` prompt still receives `simulation_outcomes` text under `diagnostic_only`
-  (design.md §10). These need the owner's paid runs and decisions D1–D6.
+Claude's S0–S4 integration was recovered from `579c1acf` and completed on
+`codex/simulation-report-boundary`. The owner explicitly asked to finish the
+attached architecture; version-1 decisions D1–D6 use the recommendations below.
+The previous outline-prompt exception is closed, including direct writer tools
+and the community-tool fallback. The native world engine remains opt-in.
+
+The record now binds canonical JSON, both deterministic Markdown renderings and
+its consumed simulation inputs, including the native world manifest. Every public
+record consumer uses the verified snapshot. Missing/stale records are repaired
+without rerunning a paid simulation or repeating synthesis. A shared terminal
+publisher covers main, reuse, seed and standalone paths; the parallel runner waits
+for post-hoc artifacts before announcing completion.
+
+Legacy fallback records are compiled and audited in memory with synthesis off.
+Rejected projections produce health-only disclosures. Both primary and translated
+bridges must match exact deterministic bytes, including zero-bridge policies and
+malformed-marker negatives. The composed Mandarin translator reviews only prose;
+its source-bound model receipt and the deterministic envelope are checked again
+at publication. Unknown policy never grants a record link.
+
+Verification and exact limits are recorded in
+[completion.md](../handoff/simulation-after-action-record/completion.md) and
+[verification.json](../handoff/simulation-after-action-record/verification.json):
+883 feature-branch backend tests, 321 frontend tests, and 981 backend / 379 frontend
+tests on the composed working tree, with explicit skips/expected failures retained.
+A copied complete nine-period saved run passes the record gate with zero warnings;
+the actual Vue component was exercised in both UI languages and across periods.
+
+The separately defined fresh-provider acceptance runs and optional synthesis
+provider check have not been performed. These are operational evidence limits,
+not permission to give simulated shares probability authority or to overwrite
+existing accepted reports. No prospective calibration claim is made.
 
 ## Alternatives considered
 

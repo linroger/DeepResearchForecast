@@ -180,7 +180,7 @@
           <!-- ADR 0003：门禁通过的情景模拟记录的锚点卡（报告负载 simulation_record_ref）；缺失则不渲染。 -->
           <div v-if="simulationRecordRef" class="sim-record-anchor">
             <span class="diamond">◇</span>
-            <span class="sra-text">{{ L('情景模拟事后记录已通过门禁（模拟记录：非证据，未进入任何概率）', 'Scenario simulation after-action record passed its gate (simulated record: not evidence, not an input to any probability)') }}</span>
+            <span class="sra-text">{{ simulationRecordLabel }}</span>
             <code v-if="simulationRecordRef.sha256" class="sra-sha" :title="simulationRecordRef.sha256">SHA-256 {{ simulationRecordSha }}</code>
             <button class="sra-btn" type="button" @click="openSimulationRecord">{{ L('在模拟标签页查看记录', 'Open the record in the Simulation tab') }} →</button>
           </div>
@@ -355,7 +355,7 @@ import {
   reportMarkdownUrl, reportPdfUrl, reportAssetUrl, getForecast, getReportOfficialData
 } from '../../api/report'
 import BinaryForecastTable from './BinaryForecastTable.vue'
-import { renderMarkdown, extractHeadings, splitMarkedBlock } from '../../utils/markdown'
+import { renderMarkdown, extractHeadings, parseMarkedBlock } from '../../utils/markdown'
 import {
   chartAssetKind,
   chartAttribution,
@@ -613,7 +613,7 @@ function interactiveHref(rel) {
 const REF_HEADING_RE = /references|sources|bibliography|参考|来源|文献/i
 const citationsMap = computed(() => {
   const map = {}
-  const src = String(currentMd.value || '')
+  const src = String(displayMd.value || '')
   if (!src) return map
   let inRefs = false
   let inFence = false
@@ -649,27 +649,44 @@ function escapeText(value) {
   return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-// ADR 0003: the bridge block, when the markdown carries one (null otherwise).
-const bridgeSplit = computed(() => splitMarkedBlock(currentMd.value || '', SIM_BRIDGE_START, SIM_BRIDGE_END))
+// A malformed bridge withholds the body: dropping its markers would relabel simulated
+// prose as research. Code examples are not bridge blocks, including unclosed fences.
+const bridgeParse = computed(() => parseMarkedBlock(currentMd.value, SIM_BRIDGE_START, SIM_BRIDGE_END))
+const bridgeSplit = computed(() => bridgeParse.value.status === 'valid' ? bridgeParse.value : null)
+const displayMd = computed(() => {
+  const parsed = bridgeParse.value
+  if (parsed.status === 'invalid') return ''
+  return forecastEffect.value === 'no_update' && parsed.status === 'valid'
+    ? `${parsed.before}\n\n${parsed.after}` : currentMd.value
+})
+
+function renderReportMarkdown(source) {
+  const parsed = parseMarkedBlock(source, SIM_BRIDGE_START, SIM_BRIDGE_END)
+  if (parsed.status === 'invalid') {
+    return '<p class="partial-warning" role="alert">' + escapeText(L(
+      '情景模拟章节标记无效，报告正文暂不显示。',
+      'The simulation section markers are invalid; the report body is withheld.'
+    )) + '</p>'
+  }
+  if (parsed.status !== 'valid') return renderMarkdown(source, renderOpts.value)
+  if (forecastEffect.value === 'no_update') {
+    return renderMarkdown(`${parsed.before}\n\n${parsed.after}`, renderOpts.value)
+  }
+  // Keep References detection in one pass; choose a slot absent from the source so
+  // literal prose cannot steal the bridge's insertion point.
+  let token = SIM_BRIDGE_SLOT
+  while (source.includes(token)) token += 'X'
+  const main = renderMarkdown(`${parsed.before}\n\n${token}\n\n${parsed.after}`, renderOpts.value)
+  const box = '<section class="sim-bridge" data-record-class="simulated">'
+    + '<div class="sim-bridge-eyebrow"><span class="sim-bridge-mark" aria-hidden="true">◇</span>'
+    + escapeText(L('情景模拟 · 模拟记录：非证据，未进入任何概率', 'Scenario simulation · simulated record: not evidence, not an input to any probability'))
+    + '</div><div class="sim-bridge-body">' + renderMarkdown(parsed.inner, renderOpts.value) + '</div></section>'
+  return main.replace(`<p>${token}</p>`, () => box)
+}
 
 const renderedHtml = computed(() => {
   try {
-    const split = bridgeSplit.value
-    if (!split) return renderMarkdown(currentMd.value || '', renderOpts.value)
-    // The surrounding document renders in one pass (References detection and heading ids
-    // untouched); the bridge renders through the same renderer into a shaded box.
-    const main = renderMarkdown(`${split.before}\n\n${SIM_BRIDGE_SLOT}\n\n${split.after}`, renderOpts.value)
-    const box = '<section class="sim-bridge" data-record-class="simulated">'
-      + '<div class="sim-bridge-eyebrow"><span class="sim-bridge-mark" aria-hidden="true">◇</span>'
-      + escapeText(L('情景模拟 · 模拟记录：非证据，未进入任何概率', 'Scenario simulation · simulated record: not evidence, not an input to any probability'))
-      + '</div><div class="sim-bridge-body">' + renderMarkdown(split.inner, renderOpts.value) + '</div></section>'
-    const slot = `<p>${SIM_BRIDGE_SLOT}</p>`
-    // function replacer: the bridge body may contain `$` (amounts) that String.replace would treat as patterns
-    if (main.includes(slot)) return main.replace(slot, () => box)
-    // The slot did not render as its own paragraph (an unclosed fence before the bridge, for
-    // example): render the document without the slot so the token never reaches the reader,
-    // and keep the labelled box at the end.
-    return renderMarkdown(`${split.before}\n\n${split.after}`, renderOpts.value) + '\n' + box
+    return renderReportMarkdown(currentMd.value || '')
   } catch (e) {
     return ''
   }
@@ -677,7 +694,7 @@ const renderedHtml = computed(() => {
 
 const headings = computed(() => {
   try {
-    const list = extractHeadings(currentMd.value || '')
+    const list = extractHeadings(displayMd.value || '')
     return Array.isArray(list) ? list : []
   } catch (e) {
     return []
@@ -1034,29 +1051,41 @@ const fc = computed(() => {
 
 // ---------- ADR 0003：门禁通过的情景模拟记录引用与模拟策略 ----------
 // GET /api/report/<id> MAY carry simulation_record_ref {sha256, url}（仅当记录通过门禁）与
-// forecast_effect；二者缺失时锚点卡不渲染、脚注回退为生产策略 diagnostic_only（degrade-safe）。
+// forecast_effect；缺失策略如实披露，no_update 不显示报告桥接或记录链接。
 const simulationRecordRef = computed(() => {
+  if (forecastEffect.value === 'no_update' || bridgeParse.value.status === 'invalid') return null
   const value = meta.value && meta.value.simulation_record_ref
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const sha256 = typeof value.sha256 === 'string' ? value.sha256.trim() : ''
   const url = typeof value.url === 'string' ? value.url.trim() : ''
-  return sha256 || url ? { sha256, url } : null
+  return /^[a-f0-9]{64}$/i.test(sha256) && /^\/api\/simulation\/[A-Za-z0-9_-]+\/record$/.test(url)
+    ? { sha256, url } : null
+})
+const simulationRecordLabel = computed(() => {
+  if (['diagnostic_only', 'validated_update'].includes(forecastEffect.value)) {
+    return L('情景模拟事后记录已通过门禁（模拟记录：非证据，未进入任何概率）',
+      'Scenario simulation after-action record passed its gate (simulated record: not evidence, not an input to any probability)')
+  }
+  // Passing the record's fidelity gate does not establish probability isolation for
+  // historical or unknown policies.
+  return L('情景模拟事后记录已通过门禁（模拟记录：非证据）',
+    'Scenario simulation after-action record passed its gate (simulated record: not evidence)')
 })
 const simulationRecordSha = computed(() => {
   const sha = (simulationRecordRef.value && simulationRecordRef.value.sha256) || ''
   return sha.length > 13 ? `${sha.slice(0, 8)}…${sha.slice(-4)}` : sha
 })
 function openSimulationRecord() {
-  emit('open-simulation-record', simulationRecordRef.value)
+  if (simulationRecordRef.value) emit('open-simulation-record', simulationRecordRef.value)
 }
 const forecastEffect = computed(() => {
   const fromReport = meta.value && meta.value.forecast_effect
-  if (typeof fromReport === 'string' && fromReport.trim()) return fromReport.trim()
+  if (typeof fromReport === 'string' && fromReport.trim()) return fromReport.trim().toLowerCase()
   const bridge = fc.value && fc.value.simulation_bridge
-  const fromBridge = bridge && typeof bridge === 'object' ? bridge.forecast_effect : ''
-  if (typeof fromBridge === 'string' && fromBridge.trim()) return fromBridge.trim()
+  const fromBridge = bridge && typeof bridge === 'object' && !Array.isArray(bridge) ? bridge.forecast_effect : ''
+  if (typeof fromBridge === 'string' && fromBridge.trim()) return fromBridge.trim().toLowerCase()
   const fromForecast = fc.value && fc.value.forecast_effect
-  return typeof fromForecast === 'string' ? fromForecast.trim() : ''
+  return typeof fromForecast === 'string' ? fromForecast.trim().toLowerCase() : ''
 })
 
 // 0..1 概率 → 百分比字符串（保留 1 位小数，去掉尾零由 Math.round 保证）。
@@ -1284,7 +1313,7 @@ const writingSectionLabel = computed(() => {
 function renderPartial(mdText) {
   try {
     // 生成期单章通常尚无 References 章节 → 引文自动降级为纯上标（markdown.js 预扫描决定）。
-    return renderMarkdown(mdText || '', renderOpts.value)
+    return renderReportMarkdown(mdText || '')
   } catch (e) {
     return ''
   }
@@ -1343,7 +1372,7 @@ function scrollToHeading(h) {
 }
 
 async function copyMarkdown() {
-  const text = currentMd.value || ''
+  const text = displayMd.value || ''
   if (!text) return
   try {
     if (navigator && navigator.clipboard && navigator.clipboard.writeText) {

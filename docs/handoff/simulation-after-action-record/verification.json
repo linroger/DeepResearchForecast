@@ -1,0 +1,91 @@
+{
+  "verified_at_utc": "2026-10-23T05:05:20.577872+00:00",
+  "source_base": "579c1acf591b6af9713e3f53b2e524c113a254f5",
+  "branch": "codex/simulation-report-boundary",
+  "feature_backend": {
+    "passed": 883,
+    "skipped": 2,
+    "expected_failures": 11,
+    "failures_or_errors": 0,
+    "exit_code": 0,
+    "identity_preserved": true,
+    "source_drift": [],
+    "blocked_operations": {
+      "blocked:network:socket.__new__": 1,
+      "blocked:process:subprocess.Popen": 6,
+      "blocked:external_read": 20
+    },
+    "evidence_directory": "/Users/rogerlin/.local/share/DeepResearchForecast/verification/simulation-report-boundary/integrated-final"
+  },
+  "feature_fixture_recheck": {
+    "passed": 58,
+    "skipped": 0,
+    "expected_failures": 0,
+    "failures_or_errors": 0,
+    "exit_code": 0,
+    "identity_preserved": true,
+    "source_drift": [],
+    "blocked_operations": {},
+    "evidence_directory": "/Users/rogerlin/.local/share/DeepResearchForecast/verification/simulation-report-boundary/feature-cache-fixtures"
+  },
+  "combined_backend": {
+    "passed": 981,
+    "skipped": 1,
+    "expected_failures": 11,
+    "failures_or_errors": 0,
+    "exit_code": 0,
+    "identity_preserved": true,
+    "source_drift": [],
+    "blocked_operations": {
+      "blocked:network:socket.__new__": 1,
+      "blocked:process:subprocess.Popen": 6,
+      "blocked:external_read": 20
+    },
+    "evidence_directory": "/Users/rogerlin/.local/share/DeepResearchForecast/verification/simulation-report-boundary/combined-delivery-final"
+  },
+  "feature_frontend": {
+    "passed": 321,
+    "failed": 0,
+    "build": "passed"
+  },
+  "combined_frontend": {
+    "passed": 379,
+    "failed": 0,
+    "build": "passed",
+    "warning": "Vite chunk size 526.71 kB; no build error"
+  },
+  "saved_record_replay": {
+    "simulation_id": "sim_3ec25e64209e",
+    "periods": 9,
+    "public_moves": 106,
+    "state_changes": 51,
+    "gate": "passed",
+    "warnings": 0,
+    "new_model_calls": 0
+  },
+  "browser": {
+    "component": "actual Vite-compiled SimulationRecordView",
+    "checks": [
+      "English labels and banner",
+      "period 1 to period 9 changes narrative and state",
+      "Chinese labels preserve selected period and values"
+    ],
+    "screenshots": [
+      "/Users/rogerlin/.local/share/DeepResearchForecast/verification/simulation-report-boundary/record-ui-en.png",
+      "/Users/rogerlin/.local/share/DeepResearchForecast/verification/simulation-report-boundary/record-ui-zh-period9.png"
+    ]
+  },
+  "independent_reviews": [
+    "/Users/rogerlin/.local/share/DeepResearchForecast/verification/simulation-report-boundary/report-independent-review.json",
+    "/Users/rogerlin/.local/share/DeepResearchForecast/verification/simulation-report-boundary/record-reviewed-v6/review.json",
+    "/Users/rogerlin/.local/share/DeepResearchForecast/verification/simulation-report-boundary/record-native-manifest-v7/lifecycle-rereview.json"
+  ],
+  "limits": [
+    "No fresh paid end-to-end forecast was launched.",
+    "No predictive calibration or simulation-realism promotion is claimed.",
+    "Original saved runs and accepted reports remain unchanged."
+  ],
+  "delivery_status": "verified; commit and active-source reconciliation in progress",
+  "feature_source_hashes": "/Users/rogerlin/.local/share/DeepResearchForecast/verification/simulation-report-boundary/delivery-feature-source-hashes.json",
+  "combined_source_hashes": "/Users/rogerlin/.local/share/DeepResearchForecast/verification/simulation-report-boundary/delivery-combined-source-hashes.json"
+}

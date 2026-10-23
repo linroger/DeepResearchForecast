@@ -60,7 +60,8 @@ def write_sim(root: Path, sim_id: str, *, shares: Dict[str, float], token: str,
         "horizon_date": "2026-11-14", "n_rounds": 2, "converged_at": None, "scenarios": list(SCENARIOS),
         "outcome": {"shares": shares, "rounds": 2, "epistemic_status": "elicited_model_projection"},
         "trajectory": [{"round": 0, "shares": {"Expansion": 0.5, "Status quo": 0.5}, "as_of": "2026-11-01"},
-                       {"round": 1, "shares": shares}],
+                       {"round": 1, "shares": {"Expansion": 0.5, "Status quo": 0.5}},
+                       {"round": 2, "shares": shares}],
     }), encoding="utf-8")
     (directory / "world_state.json").write_text(json.dumps({
         "schema_version": 1, "simulation_id": sim_id, "committed_round": 2,
@@ -89,38 +90,41 @@ def write_sim(root: Path, sim_id: str, *, shares: Dict[str, float], token: str,
     ]
     (directory / "world_state_history.jsonl").write_text(
         "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    (directory / "world_actions.jsonl").write_text(json.dumps({
+        "round": 1, "agent_id": 1, "actor_name": "Actor B", "status": "ok",
+        "option": {"id": "raise_tariff", "label": "Raise tariff", "kind": "policy"},
+        "targets": ["Actor A"], "magnitude": 0.8,
+        "public_statement": f"We announce the tariff {token}.",
+    }) + "\n", encoding="utf-8")
     if paths_k > 1:
         (directory / "world_paths.json").write_text(json.dumps({
             "schema_version": "world-paths/v1", "k": paths_k,
-            "shares": {name: {"mean": value, "sd": 0.05, "p10": max(0.0, value - 0.06), "p50": value,
-                              "p90": min(1.0, value + 0.07)} for name, value in shares.items()},
+            "paths": [{"path": i, "shares": {
+                "Expansion": shares["Expansion"] + delta,
+                "Status quo": shares["Status quo"] - delta}}
+                for i, delta in enumerate((-0.06, -0.02, 0.02, 0.06))],
         }), encoding="utf-8")
     if record:
-        rec = _record_fixture("paths")
-        rec["simulation_id"] = sim_id
-        rec["setup"]["scenarios"] = list(SCENARIOS)
-        rec["overall"]["shares"] = {"final": dict(shares), "converged_at": None,
-                                    "paths": {"k": 1, "per_scenario": {}}}
-        for period in rec["periods"]:
-            if period["narrative"]:
-                period["narrative"] += " " + token
-            for move in period["moves"]:
-                move["public_statement"] += " " + token
-        (directory / "simulation_record.json").write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
-        md_text = f"# Simulation After-Action Record {token}\n"
-        (directory / "simulation_record.md").write_text(md_text, encoding="utf-8")
-        (directory / "simulation_record_audit.json").write_text(json.dumps({
-            "sha256": hashlib.sha256(md_text.encode("utf-8")).hexdigest(),
-            "hard_issues": [], "warnings": [], "publication_status": "passed",
-        }), encoding="utf-8")
+        from app.services import simulation_record as sr, simulation_record_gate as gate
+        rec = sr.build_record(str(directory), language="English", synthesis=False)
+        sr.write_record(str(directory), rec)
+        audit = gate.audit_record(str(directory), rec)
+        assert audit["publication_status"] == "passed", audit["hard_issues"]
     return directory
 
 
 class StubZep:
-    """Graph tools that return nothing: the report is driven by the research report alone."""
+    """Research graph is constant; simulation tools expose distinct stored trajectories."""
 
     def get_simulation_context(self, **kwargs):
         return {}
+
+    def simulation_outcomes(self, simulation_id, **kwargs):
+        return (Path(Config.OASIS_SIMULATION_DATA_DIR) / simulation_id
+                / "world_state_history.jsonl").read_text()
+
+    def scenario_diff(self, base_simulation_id, simulation_id):
+        return self.simulation_outcomes(simulation_id)
 
     def __getattr__(self, name):
         def _empty(*args, **kwargs):
@@ -169,6 +173,21 @@ class ScriptedModel(FakeLLMClient):
 
     def chat(self, messages, **kwargs):
         self.calls.append({"kind": "chat", "messages": messages})
+        # The active checkout may carry the newer reviewed translation engine.
+        # Exercise its real entry/review protocol when available; legacy-only
+        # checkouts keep the explicitly scripted translator below.
+        try:
+            from tests.model_translation_fakes import model_protocol, raw_fixture_zh
+        except ImportError:
+            pass
+        else:
+            import re
+            def faithful_zh(text):
+                return "".join(part if i % 2 else raw_fixture_zh(part)
+                               for i, part in enumerate(re.split(r"(\bF\d+\b)", text)))
+            translated = model_protocol(messages, faithful_zh)
+            if translated is not None:
+                return translated
         system = str(messages[0].get("content") or "") if messages else ""
         if "质检员" in system:               # section critique
             return "PASS"
@@ -176,7 +195,9 @@ class ScriptedModel(FakeLLMClient):
 
 
 @pytest.fixture
-def report_config(monkeypatch):
+def report_config(monkeypatch, tmp_path):
+    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(tmp_path / "simulations"))
+    monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(tmp_path / "reports"))
     for name in ("REPORT_BILINGUAL", "REPORT_FORECAST_LEDGER", "REPORT_VISUALIZATIONS",
                  "REPORT_PUBLISH_GATE", "REPORT_LANGUAGE_PURITY", "REPORT_THREE_PART_SKELETON",
                  "REPORT_SECTION_CONTINUE", "REPORT_TELEMETRY", "LLM_TELEMETRY_ENABLED",
@@ -340,6 +361,42 @@ def test_t6_no_update_has_no_block_no_link_no_field(report_config, monkeypatch):
     assert agent._build_signal_pack() == ""
 
 
+@pytest.mark.parametrize("policy", ["diagnostic_only", "no_update"])
+def test_simulation_tools_cannot_reenter_writer_context(report_config, monkeypatch, policy):
+    monkeypatch.setattr(Config, "SIMULATION_FORECAST_EFFECT", policy)
+    monkeypatch.setattr(Config, "GRAPH_COMMUNITY_RETRIEVAL", True)
+    agent = make_agent("sim_tools", ScriptedModel(), base_simulation_id="sim_base")
+    simulation_tools = {"simulation_outcomes", "coalition_map", "opinion_shift", "scenario_diff",
+                        "interview_agents"}
+    assert not simulation_tools.intersection(agent.tools)
+    calls = []
+    agent.zep_tools.simulation_outcomes = lambda *a, **kw: calls.append(a) or TOKENS[0]
+    agent.zep_tools.coalition_map = agent.zep_tools.simulation_outcomes
+    agent.zep_tools.opinion_shift = agent.zep_tools.simulation_outcomes
+    agent.zep_tools.scenario_diff = agent.zep_tools.simulation_outcomes
+    for name in simulation_tools:
+        assert TOKENS[0] not in agent._execute_tool(name, {})
+    assert calls == []
+    agent.zep_tools.faction_brief = lambda graph, query, simulation_id: calls.append(simulation_id) or "research communities"
+    assert agent._execute_tool("faction_brief", {}) == "research communities"
+    assert calls == [""]  # No fallback to simulated behavior when the graph has no communities.
+
+
+@pytest.mark.parametrize("policy", ["diagnostic_only", "no_update"])
+def test_whatif_outline_has_identical_research_inputs(report_config, monkeypatch, policy):
+    monkeypatch.setattr(Config, "SIMULATION_FORECAST_EFFECT", policy)
+    prompts = []
+    for i, token in enumerate(TOKENS):
+        model = ScriptedModel()
+        agent = make_agent(f"sim_outline_{i}", model, base_simulation_id="sim_base")
+        agent.zep_tools.simulation_outcomes = lambda *a, t=token, **kw: t
+        agent.zep_tools.scenario_diff = lambda *a, t=token, **kw: t
+        agent.plan_outline()
+        prompts.append(model.calls)
+    assert prompts[0] == prompts[1]
+    assert all(token not in json.dumps(prompts) for token in TOKENS)
+
+
 def test_t6_diagnostic_only_exactly_one_block_equal_to_the_renderer(report_config):
     (agent, report, _model), = run_pair()[:1]
     blocks = ra._sim_bridge_blocks(report.markdown_content)
@@ -372,12 +429,10 @@ def test_absent_record_uses_the_artifact_adapter_and_says_so(report_config):
     block = blocks[0]
     text = ra._SIM_BRIDGE_TEXT["en"]
     assert text["no_record"] in block and "simulation_record.md" not in block
-    assert text["moves_none"] in block
-    # final shares, K-path spread, red lines and lapsed commitments from the raw artifacts
-    assert "| Expansion | 44.0% (p10–p90 38.0%–51.0%) | 60% |" in block
-    assert "| Status quo | 56.0% (p10–p90 50.0%–63.0%) | 40% |" in block
-    assert f"2026-W45: Actor B crossed Actor A's red line {TOKENS[0]}" in block
-    assert f"2026-W46: Actor B: keep the tariff {TOKENS[0]}" in block
+    assert TOKENS[0] in block  # Public move admitted by the same compiler and fidelity gate.
+    # Final shares and K-path spread come only from the audited projection.
+    assert "| Expansion | 44.0% (p10–p90 39.2%–48.8%) | 60% |" in block
+    assert "| Status quo | 56.0% (p10–p90 51.2%–60.8%) | 40% |" in block
     assert "- Engine: oasis-reflexive" in block and "- Health: ok (validity: valid)" in block
     assert "- Periods committed: 2 of 2 planned" in block
     assert block == agent._render_sim_bridge_for_report(report.report_id, chinese=False)
@@ -480,6 +535,16 @@ def test_t8_decisive_move_selection_rule_is_pinned():
     assert ra._bridge_select_decisive_moves([]) == []
 
 
+def test_structured_redline_prioritizes_crosser_not_the_owner():
+    period = {"round": 1, "label": "2026-W45", "moves": [
+        {"actor": actor, "option": "Move", "public_statement": "A public statement."}
+        for actor in ("Actor A", "Actor B")],
+        "red_lines_crossed": [{"actor": "Actor A", "by": "Actor B", "red_line": "No tariff"}]}
+    assert ra._bridge_select_decisive_moves([period])[0][1] == "Actor B"
+    en = ra._bridge_red_line_items({"periods": [period]}, ra._SIM_BRIDGE_TEXT["en"])
+    assert en == ["2026-W45: Actor B crossed Actor A's red line: No tariff"]
+
+
 def test_bridge_insertion_is_idempotent_and_relocates_placed_simulated_charts(tmp_path):
     record = _record_fixture("en")
     charts = [{"id": "worldstate_trajectory", "path": "charts/worldstate_trajectory.png",
@@ -535,7 +600,63 @@ def test_hollow_record_renders_banner_health_and_no_moves():
     text = ra._SIM_BRIDGE_TEXT["en"]
     assert "- Health: hollow (validity: valid)" in block
     assert "- Periods committed: 0 of 9 planned" in block
-    assert text["moves_none"] in block and text["none"] in block
-    assert "| Expansion | — | 60% |" in block and "| Status quo | — | 40% |" in block
+    assert text["moves_h"] not in block and text["shares_h"] not in block
     assert text["record"].format(sha="cafe") in block
     assert rl.leakage_hits(block) == []
+
+
+@pytest.mark.parametrize("marker", [sp.BRIDGE_START, sp.BRIDGE_END])
+def test_bridge_audit_rejects_unmatched_markers(marker):
+    block = sp.BRIDGE_START + "\ncanonical\n" + sp.BRIDGE_END
+    for expected in (block, ""):
+        audit = ReportAgent._sim_bridge_audit_block(expected + marker, expected)
+        assert not audit["bytes_match"]
+        issues = ReportAgent._final_audit_integrity_issues({"simulation_bridge": audit})
+        assert any("simulation bridge" in issue for issue in issues)
+
+
+@pytest.mark.parametrize("published", [False, True])
+@pytest.mark.parametrize("contamination", ["[S999]", "PRIVATE_FRAGMENT"])
+def test_rejected_raw_fallback_is_health_only(report_config, published, contamination):
+    directory = write_sim(Path(Config.OASIS_SIMULATION_DATA_DIR), "sim_raw_rejected",
+                          shares={"Expansion": 0.44, "Status quo": 0.56}, token=TOKENS[0], record=published)
+    history = directory / "world_state_history.jsonl"
+    rows = [json.loads(line) for line in history.read_text().splitlines()]
+    rows[0]["narrative"] += contamination
+    rows[0]["deterministic"]["red_lines_crossed"] = [contamination]
+    history.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    if contamination == "PRIVATE_FRAGMENT":
+        path = directory / "world_actions.jsonl"
+        row = json.loads(path.read_text())
+        row["private_rationale"] = contamination
+        path.write_text(json.dumps(row) + "\n")
+    agent = make_agent(directory.name, ScriptedModel())
+    block = agent._render_sim_bridge_for_report("report_raw_rejected", chinese=False)
+    assert "validity: invalid" in block
+    assert contamination not in block and TOKENS[0] not in block
+    assert "simulation_record.md" not in block and "charts/" not in block
+    assert ra._SIM_BRIDGE_TEXT["en"]["shares_h"] not in block
+
+
+def test_no_update_never_places_simulated_charts(report_config, monkeypatch, tmp_path):
+    monkeypatch.setattr(Config, "SIMULATION_FORECAST_EFFECT", "no_update")
+    agent = make_agent("sim_no_chart", ScriptedModel())
+    manifest = [{"id": "worldstate_trajectory", "type": "png",
+                 "path": "charts/worldstate_trajectory.png", "placement_hint": "simulation",
+                 "caption": sp.CHART_OUTCOME_SHARES_EN}]
+    body = "# Evidence report\n\n## Outlook\n\nObserved facts.\n"
+    assert agent._place_visualizations(body, str(tmp_path), manifest) == body
+
+
+def test_hollow_raw_adapter_cannot_publish_partial_dynamics(report_config):
+    directory = write_sim(Path(Config.OASIS_SIMULATION_DATA_DIR), "sim_hollow_adapter",
+                          shares={"Expansion": 0.95}, token=TOKENS[0], record=False)
+    summary = json.loads((directory / "run_summary.json").read_text())
+    summary["simulation_health"] = "hollow"
+    (directory / "run_summary.json").write_text(json.dumps(summary))
+    agent = make_agent(directory.name, ScriptedModel())
+    report = agent.generate_report(report_id="report_hollow_adapter")
+    assert report.status == ReportStatus.COMPLETED, report.error
+    block, = ra._sim_bridge_blocks(report.markdown_content)
+    assert "Health: hollow" in block and TOKENS[0] not in block
+    assert "95.0%" not in block and ra._SIM_BRIDGE_TEXT["en"]["shares_h"] not in block

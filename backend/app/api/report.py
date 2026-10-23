@@ -88,6 +88,11 @@ def _report_forecast_effect(report):
     bridge = (forecast or {}).get("simulation_bridge") if isinstance(forecast, dict) else None
     if isinstance(bridge, dict) and bridge.get("forecast_effect"):
         return str(bridge["forecast_effect"])
+    quality = forecast.get("quality") if isinstance(forecast, dict) else None
+    final = quality.get("final_audit") if isinstance(quality, dict) else None
+    audited = final.get("simulation_bridge") if isinstance(final, dict) else None
+    if isinstance(audited, dict) and audited.get("policy") in {"diagnostic_only", "no_update", "legacy_prompt"}:
+        return audited["policy"]
     try:
         return _pinned_simulation_policy(ReportManager._get_report_folder(report.report_id))
     except Exception:  # noqa: BLE001
@@ -102,16 +107,10 @@ def _simulation_record_ref(report):
         return None
     sim_dir = os.path.join(getattr(Config, "OASIS_SIMULATION_DATA_DIR", "") or "", sim_id)
     try:
-        if not _src.is_published(sim_dir):
+        record, _status = _src.load_published_record(sim_dir)
+        if record is None:
             return None
-        audit = _src.load_audit(sim_dir) or {}
-        sha = str(audit.get("sha256") or "").strip()
-        if not sha:
-            md_path = _src.record_paths(sim_dir)["md"]
-            if os.path.islink(md_path) or not os.path.isfile(md_path):
-                return None
-            with open(md_path, "rb") as handle:
-                sha = hashlib.sha256(handle.read()).hexdigest()
+        sha = _src.record_sha256(record)
     except (OSError, ValueError, TypeError):
         return None
     return {"sha256": sha, "url": f"/api/simulation/{sim_id}/record"}
@@ -152,7 +151,8 @@ def _report_publication_payload(report):
             and verified.get("final_audit_sha256")):
         payload["translations"] = [verified]
     payload["forecast_effect"] = _report_forecast_effect(report)
-    record_ref = _simulation_record_ref(report)
+    record_ref = (_simulation_record_ref(report)
+                  if payload["forecast_effect"] == "diagnostic_only" else None)
     if record_ref:
         payload["simulation_record_ref"] = record_ref
     return payload

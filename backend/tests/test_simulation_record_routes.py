@@ -123,15 +123,15 @@ def test_symlinked_record_and_traversal_identifiers_are_refused(client, tmp_path
     for bad in ("..%2F..%2Fetc", "%2E%2E", ".", "sim_real%2F..%2Fsim_real", "sim%00real"):
         assert client.get(f"/api/simulation/{bad}/record").status_code == 404, bad
         assert client.get(f"/api/simulation/{bad}/record.md").status_code == 404, bad
-    # a symlinked markdown rendering is not read: the route renders from the JSON instead
+    # a symlinked Markdown rendering invalidates the shared publication seal
     md_link = tmp_path / "sim_mdlink"
     shutil.copytree(real, md_link)
     os.unlink(md_link / rc.RECORD_MD)
     (tmp_path / "evil.md").write_text("# not the record\n", encoding="utf-8")
     os.symlink(tmp_path / "evil.md", md_link / rc.RECORD_MD)
     res = client.get("/api/simulation/sim_mdlink/record.md")
-    assert res.status_code == 200 and "not the record" not in res.get_data(as_text=True)
-    assert sp.SIM_BANNER_EN in res.get_data(as_text=True)
+    assert res.status_code == 409 and "not the record" not in res.get_data(as_text=True)
+    assert res.get_json()["publication_status"] == "stale_audit"
 
 
 def test_oversized_rewritten_or_unparsable_record_is_not_served(client, tmp_path):
@@ -154,3 +154,15 @@ def test_oversized_rewritten_or_unparsable_record_is_not_served(client, tmp_path
     Path(sim_dir, rc.RECORD_JSON).write_text("{not json", encoding="utf-8")
     res = client.get("/api/simulation/sim_big/record")
     assert res.status_code == 409 and res.get_json()["success"] is False
+
+
+@pytest.mark.parametrize("filename", [rc.RECORD_MD, rc.RECORD_MD_ZH, "world_state_history.jsonl"])
+def test_record_routes_share_source_and_markdown_seals(client, tmp_path, filename):
+    sim_dir = _published_run(tmp_path, "sim_tampered")
+    path = sim_dir / filename
+    path.write_bytes(path.read_bytes() + b"\nUNREVIEWED_CONTENT")
+    for suffix in ("record", "record.md", "record.md?lang=zh"):
+        response = client.get(f"/api/simulation/sim_tampered/{suffix}")
+        assert response.status_code == 409
+        assert response.get_json()["publication_status"] == "stale_audit"
+        assert "UNREVIEWED_CONTENT" not in response.get_data(as_text=True)

@@ -253,6 +253,7 @@ _SIM_BRIDGE_TEXT: Dict[str, Dict[str, Any]] = {
         "moves_cols": ("Period", "Actor", "Move", "Target", "Public statement"),
         "moves_none": "No decisive moves were recorded.",
         "redlines_h": "Red lines crossed and commitments broken", "none": "None recorded.",
+        "redline": "{by} crossed {actor}'s red line: {red_line}",
         "track": "{actor}: commitments kept {kept}, lapsed {lapsed}, broken {broken}",
         "shares_h": "Simulated shares beside this report's probabilities",
         "shares_cols": ("Scenario", "Final simulated share", "Report probability"),
@@ -260,7 +261,7 @@ _SIM_BRIDGE_TEXT: Dict[str, Dict[str, Any]] = {
         "spread_fmt": "{mean} (p10–p90 {lo}–{hi})",
         "unchanged": "The probabilities in this report were not changed by the exercise (policy: {policy}).",
         "chart_link_sep": ": ", "interactive": "interactive version",
-        "record": "Full record: `simulation_record.md` (SHA-256 {sha})",
+        "record": "Full record: `simulation_record.md` (canonical JSON SHA-256 {sha})",
         "no_record": "After-action record not available for this run.",
     },
     "zh": {
@@ -274,6 +275,7 @@ _SIM_BRIDGE_TEXT: Dict[str, Dict[str, Any]] = {
         "moves_cols": ("时段", "行动者", "行动", "对象", "公开声明"),
         "moves_none": "未记录关键行动。",
         "redlines_h": "越过的红线与违背的承诺", "none": "无记录。",
+        "redline": "{by} 越过 {actor} 的红线：{red_line}",
         "track": "{actor}：承诺履行 {kept}、失效 {lapsed}、违背 {broken}",
         "shares_h": "模拟份额与本报告概率对照",
         "shares_cols": ("情景", "最终模拟份额", "本报告概率"),
@@ -281,7 +283,7 @@ _SIM_BRIDGE_TEXT: Dict[str, Dict[str, Any]] = {
         "spread_fmt": "{mean}（p10–p90 {lo}–{hi}）",
         "unchanged": "本报告的概率未因该推演而改变（策略：{policy}）。",
         "chart_link_sep": "：", "interactive": "交互版",
-        "record": "完整记录：`simulation_record.md`（SHA-256 {sha}）",
+        "record": "完整记录：`simulation_record.md`（规范 JSON 的 SHA-256 {sha}）",
         "no_record": "本次运行无事后记录。",
     },
 }
@@ -403,6 +405,10 @@ def _bridge_select_decisive_moves(periods: List[Any]) -> List[Tuple[str, str, st
         round_no = round_no if round_no is not None else 0
         crossers: set = set()
         for entry in period.get("red_lines_crossed") or []:
+            if isinstance(entry, dict):
+                if entry.get("by") in actors:
+                    crossers.add(entry["by"])
+                continue
             text = str(entry)
             found = [(text.find(a), a) for a in actors if a and a in text]
             if found:
@@ -453,7 +459,9 @@ def _bridge_red_line_items(record: Dict[str, Any], text: Dict[str, Any]) -> List
             continue
         label = _bridge_period_label(period)
         for entry in period.get("red_lines_crossed") or []:
-            body = str(entry or "").strip()
+            body = (text["redline"].format(by=entry.get("by") or "—", actor=entry.get("actor") or "—",
+                                           red_line=entry.get("red_line") or "—")
+                    if isinstance(entry, dict) else str(entry or "").strip())
             if body:
                 items.append(f"{label}{kv}{body}" if label else body)
     items.extend(x for x in (_pair(e) for e in record.get("red_lines_crossed") or []) if x)
@@ -604,6 +612,16 @@ def render_sim_bridge(record: Dict[str, Any], *, chinese: bool,
         gaps = _bridge_count(setup.get("seed_gaps"))
     if gaps is not None:
         lines.append(f"- {text['gaps']}{kv}{gaps}")
+
+    # A stopped or invalid exercise is a health record, not a scenario narrative.
+    # This also contains the raw-artifact fallback for runs predating the compiler.
+    if (status in _src.HEALTH_STUB_VALUES or validity not in {"", "valid"}
+            or record.get("health_stub") is True):
+        if record.get("_record_available") is False:
+            lines.extend(["", text["no_record"]])
+        elif record_sha256:
+            lines.extend(["", text["record"].format(sha=str(record_sha256).strip())])
+        return _sp.BRIDGE_START + "\n" + "\n".join(lines).rstrip() + "\n" + _sp.BRIDGE_END
 
     lines.extend(["", "### " + text["moves_h"], ""])
     moves = _bridge_select_decisive_moves(list(record.get("periods") or []))
@@ -3068,6 +3086,17 @@ class ReportAgent:
         return str(getattr(Config, "SIMULATION_FORECAST_EFFECT", "diagnostic_only")
                    or "diagnostic_only").strip().lower()
 
+    def _simulation_prompt_inputs_allowed(self) -> bool:
+        """Only the explicit legacy ablation may expose simulated writer inputs.
+
+        Missing owner proof cannot grant that capability. Other consumers still
+        enforce their own owner/evidence checks rather than trusting this fallback.
+        """
+        try:
+            return self._simulation_forecast_effect() == "legacy_prompt"
+        except (ValueError, KeyError, TypeError, OSError):
+            return False
+
     def set_backtest_policy(self, option: Optional[Dict[str, Any]]) -> None:
         """Pin the owning pipeline's backtest option (``None`` = live run).
 
@@ -3160,93 +3189,32 @@ class ReportAgent:
             return None
 
     def _sim_record_from_artifacts(self, sim_dir: str) -> Optional[Dict[str, Any]]:
-        """Record-shaped adapter over the raw world artifacts for a run without a published
-        after-action record (S1 may not have run, or its gate failed): final shares and K-path
-        spread, red lines crossed and commitments lapsed or breached (world_state_history),
-        health and run facts (run_summary, world_state, trajectory).  No moves, so the bridge
-        lists none and says the record is unavailable.  None when no artifact exists.
-        Deterministic: it reads files only and never calls a model."""
-        traj = self._sim_read_json(os.path.join(sim_dir, "world_state_trajectory.json"))
-        state = self._sim_read_json(os.path.join(sim_dir, "world_state.json"))
-        summary = self._sim_read_json(os.path.join(sim_dir, "run_summary.json"))
-        traj = traj if isinstance(traj, dict) else None
-        state = state if isinstance(state, dict) else None
-        summary = summary if isinstance(summary, dict) else None
-        if traj is None and state is None and summary is None:
+        """Audit an old run's deterministic projection without publishing or calling a model.
+
+        A missing/stale record never grants a second path around the fidelity
+        gate. Rejected projections disclose health only, with no dynamic text.
+        """
+        if not any(os.path.isfile(os.path.join(sim_dir, name)) for name in (
+                "run_summary.json", "world_state.json", "world_state_trajectory.json", "world_result.json")):
             return None
-        world = state.get("world") if state and isinstance(state.get("world"), dict) else {}
-        model = summary.get("world_model") if summary and isinstance(summary.get("world_model"), dict) else {}
-        outcome = traj.get("outcome") if traj and isinstance(traj.get("outcome"), dict) else {}
-        final: Dict[str, float] = {}
-        for name, value in (outcome.get("shares") or {}).items() if isinstance(outcome.get("shares"), dict) else []:
-            number = _bridge_float(value)
-            if number is not None:
-                final[str(name)] = number
-        k, per = 1, {}
-        paths = self._sim_read_json(os.path.join(sim_dir, "world_paths.json"))
-        if isinstance(paths, dict):
-            k = max(1, _bridge_int(paths.get("k")) or 1)
-            for name, stats in (paths.get("shares") or {}).items() if isinstance(paths.get("shares"), dict) else []:
-                if isinstance(stats, dict):
-                    per[str(name)] = {key: stats.get(key) for key in ("mean", "sd", "p10", "p50", "p90")}
-        red_lines: List[Tuple[str, str]] = []
-        broken: List[Tuple[str, str]] = []
-        history = os.path.join(sim_dir, "world_state_history.jsonl")
-        if os.path.isfile(history) and not os.path.islink(history):
-            try:
-                with open(history, "r", encoding="utf-8") as handle:
-                    rows = [line for line in handle if line.strip()]
-            except OSError:
-                rows = []
-            for raw in rows:
-                try:
-                    row = json.loads(raw)
-                except ValueError:
-                    continue
-                if not isinstance(row, dict):
-                    continue
-                period = row.get("period") if isinstance(row.get("period"), dict) else {}
-                label = str(row.get("period_label") or period.get("label") or row.get("round") or "").strip()
-                det = row.get("deterministic") if isinstance(row.get("deterministic"), dict) else {}
-                arbiter = row.get("arbiter") if isinstance(row.get("arbiter"), dict) else {}
-                for source in (det, arbiter):
-                    for entry in source.get("red_lines_crossed") or []:
-                        red_lines.append((label, str(entry)))
-                for key in ("commitments_breached", "commitments_broken", "commitments_lapsed"):
-                    for entry in det.get(key) or []:
-                        broken.append((label, str(entry)))
-        trajectory = traj.get("trajectory") if traj and isinstance(traj.get("trajectory"), list) else []
-        first = trajectory[0] if trajectory and isinstance(trajectory[0], dict) else {}
-        decisions = traj.get("decisions") if traj and isinstance(traj.get("decisions"), dict) else {}
-        seed_gaps = model.get("seed_gaps")
-        if seed_gaps is None and isinstance(world.get("seed_gaps"), list):
-            seed_gaps = len(world["seed_gaps"])
-        temporal = str((summary or {}).get("temporal_mode") or "").strip().lower()
-        return {
-            "engine": "oasis-reflexive" if world else ("oasis-hours" if temporal == "hours" else "oasis-inband"),
-            "rounds_planned": (summary or {}).get("total_rounds") or (summary or {}).get("total_periods")
-                              or (traj or {}).get("n_rounds"),
-            "rounds_committed": model.get("rounds_committed") or (state or {}).get("committed_round")
-                                or outcome.get("rounds") or (traj or {}).get("n_rounds"),
-            "health": {
-                "simulation_health": str((summary or {}).get("simulation_health") or "").strip(),
-                "validity": str((traj or {}).get("validity") or decisions.get("validity") or "").strip(),
-                "arbiter_failed_rounds": model.get("arbiter_failed_rounds"),
-                "seed_gaps": seed_gaps,
-                "organic_actions": (summary or {}).get("organic_action_count"),
-            },
-            "as_of": world.get("as_of_date") or first.get("as_of"),
-            "horizon_date": (traj or {}).get("horizon_date") or (summary or {}).get("horizon_date")
-                            or world.get("horizon_date"),
-            "calendar_unit": (traj or {}).get("calendar_unit") or (summary or {}).get("calendar_unit"),
-            "periods": [],
-            "overall": {"final_variables": [], "turning_points": [], "track_records": [],
-                        "shares": {"final": final, "converged_at": (traj or {}).get("converged_at"),
-                                   "paths": {"k": k, "per_scenario": per}}},
-            "red_lines_crossed": red_lines,
-            "commitments_broken": broken,
-            "_record_available": False,
-        }
+        from .simulation_record import build_record
+        from .simulation_record_gate import audit_record
+        try:
+            record = build_record(sim_dir, language="English", synthesis=False)
+            audit = audit_record(sim_dir, record, write=False)
+        except (OSError, ValueError, TypeError, KeyError):
+            return {"health": {"simulation_health": "unavailable", "validity": "invalid"},
+                    "health_stub": True, "_record_available": False}
+        if audit.get("publication_status") != "passed":
+            # Select only fixed health metadata. No quote, share, event or other
+            # unverified artifact text can enter the lint-exempt bridge.
+            return {"engine": record.get("engine"),
+                    "rounds_committed": record.get("rounds_committed"),
+                    "rounds_planned": record.get("rounds_planned"),
+                    "health": {"simulation_health": "unavailable", "validity": "invalid"},
+                    "health_stub": True, "_record_available": False}
+        record["_record_available"] = False
+        return record
 
     def _sim_bridge_chart_paths(self, folder: str) -> List[Dict[str, str]]:
         """The simulated charts of this report's viz manifest as ``{id, path, image}``, in a
@@ -3301,16 +3269,9 @@ class ReportAgent:
             return ""
         record: Optional[Dict[str, Any]] = None
         record_sha: Optional[str] = None
-        if _src.is_published(sim_dir):
-            record = _src.load_record(sim_dir)
-            if record is not None:
-                audit = _src.load_audit(sim_dir) or {}
-                record_sha = str(audit.get("sha256") or "").strip() or None
-                if not record_sha:
-                    md_path = _src.record_paths(sim_dir)["md"]
-                    if os.path.isfile(md_path) and not os.path.islink(md_path):
-                        with open(md_path, "rb") as handle:
-                            record_sha = hashlib.sha256(handle.read()).hexdigest()
+        record, _status = _src.load_published_record(sim_dir)
+        if record is not None:
+            record_sha = _src.record_sha256(record)
         if record is None:
             record = self._sim_record_from_artifacts(sim_dir)
             if record is None:
@@ -3323,7 +3284,9 @@ class ReportAgent:
             record, chinese=chinese, spine=spine,
             chart_rel_paths=self._sim_bridge_chart_paths(folder),
             whatif_table_md=self._sim_bridge_whatif_table(folder),
-            record_sha256=record_sha, policy=self._simulation_forecast_effect(),
+            record_sha256=record_sha, policy=(
+                (spine.get("simulation_bridge") or {}).get("forecast_effect")
+                if isinstance(spine, dict) else None) or self._simulation_forecast_effect(),
         )
 
     def _record_sim_bridge_in_forecast(self, report_id: str, block: str) -> None:
@@ -3380,6 +3343,8 @@ class ReportAgent:
             match = len(blocks) == 1 and blocks[0] == expected_block
         else:
             match = not blocks
+        match = (match and (md or "").count(_sp.BRIDGE_START) == expected
+                 and (md or "").count(_sp.BRIDGE_END) == expected)
         return {"expected_count": expected, "count": len(blocks), "bytes_match": bool(match),
                 "sha256": (hashlib.sha256(expected_block.encode("utf-8")).hexdigest()
                            if expected_block else None)}
@@ -9401,6 +9366,19 @@ class ReportAgent:
         )
         return {"hard": hard, "residual": residual}
 
+    def _translation_simulation_provenance(self, report_id, source_md, variant_md, source_lang, target_lang):
+        """Verify the deterministic envelope independently of the prose translator."""
+        source_bridge = ""
+        target_bridge = ""
+        if _sim_bridge_blocks(source_md):
+            try:
+                source_bridge = self._render_sim_bridge_for_report(report_id, chinese=source_lang == "zh")
+                target_bridge = self._render_sim_bridge_for_report(report_id, chinese=target_lang == "zh")
+            except (OSError, ValueError, TypeError, KeyError):
+                pass
+        return {"source": self._sim_bridge_audit_block(source_md, source_bridge),
+                "variant": self._sim_bridge_audit_block(variant_md, target_bridge)}
+
     def _audit_translation_variant(
         self,
         report_id: str,
@@ -9500,6 +9478,10 @@ class ReportAgent:
 
         issues: List[str] = []
         warnings: List[str] = []
+        bridge_audit = self._translation_simulation_provenance(
+            report_id, source_md, variant_md, source_lang, target_lang)
+        if not all(part["bytes_match"] for part in bridge_audit.values()):
+            issues.append("translation simulation bridge differs from admitted deterministic provenance")
         if heading_source != heading_variant:
             issues.append("translation heading-level sequence differs from primary")
         if table_source != table_variant:
@@ -9683,6 +9665,7 @@ class ReportAgent:
                 "invalid_urls": invalid_urls,
             },
             "language_lint": lint_audit,
+            "simulation_bridge": bridge_audit,
             "translator_version": self._TRANSLATOR_VERSION,
             "residual_source_lines": {
                 "count": contamination,
@@ -11849,7 +11832,7 @@ class ReportAgent:
                     f"simulation bridge block count is {count}; policy "
                     f"{bridge.get('policy')} requires {expected}"
                 )
-            elif expected and bridge.get("bytes_match") is not True:
+            elif bridge.get("bytes_match") is not True:
                 issues.append("simulation bridge bytes differ from the deterministic renderer")
         for issue in (audit.get("citation_artifacts") or {}).get("issues") or []:
             if issue not in issues:
@@ -12784,7 +12767,10 @@ class ReportAgent:
         # ADR 0003 (S3, design §3.3 item 5): under diagnostic_only the simulated charts are
         # rendered inside the fenced bridge only; placing them here as well would put a
         # simulated chart in an evidence section or the annex.
-        bridge_active = self._sim_bridge_active()
+        try:
+            simulation_in_body = self._simulation_forecast_effect() == "legacy_prompt"
+        except Exception:
+            simulation_in_body = False
         lines = md.split("\n")
         # 预扫描 "## " 详细章节标题（行号 + 小写标题），供 Mermaid 就地放置的模糊匹配。
         headings: List[Tuple[int, str]] = []
@@ -12805,7 +12791,7 @@ class ReportAgent:
             marker = f"<!-- viz:{path} -->"
             if marker in md:
                 continue  # 幂等：该图已注入
-            if bridge_active and _sp.is_simulated_chart(item):
+            if not simulation_in_body and _sp.is_simulated_chart(item):
                 continue  # ADR 0003 (S3): rendered by render_sim_bridge, nowhere else
             vtype = str(item.get("type") or "").strip().lower()
             caption = str(item.get("caption") or "").strip()
@@ -13318,6 +13304,11 @@ class ReportAgent:
                     and self._simulation_forecast_effect() == "diagnostic_only"):
                 tools["world_pathway"] = {"name": "world_pathway", "parameters": {},
                     "description": "Read the frozen conditional world pathway, exact dated metrics, events and pending obligations. Simulated; never probability evidence."}
+        if not self._simulation_prompt_inputs_allowed():
+            # Diagnostic output has one deterministic home: the bridge. Hiding
+            # the pack alone is insufficient if the writer can request it again.
+            for name in ("simulation_outcomes", "coalition_map", "opinion_shift", "scenario_diff"):
+                tools.pop(name, None)
         return tools
 
     def _execute_tool(self, tool_name: str, parameters: Dict[str, Any], report_context: str = "") -> str:
@@ -13340,6 +13331,9 @@ class ReportAgent:
             if tool_name == "world_pathway":
                 return self._world_pathway() if getattr(self, "_world_chat_mode", False) else ""
             return "Unsupported for world-v1; use admitted research evidence or its pinned conditional pathway."
+        if (not self._simulation_prompt_inputs_allowed()
+                and tool_name in {"simulation_outcomes", "coalition_map", "opinion_shift", "scenario_diff"}):
+            return "Simulation diagnostics are available only in the labelled after-action record and report bridge."
         try:
             if tool_name == "insight_forge":
                 query = parameters.get("query", "")
@@ -13415,7 +13409,8 @@ class ReportAgent:
 
             elif tool_name == "faction_brief":  # EXECPLAN2 I-1-2
                 return self.zep_tools.faction_brief(
-                    self.graph_id, parameters.get("query", ""), self.simulation_id)
+                    self.graph_id, parameters.get("query", ""),
+                    self.simulation_id if self._simulation_prompt_inputs_allowed() else "")
 
             elif tool_name == "opinion_shift":
                 actor_name = parameters.get("actor_name", parameters.get("query", ""))
@@ -13713,7 +13708,8 @@ class ReportAgent:
         except Exception as e:
             logger.warning(f"plan_outline insight_forge 扫描失败（忽略）: {e}")
         try:
-            outcomes = "" if world else self.zep_tools.simulation_outcomes(self.simulation_id, top_n=10)
+            outcomes = (self.zep_tools.simulation_outcomes(self.simulation_id, top_n=10)
+                        if not world and self._simulation_prompt_inputs_allowed() else "")
             if outcomes:
                 # WAVE9：包成内部方法学材料——它只用于判断哪些行为者/议题值得设章深挖，
                 # 绝不能催生「Agent 行为分析」型章节（940-actor 章节即此前的泄漏产物）。
@@ -13729,7 +13725,8 @@ class ReportAgent:
             user_prompt = user_prompt + "\n\n" + "\n\n".join(sweeps)
 
         # T4.7: 情景对比报告 —— 强制大纲包含「情景对比 / 反事实」章节，并预取 scenario_diff 摘要
-        if self.base_simulation_id and not world:
+        if (self.base_simulation_id and not world
+                and self._simulation_prompt_inputs_allowed()):
             try:
                 diff_text = self.zep_tools.scenario_diff(self.base_simulation_id, self.simulation_id)
                 if diff_text:
@@ -14711,10 +14708,7 @@ class ReportAgent:
         draft_answer: Optional[str] = None
         # REPORT-8 / ADR 0003 (S3)：interview_agents 已不在默认引擎的工具集中（其产出不能进入
         # 正文），自然也不在「未使用工具」推荐集里。
-        all_tools = {"insight_forge", "panorama_search", "quick_search",
-                     "simulation_outcomes", "coalition_map", "opinion_shift"}
-        if self.base_simulation_id:
-            all_tools.add("scenario_diff")  # T4.7
+        all_tools = set(self.tools)
 
         # 报告上下文，用于InsightForge的子问题生成
         report_context = f"章节标题: {section.title}\n模拟需求: {self.simulation_requirement}"
@@ -14849,7 +14843,7 @@ class ReportAgent:
                             )
                     if not _grounded_early:
                         messages.append({"role": "assistant", "content": response})
-                        unused_tools = all_tools - used_tools
+                        unused_tools = sorted(all_tools - used_tools)
                         unused_hint = f"（这些工具还未使用，推荐用一下他们: {', '.join(unused_tools)}）" if unused_tools else ""
                         messages.append({
                             "role": "user",
@@ -14953,7 +14947,7 @@ class ReportAgent:
                 self._SECTION_TOOL_CTX.set(self._SECTION_TOOL_CTX.get() + 1)  # LOG-16: 并发章节按上下文归因
 
                 # 构建未使用工具提示
-                unused_tools = all_tools - used_tools
+                unused_tools = sorted(all_tools - used_tools)
                 unused_hint = ""
                 if unused_tools and tool_calls_count < self.MAX_TOOL_CALLS_PER_SECTION:
                     unused_hint = REACT_UNUSED_TOOLS_HINT.format(unused_list="、".join(unused_tools))
@@ -14977,7 +14971,7 @@ class ReportAgent:
 
             if tool_calls_count < min_tool_calls:
                 # 工具调用次数不足，推荐未用过的工具
-                unused_tools = all_tools - used_tools
+                unused_tools = sorted(all_tools - used_tools)
                 unused_hint = f"（这些工具还未使用，推荐用一下他们: {', '.join(unused_tools)}）" if unused_tools else ""
 
                 messages.append({

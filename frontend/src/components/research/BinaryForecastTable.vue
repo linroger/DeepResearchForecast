@@ -128,7 +128,7 @@ import { L } from '../../i18n'
 // 组件只负责双语标签与 tooltip 的拼装。
 // officialSeries：报告官方数据的 series → {label, sourceId, sourceUrl}（数据锚点的读者标签与 [S#]）；
 // lang：官方数据展示语种（大额数值的量级说明，如「≈45万亿美元」）。
-// forecastEffect：报告负载的 forecast_effect（情景模拟对概率的策略；缺省即生产策略 diagnostic_only）。
+// forecastEffect：报告负载的 forecast_effect（情景模拟对概率的策略；缺省时披露策略未记录）。
 const props = defineProps({
   forecast: { type: Object, default: null },
   officialSeries: { type: Object, default: null },
@@ -147,10 +147,15 @@ const hasDataAnchors = computed(() => rows.value.some(row => row.dataAnchor))
 // scenario simulation ran. It mirrors sim_provenance.brief_sim_role: the research-only claim is
 // made only for a policy that was actually read and keeps the simulation out of probabilities;
 // an unread policy is reported as not recorded, never assumed.
-const RESEARCH_ONLY_POLICIES = ['diagnostic_only', 'no_update', 'validated_update']
+const RESEARCH_ONLY_POLICIES = ['diagnostic_only', 'no_update']
 const probabilityFootnote = computed(() => {
   const policy = String(props.forecastEffect || '').trim().toLowerCase()
   if (!policy) return L('本次运行未记录概率策略', 'The forecast policy is not recorded for this run')
+  if (policy === 'validated_update') {
+    // sim_provenance.brief_sim_role collapses this disabled policy to diagnostic_only.
+    return L('概率仅来自研究证据（策略：diagnostic_only；请求：validated_update）',
+      'Probabilities come from research evidence only (policy: diagnostic_only; requested: validated_update)')
+  }
   if (RESEARCH_ONLY_POLICIES.includes(policy)) {
     return L(`概率仅来自研究证据（策略：${policy}）`, `Probabilities come from research evidence only (policy: ${policy})`)
   }

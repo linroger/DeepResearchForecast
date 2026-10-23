@@ -28,6 +28,10 @@
       :simulation-id="simulationId"
       :generation-id="worldGenerationId"
     />
+    <div v-if="recordNotice" class="record-notice" role="status">
+      <span>{{ recordNotice }}</span>
+      <button type="button" class="refresh-btn" :disabled="loading" @click="retryRecord">{{ L('重试读取记录', 'Retry record') }}</button>
+    </div>
   </template>
   <div v-else-if="engine === LEGACY_ENGINE" class="sim-view">
     <!-- ===== Header ===== -->
@@ -83,6 +87,10 @@
       </div>
     </header>
 
+    <div v-if="recordNotice" class="record-notice" role="status">
+      <span>{{ recordNotice }}</span>
+      <button type="button" class="refresh-btn" :disabled="loading" @click="retryRecord">{{ L('重试读取记录', 'Retry record') }}</button>
+    </div>
     <!-- ===== Error banner ===== -->
     <div v-if="error" class="sv-error">
       <span class="err-dot">●</span>
@@ -280,7 +288,9 @@ import { isSimulationRecord } from '../../utils/simRecord'
 import { feedRequest, postPeriodNote, roundLabel as periodRoundLabel, selectionFromPanel } from '../../utils/feedRounds'
 
 const props = defineProps({
-  simulationId: { type: String, default: '' }
+  simulationId: { type: String, default: '' },
+  stageStatus: { type: String, default: '' },
+  openRecordRequest: { type: Number, default: 0 }
 })
 
 // ===== Local state =====
@@ -312,10 +322,25 @@ let refreshTimer = null
 const emit = defineEmits(['record-state'])
 const record = ref(null)
 const recordStatus = ref(null)
+const recordPublicationStatus = ref('')
 const showRecord = ref(true)
 let recordRetries = 0
 const RECORD_RETRY_MS = 15000
 const RECORD_RETRY_MAX = 4
+const recordNotice = computed(() => {
+  if (record.value || isRunnerActive() || recordStatus.value === null) return ''
+  if (recordStatus.value === 409 && recordPublicationStatus.value !== 'not_audited') {
+    return L('模拟记录未通过当前发布校验，暂不可用。', 'The simulation record has not passed its current publication check and is unavailable.')
+  }
+  if (recordStatus.value === 'error') return L('无法读取模拟记录，请重试。', 'Could not load the simulation record. Please retry.')
+  return L('模拟记录尚未就绪。', 'The simulation record is not ready yet.')
+})
+
+function retryRecord() {
+  recordRetries = 0
+  showRecord.value = true
+  return loadAll()
+}
 
 function announceRecord() {
   if (typeof emit === 'function') emit('record-state', { available: !!record.value, status: recordStatus.value })
@@ -324,9 +349,13 @@ function announceRecord() {
 function clearRecord() {
   record.value = null
   recordStatus.value = null
+  recordPublicationStatus.value = ''
 }
 
 function isRunnerActive() {
+  // Stage 5 is authoritative when embedded in the pipeline dashboard. A prepared
+  // world run may remain active much longer than the short publication retry window.
+  if (props.stageStatus) return ['pending', 'running', 'starting'].includes(props.stageStatus)
   const rs = isPlainObject(runState.value) ? runState.value : {}
   const st = String(rs.runner_status || '').toLowerCase()
   return st === 'running' || st === 'starting'
@@ -341,6 +370,7 @@ async function loadRecord(simId, request) {
     record.value = next
     const status = res ? Number(res.status) : NaN
     recordStatus.value = Number.isFinite(status) ? status : null
+    recordPublicationStatus.value = res?.publicationStatus || ''
     if (next) recordRetries = 0
   } catch {
     if (!request.isCurrent()) return
@@ -352,9 +382,10 @@ async function loadRecord(simId, request) {
 }
 
 // The record is re-asked only while nothing is shown and the last answer was 404 or a
-// transport failure (409 = gate failed: final).
+// transport failure, or a record awaiting its audit. A failed/stale audit is final.
 function recordRetryPending() {
-  return !record.value && (recordStatus.value === 404 || recordStatus.value === 'error') && recordRetries < RECORD_RETRY_MAX
+  return !record.value && (recordStatus.value === 404 || recordStatus.value === 'error'
+    || (recordStatus.value === 409 && recordPublicationStatus.value === 'not_audited')) && recordRetries < RECORD_RETRY_MAX
 }
 
 // ===== Defensive helpers =====
@@ -713,13 +744,27 @@ async function loadAll() {
       loading.value = false
       return
     }
-    worldGenerationId.value = response.data.world_generation_id || ''
+    const generation = response.data.world_generation_id || ''
+    if (worldGenerationId.value !== generation) {
+      clearRecord()
+      recordRetries = 0
+      showRecord.value = true
+      announceRecord()
+    }
+    worldGenerationId.value = generation
     engine.value = savedEngine
     if (savedEngine === WORLD_ENGINE) {
       // ADR 0003: the record applies to both engines; a 404/409 leaves the world view as is.
       // Stage 5 writes the record shortly after completion, so a 404 is re-asked a bounded
       // number of times here as well (the live layout below does the same).
-      await loadRecord(simId, request)
+      // Standalone callers can still follow the saved world's running status.
+      runState.value = { runner_status: response.data.status }
+      if (isRunnerActive()) {
+        clearRecord()
+        announceRecord()
+      } else {
+        await loadRecord(simId, request)
+      }
       if (request.isCurrent()) {
         loading.value = false
         scheduleAutoRefresh()
@@ -858,15 +903,20 @@ function scheduleAutoRefresh() {
 }
 
 watch(
-  () => props.simulationId,
-  () => {
-    engine.value = null
-    worldGenerationId.value = ''
-    profiles.value = []; posts.value = []; comments.value = []
-    stats.value = {}; runState.value = {}; userMap.value = {}
-    selectedRound.value = null
-    feedRounds.value = []
-    feedPeriodLabel.value = ''
+  () => [props.simulationId, props.stageStatus, props.openRecordRequest],
+  (next, previous) => {
+    const changedSimulation = !previous || next[0] !== previous[0]
+    if (changedSimulation) {
+      engine.value = null
+      worldGenerationId.value = ''
+      profiles.value = []; posts.value = []; comments.value = []
+      stats.value = {}; runState.value = {}; userMap.value = {}
+      selectedRound.value = null
+      feedRounds.value = []
+      feedPeriodLabel.value = ''
+    }
+    // A new stage transition (including resume) starts a fresh publication window.
+    // Opening the record from the report also revalidates its current gate status.
     clearRecord()
     recordRetries = 0
     showRecord.value = true
@@ -927,6 +977,8 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
 }
+
+.record-notice { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px; font-size: 13px; color: #666; }
 
 /* ADR 0003: fixed caveat under the title, engine tag, record shell spacing */
 .sv-title-block {

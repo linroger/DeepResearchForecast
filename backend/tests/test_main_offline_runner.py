@@ -30,6 +30,27 @@ class MainOfflineControls(unittest.TestCase):
                       "run via backend/scripts/main_offline_pytest.py")
         self.work = Path(tempfile.mkdtemp(prefix="control-"))
 
+    def test_managed_checkout_does_not_expose_parent_credentials(self):
+        repo = Path(__file__).resolve().parents[2]
+        self.assertTrue((repo / "backend/scripts/main_offline_pytest.py").read_bytes())
+        for path in (repo / ".env", repo / ".codex/auth.json",
+                     repo.parent / "auth.json", Path.home() / ".codex/config.toml",
+                     repo / "backend/uploads/secret.json"):
+            with self.assertRaises(PermissionError):
+                path.read_bytes()
+        # An allowed name must not hide a symlink into a protected root.
+        link = self.work / "source-looking.py"
+        with self.assertRaisesRegex(PermissionError, "credential_path"):
+            link.symlink_to(Path.home() / ".codex/config.toml")
+        original_resolve = Path.resolve
+        def resolve(path, *args, **kwargs):
+            if path == link:
+                return Path.home() / ".codex/config.toml"
+            return original_resolve(path, *args, **kwargs)
+        with mock.patch.object(Path, "resolve", resolve):
+            with self.assertRaisesRegex(PermissionError, "credential_path"):
+                link.read_bytes()
+
     def test_network(self):
         with self.assertRaisesRegex(PermissionError, "network"):
             socket.socket(socket.AF_INET, socket.SOCK_STREAM)

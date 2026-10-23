@@ -1,8 +1,8 @@
 # Handoff.md — Simulation After-Action Record and Report Bridge
 
-**Last Updated (UTC):** 2026-10-22T15:50:00+00:00
-**Status:** S0 complete and verified on `claude/sim-provenance-s0` (14 commits incl. follow-ups, unpushed); owner asked for the FULL plan (S1–S4) to be implemented; S1 and S2 running as isolated-worktree agents; S3/S4 queued
-**Current Focus:** Land S1 (record+gate+API) and S2 (dashboard) branches, then S3 (bridge, prompt isolation, section-aware lint, T1), integrate on `claude/sim-provenance-impl` in the clean worktree, run suites, then S4 docs.
+**Last Updated (UTC):** 2026-10-23T05:05:20.577872+00:00
+**Status:** Implementation verified; source delivery in progress. Historical S0–S4 notes below are retained as history.
+**Current Focus:** Commit and reconcile the verified feature with the preserved Mandarin work; verify remote delivery and managed local readiness.
 
 The key words MUST, SHOULD and MAY are to be interpreted as described in RFC 2119.
 
@@ -98,3 +98,44 @@ Not applicable yet; no change applied. The acceptance scenarios for the implemen
 - 2026-10-22T15:20:00+00:00: slice S0 implemented and committed on `claude/sim-provenance-s0` (one commit per change, nothing pushed); ledger, issues and evidence updated; full-suite run in a clean worktree and an adversarial review of the diff in progress.
 - 2026-10-23T16:35:00+00:00: S0 review fixes F1–F5 committed; ideas document `docs/handoff/pipeline-improvement-ideas/ideas.md` (448245dd); record contract 02de15d7; S1/S2 agents running in worktrees.
 - 2026-10-22T15:50:00+00:00: full suite at the S0 tip in a clean worktree: 7,707 passed / 9 failed / 19 errors / 1,668 skipped; every failure reproduces at the base commit 589d5d92 except the Kaleido exit test, which was a real regression (relative import broke standalone loading) fixed in 77a9f65e; two follow-ups (frontend caption table 73905af4, env example 0567ef18). Owner expanded scope to S1–S4 plus an ideas write-up; record contract committed (02de15d7); S1/S2 agents launched in worktrees.
+
+
+## 2026-10-23T03:45:43.414648+00:00 — Codex completion continuation
+
+The user asked to finish and validate the existing approved design. The active checkout is still at S0 and contains extensive unrelated Mandarin edits. The integration branch survives at `579c1acf` although its temporary worktree no longer exists. A managed worktree at `/Users/rogerlin/.codex/worktrees/simulation-report-boundary/DeepResearchForecast` on `codex/simulation-report-boundary` recovers the integration source. This continuation follows [PLANS.md](PLANS.md). Historical completion counts above are not fresh verification.
+
+Current status: in progress. The immediate critical path is closing the documented outline-prompt leak, checking record fidelity and real consumer wiring, then guarded acceptance and independent review. Existing decisions D1–D6 use the documented version-1 recommendations within the user's completion authorization. No new probability authority is granted to simulation.
+
+### 2026-10-23T03:53:16.248022+00:00 — Boundary defects reproduced
+
+The old T1 test stub returned empty simulation-tool outputs, masking the documented outline leak. Replacing those outputs with distinct stored trajectories and adding direct-tool/what-if checks produced five behavioral failures (report-red/junit.xml). The writer also advertised simulation_outcomes, coalition_map, opinion_shift and scenario_diff, and faction_brief could fall back to simulation behavior. The fix removes these tools under every non-legacy policy, blocks direct dispatch, prevents the community fallback, and isolates the outline. The report's deterministic bridge retains simulation access.
+
+The main offline runner initially refused the managed checkout because its absolute path includes `.codex`. The guard now checks credential components relative to the explicitly admitted checkout, independently checking resolved targets. Its 25 actual-operation controls pass, including source-read, credential/sibling/symlink denials and child propagation (guard-control-v3). Initial failures from missing evidence parent, an unapplied combined patch, and an over-eager symlink control were corrected; no protected reads succeeded. The report suite exposed reused test directories under guarded execution, fixed with per-test roots. Evidence root: `/Users/rogerlin/.local/share/DeepResearchForecast/verification/simulation-report-boundary/`.
+
+Bounded workers: record compiler/gate/API (Popper), frontend consumers (Kant), read-only stage lifecycle audit (Averroes); parent owns report isolation, guard, integration and continuity.
+
+### 2026-10-23T04:07:03.392609+00:00 — Real trajectory and lifecycle findings
+
+The full saved run `sim_3ec25e64209e` was copied read-only (11 allowlisted inputs) into a private replay snapshot, with source hashes retained. Its nine committed periods compile into 106 public moves and 51 state changes; deterministic compilation, gate, and verified reload pass with zero warnings and no provider calls (`saved-replay-v1/junit.xml`). This proves fidelity to saved artifacts, not their real-world truth or forecasting calibration. The actual saved run was not modified.
+
+Independent lifecycle tracing found missing world-v1/standalone finalization, a generic research artifact endpoint bypass, overly strict RUN reuse dependence on the derivative record, existence-only reuse of stale audits, and post-completion state writes invalidating full-file seals. Averroes is implementing the bounded producer/consumer fixes. Parent report checks now use the real record compiler and gate instead of fabricated audit JSON. A 202-case affected run had 200 passes, one intended fixture re-pin and one explicit skip; it is intermediate evidence, not final acceptance.
+
+Hollow bridges now show health only; no_update omits record links and simulated charts; unmatched bridge markers fail byte/count validation. Structured red-line ranking uses the recorded crosser (`by`) rather than the first actor name in a dict string.
+
+### 2026-10-23T04:47:51.569004+00:00 — Delivery cursor and combined translation validation
+
+The pure feature is in `/Users/rogerlin/.codex/worktrees/simulation-report-boundary/DeepResearchForecast` on `codex/simulation-report-boundary`; no continuation commit or push yet. Primary is still untouched on `claude/sim-provenance-s0` at `aad41e90`, with 69 dirty tracked-file hashes recorded in `primary-preservation-snapshot.json`; subsequent checks show no drift. The complete combined candidate is under the private evidence root's `combined-checkout/`. It contains preserved primary translation changes, the feature, and reviewed manual conflict resolutions. Do not rerun the first-pass `resolve_combined.py` over the updated candidate: later reviewer/harness edits must be retained.
+
+Pure integrated-v1 exercised 38 suites: 870 passed, 11 expected failures, one git-based historical comparison skipped, and one real orphan-owner child fixture blocked because its CLI allowance was omitted. With the exact inspected `backend/tests/fixtures/orphan_owner.py` allowlisted, that case passed (`orphan-control`). Source drift was zero. A later common translation-provenance helper and clarified JSON-hash label still need the final affected/broad gate.
+
+Combined translation validation: 141 passed (`combined-report-v2`) with the named translation restart child allowed. The newer semantic translator receives bridge-free prose; the bridge is reinserted deterministically. Model receipts stay bound to the exact translated body, and full publication envelopes bind the full source/target documents. The publication reader independently checks both. Additional bridge-tamper tests are in `combined-provenance-review`. Frontend combination initially had 18 test-harness import gaps (360 passed); Kant is fixing only the composed harness and the Live-only translation-button scope in the candidate, with no primary writes.
+
+Lifecycle cross-review identified three final edges: verify native world export seals, avoid losing a new world monitor behind an exiting old monitor, and suppress repeated synthesis when only old Markdown survives. Averroes is fixing these; Popper is adding the native result-manifest input seal. After freeze, sync their changed production/test files into the candidate, using three-way merges for primary-dirty paths, then run final guarded gates and build. Halley is reviewing the combined report translation adapter.
+
+Browser proof is saved as `record-ui-en.png` and `record-ui-zh-period9.png` in the evidence root. The actual compiled record component displays the nine-period saved replay and preserves period selection when language labels switch; source narratives remain verbatim. The preview server is loopback-only on 53741 (session 52609). Local production health was ok and `/api/research/list` reported no active pipelines at the last read-only check. Recheck immediately before any managed restart.
+
+Final delivery must preserve primary translation edits and staged news work. Commit only the owned feature files, never the temporary full-run input copy or peer translation code. The candidate's small compatibility adjustments must remain reviewable with the preserved peer work. Save final source hashes, exact tests, independent reviews, source delivery and any operational acceptance limits before marking this topic complete.
+
+### 2026-10-23T05:05:20.577872+00:00 — Final acceptance
+
+The feature branch passes 883 backend tests (2 explicit skips, 11 expected failures), 58 rechecked context tests after fixture corrections, and 321 frontend tests/build. The composed active-source candidate passes 981 backend tests (1 Git-history skip, 11 expected failures), 379 frontend tests/build, the model-receipt/bridge negative matrix and independent review. See [completion.md](completion.md), [verification.json](verification.json) and [issues.md](issues.md). Production hashes are frozen; the remaining action is source delivery and local readiness.

@@ -38,8 +38,8 @@ Checks (hard unless stated):
 
 Input contract: only files inside ``sim_dir`` are opened (regular files, symlinks
 refused); nothing is imported from the report or research planes except the lint's
-language scan.  The compiler (``simulation_record.py``) imports this module; this module
-never imports the compiler.
+language scan. Deterministic compiler projections and renderers are loaded lazily
+with synthesis disabled to check row fidelity and seal Markdown. No model is called.
 """
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 from . import simulation_record_contract as rc
 
 AUDIT_SCHEMA = "simulation-record-audit/v1"
-GATE_VERSION = "simulation_record_gate/1.0"
+GATE_VERSION = "simulation_record_gate/1.1"
 
 # Record keys whose values are identifiers, provenance pointers or structure, never
 # reader-facing numbers.  They are excluded from the numeric scan (G2) and from the
@@ -97,11 +97,22 @@ def _utcnow() -> str:
 def record_bytes(record: Dict[str, Any]) -> bytes:
     """Canonical bytes of ``simulation_record.json`` (shared with the writer so the
     audit's SHA-256 is the file's SHA-256)."""
-    return (json.dumps(record, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    return rc.record_bytes(record)
 
 
 def record_sha256(record: Dict[str, Any]) -> str:
-    return hashlib.sha256(record_bytes(record)).hexdigest()
+    return rc.record_sha256(record)
+
+
+def _same_json(left: Any, right: Any) -> bool:
+    """JSON fidelity distinguishes false/0 and true/1, unlike Python equality."""
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return left.keys() == right.keys() and all(_same_json(left[k], right[k]) for k in left)
+    if isinstance(left, list):
+        return len(left) == len(right) and all(_same_json(a, b) for a, b in zip(left, right))
+    return left == right
 
 
 def _as_int(value: Any) -> Optional[int]:
@@ -200,15 +211,17 @@ class _Sources:
     plus the private-rationale texts kept apart for the G6 comparison."""
 
     def __init__(self, sim_dir: str) -> None:
-        self.ok = bool(sim_dir) and os.path.isdir(sim_dir)
+        self.ok = bool(sim_dir) and os.path.isdir(sim_dir) and os.path.abspath(sim_dir) == os.path.realpath(sim_dir)
         self.dir = os.path.realpath(sim_dir) if self.ok else ""
+        self.errors: List[str] = []
         self.run_summary = self._json("run_summary.json")
         self.world_state = self._json("world_state.json")
         self.trajectory = self._json("world_state_trajectory.json")
         self.world_paths = self._json("world_paths.json")
         self.cast_manifest = self._json("actor_cast_manifest.json")
         self.state = self._json("state.json")
-        self.world_result = self._json("world_result.json")
+        self.raw_world_result = self._json("world_result.json")
+        self.world_result = rc.public_world_result(self.raw_world_result)
         self.world_spec = self._json("world_spec.json")
         config = self._json("simulation_config.json")
         self.temporal = config.get("temporal_config") if isinstance(config.get("temporal_config"), dict) else {}
@@ -223,6 +236,26 @@ class _Sources:
             private = str(row.get("private_rationale") or "").strip()
             if private:
                 self.private_texts.append((private, json.dumps(public, ensure_ascii=False)))
+        # A mislabeled export must not turn actor/analyst-only strings into
+        # allowed synthesis material. Keep excluded strings only for G6.
+        public_blob = json.dumps(self.world_result, ensure_ascii=False)
+        raw = self.raw_world_result
+        private_metadata = {"visibility", "kind", "status", "actorId", "eventId", "templateId", "unit",
+                            "valueStatus", "basis", "initialBasis", "createdAt", "deliverAt", "dueAt",
+                            "proposerId", "recipientIds", "ownerId", "id", "round", "createdRound"}
+        for snapshot in [raw.get("world", {}), *(raw.get("trajectory") or [])]:
+            if not isinstance(snapshot, dict):
+                continue
+            for bucket in ("metrics", "rules", "interactions", "commitments"):
+                values = snapshot.get(bucket, {})
+                for row in values.values() if isinstance(values, dict) else []:
+                    if isinstance(row, dict) and (row.get("visibility") or {}).get("kind") != "public":
+                        self.private_texts.extend((s, public_blob) for s in _walk_strings(row, skip_keys=private_metadata) if s)
+        for row in raw.get("events", []):
+            if isinstance(row, dict) and (row.get("visibility") or {}).get("kind") != "public":
+                self.private_texts.extend((s, public_blob) for s in _walk_strings(row, skip_keys=private_metadata) if s)
+        for key in ("decisions", "resolutions"):
+            self.private_texts.extend((s, public_blob) for s in _walk_strings(raw.get(key, []), skip_keys=private_metadata) if s)
 
     def path(self, name: str) -> Optional[str]:
         if not self.ok:
@@ -233,7 +266,10 @@ class _Sources:
                 return None
         except ValueError:
             return None
-        if os.path.islink(candidate) or not os.path.isfile(candidate):
+        if os.path.islink(candidate):
+            self.errors.append(f"unsafe artifact: {name}")
+            return None
+        if not os.path.isfile(candidate):
             return None
         return candidate
 
@@ -248,8 +284,12 @@ class _Sources:
             with open(path, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
         except (OSError, ValueError):
+            self.errors.append(f"unreadable artifact: {name}")
             return {}
-        return data if isinstance(data, dict) else {}
+        if not isinstance(data, dict):
+            self.errors.append(f"invalid object: {name}")
+            return {}
+        return data
 
     def _jsonl(self, name: str) -> List[Dict[str, Any]]:
         path = self.path(name)
@@ -265,10 +305,14 @@ class _Sources:
                     try:
                         row = json.loads(line)
                     except ValueError:
+                        self.errors.append(f"invalid row: {name}")
                         continue
                     if isinstance(row, dict):
                         rows.append(row)
+                    else:
+                        self.errors.append(f"invalid row: {name}")
         except OSError:
+            self.errors.append(f"unreadable artifact: {name}")
             return []
         return rows
 
@@ -287,7 +331,7 @@ class _Sources:
         out: Dict[int, Dict[str, Any]] = {}
         for row in self.history:
             rnd = _as_int(row.get("round"))
-            if rnd is None or rnd <= 0 or row.get("scenario_round_status") not in (None, "committed"):
+            if rnd is None or rnd <= 0:
                 continue
             out[rnd] = row
         return out
@@ -303,7 +347,8 @@ class _Sources:
     def committed_rounds(self, engine: str) -> List[int]:
         if engine == "world-v1":
             committed = _as_int(self.world_result.get("committedRound")) or 0
-            return list(range(1, committed + 1))
+            return sorted({_as_int(row.get("round")) for row in self.world_result.get("trajectory", [])
+                           if isinstance(row, dict) and 0 < (_as_int(row.get("round")) or 0) <= committed})
         if engine == "oasis-reflexive":
             return sorted(self.history_by_round())
         return sorted(self.digest_by_round())
@@ -420,7 +465,10 @@ class _Sources:
             "run_summary": self.run_summary, "world_state": self.world_state, "trajectory": self.trajectory,
             "world_paths": self.world_paths, "cast_manifest": self.cast_manifest, "temporal": self.temporal,
             "world_seed": self.world_seed, "history": self.history, "digest": self.digest,
-            "actions": self.actions, "world_result": self.world_result, "world_spec": self.world_spec,
+            "actions": self.actions, "world_result": self.world_result,
+            "world_spec": {"periods": self.world_spec.get("periods", []),
+                           "actors": [{k: a[k] for k in ("actorId", "name") if k in a}
+                                      for a in self.world_spec.get("actors", []) if isinstance(a, dict)]},
         }
 
 
@@ -454,9 +502,7 @@ class _Universe:
             except Exception:  # noqa: BLE001 — the universe is only ever smaller for it
                 pass
         # structural counts: round indices, list lengths, commitment status counts
-        planned = _as_int(record.get("rounds_planned")) or 0
-        committed = _as_int(record.get("rounds_committed")) or 0
-        for n in range(0, max(planned, committed, len(src.history), len(src.digest)) + 2):
+        for n in range(0, max(len(src.history), len(src.digest), len(src.world_result.get("trajectory", []))) + 2):
             self.numbers.add(Decimal(n))
         for length in self._list_lengths(record):
             self.numbers.add(Decimal(length))
@@ -645,6 +691,7 @@ def audit_record(sim_dir: str, record: Any, *, write: bool = True) -> Dict[str, 
     hard: List[str] = []
     warnings: List[str] = []
     checks: Dict[str, int] = {}
+    excluded: List[str] = []
 
     def fail(code: str, text: str) -> None:
         hard.append(f"{code}: {text}")
@@ -653,15 +700,45 @@ def audit_record(sim_dir: str, record: Any, *, write: bool = True) -> Dict[str, 
     def warn(code: str, text: str) -> None:
         warnings.append(f"{code}: {text}")
 
+    sources = None
+    markdown = {}
     try:
-        _audit(sim_dir, record, fail, warn)
+        sources = rc.artifact_hashes(sim_dir)
+        _audit(sim_dir, record, fail, warn, excluded)
     except Exception as exc:  # noqa: BLE001 — a gate crash is a failed audit, never a pipeline failure
-        fail("gate", f"audit crashed: {type(exc).__name__}: {str(exc)[:200]}")
+        fail("gate", f"audit crashed: {type(exc).__name__}")
+
+    if isinstance(record, dict):
+        try:
+            from .simulation_record import render_markdown
+            for name, lang in ((rc.RECORD_MD, record.get("language")), (rc.RECORD_MD_ZH, "zh")):
+                expected = render_markdown(record, lang).encode("utf-8")
+                markdown[name] = hashlib.sha256(expected).hexdigest()
+                path = os.path.join(sim_dir, name)
+                if write and os.path.lexists(path) and rc.read_regular(path) != expected:
+                    fail("G7", f"{name} differs from deterministic rendering")
+            if sources != rc.artifact_hashes(sim_dir):
+                fail("G7", "simulation artifacts changed during audit")
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            fail("G7", "cannot seal record renderings and artifact inputs")
 
     # bounded, deterministic order
+    def redact(issue: str) -> str:
+        for private in excluded:
+            if private in issue or (len(private) >= 24 and any(
+                    private[i:i + 24] in issue for i in range(len(private) - 23))):
+                return issue.split(":", 1)[0] + ": diagnostic omitted to protect private content"
+        return issue
+
+    hard = [redact(issue) for issue in hard]
+    warnings = [redact(issue) for issue in warnings]
     hard = sorted(set(hard))[:200]
     warnings = sorted(set(warnings))[:200]
-    sha = record_sha256(record) if isinstance(record, dict) else hashlib.sha256(b"").hexdigest()
+    try:
+        sha = record_sha256(record) if isinstance(record, dict) else hashlib.sha256(b"").hexdigest()
+    except (ValueError, TypeError):
+        sha = hashlib.sha256(b"").hexdigest()
+        hard.append("shape: record is not finite JSON")
     if write and isinstance(record, dict):
         on_disk = rc.record_paths(sim_dir)["json"]
         try:
@@ -677,6 +754,8 @@ def audit_record(sim_dir: str, record: Any, *, write: bool = True) -> Dict[str, 
         "gate_version": GATE_VERSION,
         "simulation_id": str(record.get("simulation_id") or "") if isinstance(record, dict) else "",
         "sha256": sha,
+        "markdown_sha256": markdown,
+        "artifact_sha256": sources,
         "hard_issues": hard,
         "warnings": warnings,
         "publication_status": "passed" if not hard else "failed",
@@ -693,18 +772,16 @@ def audit_record(sim_dir: str, record: Any, *, write: bool = True) -> Dict[str, 
 
 
 def _atomic_write(path: str, data: bytes) -> None:
-    tmp = f"{path}.tmp-{os.getpid()}"
-    with open(tmp, "wb") as fh:
-        fh.write(data)
-    os.replace(tmp, path)
+    rc.atomic_write(path, data)
 
 
-def _audit(sim_dir: str, record: Any, fail, warn) -> None:  # noqa: C901 — one check per block, kept flat on purpose
+def _audit(sim_dir: str, record: Any, fail, warn, excluded) -> None:  # noqa: C901 — one check per block, kept flat on purpose
     for problem in rc.validate_shape(record):
         fail("shape", problem)
     if not isinstance(record, dict):
         return
     src = _Sources(sim_dir)
+    excluded.extend(private for private, public in src.private_texts if private and private not in public)
     if not src.ok:
         fail("G1", f"simulation directory is not readable: {sim_dir!r}")
         return
@@ -712,9 +789,29 @@ def _audit(sim_dir: str, record: Any, fail, warn) -> None:  # noqa: C901 — one
     lang = "zh" if str(record.get("language") or "").lower().startswith("zh") else "en"
     periods = [p for p in (record.get("periods") or []) if isinstance(p, dict)] if isinstance(record.get("periods"), list) else []
     overall = record.get("overall") if isinstance(record.get("overall"), dict) else {}
+    for error in src.errors:
+        fail("G1", error)
 
     # ── G1: one period per committed round ──
     committed = src.committed_rounds(engine)
+    if engine == "oasis-reflexive":
+        count = _as_int(src.summary.get("rounds_committed"))
+        if count is not None and (len(committed) != count or any(r != i for i, r in enumerate(committed, 1))):
+            fail("G1", "history does not cover the committed world periods")
+    if engine in ("oasis-reflexive", "oasis-inband"):
+        trajectory = src.trajectory.get("trajectory", [])
+        trajectory_rounds = sorted({_as_int(r.get("round")) for r in trajectory
+                                    if isinstance(r, dict) and (_as_int(r.get("round")) or 0) > 0})
+        if trajectory_rounds and committed != trajectory_rounds:
+            fail("G1", "period artifacts disagree with trajectory rounds")
+    if engine == "world-v1":
+        result = src.raw_world_result
+        if result.get("view") != "public":
+            fail("G6", "world-v1 requires the public export")
+        rows = result.get("trajectory", [])
+        rounds = [r.get("round") for r in rows if isinstance(r, dict)]
+        if rc.world_result_validity(src.world_result) in ("invalid", "unknown") or rounds != [0, *committed]:
+            fail("G1", "world-v1 export does not contain the selected committed trajectory")
     record_rounds = [_as_int(p.get("round")) for p in periods]
     missing = [r for r in committed if r not in record_rounds]
     extra = [r for r in record_rounds if r not in committed]
@@ -724,6 +821,33 @@ def _audit(sim_dir: str, record: Any, fail, warn) -> None:  # noqa: C901 — one
         fail("G1", f"period sections for rounds that were not committed: {extra}")
     if len(record_rounds) != len(set(record_rounds)):
         fail("G1", "duplicate period sections")
+
+    # Compare each deterministic field to its source projection. A number or actor
+    # appearing somewhere else in the run does not establish this row's fidelity.
+    # build_record(synthesis=False) cannot recurse into the gate or call a model.
+    from .simulation_record import build_record
+    expected = build_record(sim_dir, language=lang, synthesis=False)
+    for key in ("engine", "simulation_id", "pipeline_id", "config_hash", "as_of", "horizon_date", "calendar_unit",
+                "rounds_planned", "rounds_committed", "setup", "health", "entities_declared"):
+        if not _same_json(record.get(key), expected.get(key)):
+            fail("G7" if key == "health" else "G4", f"{key} differs from the artifact projection")
+    for p, e in zip(periods, expected["periods"]):
+        if set(p) - set(e):
+            fail("G4", f"round {p.get('round')}: unexpected period fields")
+        for key in rc.PERIOD_KEYS + ("mechanical_only", "stub"):
+            if not _same_json(p.get(key), e.get(key)):
+                fail("G4", f"round {p.get('round')}: {key} differs from the artifact projection")
+    for key in ("final_variables", "shares", "turning_points", "track_records"):
+        if not _same_json(overall.get(key), expected["overall"].get(key)):
+            fail("G4", f"overall.{key} differs from the artifact projection")
+    limits = record.get("limits") if isinstance(record.get("limits"), dict) else {}
+    if not _same_json(limits.get("stub"), expected["limits"]["stub"]):
+        fail("G7", "stub status differs from artifact health")
+    if expected["limits"]["stub"] and not _same_json(overall.get("synthesis"), expected["overall"]["synthesis"]):
+        fail("G7", "unusable run must carry only its deterministic health stub")
+    if not _same_json({k: v for k, v in limits.items() if k != "synthesis_dropped"},
+                      {k: v for k, v in expected["limits"].items() if k != "synthesis_dropped"}):
+        fail("G7", "limits differ from the artifact projection")
 
     # ── G2: numeric and date fidelity ──
     universe = _Universe(src, record)
@@ -871,8 +995,16 @@ def _audit(sim_dir: str, record: Any, fail, warn) -> None:  # noqa: C901 — one
         for claim in claims:
             if isinstance(claim, dict) and isinstance(claim.get("refs"), list):
                 idx = _as_int(claim.get("paragraph"))
-                if idx is not None:
+                if idx is not None and 0 <= idx < len(paragraphs):
                     by_paragraph.setdefault(idx, []).extend(claim["refs"])
+                    if not claim["refs"]:
+                        fail("G4", "synthesis claim has no refs")
+                    for ref in claim["refs"]:
+                        check_ref(ref, f"synthesis paragraph {idx + 1}")
+                else:
+                    fail("G4", "synthesis claim has no matching paragraph")
+            else:
+                fail("G4", "invalid synthesis claim")
         labels = {str(p.get("label") or ""): p for p in periods if p.get("label")}
         for i, para in enumerate(paragraphs):
             refs = by_paragraph.get(i) or [r for label, p in labels.items() if label in para

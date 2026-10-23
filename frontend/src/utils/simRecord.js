@@ -57,14 +57,32 @@ export function recordHealth(record) {
 /** A hollow, errored, truncated or invalid run: the record is a health stub, not an account. */
 export function isUnusableRecord(record) {
   const health = recordHealth(record)
-  if (STUB_HEALTH.includes(health.health)) return true
-  if (health.validity !== 'unknown' && health.validity !== 'valid') return true
+  if (record?.limits?.stub === true || STUB_HEALTH.includes(health.health)) return true
+  if (health.validity !== 'valid') return true
   return health.committed === 0
 }
 
 function eventText(event) {
   if (object(event)) return text(event.description || event.text || event.name || event.kind)
   return text(event)
+}
+
+function redLine(crossing) {
+  if (object(crossing) && crossing.red_line) return {
+    text: [text(crossing.actor), text(crossing.red_line)].filter(Boolean).join(': '),
+    by: text(crossing.by),
+  }
+  return { text: eventText(crossing), by: '' }
+}
+
+function allianceText(shift) {
+  if (object(shift) && shift.kind === 'alliance_move') {
+    return `${text(shift.actor)}: ${text(shift.move)} → ${text(shift.target)}`
+  }
+  if (object(shift) && shift.kind === 'relationship') {
+    return `${text(shift.source)} → ${text(shift.target)}: ${text(shift.from)} → ${text(shift.to)}`
+  }
+  return eventText(shift)
 }
 
 function normalizeMove(move) {
@@ -84,7 +102,8 @@ function normalizeMove(move) {
     targets: list(move.targets).map(text).filter(Boolean),
     magnitude: num(move.magnitude),
     publicStatement: text(move.public_statement || move.statement),
-    commitment: commitmentText ? { text: commitmentText, due: commitmentDue } : null,
+    terms: text(move.terms),
+    commitment: commitmentText ? { text: commitmentText, due: commitmentDue, duePeriods: object(commitment) ? int(commitment.due_periods) : null } : null,
   }
 }
 
@@ -96,8 +115,8 @@ export function offersByStatus(offers) {
     const status = text(offer.status) || 'unknown'
     if (!groups.has(status)) groups.set(status, [])
     groups.get(status).push({
-      from: text(offer.from || offer.proposer),
-      to: text(offer.to || offer.recipient),
+      from: text(offer.from_actor || offer.from || offer.proposer),
+      to: text(offer.to_actor || offer.to || offer.recipient),
       kind: text(offer.kind),
       status,
       terms: text(offer.terms),
@@ -127,8 +146,8 @@ export function recordPeriods(record) {
         periodEnd: text(period.period_end),
         arbiterStatus,
         arbiterProblems: list(period.arbiter_problems).map(text).filter(Boolean),
-        // design §3.1: rounds whose arbiter did not apply are "mechanical only"
-        mechanicalOnly: arbiterStatus !== 'applied',
+        // The compiler knows whether an arbiter applies to this engine; preserve that flag.
+        mechanicalOnly: typeof period.mechanical_only === 'boolean' ? period.mechanical_only : arbiterStatus !== 'applied',
         narrative: text(period.narrative),
         moves: list(period.moves).filter(object).map(normalizeMove),
         heldPosition: list(period.held_position).map(text).filter(Boolean),
@@ -141,8 +160,8 @@ export function recordPeriods(record) {
         })),
         events: list(period.events).map(eventText).filter(Boolean),
         shocksFired: list(period.shocks_fired).map(eventText).filter(Boolean),
-        redLinesCrossed: list(period.red_lines_crossed).map(eventText).filter(Boolean),
-        alliances: list(period.alliances).map(eventText).filter(Boolean),
+        redLinesCrossed: list(period.red_lines_crossed).map(redLine).filter(row => row.text),
+        alliances: list(period.alliances).map(allianceText).filter(Boolean),
         offers,
         offerCount: offers.reduce((total, group) => total + group.offers.length, 0),
         behaviour: object(period.behaviour) ? period.behaviour : null,
@@ -167,7 +186,8 @@ export function formatQuantity(value, unit = '') {
   if (value === null || value === undefined || value === '') return '—'
   let shown
   if (typeof value === 'boolean') shown = value ? 'true' : 'false'
-  else if (typeof value === 'number') shown = Number.isFinite(value) ? String(Math.round(value * 1e4) / 1e4) : String(value)
+  // Preserve the stored quantity; rounding here can silently turn a real change into zero.
+  else if (typeof value === 'number') shown = Number.isFinite(value) ? String(value) : '—'
   else shown = text(value)
   const u = text(unit)
   if (!u || typeof value === 'boolean') return shown
@@ -274,6 +294,7 @@ export function limitsOf(record) {
     seedGaps: Array.isArray(seedGaps) ? seedGaps.map(eventText).filter(Boolean) : [],
     seedGapCount: Array.isArray(seedGaps) ? seedGaps.length : int(seedGaps),
     behaviourNote: text(limits.behaviour_note),
+    notes: list(limits.notes).map(eventText).filter(Boolean),
   }
 }
 
