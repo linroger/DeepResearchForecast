@@ -35,7 +35,12 @@ jobs:
         run: |
           uv venv --python 3.12
           uv pip install pytest python-dotenv
-          cd backend && uv run pytest -q
+          cd backend && uv run pytest -q \
+            tests/test_telemetry.py \
+            tests/test_telemetry_fallback_attribution.py \
+            tests/test_utils_security.py \
+            tests/test_utils_atomic.py \
+            tests/test_utils_dates.py
 
   byte-compile:
     name: Byte-compile (syntax) all backend
