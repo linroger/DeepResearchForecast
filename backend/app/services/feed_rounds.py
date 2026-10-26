@@ -23,6 +23,7 @@ import json
 import os
 import re
 import sqlite3
+from pathlib import Path
 import threading
 from collections import OrderedDict, deque
 from typing import Any, Dict, List, Optional, Tuple
@@ -131,7 +132,7 @@ def load_platform_rows(db_path: str) -> Tuple[List[Dict[str, Any]], List[Dict[st
     """(posts, comments, user_id → agent_id) from a platform SQLite file, read-only."""
     if not _regular_file(db_path):
         return [], [], {}
-    uri = "file:" + os.path.abspath(db_path).replace("?", "%3F") + "?mode=ro"
+    uri = Path(db_path).absolute().as_uri() + "?mode=ro"
     try:
         conn = sqlite3.connect(uri, uri=True, timeout=5)
     except sqlite3.Error:

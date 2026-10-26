@@ -1,4 +1,4 @@
-"""Bilingual pass vs. the provider content filter (FILTER-SAFE, REPORT_BILINGUAL_FILTER_SAFE).
+"""Default model-led provider refusal plus historical FILTER-SAFE helpers.
 
 Live defect (report_0f2e07d62a34, glm-5.3 through the coding-plan endpoint): sixteen
 translation calls were rejected with HTTP 400 code 1301, the affected text stayed in
@@ -7,7 +7,7 @@ version was lost to its own audit ("2 target-language contamination lines").  Th
 run's numeric-parity failure was a second defect: two restored placeholders fused
 ("2025-Q4" + "3667亿美元" → "2025-Q43667亿美元", read by the amount parser as 43667亿).
 
-Pins: a content-filtered unit is split smaller and retried once with the translation
+Historical direct-helper compatibility pins: a content-filtered unit is split smaller and retried once with the translation
 directive (never with the generation rung's "refer to leaders by office" wording, which
 is itself filtered); a unit rejected again keeps its source bytes and is disclosed with
 its chunk and reason; the ladder outcome is memoised so the integrity retry and the
@@ -18,6 +18,11 @@ contamination and number drift still fail closed; the knob restores the previous
 all-or-nothing behaviour; transient provider errors and the primary report's purity
 path (ladder not armed) are unchanged; the restore guard keeps fused numeric tokens
 apart.
+
+Default-generation tests below use whole readable entries and separate semantic
+review. Provider failures stop explicitly without the legacy ladder, source-partial
+publication or lint rewrite. The helper tests remain historical compatibility
+coverage, not claims about the approved default engine.
 """
 
 from __future__ import annotations
@@ -36,6 +41,7 @@ from app.services import report_filter_safe as fs  # noqa: E402
 from app.services import report_lint as rl  # noqa: E402
 from app.services.report_agent import ReportAgent, ReportManager  # noqa: E402
 from tests.test_report_bilingual import _publish_primary  # noqa: E402
+from model_translation_fakes import model_protocol  # noqa: E402
 
 ZH = "简体中文（Simplified Chinese）"
 
@@ -138,6 +144,33 @@ class _FilterLLM:
     def chat_json(self, messages=None, **_kw):
         self._record("chat_json", messages)
         return {}
+
+
+class _ModelLLM:
+    """Raw generation/review transport with explicit provider refusal controls."""
+
+    model = "raw-filter-fixture"
+    provider = "offline"
+
+    def __init__(self, translate=_translate, *, sensitive=(), error=None, expected=None):
+        self.calls = []
+        self.translate, self.expected = translate, expected or translate
+        self.sensitive, self.error = sensitive, error
+
+    def chat(self, messages=None, **_kwargs):
+        payload = json.loads(messages[-1]["content"])
+        assert isinstance(payload.get("entries") or payload.get("pairs"), dict)
+        assert "⟦" not in messages[-1]["content"]
+        self.calls.append({"system": messages[0]["content"], "payload": payload})
+        if "entries" in payload and any(sentence in text for text in payload["entries"].values()
+                                        for sentence in self.sensitive):
+            raise self.error or _ContentFilterError(FILTER_TEXT)
+        result = model_protocol(messages, self.translate, expected_fn=self.expected)
+        assert result is not None, "default engine called a legacy translation protocol"
+        return result
+
+    def chat_json(self, messages=None, **kwargs):
+        return json.loads(self.chat(messages, **kwargs))
 
 
 def _worker(llm, armed=True, source=SRC):
@@ -510,83 +543,64 @@ def test_restore_guard_only_touches_fusing_neighbours():
 
 
 # ───────────────────────────── end to end ─────────────────────────────
-def test_end_to_end_partial_translation_is_published_and_disclosed(reports_tmp):
-    rid = "report_filter_partial"
+@pytest.mark.parametrize("provider_error", [_ContentFilterError(FILTER_TEXT), RuntimeError("provider unavailable")])
+def test_default_provider_failure_is_explicit_without_partial_publication(reports_tmp, provider_error):
+    rid = "report_filter_failed"
     _publish_primary(rid, SRC)
-    llm = _FilterLLM()
+    llm = _ModelLLM(sensitive=(SENSITIVE_1, SENSITIVE_2), error=provider_error)
 
     status = ReportManager.generate_translation_variant(rid, "zh", llm_client=llm)
 
-    assert status["available"] is True and status["status"] == "available"
-    assert status["partial"] is True and status["can_update"] is True
-    row = status["translation"]
-    assert row["partial"] is True and row["residual_source_lines"] == 2
-    chunks = row["verbatim_chunks"]
-    assert len(chunks) == 2
-    assert all(c["chunk"] == 1 and c["heading"] == "Executive Summary"
-               and c["reason"] == "content_filter" and c["scope"] == "unit" for c in chunks)
-
-    zh = open(ReportManager._get_report_translation_path(rid, "zh"), encoding="utf-8").read()
-    assert SENSITIVE_1 in zh and SENSITIVE_2 in zh
-    assert "基准情景为 42%" in zh and "| 基准 | 42% | 稳定 |" in zh and "## 情景与数据" in zh
-
+    assert status["available"] is False and status["status"] == "failed", status
+    assert len(llm.calls) == 1
+    assert SENSITIVE_1 in " ".join(llm.calls[0]["payload"]["entries"].values())
+    assert fs.translation_register_directive() not in llm.calls[0]["system"]
+    assert not os.path.exists(ReportManager._get_report_translation_path(rid, "zh"))
     runtime = ReportManager._load_translation_runtime_status(rid, "zh")
-    assert runtime["status"] == "partial" and runtime["progress"] == 100
-    assert [c["sample"] for c in runtime["verbatim_chunks"]] == [SENSITIVE_1[:120], SENSITIVE_2[:120]]
-    assert "issues" not in runtime
-    assert any(w.startswith("partial translation") for w in runtime["warnings"])
-
-    with open(ReportManager._get_report_path(rid), encoding="utf-8") as handle:
-        meta = json.load(handle)
-    entry = meta["translations"][0]
-    assert entry["translation_quality"] == "partial" and len(entry["verbatim_chunks"]) == 2
-
-    with open(ReportManager._get_report_final_audit_path(rid, "zh"), encoding="utf-8") as handle:
-        audit = json.load(handle)
-    assert audit["hard_passed"] is True and audit["partial"]["disclosed_lines"] == 2
-    assert audit["residual_source_lines"]["count"] == 0
-
-    # The primary report is untouched and the rejected requests were not replayed.
+    assert runtime["status"] == "failed" and runtime["issues"]
+    assert not runtime.get("verbatim_chunks")
     assert open(ReportManager._get_report_markdown_path(rid), encoding="utf-8").read() == SRC
-    directive = fs.translation_register_directive()
-    unit_calls = [c for c in llm.calls if c["kind"] == "chat" and SENSITIVE_1 in c["user"]
-                  and "Translate the following Markdown" in c["system"]]
-    assert len(unit_calls) == 2 and directive in unit_calls[1]["system"]
-    assert "by office" not in unit_calls[1]["system"]
 
 
-def test_end_to_end_knob_off_rejects_the_variant_as_before(reports_tmp, monkeypatch):
+def test_default_legacy_filter_knob_cannot_reenable_a_refusal_ladder(reports_tmp, monkeypatch):
     monkeypatch.setattr(Config, "REPORT_BILINGUAL_FILTER_SAFE", False)
-    rid = "report_filter_legacy"
+    rid = "report_filter_legacy_knob"
     _publish_primary(rid, SRC)
-    llm = _FilterLLM()
+    llm = _ModelLLM(sensitive=(SENSITIVE_1,))
 
     status = ReportManager.generate_translation_variant(rid, "zh", llm_client=llm)
 
     assert status["available"] is False and status["status"] == "failed"
-    assert any("target-language contamination" in issue for issue in status["issues"])
-    assert any("translation model call(s) failed" in issue for issue in status["issues"])
-    assert _directive_calls(llm) == []
+    assert len(llm.calls) == 1
+    assert not any(fs.translation_register_directive() in row["system"] for row in llm.calls)
     assert not os.path.exists(ReportManager._get_report_translation_path(rid, "zh"))
-    runtime = ReportManager._load_translation_runtime_status(rid, "zh")
-    assert runtime["status"] == "failed" and runtime["verbatim_chunks"] == []
 
 
-def test_end_to_end_directive_retry_publishes_a_full_translation(reports_tmp):
+def test_default_raw_translation_and_separate_review_publish_full_variant(reports_tmp, monkeypatch):
     rid = "report_filter_full"
     _publish_primary(rid, SRC)
-    llm = _FilterLLM(pass_with_directive=True)
+    llm = _ModelLLM()
+
+    def obsolete(*_args, **_kwargs):
+        raise AssertionError("legacy ladder/skeleton/lint must not run in default generation")
+    for name in ("_translate_section", "_translate_from_source_skeleton", "_protect_translation_tokens",
+                 "_repair_variant_contamination", "_lint_variant_to_audit_fixed_point"):
+        monkeypatch.setattr(ReportAgent, name, obsolete)
 
     status = ReportManager.generate_translation_variant(rid, "zh", llm_client=llm)
 
-    assert status["available"] is True and status["partial"] is False
+    assert status["available"] is True and status["partial"] is False, status
     assert status["can_update"] is False and status["translation"]["verbatim_chunks"] == []
-    zh = open(ReportManager._get_report_translation_path(rid, "zh"), encoding="utf-8").read()
+    zh = ReportManager.read_translation_markdown(rid, "zh")
     assert _REPLACEMENTS[SENSITIVE_1] in zh and SENSITIVE_1 not in zh
-    with open(ReportManager._get_report_path(rid), encoding="utf-8") as handle:
-        meta = json.load(handle)
-    assert meta["translations"][0]["translation_quality"] == "ok"
-    assert "verbatim_chunks" not in meta["translations"][0]
+    assert zh == _translate(SRC).strip() + "\n"
+    assert len(llm.calls) == 2
+    assert "entries" in llm.calls[0]["payload"] and "pairs" in llm.calls[1]["payload"]
+    assert not any(fs.translation_register_directive() in row["system"] for row in llm.calls)
+    with open(ReportManager._translation_read_paths(rid, "zh")[1], encoding="utf-8") as handle:
+        audit = json.load(handle)
+    assert audit["hard_passed"] and audit["fact_fidelity"]["passed"]
+    assert audit["model_translation"]["complete"] is True
     assert ReportManager._load_translation_runtime_status(rid, "zh")["status"] == "available"
 
 
@@ -614,41 +628,31 @@ FRED_SRC = f"""# Trade Outlook Report
 | F13 | {FRED_ROW_F13} | 15% | Resolves YES if fred:IMPCH < 20000 Millions of Dollars in 2027-06 (source: FRED/Census). |
 """
 
-_FRED_ZH = [
-    (r"^# Trade Outlook Report$", "# 贸易展望报告"),
-    (r"^## Binary Forecasts$", "## 二元预测"),
-    (r"^\| ID \| Statement \| Probability \| Resolution \|$", "| ID | 陈述 | 概率 | 判定 |"),
-    (r"U\.S\. Imports of Goods by Customs Basis from China \(fred:IMPCH\) are below "
-     r"(⟦Q[A-Z]+⟧) in (⟦D[A-Z]+⟧)\.",
-     r"美国自中国商品进口额（海关口径）(fred:IMPCH) 在\2低于\1。"),
-    (r"US goods imports from China \(fred:IMPCH\) fall below (⟦Q[A-Z]+⟧) in (⟦D[A-Z]+⟧), "
-     r"sliding toward the (⟦D[A-Z]+⟧) trough\.",
-     r"美国自中国商品进口额 (fred:IMPCH) 在\2跌破\1，滑向\3的低谷。"),
-    (r"Resolves YES if fred:IMPCH < (⟦Q[A-Z]+⟧) in 2027-06 \(source: ([A-Za-z/]+)\)\.",
-     r"若 fred:IMPCH 在 2027-06 低于\1，则判定为 YES（来源：\2）。"),
-]
-
-
 def _translate_fred(user: str) -> str:
-    """Faithful translator: every ⟦Q…⟧ / ⟦D…⟧ token is copied where the amount or date belongs."""
-    out = user
-    for pattern, replacement in _FRED_ZH:
-        out = re.sub(pattern, replacement, out, flags=re.M)
-    return out
+    """Fixture-known translation of raw amounts/dates; no application masks."""
+    return (user.replace("# Trade Outlook Report", "# 贸易展望报告")
+        .replace("## Binary Forecasts", "## 二元预测")
+        .replace("| ID | Statement | Probability | Resolution |", "| ID | 陈述 | 概率 | 判定 |")
+        .replace(FRED_ROW_F4, "美国自中国商品进口额（海关口径）(fred:IMPCH) 在2027年6月低于250亿美元。")
+        .replace(FRED_ROW_F13, "美国自中国商品进口额 (fred:IMPCH) 在2027年6月跌破200亿美元，滑向2025年6月的低谷。")
+        .replace("Resolves YES if fred:IMPCH < 25000 Millions of Dollars in 2027-06 (source: FRED).",
+                 "若 fred:IMPCH 在 2027-06 低于250亿美元，则判定为 YES（来源：FRED）。")
+        .replace("Resolves YES if fred:IMPCH < 20000 Millions of Dollars in 2027-06 (source: FRED/Census).",
+                 "若 fred:IMPCH 在 2027-06 低于200亿美元，则判定为 YES（来源：FRED/Census）。"))
 
 
-def test_binary_forecast_rows_with_fred_unit_phrases_translate_and_pass_the_number_guard(
+def test_default_raw_fred_rows_translate_equivalent_amounts_and_pass_review(
     reports_tmp,
 ):
     rid = "report_fred_units"
     _publish_primary(rid, FRED_SRC)
-    llm = _FilterLLM(_translate_fred, sensitive=())
+    llm = _ModelLLM(_translate_fred)
 
     status = ReportManager.generate_translation_variant(rid, "zh", llm_client=llm)
 
     assert status["available"] is True and status["status"] == "available", status.get("issues")
     assert status["partial"] is False and status["translation"]["verbatim_chunks"] == []
-    zh = open(ReportManager._get_report_translation_path(rid, "zh"), encoding="utf-8").read()
+    zh = ReportManager.read_translation_markdown(rid, "zh")
     assert ("| F4 | 美国自中国商品进口额（海关口径）(fred:IMPCH) 在2027年6月低于250亿美元。 | 35% | "
             "若 fred:IMPCH 在 2027-06 低于250亿美元，则判定为 YES（来源：FRED）。 |") in zh
     assert ("| F13 | 美国自中国商品进口额 (fred:IMPCH) 在2027年6月跌破200亿美元，滑向2025年6月的低谷。"
@@ -656,15 +660,18 @@ def test_binary_forecast_rows_with_fred_unit_phrases_translate_and_pass_the_numb
     assert "## 二元预测" in zh and "| ID | 陈述 | 概率 | 判定 |" in zh
     for english in ("Millions", "millions", "25000", "20,000", "20000", "June"):
         assert english not in zh
-    # Every ⟦Q…⟧ the model saw was the whole phrase, already rendered in Chinese.
-    unit_call = next(c for c in llm.calls if FRED_ROW_F4.split(" are below ")[0] in c["user"])
-    assert "Millions of Dollars" not in unit_call["user"] and "25000" not in unit_call["user"]
-    assert "⟦Q" in unit_call["user"]
+    # The model sees the original meaningful value/date representation. The
+    # separate review approves the independently specified equivalent rendering.
+    unit_call = next(row for row in llm.calls if "entries" in row["payload"])
+    raw = " ".join(unit_call["payload"]["entries"].values())
+    assert FRED_ROW_F4 in raw and "25000 Millions of Dollars" in raw and "June 2027" in raw
+    assert "⟦" not in raw
+    assert any("pairs" in row["payload"] for row in llm.calls)
 
-    with open(ReportManager._get_report_final_audit_path(rid, "zh"), encoding="utf-8") as handle:
+    with open(ReportManager._translation_read_paths(rid, "zh")[1], encoding="utf-8") as handle:
         audit = json.load(handle)
-    assert audit["hard_passed"] is True and audit["number_parity"]["passed"] is True
+    assert audit["hard_passed"] is True and audit["fact_fidelity"]["passed"] is True
+    assert audit["model_translation"]["complete"] is True
     assert audit["residual_source_lines"]["count"] == 0
-    assert audit["residual_source_lines"]["disclosed"] == 0
     assert ReportAgent._translation_fact_multiset(zh) == ReportAgent._translation_fact_multiset(FRED_SRC)
     assert open(ReportManager._get_report_markdown_path(rid), encoding="utf-8").read() == FRED_SRC

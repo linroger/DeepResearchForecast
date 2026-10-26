@@ -7,7 +7,7 @@
         <span class="rec-label mono">{{ L('情景模拟 · 事后记录', 'Scenario simulation · after-action record') }}</span>
         <span class="rec-class mono">{{ L('模拟记录，非证据', 'simulated record, not evidence') }}</span>
       </div>
-      <p class="rec-banner">{{ rec.banner }}</p>
+      <p class="rec-banner">{{ d(rec.banner) }}</p>
       <dl class="rec-meta mono">
         <div><dt>{{ L('引擎', 'engine') }}</dt><dd>{{ rec.engine || '—' }}</dd></div>
         <div><dt>{{ L('时间范围', 'horizon') }}</dt><dd>{{ horizonText }}</dd></div>
@@ -16,14 +16,14 @@
       </dl>
       <p class="rec-health mono" :class="{ 'rec-health-bad': unusable }">{{ healthLine }}</p>
       <ul v-if="limits.notes.length" class="rec-notes">
-        <li v-for="(note, i) in limits.notes" :key="'note-' + i">{{ note }}</li>
+        <li v-for="(note, i) in limits.notes" :key="'note-' + i">{{ d(note) }}</li>
       </ul>
       <div v-if="unusable" class="rec-unusable" role="alert">
         <p class="rec-unusable-text">{{ unusableText }}</p>
         <table class="rec-table rec-health-table">
           <tbody>
-            <tr><th scope="row">{{ L('健康状态', 'simulation health') }}</th><td class="mono">{{ health.health }}</td></tr>
-            <tr><th scope="row">{{ L('有效性', 'validity') }}</th><td class="mono">{{ health.validity }}</td></tr>
+            <tr><th scope="row">{{ L('健康状态', 'simulation health') }}</th><td class="mono">{{ d(health.health) }}</td></tr>
+            <tr><th scope="row">{{ L('有效性', 'validity') }}</th><td class="mono">{{ d(health.validity) }}</td></tr>
             <tr><th scope="row">{{ L('仲裁失败轮次', 'arbiter-failed rounds') }}</th><td class="mono">{{ dash(health.arbiterFailedRounds) }}</td></tr>
             <tr><th scope="row">{{ L('建模缺口', 'seed gaps') }}</th><td class="mono">{{ dash(health.seedGaps) }}</td></tr>
             <tr><th scope="row">{{ L('自发行动', 'organic actions') }}</th><td class="mono">{{ dash(health.organicActions) }}</td></tr>
@@ -32,6 +32,10 @@
         </table>
       </div>
     </header>
+
+    <TranslationJobStatus class="rec-translation" :observer="translation.observer" :L="L">
+      <span>{{ translation.feedback.value }}</span>
+    </TranslationJobStatus>
 
     <template v-if="!unusable">
       <!-- ===== Period strip: one button per committed period ===== -->
@@ -44,28 +48,28 @@
           :class="['st-' + p.arbiterStatus, { selected: p.round === selectedRound }]"
           :aria-pressed="p.round === selectedRound"
           :aria-label="tickLabel(p)"
-          :title="p.periodStart && p.periodEnd ? p.periodStart + ' → ' + p.periodEnd : p.label"
+          :title="p.periodStart && p.periodEnd ? p.periodStart + ' → ' + p.periodEnd : d(p.label)"
           @click="selectPeriod(p.round)"
-        >{{ p.label }}</button>
+        >{{ d(p.label) }}</button>
       </div>
 
       <!-- ===== Selected period ===== -->
       <section v-if="period" class="rec-period" :aria-label="L('所选时段', 'Selected period')">
         <h3 class="rec-period-title">
-          <span>{{ L('第', 'Period ') }}{{ period.round }}{{ L('期', '') }} · {{ period.label }}</span>
+          <span>{{ L('第', 'Period ') }}{{ period.round }}{{ L('期', '') }} · {{ d(period.label) }}</span>
           <span v-if="period.periodStart && period.periodEnd" class="rec-dates mono">{{ period.periodStart }} → {{ period.periodEnd }}</span>
-          <span class="rec-badge mono" :class="'st-' + period.arbiterStatus">{{ L('仲裁', 'arbiter') }}: {{ period.arbiterStatus }}</span>
+          <span class="rec-badge mono" :class="'st-' + period.arbiterStatus">{{ L('仲裁', 'arbiter') }}: {{ d(period.arbiterStatus) }}</span>
           <span v-if="period.mechanicalOnly" class="rec-badge mono st-failed">{{ L('仅机械推进', 'mechanical only') }}</span>
         </h3>
         <ul v-if="period.arbiterProblems.length" class="rec-problems">
           <li v-for="(problem, i) in period.arbiterProblems" :key="'ap' + i">
-            <span class="warn-dot">▲</span><span>{{ L('仲裁问题', 'arbiter problem') }}: {{ problem }}</span>
+            <span class="warn-dot">▲</span><span>{{ L('仲裁问题', 'arbiter problem') }}: {{ d(problem) }}</span>
           </li>
         </ul>
 
         <div class="rec-card rec-narrative">
           <div class="rec-card-head">{{ L('仲裁叙事（模拟文本）', 'Arbiter narrative (simulated text)') }}</div>
-          <blockquote v-if="period.narrative" class="rec-quote">{{ period.narrative }}</blockquote>
+          <blockquote v-if="period.narrative" class="rec-quote">{{ d(period.narrative) }}</blockquote>
           <p v-else class="rec-empty">{{ L('本时段无仲裁叙事', 'No arbiter narrative for this period') }}</p>
         </div>
 
@@ -75,13 +79,13 @@
             <ul class="rec-list">
               <li v-for="(m, i) in period.moves" :key="'m' + i" class="rec-move">
                 <span class="rec-actor">{{ m.actor }}</span>
-                <span class="rec-move-desc">{{ m.option }}<template v-if="m.targets.length"> → {{ m.targets.join(', ') }}</template></span>
+                <span class="rec-move-desc">{{ d(m.option) }}<template v-if="m.targets.length"> → {{ m.targets.join(', ') }}</template></span>
                 <span v-if="m.magnitude !== null" class="rec-mag mono">{{ L('力度', 'magnitude') }} {{ m.magnitude }}</span>
-                <q v-if="m.publicStatement" class="rec-stmt">{{ m.publicStatement }}</q>
+                <q v-if="m.publicStatement" class="rec-stmt">{{ d(m.publicStatement) }}</q>
                 <span v-if="m.commitment" class="rec-commit">
-                  {{ L('承诺', 'commitment') }}: {{ m.commitment.text }}<template v-if="m.commitment.duePeriods !== null"> · {{ L('到期时段数', 'due in periods') }} {{ m.commitment.duePeriods }}</template><template v-if="m.commitment.due"> · {{ L('到期', 'due') }} {{ m.commitment.due }}</template>
+                  {{ L('承诺', 'commitment') }}: {{ d(m.commitment.text) }}<template v-if="m.commitment.duePeriods !== null"> · {{ L('到期时段数', 'due in periods') }} {{ m.commitment.duePeriods }}</template><template v-if="m.commitment.due"> · {{ L('到期', 'due') }} {{ m.commitment.due }}</template>
                 </span>
-                <span v-if="m.terms" class="rec-terms">{{ L('条款', 'terms') }}: {{ m.terms }}</span>
+                <span v-if="m.terms" class="rec-terms">{{ L('条款', 'terms') }}: {{ d(m.terms) }}</span>
               </li>
               <li v-if="period.heldPosition.length" class="rec-held">
                 <span class="rec-kind mono">{{ L('观望', 'held') }}</span><span>{{ period.heldPosition.join(', ') }}</span>
@@ -102,9 +106,9 @@
               </thead>
               <tbody>
                 <tr v-for="(f, i) in period.factsChanged" :key="'f' + i">
-                  <th scope="row">{{ f.variable }}</th>
+                  <th scope="row">{{ d(f.variable) }}</th>
                   <td class="mono">{{ quantity(f.from, f.unit) }} → {{ quantity(f.to, f.unit) }}</td>
-                  <td>{{ f.cause || '—' }}</td>
+                  <td>{{ d(f.cause) || '—' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -118,13 +122,13 @@
             </div>
             <ul class="rec-list">
               <li v-for="(r, i) in period.redLinesCrossed" :key="'rl' + i" class="rec-event ev-red-line">
-                <span class="rec-kind mono">{{ L('越过红线', 'red line crossed') }}</span><span>{{ r.text }}<template v-if="r.by"> · {{ L('越线方', 'crossed by') }}: {{ r.by }}</template></span>
+                <span class="rec-kind mono">{{ L('越过红线', 'red line crossed') }}</span><span>{{ d(r.text) }}<template v-if="r.by"> · {{ L('越线方', 'crossed by') }}: {{ r.by }}</template></span>
               </li>
               <li v-for="(s, i) in period.shocksFired" :key="'sh' + i" class="rec-event ev-shock">
-                <span class="rec-kind mono">{{ L('冲击', 'shock') }}</span><span>{{ s }}</span>
+                <span class="rec-kind mono">{{ L('冲击', 'shock') }}</span><span>{{ d(s) }}</span>
               </li>
               <li v-for="(e, i) in period.events" :key="'ev' + i" class="rec-event">
-                <span class="rec-kind mono">{{ L('事件', 'event') }}</span><span>{{ e }}</span>
+                <span class="rec-kind mono">{{ L('事件', 'event') }}</span><span>{{ d(e) }}</span>
               </li>
               <li v-if="!period.events.length && !period.shocksFired.length && !period.redLinesCrossed.length" class="rec-empty">
                 {{ L('本时段无新事件', 'No new events this period') }}
@@ -135,12 +139,12 @@
           <div class="rec-card">
             <div class="rec-card-head">{{ L('要约（按状态）', 'Offers by status') }} ({{ period.offerCount }})</div>
             <div v-for="group in period.offers" :key="'og-' + group.status" class="rec-offer-group">
-              <div class="rec-offer-status mono" :class="'offer-' + group.status">{{ group.status }} · {{ group.offers.length }}</div>
+              <div class="rec-offer-status mono" :class="'offer-' + group.status">{{ d(group.status) }} · {{ group.offers.length }}</div>
               <ul class="rec-list">
                 <li v-for="(o, i) in group.offers" :key="'o' + group.status + i" class="rec-offer">
                   <span class="rec-actor">{{ o.from }} → {{ o.to }}</span>
-                  <span v-if="o.kind" class="rec-kind mono">{{ o.kind }}</span>
-                  <span v-if="o.terms" class="rec-terms">{{ o.terms }}</span>
+                  <span v-if="o.kind" class="rec-kind mono">{{ d(o.kind) }}</span>
+                  <span v-if="o.terms" class="rec-terms">{{ d(o.terms) }}</span>
                 </li>
               </ul>
             </div>
@@ -151,7 +155,7 @@
             <div class="rec-card-head">{{ L('联盟变动', 'Alliance shifts') }} ({{ period.alliances.length }})</div>
             <ul class="rec-list">
               <li v-for="(a, i) in period.alliances" :key="'al' + i" class="rec-event">
-                <span class="rec-kind mono">{{ L('联盟', 'alliance') }}</span><span>{{ a }}</span>
+                <span class="rec-kind mono">{{ L('联盟', 'alliance') }}</span><span>{{ d(a) }}</span>
               </li>
             </ul>
           </div>
@@ -179,7 +183,7 @@
               </thead>
               <tbody>
                 <tr v-for="(v, i) in finalVariables" :key="'fv' + i" :class="'dir-' + v.direction">
-                  <th scope="row">{{ v.name }}</th>
+                  <th scope="row">{{ d(v.name) }}</th>
                   <td class="mono">{{ v.seed }}</td>
                   <td class="mono">{{ v.final }}</td>
                 </tr>
@@ -206,7 +210,7 @@
               </thead>
               <tbody>
                 <tr v-for="row in shares.rows" :key="'share-' + row.name">
-                  <th scope="row">{{ row.name }}</th>
+                  <th scope="row">{{ d(row.name) }}</th>
                   <td class="mono">{{ row.finalText }}</td>
                   <template v-if="shares.hasPaths">
                     <td class="mono">{{ row.meanText }}<template v-if="row.sdText"> ± {{ row.sdText }}</template></td>
@@ -227,7 +231,7 @@
             <div class="rec-card-head">{{ L('转折点', 'Turning points') }} ({{ turningPoints.length }})</div>
             <ul class="rec-list">
               <li v-for="(tp, i) in turningPoints" :key="'tp' + i" class="rec-event">
-                <span class="rec-kind mono">{{ L('第', 'period ') }}{{ tp.round }}{{ L('期', '') }}</span><span>{{ tp.why }}</span>
+                <span class="rec-kind mono">{{ L('第', 'period ') }}{{ tp.round }}{{ L('期', '') }}</span><span>{{ d(tp.why) }}</span>
               </li>
               <li v-if="!turningPoints.length" class="rec-empty">{{ L('未识别转折点', 'No turning point identified') }}</li>
             </ul>
@@ -250,7 +254,7 @@
             {{ L('综合', 'Synthesis') }}
             <span class="rec-badge mono st-note" :title="L('生成方式', 'generator')">{{ L('生成方式', 'generated by') }}: {{ generatorLabel }}</span>
           </div>
-          <p v-for="(para, i) in synthesis.paragraphs" :key="'syn' + i" class="rec-synthesis-text">{{ para }}</p>
+          <p v-for="(para, i) in synthesis.paragraphs" :key="'syn' + i" class="rec-synthesis-text">{{ d(para) }}</p>
           <p v-if="!synthesis.paragraphs.length" class="rec-empty">{{ L('本记录无综合文本', 'No synthesis text in this record') }}</p>
         </div>
 
@@ -262,10 +266,10 @@
               <span>{{ L(`仲裁失败 ${dash(limits.arbiterFailedRounds)} 轮`, `${dash(limits.arbiterFailedRounds)} arbiter-failed rounds`) }}</span>
             </li>
             <li v-for="(gap, i) in limits.seedGaps" :key="'gap' + i" class="rec-event">
-              <span class="rec-kind mono">{{ L('缺口', 'gap') }}</span><span>{{ gap }}</span>
+              <span class="rec-kind mono">{{ L('缺口', 'gap') }}</span><span>{{ d(gap) }}</span>
             </li>
             <li v-if="limits.behaviourNote" class="rec-event">
-              <span class="rec-kind mono">{{ L('行为指标', 'behaviour') }}</span><span>{{ limits.behaviourNote }}</span>
+              <span class="rec-kind mono">{{ L('行为指标', 'behaviour') }}</span><span>{{ d(limits.behaviourNote) }}</span>
             </li>
           </ul>
         </div>
@@ -280,18 +284,27 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { L } from '../../i18n'
+import { locale } from '../../i18n'
+import { useSimulationTranslation } from '../../utils/overlayTranslation'
+import TranslationJobStatus from '../TranslationJobStatus.vue'
+import { simulationRecordTranslationTexts } from '../../utils/simulationRecordTranslation'
 import {
   behaviourSummary, defaultPeriodRound, finalVariableRows, formatQuantity, isSimulationRecord, isUnusableRecord,
   limitsOf, recordHealth, recordPeriods, resolvePeriodRound, shareRows, synthesisOf, trackRecordRows, turningPointRows
 } from '../../utils/simRecord'
 
 // ADR 0003 (design §3.6 "Dashboard"): the Simulation After-Action Record as the reader
-// sees it after a run — the banner verbatim from the record, one section per committed
-// period, then the overall account.  Every text field comes from the gate-passed record;
-// the component adds labels only.  Shares are shares, never probabilities (gate check G8).
+// sees it after a run — one section per committed period, then the overall account.
+// Reviewed display prose overlays the gate-passed record; canonical facts and provenance
+// remain intact. Shares are shares, never probabilities (gate check G8).
 const props = defineProps({
-  record: { type: Object, default: null }
+  record: { type: Object, default: null },
+  simulationId: { type: String, default: '' },
+  generationId: { type: String, default: '' },
+  engine: { type: String, default: '' },
+  language: { type: String, default: '' },
+  // Changes only for an explicit click on the Simulation tab's language control.
+  translationRequest: { type: Number, default: 0 }
 })
 
 const rec = computed(() => (isSimulationRecord(props.record) ? props.record : null))
@@ -306,8 +319,32 @@ const turningPoints = computed(() => turningPointRows(rec.value))
 const trackRecords = computed(() => trackRecordRows(rec.value))
 const synthesis = computed(() => synthesisOf(rec.value))
 const limits = computed(() => limitsOf(rec.value))
+const visibleTexts = computed(() => simulationRecordTranslationTexts(rec.value, selectedRound.value))
+const visibleTextSet = computed(() => new Set(visibleTexts.value))
+const translation = useSimulationTranslation({
+  simulationId: () => rec.value && (!props.simulationId || rec.value.simulation_id === props.simulationId)
+    ? (props.simulationId || rec.value.simulation_id) : '',
+  language: () => props.language || locale.value,
+  context: () => ({ engine: props.engine || rec.value?.engine || '', platform: '', round: selectedRound.value,
+    generation_id: props.generationId || '',
+    revision: JSON.stringify([rec.value?.config_hash || '', rec.value?.generator_version || '', rec.value?.generated_at || '']),
+    view: 'record', surface: 'record', actor_id: '' }),
+  texts: () => visibleTexts.value,
+})
+const L = translation.L
+// Identity fallbacks (for example option.id or variable.id) never gain a translated
+// spelling, even if a backend map also happens to contain the same source string.
+const d = value => visibleTextSet.value.has(value) ? translation.display(value) : (value ?? '')
 
 watch(periods, next => { selectedRound.value = resolvePeriodRound(next, selectedRound.value) })
+watch(() => [props.simulationId, props.generationId], () => {
+  selectedRound.value = defaultPeriodRound(periods.value)
+}, { flush: 'sync' })
+// Mount, record arrival, source refresh and period changes are read-only observer
+// selections. Never replay an old click when switching back from the live view.
+watch(() => props.translationRequest, (next, previous) => {
+  if (next > (previous || 0) && translation.lang.value === 'zh') translation.start()
+}, { flush: 'post' })
 
 function dash(value) {
   return value === null || value === undefined || value === '' ? '—' : value
@@ -322,7 +359,7 @@ function selectPeriod(round) {
 }
 
 function tickLabel(p) {
-  const bits = [p.label, `${L('仲裁', 'arbiter')} ${p.arbiterStatus}`]
+  const bits = [d(p.label), `${L('仲裁', 'arbiter')} ${d(p.arbiterStatus)}`]
   if (p.factsChanged.length) bits.push(`${p.factsChanged.length} ${L('项事实变化', 'facts changed')}`)
   if (p.redLinesCrossed.length) bits.push(`${p.redLinesCrossed.length} ${L('条红线被越过', 'red lines crossed')}`)
   return bits.join(', ')
@@ -331,7 +368,7 @@ function tickLabel(p) {
 const horizonText = computed(() => {
   const r = rec.value || {}
   const span = [r.as_of, r.horizon_date].filter(Boolean).join(' → ') || '—'
-  return r.calendar_unit ? `${span} · ${r.calendar_unit}` : span
+  return r.calendar_unit ? `${span} · ${d(r.calendar_unit)}` : span
 })
 
 const periodsText = computed(() => {
@@ -342,8 +379,8 @@ const periodsText = computed(() => {
 const healthLine = computed(() => {
   const h = health.value
   return [
-    `${L('健康', 'health')} ${h.health}`,
-    `${L('有效性', 'validity')} ${h.validity}`,
+    `${L('健康', 'health')} ${d(h.health)}`,
+    `${L('有效性', 'validity')} ${d(h.validity)}`,
     L(`仲裁失败 ${dash(h.arbiterFailedRounds)} 轮`, `${dash(h.arbiterFailedRounds)} arbiter-failed rounds`),
     L(`建模缺口 ${dash(h.seedGaps)} 项`, `${dash(h.seedGaps)} seed gaps`),
     L(`自发行动 ${dash(h.organicActions)} 次`, `${dash(h.organicActions)} organic actions`)
@@ -352,7 +389,7 @@ const healthLine = computed(() => {
 
 const unusableText = computed(() => {
   const h = health.value
-  const reason = h.validity !== 'valid' ? h.validity : h.health
+  const reason = d(h.validity !== 'valid' ? h.validity : h.health)
   return L(
     `本次推演不可用（状态：${reason}）。记录仅含健康表；未生成叙事，也没有可供阅读的时段账目。`,
     `This exercise was not usable (status: ${reason}). The record carries the health table only; no narrative was generated and there is no period account to read.`
@@ -362,13 +399,13 @@ const unusableText = computed(() => {
 const behaviourText = computed(() => behaviourSummary(period.value && period.value.behaviour, {
   moves: L('项行动', 'moves'), responsive: L('项回应上期', 'responsive'), offersAnswered: L('项应答要约', 'offers answered')
 }))
-const behaviourNote = computed(() => limits.value.behaviourNote || L('文本层面的诊断，非真实性判定', 'textual diagnostic, not a realism verdict'))
+const behaviourNote = computed(() => d(limits.value.behaviourNote) || L('文本层面的诊断，非真实性判定', 'textual diagnostic, not a realism verdict'))
 
 const generatorLabel = computed(() => {
   const g = synthesis.value.generator
   if (g === 'llm') return L('有界 LLM 综合（经门禁校验）', 'bounded LLM synthesis (gate-checked)')
   if (g === 'deterministic') return L('确定性模板', 'deterministic template')
-  return g
+  return d(g)
 })
 
 function trackRecordLine(r) {
@@ -380,6 +417,7 @@ function trackRecordLine(r) {
 </script>
 
 <style scoped>
+.rec-translation { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 12px; background: #fff7ed; font-size: 13px; }
 .sim-record {
   --orange: #FF4500;
   --border: #E5E5E5;

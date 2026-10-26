@@ -30,6 +30,8 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from model_translation_fakes import model_protocol
+
 from app.config import Config  # noqa: E402
 from app.services.report_agent import (  # noqa: E402
     ReportAgent, ReportManager, Report, ReportStatus,
@@ -42,11 +44,12 @@ class _TransLLM:
 
     `translate=None` + `raises=True` simulates an LLM outage (every call raises)."""
 
-    def __init__(self, translate=None, raises=False, model="fake-translator"):
+    def __init__(self, translate=None, raises=False, model="fake-translator", review_translate=None):
         self.model = model
         self.provider = "fake"
         self.calls = []
         self._t = translate
+        self._review = review_translate
         self._raises = raises
 
     def chat(self, messages=None, temperature=0.7, max_tokens=4096, tier="strong", **kw):
@@ -54,6 +57,9 @@ class _TransLLM:
                            "temperature": temperature})
         if self._raises:
             raise RuntimeError("simulated LLM outage")
+        response = model_protocol(messages, self._t or (lambda text: text), expected_fn=self._review)
+        if response is not None:
+            return response
         user = (messages or [{}])[-1].get("content", "")
         user = ReportAgent._decode_translation_placeholders(user)
         return self._t(user) if self._t else user
@@ -400,7 +406,7 @@ def test_reference_chunk_is_localized_deterministically_without_touching_entries
     assert translated.split("\n", 1)[1] == source.split("\n", 1)[1]
 
 
-def test_bilingual_repairs_residual_table_prose_once_and_keeps_reference_namespace(
+def test_model_review_repairs_one_table_block_and_keeps_reference_namespace(
     reports_tmp, monkeypatch,
 ):
     rid = "report_residual_repair"
@@ -440,29 +446,32 @@ def test_bilingual_repairs_residual_table_prose_once_and_keeps_reference_namespa
 
     body_attempts = 0
 
+    def faithful(user: str) -> str:
+        return (user.replace("# Forecast", "# 预测")
+                .replace("## Binary Forecasts", "## 二元预测")
+                .replace("| ID | Statement | Probability |", "| ID | 陈述 | 概率 |")
+                .replace("Global electric vehicle market share exceeds 42% by 2030 [S1]",
+                         "全球电动汽车份额到 2030 年超过 42% [S1]")
+                .replace("## References", "## 参考来源"))
+
     def translate(user: str) -> str:
         nonlocal body_attempts
-        if user.startswith("# Forecast"):
-            return user.replace("# Forecast", "# 预测")
+        out = faithful(user)
         if user.startswith("## Binary Forecasts"):
             body_attempts += 1
-            out = user.replace("## Binary Forecasts", "## 二元预测")
-            out = out.replace("| ID | Statement | Probability |", "| ID | 陈述 | 概率 |")
-            if body_attempts > 1:
-                out = out.replace(
-                    "Global electric vehicle market share exceeds 42% by 2030 [S1]",
-                    "全球电动汽车份额到 2030 年超过 42% [S1]",
-                )
-            return out
-        raise AssertionError("References must not consume an LLM translation call")
+            if body_attempts == 1:
+                out = out.replace("全球电动汽车份额到 2030 年超过 42% [S1]",
+                    "Global electric vehicle market share exceeds 42% by 2030 [S1]")
+        return out
 
     monkeypatch.setattr(Config, "REPORT_TRANSLATION_CONCURRENCY", 1)
-    agent = _bili_agent(_TransLLM(translate=translate))
+    ReportManager.save_report(report)
+    agent = _bili_agent(_TransLLM(translate=translate, review_translate=faithful))
     agent._generate_bilingual_report(rid, report)
 
     assert body_attempts == 2
     assert ReportManager.is_publishable(rid, "zh") is False  # primary fixture is not published
-    out_path = ReportManager._get_report_translation_path(rid, "zh")
+    out_path = ReportManager._translation_read_paths(rid, "zh")[0]
     assert os.path.exists(out_path)
     out = open(out_path, encoding="utf-8").read()
     assert "全球电动汽车份额到 2030 年超过 42% [S1]" in out
@@ -480,9 +489,10 @@ def test_bilingual_preserves_structure_and_writes_zh(reports_tmp):
                     markdown_content=_EN_MD)
     agent = _bili_agent(_TransLLM(translate=_translate_outlook), output_language="English")
 
+    ReportManager.save_report(report)
     agent._generate_bilingual_report(rid, report)
 
-    zh_path = os.path.join(reports_tmp, rid, "full_report.zh.md")
+    zh_path = ReportManager._translation_read_paths(rid, "zh")[0]
     assert os.path.exists(zh_path)
     with open(zh_path, encoding="utf-8") as f:
         out = f.read()
@@ -506,8 +516,8 @@ def test_bilingual_preserves_structure_and_writes_zh(reports_tmp):
     assert entry["chars"] == len(out)
     assert entry["bytes"] == len(out.encode("utf-8"))
     assert entry["markdown_sha256"] == hashlib.sha256(out.encode("utf-8")).hexdigest()
-    assert os.path.exists(ReportManager._get_report_citations_path(rid, "zh"))
-    assert os.path.exists(ReportManager._get_report_final_audit_path(rid, "zh"))
+    assert os.path.exists(ReportManager._translation_read_paths(rid, "zh")[2])
+    assert os.path.exists(ReportManager._translation_read_paths(rid, "zh")[1])
     # primary deliverable never mutated
     assert report.markdown_content == _EN_MD
     # meta.json round-trips the translations block
@@ -516,7 +526,7 @@ def test_bilingual_preserves_structure_and_writes_zh(reports_tmp):
     assert reloaded.translations and reloaded.translations[0]["lang"] == "zh"
 
 
-def test_parallel_translation_workers_inherit_run_telemetry_context(
+def test_model_translation_and_review_calls_inherit_run_telemetry_context(
     reports_tmp, monkeypatch
 ):
     from app.utils import telemetry
@@ -540,6 +550,7 @@ def test_parallel_translation_workers_inherit_run_telemetry_context(
         status=ReportStatus.COMPLETED,
         markdown_content=_EN_MD,
     )
+    ReportManager.save_report(report)
     llm = ContextLLM()
     monkeypatch.setattr(Config, "REPORT_TRANSLATION_CONCURRENCY", 4)
     previous = telemetry.get_run_context()
@@ -561,13 +572,15 @@ def test_parallel_translation_workers_inherit_run_telemetry_context(
     values = [value for value, _message in progress_updates]
     assert values == sorted(values)
     assert values[0] == 1 and values[-1] == 95
-    assert any("translated" in message for _value, message in progress_updates)
+    assert any("translating and reviewing" in message for _value, message in progress_updates)
+    assert any('"entries"' in call["messages"][-1]["content"] for call in llm.calls)
+    assert any('"pairs"' in call["messages"][-1]["content"] for call in llm.calls)
     runtime = ReportManager._load_translation_runtime_status(rid, "zh")
     assert runtime and runtime["status"] == "available" and runtime["progress"] == 100
 
 
 # ─────────────────────────── number-integrity flag ──────────────────────
-def test_bilingual_number_mutation_is_repaired_but_bad_prose_still_blocks_variant(
+def test_model_review_rejects_changed_probability_without_rewriting_body(
     reports_tmp, monkeypatch,
 ):
     # Strict mode: with REPORT_TRANSLATION_RESIDUAL_LINES=0 any residual source-language
@@ -579,8 +592,9 @@ def test_bilingual_number_mutation_is_repaired_but_bad_prose_still_blocks_varian
     report = Report(report_id=rid, simulation_id="s", graph_id="g",
                     simulation_requirement="req", status=ReportStatus.COMPLETED,
                     markdown_content=_EN_MD)
-    # Corrupt the numbers: drop the '%' on 42% (→ '42 percent') in prose + table.
-    llm = _TransLLM(translate=lambda u: _translate_outlook(u).replace("42%", "42 percent"))
+    # Change a real probability; an independent faithful fixture oracle rejects it.
+    llm = _TransLLM(translate=lambda u: _translate_outlook(u).replace("42%", "43%"),
+                    review_translate=_translate_outlook)
     agent = _bili_agent(llm)
 
     agent._generate_bilingual_report(rid, report)
@@ -591,14 +605,10 @@ def test_bilingual_number_mutation_is_repaired_but_bad_prose_still_blocks_varian
     with open(audit_path, encoding="utf-8") as handle:
         audit = json.load(handle)
     assert audit["hard_passed"] is False
-    assert audit["number_parity"]["passed"] is True
-    contamination = audit["language_lint"]["language_contamination"]["lines"]
-    assert contamination >= 1
-    assert any(
-        issue.startswith("translation contains ")
-        and issue.endswith(" target-language contamination lines")
-        for issue in audit["issues"]
-    )
+    assert audit["fact_fidelity"]["passed"] is False
+    assert audit["model_translation"]["complete"] is False
+    assert any("semantic review rejected" in issue for details in audit["model_translation"]["issues"].values() for issue in details)
+    assert report.markdown_content == _EN_MD
 
 
 def test_translation_variant_audit_rejects_heading_table_and_language_drift():
@@ -713,9 +723,10 @@ def test_bilingual_chinese_source_produces_english(reports_tmp):
     agent = _bili_agent(_TransLLM(translate=_to_en),
                         output_language="Chinese")
 
+    ReportManager.save_report(report)
     agent._generate_bilingual_report(rid, report)
 
-    en_path = os.path.join(reports_tmp, rid, "full_report.en.md")
+    en_path = ReportManager._translation_read_paths(rid, "en")[0]
     assert os.path.exists(en_path)
     assert report.translations[0]["lang"] == "en"
     assert report.translations[0]["source_lang"] == "zh"
@@ -872,8 +883,9 @@ def test_export_pdf_uses_translation_source(reports_tmp, monkeypatch):
     )
 
     out = ReportManager.export_pdf(rid, lang="zh")
-    assert out and out.endswith("full_report.zh.pdf")
-    assert seen["pdf_path"].endswith("full_report.zh.pdf")
+    assert out and Path(out).parent.name == ".pdf-cache"
+    assert Path(seen["pdf_path"]).name.startswith(".pdf-export-")
+    assert not Path(seen["pdf_path"]).exists()  # only the validated immutable cache is retained
     assert "标题" in seen["md"]
     assert "中文来源" in seen["md"] and "WRONG PRIMARY" not in seen["md"]
     # Missing translation for 'en' → None (degrade-safe), no crash.
@@ -978,50 +990,40 @@ def test_api_translation_retry_task_is_report_and_language_bound(
     client, reports_tmp, monkeypatch,
 ):
     from app.api import report as report_api
+    from test_report_durable_routes import queue_only_scheduler, run_queued_report
 
+    queue_only_scheduler(monkeypatch, reports_tmp)
     rid = "report_api_translate_retry"
     _publish_primary(rid, "# EV Forecast\n\nEnglish report body for translation.\n")
 
-    def fake_generate(
-        cls,
-        report_id,
-        lang,
-        llm_client=None,
-        progress_callback=None,
-        force=False,
-    ):
+    def fake_generate(cls, report_id, lang, llm_client=None, progress_callback=None, force=False):
         assert report_id == rid and lang == "zh"
-        assert progress_callback is not None
-        assert force is False  # a retry of a missing variant is not a forced update
-        progress_callback(55, "Translating report sections")
-        return {
-            "report_id": rid,
-            "requested_lang": "zh",
-            "status": "available",
-            "available": True,
-            "issues": [],
-        }
+        assert force is False
+        markdown = "# 电动车预测\n\n中文报告正文。\n"
+        with open(cls._get_report_translation_path(rid, lang), "w", encoding="utf-8") as handle:
+            handle.write(markdown)
+        _publish_variant(rid, lang, markdown)
+        return {"available": True, "updated": True}
 
-    monkeypatch.setattr(
-        ReportManager, "generate_translation_variant", classmethod(fake_generate)
-    )
-    monkeypatch.setattr(report_api, "_launch_translation_thread", lambda target: target())
+    monkeypatch.setattr(ReportManager, "generate_translation_variant", classmethod(fake_generate))
+    def complete_structured(report, lang, **kwargs):
+        detail = {"complete": True, "partial": False, "pending": 0, "issues": [],
+                  "source_fingerprint": "fixture-public-display", "status": "available"}
+        return {"display": {"title": "预测"}, "structured_translation": detail, "translation_status": detail}
+    monkeypatch.setattr(report_api, "_report_structured", complete_structured)
+    monkeypatch.setattr(report_api, "_repair_report_structured", lambda *a, **kw: None)
 
     started = client.post(f"/api/report/{rid}/translations/zh")
-    assert started.status_code == 202
+    assert started.status_code == 202, started.json
     task_id = started.get_json()["data"]["task_id"]
-
-    status = client.get(
-        f"/api/report/{rid}/translations/zh/status?task_id={task_id}"
-    )
+    assert run_queued_report()["job_state"] == "completed"
+    status = client.get(f"/api/report/{rid}/translations/zh/status?task_id={task_id}")
     payload = status.get_json()["data"]
     assert status.status_code == 200
     assert payload["status"] == "completed"
     assert payload["result"]["available"] is True
-
-    wrong_lang = client.get(
-        f"/api/report/{rid}/translations/en/status?task_id={task_id}"
-    )
+    assert payload["translation_job"]["job_id"] == task_id
+    wrong_lang = client.get(f"/api/report/{rid}/translations/en/status?task_id={task_id}")
     assert wrong_lang.status_code == 409
 
 
@@ -1029,35 +1031,29 @@ def test_api_translation_post_deduplicates_from_durable_lease_after_restart(
     client, reports_tmp, monkeypatch,
 ):
     from app.api import report as report_api
-    from app.models.task import TaskManager
+    from app.services.translation.store import Store, database_path
+    from test_report_durable_routes import queue_only_scheduler
 
+    queue_only_scheduler(monkeypatch, reports_tmp)
     rid = "report_api_translate_durable_dedup"
     _publish_primary(rid, "# EV Forecast\n\nEnglish report body for translation.\n")
-    # Keep the worker queued so the durable pending record remains observable.
-    monkeypatch.setattr(report_api, "_launch_translation_thread", lambda _target: None)
-
     first = client.post(f"/api/report/{rid}/translations/zh")
-    assert first.status_code == 202
-    first_data = first.get_json()["data"]
-    task_id = first_data["task_id"]
-
-    # A second POST in the same process returns the existing task even though
-    # can_generate is false while the durable lease is active.
+    assert first.status_code == 202, first.json
+    task_id = first.json["data"]["task_id"]
     second = client.post(f"/api/report/{rid}/translations/zh")
-    assert second.status_code == 202
-    assert second.get_json()["data"]["task_id"] == task_id
-
-    # Simulate a backend restart / another worker: in-memory task state is gone,
-    # but the source-bound durable lease still deduplicates the request.
-    manager = TaskManager()
-    with manager._task_lock:
-        manager._tasks.pop(task_id, None)
+    assert second.status_code == 202 and second.json["data"]["task_id"] == task_id
+    # A newly opened read-only connection recovers the same task; TaskManager
+    # must not be consulted, even in a new request or backend worker.
+    with Store(database_path(), read_only=True) as store:
+        assert store.task(task_id)["job_state"] == "queued"
+    def forbidden():
+        raise AssertionError("TaskManager is not translation authority")
+    monkeypatch.setattr(report_api, "TaskManager", forbidden)
     third = client.post(f"/api/report/{rid}/translations/zh")
     assert third.status_code == 202
-    third_data = third.get_json()["data"]
-    assert third_data["status"] == "generating"
-    assert third_data["task_id"] == task_id
-    assert third_data["source_markdown_sha256"]
+    assert third.json["data"]["status"] == "pending"
+    assert third.json["data"]["task_id"] == task_id
+    assert third.json["data"]["source_markdown_sha256"]
 
 
 def test_api_translation_post_answers_duplicates_while_generation_holds_lease(
@@ -1072,7 +1068,8 @@ def test_api_translation_post_answers_duplicates_while_generation_holds_lease(
 
     rid = "report_api_translate_duplicate_nonblocking"
     _publish_primary(rid, "# EV Forecast\n\nEnglish report body for translation.\n")
-    monkeypatch.setattr(report_api, "_launch_translation_thread", lambda _target: None)
+    from test_report_durable_routes import queue_only_scheduler
+    queue_only_scheduler(monkeypatch, reports_tmp)
     first = client.post(f"/api/report/{rid}/translations/zh")
     assert first.status_code == 202
     task_id = first.get_json()["data"]["task_id"]
@@ -1180,7 +1177,7 @@ def test_a_rejected_update_keeps_its_text_and_audit_for_diagnosis(reports_tmp):
     rid = "report_rejected_update"
     old_zh = _publish_old_variant(rid)
     result = ReportManager.generate_translation_variant(
-        rid, "zh", llm_client=_TransLLM(translate=_translate_outlook_partially), force=True
+        rid, "zh", llm_client=_TransLLM(translate=_translate_outlook_partially, review_translate=_translate_outlook), force=True
     )
     assert result["available"] is True and result["updated"] is False
     with open(ReportManager._get_report_translation_path(rid, "zh"), encoding="utf-8") as f:
@@ -1223,7 +1220,15 @@ def test_api_forced_update_is_task_bound_not_instantly_available(client, reports
 
     rid = "report_api_force_update"
     _publish_old_variant(rid)
-    monkeypatch.setattr(report_api, "_launch_translation_thread", lambda _target: None)
+    from test_report_durable_routes import queue_only_scheduler
+    queue_only_scheduler(monkeypatch, reports_tmp)
+    # This test covers refreshing an already complete display. Missing display
+    # repair has separate durable-route coverage and must not mask the refresh.
+    def complete_structured(report, lang, **kwargs):
+        detail = {"complete": True, "partial": False, "pending": 0, "issues": [],
+                  "source_fingerprint": "fixture-public-display", "status": "available"}
+        return {"display": {}, "structured_translation": detail, "translation_status": detail}
+    monkeypatch.setattr(report_api, "_report_structured", complete_structured)
 
     plain = client.post(f"/api/report/{rid}/translations/zh")
     assert plain.status_code == 200 and plain.get_json()["data"]["available"] is True

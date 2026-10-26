@@ -337,6 +337,8 @@ def test_build_pdf_via_pandoc_mock(reports_tmp, monkeypatch):
 
     monkeypatch.setattr(Config, "REPORT_PDF_EXPORT", True, raising=False)
     monkeypatch.setattr(ExecBriefBuilder, "_export_pdf_pandoc_no_toc", classmethod(_fake_pandoc))
+    # This test isolates renderer selection/cache behavior with synthetic bytes.
+    monkeypatch.setattr(ReportManager, "_validate_pdf_content", lambda *a: (True, {}))
 
     pdf = ExecBriefBuilder.build_pdf(rid, folder)
     assert pdf and pdf.endswith("exec_brief.pdf")
@@ -362,6 +364,8 @@ def test_build_pdf_falls_back_to_pymupdf(reports_tmp, monkeypatch):
         return True
 
     monkeypatch.setattr(ReportManager, "_export_pdf_pymupdf", classmethod(_fake_pymupdf))
+    # This renderer is synthetic; real content validation has separate coverage.
+    monkeypatch.setattr(ReportManager, "_validate_pdf_content", lambda *a: (True, {}))
     pdf = ExecBriefBuilder.build_pdf(rid, folder)
     assert pdf and os.path.exists(pdf)
 

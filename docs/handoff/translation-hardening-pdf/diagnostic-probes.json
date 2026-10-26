@@ -1,0 +1,34 @@
+[
+  {
+    "case": "extra_top_level",
+    "calls": [
+      "translation",
+      "translation"
+    ],
+    "accepted": [],
+    "issues": {
+      "a": [
+        "translation/review failed (ValueError)"
+      ],
+      "b": [
+        "translation/review failed (ValueError)"
+      ]
+    },
+    "calls_used": 2
+  },
+  {
+    "case": "missing_review",
+    "calls": [
+      "translation",
+      "review",
+      "translation",
+      "review"
+    ],
+    "accepted": [
+      "a",
+      "b"
+    ],
+    "issues": {},
+    "calls_used": 4
+  }
+]

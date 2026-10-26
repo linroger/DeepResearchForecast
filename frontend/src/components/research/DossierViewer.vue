@@ -1,5 +1,65 @@
 <template>
   <div class="dossier-viewer">
+    <div v-if="hasReport && !editing && pipelineId" class="report-lang-actions dossier-language-bar">
+      <span class="lang-toggle" role="group" :aria-label="L('语言', 'Language')">
+        <button
+          type="button"
+          class="lang-btn"
+          :class="{ active: activeReportLang === null }"
+          :aria-pressed="activeReportLang === null"
+          @click="switchReportLang(null)"
+        >{{ L('原文', 'Source') }}</button>
+        <button
+          type="button"
+          class="lang-btn"
+          :class="{ active: activeReportLang === targetLang }"
+          :aria-pressed="activeReportLang === targetLang"
+          @click="switchReportLang(targetLang)"
+        >{{ targetLang === 'zh' ? '中文' : 'EN' }}</button>
+      </span>
+      <button
+        v-if="showGenerateTranslation"
+        type="button"
+        class="edit-btn"
+        :disabled="translationBusy"
+        :title="translationIssues.join('; ')"
+        @click="generateResearchTranslation"
+      >{{ translationButtonLabel }}</button>
+      <button
+        v-if="activeReportLang && translationActions.refresh"
+        type="button"
+        class="edit-btn"
+        :disabled="translationBusy"
+        @click="translationObserver.refresh()"
+      >{{ L('重新翻译', 'Refresh translation') }}</button>
+      <button
+        v-if="activeReportLang && translationError"
+        type="button"
+        class="edit-btn"
+        :disabled="reportLangLoading"
+        @click="translationObserver.observe()"
+      >{{ L('检查翻译状态', 'Check translation status') }}</button>
+      <TranslationJobStatus
+        v-if="translationFeedback || coverageFeedback"
+        :observer="translationObserver"
+        :L="L"
+        :show-actions="false"
+        :show-summary="false"
+        :show-issues="false"
+      >
+        <span v-if="translationFeedback" class="report-lang-feedback">{{ translationFeedback }}</span>
+        <span v-if="coverageFeedback" class="report-lang-feedback">{{ coverageFeedback }}</span>
+      </TranslationJobStatus>
+      <span v-if="activeReportLang && translationIssues.length" class="edit-error" role="alert">{{ translationIssues.join('; ') }}</span>
+      <button
+        type="button"
+        class="edit-btn"
+        :disabled="pdfDisabled"
+        :aria-busy="pdfBusy"
+        @click="downloadResearchPdf"
+      >{{ pdfButtonLabel }}</button>
+      <span v-if="pdfError" class="edit-error" role="alert">{{ pdfError }}</span>
+    </div>
     <!-- Segmented tab toggle -->
     <div class="tabs" role="tablist">
       <button
@@ -22,44 +82,6 @@
       <div class="panel-head">
         <span class="diamond">◇</span>{{ L('研究报告', 'Research Report') }}
         <!-- BILINGUAL：原文/译文切换 + PDF 下载（与预测报告一致，degrade-safe） -->
-        <span v-if="hasReport && !editing && pipelineId" class="report-lang-actions">
-          <span class="lang-toggle" role="group" :aria-label="L('语言', 'Language')">
-            <button
-              type="button"
-              class="lang-btn"
-              :class="{ active: activeReportLang === null }"
-              :aria-pressed="activeReportLang === null"
-              :disabled="reportLangLoading"
-              @click="switchReportLang(null)"
-            >{{ L('原文', 'Source') }}</button>
-            <button
-              type="button"
-              class="lang-btn"
-              :class="{ active: activeReportLang === targetLang }"
-              :aria-pressed="activeReportLang === targetLang"
-              :disabled="reportLangLoading"
-              @click="switchReportLang(targetLang)"
-            >{{ targetLang === 'zh' ? '中文' : 'EN' }}</button>
-          </span>
-          <button
-            v-if="showGenerateTranslation"
-            type="button"
-            class="edit-btn"
-            :disabled="translationBusy"
-            :title="translationIssues.join('; ')"
-            @click="generateResearchTranslation"
-          >{{ translationButtonLabel }}</button>
-          <span v-if="translationFeedback" class="report-lang-feedback" aria-live="polite">{{ translationFeedback }}</span>
-          <a
-            class="edit-btn"
-            :href="researchPdfHref"
-            target="_blank"
-            rel="noopener"
-            :class="{ disabled: pdfDisabled }"
-            :aria-disabled="pdfDisabled"
-            @click="onPdfClick"
-          >{{ L('下载 PDF', 'Download PDF') }}</a>
-        </span>
         <!-- T5.4: 编辑入口（仅可编辑时显示；封存的研究只读，编辑会在「继续」时被重跑覆盖） -->
         <span v-if="editable && hasReport" class="edit-actions">
           <span v-if="sealed" class="edit-sealed" :title="L('该研究已被校验和清单与 judge/actor 血缘封存。直接编辑会在「继续」时被判定为篡改并重跑综合，因此不可编辑。如需修改，请用修订后的问题重新发起研究。', 'This research is sealed by a checksum manifest and judge/actor lineage. An in-place edit would be rejected on Continue and synthesis would re-run over it, so editing is disabled. To change it, start a new research run with a refined question.')">🔒 {{ L('已封存 · 只读', 'Sealed · read-only') }}</span>
@@ -84,7 +106,7 @@
           <div class="empty-title">{{ L('暂无研究报告', 'No research report yet') }}</div>
           <div class="empty-sub">{{ L('research_report.md 尚未生成或为空。', 'research_report.md has not been generated or is empty.') }}</div>
         </div>
-        <SourceContextPanel v-if="dossier && dossier.news_market_context" :context="dossier.news_market_context" />
+        <SourceContextPanel v-if="displayDossier && displayDossier.news_market_context" :context="displayDossier.news_market_context" :lang="displayLang" />
       </div>
     </section>
 
@@ -343,9 +365,9 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, defineAsyncComponent } from 'vue'
+import { ref, computed, watch, defineAsyncComponent, onBeforeUnmount } from 'vue'
 import { renderMarkdown } from '../../utils/markdown'
-import { L, locale } from '../../i18n'
+import { L as appL, locale } from '../../i18n'
 import {
   editDossier, researchChartUrl, getArtifact,
   requestResearchTranslation, getResearchTranslation, researchPdfUrl,
@@ -353,6 +375,10 @@ import {
 import { detectTranslationTarget } from '../../utils/researchTranslation'
 import { datasetManifestRows, distinctSeriesNames } from '../../utils/officialData'
 import { saveTextFile } from '../../utils/saveTextFile'
+import { useTranslationJob } from '../../composables/useTranslationJob'
+import { createDossierTranslationAdapter, dossierSourceDigest } from '../../utils/dossierTranslationAdapter'
+import { downloadPdf } from '../../utils/pdfDownload'
+import TranslationJobStatus from '../TranslationJobStatus.vue'
 
 const SourceContextPanel = defineAsyncComponent(() => import('./SourceContextPanel.vue'))
 
@@ -375,25 +401,56 @@ const activeTab = ref('report')
 // ---- BILINGUAL: research-report language toggle + PDF ---------------------
 // activeReportLang: null = source markdown; otherwise the translated target code.
 const activeReportLang = ref(null)
-const researchLangCache = ref({})   // { lang: translated markdown }
-const reportLangLoading = ref(false)
-const translationBusy = ref(false)
-const translationStatus = ref('')   // '' | generating | available | failed | unavailable
-const translationIssues = ref([])
-let researchLangVersion = 0
-let translationPollTimer = null
-
-function stopTranslationPolling() {
-  if (translationPollTimer) {
-    clearTimeout(translationPollTimer)
-    translationPollTimer = null
-  }
+function L(zh, en) {
+  return activeReportLang.value === 'zh' ? zh : activeReportLang.value === 'en' ? (en ?? zh) : appL(zh, en)
 }
+const displayLang = computed(() => activeReportLang.value || locale.value)
+const admittedReport = ref('')
+const admittedDossier = ref(null)
+const admittedPublication = ref(null)
+const displayDossier = computed(() => activeReportLang.value && admittedDossier.value
+  ? { ...props.dossier, ...admittedDossier.value } : props.dossier)
+const targetLang = computed(() => detectTranslationTarget(props.dossier?.report || ''))
+const sourceIdentity = computed(() => JSON.stringify([props.pipelineId, props.dossier || null]))
+const hasStructuredContent = computed(() => ['actors', 'timeline', 'prediction_markets', 'news_market_context', 'sources', 'datasets']
+  .some(key => { const value = props.dossier?.[key]; return value && Object.keys(value).length > 0 }))
 
-// Source-language sniff → the translation target is the OTHER language.
-const targetLang = computed(() =>
-  detectTranslationTarget((props.dossier && props.dossier.report) || '')
-)
+// Reset selection before the shared observer reacts to a new resource. It alone
+// owns translation requests, polling, reconnects and stale-response admission.
+watch(sourceIdentity, () => { activeReportLang.value = null }, { flush: 'sync' })
+const translationAdapter = computed(() => createDossierTranslationAdapter({
+  pipelineId: props.pipelineId, lang: activeReportLang.value,
+  sourceMarkdown: props.dossier?.report || '', sourceSha: props.dossier?.source_sha256,
+  hasStructuredContent: hasStructuredContent.value,
+  get: getResearchTranslation, start: requestResearchTranslation,
+}))
+const translationObserver = useTranslationJob({
+  identity: () => props.pipelineId && activeReportLang.value && props.dossier?.has_report
+    ? { kind: 'research_dossier', pipelineId: props.pipelineId, source: sourceIdentity.value, lang: activeReportLang.value }
+    : null,
+  adapter: () => translationAdapter.value,
+  onReset: () => { admittedReport.value = ''; admittedDossier.value = null; admittedPublication.value = null },
+  onUpdate: (snapshot, { isCurrent }) => {
+    if (!isCurrent()) return
+    if (Object.hasOwn(snapshot.data, 'report')) {
+      admittedReport.value = snapshot.available ? snapshot.data.report : ''
+      admittedPublication.value = snapshot.available ? {
+        sourceSha: snapshot.data.source_sha256,
+        generation: snapshot.data.generation || snapshot.data.generation_id,
+      } : null
+    }
+    if (Object.hasOwn(snapshot.data, 'dossier')) {
+      const projection = snapshot.data.dossier
+      admittedDossier.value = projection && typeof projection === 'object' && !Array.isArray(projection)
+        ? projection : null
+    }
+  },
+})
+const { snapshot: translationSnapshot, status: translationStatus, busy: translationBusy,
+  loading: reportLangLoading, error: translationError, coverage: translationCoverage,
+  actions: translationActions } = translationObserver
+const translationIssues = computed(() => translationObserver.issues.value.map(issue =>
+  typeof issue === 'string' ? issue : String(issue?.message || issue?.code || 'Translation issue')))
 
 // ---- T5.4: edit-and-continue ----
 // Sealed research (research_contract_manifest.json) is read-only: the backend
@@ -432,7 +489,7 @@ async function saveAndContinue() {
 
 // dossier.actors is the structured-actors container { actors:[...], key_events:[...], ... }
 const actorsContainer = computed(() => {
-  const a = props.dossier && props.dossier.actors
+  const a = displayDossier.value && displayDossier.value.actors
   return a && typeof a === 'object' ? a : null
 })
 
@@ -443,7 +500,7 @@ const actorList = computed(() => {
 
 // T5.2: 优先用一等公民 dossier.timeline（timeline.json），否则回退 actors.key_events
 const keyEvents = computed(() => {
-  const tl = props.dossier && props.dossier.timeline
+  const tl = displayDossier.value && displayDossier.value.timeline
   if (Array.isArray(tl) && tl.length) {
     return tl.filter(ev => ev && (ev.event || ev.date))
   }
@@ -501,7 +558,7 @@ const asOfDate = computed(() => {
 
 // sources may be an array, or { sources:[...] }, or null
 const sourceList = computed(() => {
-  const s = props.dossier && props.dossier.sources
+  const s = displayDossier.value && displayDossier.value.sources
   if (!s) return []
   if (Array.isArray(s)) return s.filter(Boolean)
   if (typeof s === 'object' && Array.isArray(s.sources)) return s.sources.filter(Boolean)
@@ -509,7 +566,7 @@ const sourceList = computed(() => {
 })
 
 const marketContainer = computed(() => {
-  const value = props.dossier && props.dossier.prediction_markets
+  const value = displayDossier.value && displayDossier.value.prediction_markets
   return value && typeof value === 'object' && !Array.isArray(value) ? value : null
 })
 
@@ -549,14 +606,10 @@ const hasReport = computed(() => {
   return !!(d && d.has_report && d.report && String(d.report).trim() !== '')
 })
 
-// Active markdown: the cached translation when a target language is selected and
-// available, otherwise the source report.  Selecting a not-yet-loaded language shows
-// the source until its verified bytes arrive (never another pipeline's translation).
-const reportMarkdown = computed(() => {
-  const lang = activeReportLang.value
-  if (lang && researchLangCache.value[lang]) return researchLangCache.value[lang]
-  return (props.dossier && props.dossier.report) || ''
-})
+// The observer admits translations only for the current exact source and language.
+// Missing or rejected variants leave the explicitly disclosed source visible.
+const reportMarkdown = computed(() => activeReportLang.value && admittedReport.value
+  ? admittedReport.value : (props.dossier?.report || ''))
 
 const renderedReport = computed(() => {
   if (!hasReport.value) return ''
@@ -572,131 +625,91 @@ const renderedReport = computed(() => {
   }
 })
 
-const showGenerateTranslation = computed(() => {
-  // Offer generate/retry only when the target variant is not currently available.
-  if (activeReportLang.value !== targetLang.value) return false
-  return translationStatus.value !== 'available'
-    && !researchLangCache.value[targetLang.value]
-})
-
+const showGenerateTranslation = computed(() => !!activeReportLang.value
+  && (translationActions.value.start || translationActions.value.retry || translationSnapshot.value?.active))
 const translationButtonLabel = computed(() => {
-  if (translationBusy.value || translationStatus.value === 'generating') {
-    return L('翻译中…', 'Translating…')
-  }
-  if (translationStatus.value === 'failed' || translationStatus.value === 'interrupted') {
-    return L('重试翻译', 'Retry translation')
-  }
-  return targetLang.value === 'zh' ? L('生成中文', 'Generate 中文') : L('Generate EN', 'Generate EN')
+  if (translationBusy.value) return L('翻译中…', 'Translating…')
+  if (translationActions.value.retry && translationStatus.value !== 'unavailable') return L('重试翻译', 'Retry translation')
+  return targetLang.value === 'zh' ? L('生成中文', 'Generate Mandarin') : L('生成英文', 'Generate English')
 })
-
+const coverageFeedback = computed(() => {
+  if (!activeReportLang.value) return ''
+  const { total, accepted, pending } = translationCoverage.value
+  const counts = total > 0 ? L(` 已完成 ${accepted}/${total} 项；待完成 ${pending} 项。`,
+    ` ${accepted}/${total} accepted; ${pending} pending.`) : ''
+  if (!admittedReport.value) return L('译文尚不可用，下方显示原文。', 'Translation is unavailable; the source is shown below.') + counts
+  if (translationSnapshot.value?.partial) return L('部分翻译：尚未译出的内容保留原文。',
+    'Partial translation: untranslated content remains in the source language.') + counts
+  return counts.trim()
+})
 const translationFeedback = computed(() => {
-  if (activeReportLang.value !== targetLang.value) return ''
-  if (translationStatus.value === 'generating' || translationBusy.value) {
-    return L('正在生成译文，请稍候…', 'Generating translation…')
-  }
-  if (translationStatus.value === 'failed') {
-    return L('译文未通过发布审计', 'Translation did not pass the publication audit')
-  }
-  if (translationStatus.value === 'interrupted') {
-    return L('上次翻译已中断（服务重启），请重试', 'The previous translation was interrupted (service restart) — retry')
-  }
+  if (!activeReportLang.value) return ''
+  if (translationStatus.value === 'reconnecting') return L('连接中断，正在重新查询已保存的翻译任务…', 'Connection lost; checking the saved translation job…')
+  if (translationStatus.value === 'timeout') return L('自动查询已暂停，请检查翻译状态。', 'Automatic observation paused; check translation status.')
+  if (translationSnapshot.value?.active) return L('正在生成译文，请稍候…', 'Generating translation…')
+  if (reportLangLoading.value) return L('正在读取翻译状态…', 'Checking translation status…')
+  if (translationStatus.value === 'interrupted') return L('上次翻译已中断，请重试。', 'The previous translation was interrupted; retry to resume.')
+  if (['failed', 'stale', 'outdated', 'error', 'cancelled'].includes(translationStatus.value)) return L('翻译尚未完成，请查看问题并重试。', 'Translation is incomplete; review the issues and retry.')
   return ''
 })
 
-const pdfDisabled = computed(() => {
-  // A language PDF is fail-closed on the audit: only offer it once the variant is ready.
-  if (activeReportLang.value && !researchLangCache.value[activeReportLang.value]) return true
-  return false
-})
-
-const researchPdfHref = computed(() => {
-  if (pdfDisabled.value) return 'javascript:void(0)'
-  return researchPdfUrl(props.pipelineId, activeReportLang.value || undefined)
-})
-
-function onPdfClick(event) {
-  if (pdfDisabled.value) event.preventDefault()
+function generateResearchTranslation() {
+  if (!activeReportLang.value || translationBusy.value) return
+  if (translationActions.value.retry && translationStatus.value !== 'unavailable') return translationObserver.retry()
+  if (translationActions.value.start) return translationObserver.start()
+  if (translationActions.value.retry) return translationObserver.retry()
 }
-
-async function loadResearchTranslation(lang, { trigger = false } = {}) {
-  if (!props.pipelineId || !lang) return
-  const version = researchLangVersion
-  reportLangLoading.value = true
-  try {
-    const res = await getResearchTranslation(props.pipelineId, lang)
-    if (version !== researchLangVersion) return   // report changed mid-flight
-    // The shared Axios interceptor already returns the backend JSON body.
-    const data = (res && res.data) || {}
-    translationStatus.value = data.status || 'unavailable'
-    translationIssues.value = Array.isArray(data.issues) ? data.issues : []
-    if (data.available && typeof data.report === 'string' && data.report.trim()) {
-      researchLangCache.value = { ...researchLangCache.value, [lang]: data.report }
-      stopTranslationPolling()
-    } else if (trigger && translationStatus.value !== 'generating') {
-      await generateResearchTranslation()
-    } else if (translationStatus.value === 'generating') {
-      scheduleTranslationPoll(lang)
-    }
-  } catch (e) {
-    if (version === researchLangVersion) translationStatus.value = 'unavailable'
-  } finally {
-    if (version === researchLangVersion) reportLangLoading.value = false
-  }
-}
-
-function scheduleTranslationPoll(lang) {
-  stopTranslationPolling()
-  const version = researchLangVersion
-  translationPollTimer = setTimeout(() => {
-    if (version === researchLangVersion) loadResearchTranslation(lang)
-  }, 4000)
-}
-
-async function generateResearchTranslation() {
-  if (!props.pipelineId || translationBusy.value) return
-  const version = researchLangVersion
-  const lang = targetLang.value
-  translationBusy.value = true
-  try {
-    const res = await requestResearchTranslation(props.pipelineId, lang)
-    if (version !== researchLangVersion) return   // report changed mid-flight
-    const data = (res && res.data) || {}
-    translationStatus.value = data.status || 'generating'
-    if (data.available) {
-      await loadResearchTranslation(lang)
-    } else {
-      scheduleTranslationPoll(lang)
-    }
-  } catch (e) {
-    if (version === researchLangVersion) translationStatus.value = 'failed'
-  } finally {
-    if (version === researchLangVersion) translationBusy.value = false
-  }
-}
-
 function switchReportLang(lang) {
-  activeReportLang.value = lang
-  if (lang && !researchLangCache.value[lang]) {
-    loadResearchTranslation(lang, { trigger: false })
-  }
+  if (lang === null || lang === targetLang.value) activeReportLang.value = lang
 }
 
-// Report-identity guard: clearing the cache and resetting language whenever the
-// pipeline changes prevents a second dossier from ever showing the previous
-// pipeline's translated bytes (the same stale-variant bug fixed on the forecast view).
-watch(
-  () => [props.pipelineId, (props.dossier && props.dossier.report) || ''],
-  () => {
-    researchLangVersion += 1
-    stopTranslationPolling()
-    activeReportLang.value = null
-    researchLangCache.value = {}
-    reportLangLoading.value = false
-    translationBusy.value = false
-    translationStatus.value = ''
-    translationIssues.value = []
-  },
-)
+// Export the admitted body currently displayed. A target selection still showing
+// source text uses the unsuffixed source endpoint and source-language label.
+const pdfLang = computed(() => activeReportLang.value && admittedReport.value ? activeReportLang.value : null)
+const pdfDisplayLang = computed(() => pdfLang.value || (targetLang.value === 'zh' ? 'en' : 'zh'))
+const pdfBusy = ref(false)
+const pdfError = ref('')
+const pdfDisabled = computed(() => pdfBusy.value || !props.pipelineId || !hasReport.value)
+const pdfButtonLabel = computed(() => {
+  if (pdfBusy.value) return L('正在导出 PDF…', 'Exporting PDF…')
+  return pdfDisplayLang.value === 'zh' ? L('下载中文 PDF', 'Download Mandarin PDF') : L('下载英文 PDF', 'Download English PDF')
+})
+const pdfIdentity = computed(() => JSON.stringify([sourceIdentity.value, activeReportLang.value,
+  admittedReport.value, admittedPublication.value]))
+let pdfController = null
+function cancelPdfDownload() {
+  pdfController?.abort()
+  pdfController = null
+  pdfBusy.value = false
+  pdfError.value = ''
+}
+watch(pdfIdentity, cancelPdfDownload, { flush: 'sync' })
+onBeforeUnmount(cancelPdfDownload)
+async function downloadResearchPdf() {
+  if (pdfDisabled.value) return
+  const identity = pdfIdentity.value
+  const controller = new AbortController()
+  pdfController = controller
+  const isCurrent = () => pdfController === controller && !controller.signal.aborted && identity === pdfIdentity.value
+  pdfBusy.value = true
+  pdfError.value = ''
+  try {
+    const sourceSha = pdfLang.value ? admittedPublication.value.sourceSha
+      : await dossierSourceDigest(props.dossier?.report || '', props.dossier?.source_sha256)
+    if (!isCurrent()) return
+    const url = researchPdfUrl(props.pipelineId, pdfLang.value || undefined, {
+      sourceSha, generation: pdfLang.value ? admittedPublication.value?.generation : undefined,
+    })
+    await downloadPdf(url, {
+      filename: `research_${props.pipelineId}${pdfLang.value ? `.${pdfLang.value}` : ''}.pdf`,
+      signal: controller.signal, isCurrent,
+    })
+  } catch (error) {
+    if (isCurrent()) pdfError.value = error?.message || L('PDF 导出失败', 'PDF export failed')
+  } finally {
+    if (isCurrent()) { pdfBusy.value = false; pdfController = null }
+  }
+}
 
 // ---- L22: official-data datasets (handoff data/datasets.json) -------------
 // Requested through the research artifact endpoint only when the pipeline status
@@ -738,8 +751,8 @@ watch(
   { immediate: true },
 )
 
-const datasetRows = computed(() => datasetManifestRows(datasetManifest.value, {
-  lang: locale.value,
+const datasetRows = computed(() => datasetManifestRows(displayDossier.value?.datasets || datasetManifest.value, {
+  lang: displayLang.value,
   artifactNames: registeredArtifacts.value,
 }))
 
@@ -885,6 +898,7 @@ function formatUsd(value) {
 </script>
 
 <style scoped>
+.dossier-language-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border: 1px solid #e5e5e5; }
 .dossier-viewer {
   --orange: #FF4500;
   --border: #E5E5E5;

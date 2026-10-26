@@ -38,7 +38,7 @@
           <span class="btn-text">{{ L('刷新', 'Refresh') }}</span>
         </button>
         <button class="tool-btn" :class="{ active: overlayLang === 'zh' }" @click="toggleOverlayLang"
-                :disabled="overlayBusy || !graphData?.graph_id"
+                :disabled="!graphData?.graph_id"
                 :title="L('切换中文翻译（节点摘要/边事实）', 'Toggle Chinese translation (node summaries / edge facts)')">
           <span class="btn-text">{{ overlayBusy ? '…' : '中' }}</span>
         </button>
@@ -48,6 +48,7 @@
       </div>
     </div>
     
+    <TranslationJobStatus v-if="overlayLang === 'zh'" class="graph-translation-status" :observer="overlayObserver" :L="L" />
     <div class="graph-container" ref="graphContainer">
       <!-- 图谱可视化 -->
       <div v-if="graphData" class="graph-view">
@@ -320,7 +321,10 @@ import {
   graphPayloadRevision,
 } from '../utils/graphPayload'
 import { assignTypeColors, nodeRadius } from '../utils/graphStyle'
-import { ensureOverlay, graphOverlayFetcher } from '../utils/overlayTranslation'
+import { graphOverlayFetcher } from '../utils/overlayTranslation'
+import { useTranslationJob } from '../composables/useTranslationJob.js'
+import { normalizeTranslationSnapshot, translationBody } from '../utils/translationJobAdapter.js'
+import TranslationJobStatus from './TranslationJobStatus.vue'
 
 // ===== KG 渲染性能参数 =====
 // 聚焦模式阈值：节点数超过该值时默认只渲染 Top-K 子图（可用 VITE_GRAPH_UI_MAX_NODES 覆盖）
@@ -342,27 +346,18 @@ const props = defineProps({
   seedActors: { type: Array, default: () => [] }
 })
 
-// 2026-10-21: 中文翻译 overlay（节点摘要/边事实）。切换按钮触发；生成中显示 …；
-// 任何失败静默回退源文本。
+// Language selection stays local; the shared observer fences every graph/source revision.
 const overlayLang = ref(null)
-const overlayBusy = ref(false)
 const overlayMap = ref({})
-async function toggleOverlayLang() {
-  if (overlayBusy.value) return
-  if (overlayLang.value === 'zh') { overlayLang.value = null; return }
-  overlayBusy.value = true
-  overlayLang.value = 'zh'
-  try {
-    const gid = props.graphData?.graph_id
-    if (gid) {
-      const result = await ensureOverlay(graphOverlayFetcher(gid), 'zh')
-      overlayMap.value = (result && result.overlay) || {}
-    }
-  } finally { overlayBusy.value = false }
+const overlayInventoryRevision = ref(0)
+function toggleOverlayLang() {
+  overlayLang.value = overlayLang.value === 'zh' ? null : 'zh'
+  if (overlayLang.value === 'zh') return overlayObserver.start()
 }
 function displayText(key, sourceText) {
   if (overlayLang.value !== 'zh') return sourceText
-  return overlayMap.value[key] || sourceText
+  const translated = overlayMap.value[key]
+  return translated?.source === String(sourceText || '').trim() ? translated.text : sourceText
 }
 
 // T5.3: 归一化（NFKC + lowercase + trim）的种子名集合，用于节点匹配
@@ -685,9 +680,65 @@ const renderedNodeCount = ref(0)
 const totalNodeCount = ref(0)
 const userTouchedEdgeLabels = ref(false) // 用户手动动过边标签开关后，不再自动关闭
 
+// Include the overview, loaded full graph, server focus and expanded neighbours.
+// Exact source strings guard even in-place prose changes under an unchanged UUID.
+const overlayInventory = computed(() => {
+  void overlayInventoryRevision.value
+  const currentId = props.graphData?.graph_id
+  const owned = lastGraphId === currentId && lastOverviewRevision === graphPayloadRevision(props.graphData)
+  const sources = [owned && { nodes: extraNodes, edges: extraEdges }, owned && serverFocusData,
+    fullGraphData.value?.graph_id === currentId && fullGraphData.value, props.graphData,
+    selectedItem.value?.type === 'node' ? { nodes: [selectedItem.value.data] }
+      : selectedItem.value?.type === 'edge' ? { edges: selectedItem.value.data?.selfLoopEdges || [selectedItem.value.data] } : null].filter(Boolean)
+  const entries = new Map()
+  for (const graph of sources) {
+    for (const node of graph.nodes || []) if (node.uuid && node.summary?.trim()) entries.set(`node:${node.uuid}:summary`, node.summary.trim())
+    for (const edge of graph.edges || []) if (edge.uuid && edge.fact?.trim()) entries.set(`edge:${edge.uuid}:fact`, edge.fact.trim())
+  }
+  return [...entries]
+})
+const overlayObserver = useTranslationJob({
+  identity: () => overlayLang.value === 'zh' && props.graphData?.graph_id
+    ? { graphId: props.graphData.graph_id, revision: graphPayloadRevision(props.graphData), entries: overlayInventory.value, lang: 'zh' } : null,
+  adapter: () => {
+    const client = graphOverlayFetcher(props.graphData.graph_id)
+    const inventory = new Map(overlayInventory.value)
+    const normalize = response => {
+      const data = translationBody(response)
+      const admitted = (data.translations || []).filter(row => row?.source && typeof row.text === 'string' && /^[a-f0-9]{64}$/.test(row.source_sha256))
+      const byKey = new Map(admitted.filter(row => row.key).map(row => [row.key, row]))
+      const legacyPairs = new Set(admitted.filter(row => !row.key).map(row => JSON.stringify([row.source, row.text])))
+      const overlay = {}
+      for (const [key, source] of inventory) {
+        const row = byKey.get(key), text = data.overlay?.[key]
+        if (row ? row.source === source && row.text === text : legacyPairs.has(JSON.stringify([source, text]))) {
+          overlay[key] = { source, text }
+        }
+      }
+      const missing = inventory.size - Object.keys(overlay).length
+      const normalized = normalizeTranslationSnapshot(response)
+      const total = Math.max(inventory.size, normalized.coverage.total)
+      const pending = Math.max(missing, normalized.coverage.pending)
+      normalized.coverage = { total, accepted: Math.max(0, total - pending), pending }
+      if (missing && !normalized.active) {
+        normalized.state = 'partial'; normalized.partial = true
+        normalized.actions.retry = true
+        normalized.issues = [...new Set([...normalized.issues, 'Visible graph passages remain untranslated; retry to complete the full inventory.'])]
+      }
+      return { ...normalized, continue: data.continuation?.available === true, data: { ...data, admittedOverlay: overlay } }
+    }
+    return { get: async ({ signal }) => normalize(await client.get('zh', { signal })),
+      start: async ({ signal, force }) => normalize(await client.start('zh', force, { signal })) }
+  },
+  onReset: () => { overlayMap.value = {} },
+  onUpdate: state => { overlayMap.value = state.data.admittedOverlay },
+})
+const overlayBusy = overlayObserver.busy
+
 // 渲染合并调度：同一 tick 内的多个触发只重建一次
 let renderPending = false
 function scheduleRender() {
+  overlayInventoryRevision.value += 1
   if (renderPending) return
   renderPending = true
   nextTick(() => {
@@ -959,6 +1010,7 @@ function synchronizeGraphState() {
   serverFilterSupport = null
   serverNeighborsSupport = null
   closeDetailPanel()
+  overlayInventoryRevision.value += 1
 
   if (graphChanged) {
     userTouchedEdgeLabels.value = false
@@ -1886,6 +1938,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.graph-translation-status { position: absolute; top: 58px; left: 10px; right: 10px; z-index: 5; }
 .graph-panel {
   position: relative;
   width: 100%;

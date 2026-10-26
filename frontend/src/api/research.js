@@ -187,9 +187,11 @@ export function editDossier(pipelineId, payload) {
  * 仅在隔离审计硬通过时落 research_report.<lang>.md + 审计侧车；失败不发布（fail-closed）。
  * @param {String} pipelineId
  * @param {String} lang - 'en' | 'zh'
+ * @param {Boolean} force - Only explicit refresh replaces accepted translation work.
+ * @param {Object} options - AbortSignal for the current observer subscription.
  */
-export function requestResearchTranslation(pipelineId, lang) {
-  return service.post(`/api/research/${pipelineId}/dossier/translations/${lang}`)
+export function requestResearchTranslation(pipelineId, lang, force = false, { signal } = {}) {
+  return service.post(`/api/research/${pipelineId}/dossier/translations/${lang}${force ? '?force=1' : ''}`, undefined, { signal })
 }
 
 /**
@@ -199,20 +201,25 @@ export function requestResearchTranslation(pipelineId, lang) {
  * @param {String} pipelineId
  * @param {String} lang - 'en' | 'zh'
  */
-export function getResearchTranslation(pipelineId, lang) {
-  return service.get(`/api/research/${pipelineId}/dossier/translations/${lang}`)
+export function getResearchTranslation(pipelineId, lang, { signal } = {}) {
+  return service.get(`/api/research/${pipelineId}/dossier/translations/${lang}`, { signal })
 }
 
 /**
- * 研究报告 PDF 直链（浏览器直下；绕过 axios）。lang ∈ {en,zh} 取审计通过的双语版（?lang=），
+ * 研究报告 PDF 地址（由下载控件获取并验证；绕过 axios）。lang ∈ {en,zh} 取审计通过的双语版（?lang=），
  * 缺省取主报告。与预测报告 PDF 复用同一 LaTeX 模板（CJK/符号安全）。
  * @param {String} pipelineId
  * @param {String} [lang] - 'en' | 'zh'
- * @returns {String} 可放进 <a href> 的 URL
+ * @param {Object} identity - Optional displayed source digest and admitted generation.
+ * @returns {String} PDF fetch URL; omitting lang selects the source.
  */
-export function researchPdfUrl(pipelineId, lang) {
+export function researchPdfUrl(pipelineId, lang, { sourceSha, generation } = {}) {
   const base = `/api/research/${pipelineId}/dossier/pdf`
-  return apiUrl(lang ? `${base}?lang=${encodeURIComponent(lang)}` : base)
+  const query = new URLSearchParams()
+  if (lang) query.set('lang', lang)
+  if (sourceSha) query.set('source_sha256', sourceSha)
+  if (generation) query.set('generation', generation)
+  return apiUrl(query.size ? `${base}?${query}` : base)
 }
 
 /**

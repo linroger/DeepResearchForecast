@@ -204,6 +204,22 @@ def create_app(config_class=Config):
     app.register_blueprint(research_bp, url_prefix='/api/research')
     app.register_blueprint(settings_bp, url_prefix='/api/settings')
 
+    # Register every durable operation before an elected coordinator sees the
+    # queue left by a previous process. Imports/GETs alone never dispatch work.
+    from .api.translations import translations_bp
+    from .api.report import register_translation_handler as register_report_translation
+    from .api.research import register_translation_handler as register_research_translation
+    from .services.artifact_translation import register_translation_handler as register_overlay_translation
+    app.register_blueprint(translations_bp, url_prefix='/api/translations')
+    register_report_translation()
+    register_research_translation()
+    register_overlay_translation()
+    if _runtime_lifecycle_enabled:
+        from .services.translation.scheduler import start_scheduler, stop_schedulers
+        import atexit
+        start_scheduler()
+        atexit.register(stop_schedulers)
+
     # 稳定版程序化 API 表面 /api/v1（EXECPLAN2 I-9-5）。可选降级：默认 **不注册**，
     # 仅当 Config.API_V1_ENABLED 为真时挂载，未开启则本机 SPA 与现有路由行为完全不变。
     # 鉴权/CORS 复用上面的 /api/* 统一闸门（/api/v1/* 自动继承）。

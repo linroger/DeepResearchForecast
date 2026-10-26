@@ -168,6 +168,13 @@ class _ChineseToEnglish:
                          for line in english.split("\n")).replace("#  ", "# ")
 
     def chat(self, messages=None, temperature=0.0, max_tokens=4096, tier="strong", **_kw):
+        from model_translation_fakes import model_protocol, preserve_carriers
+        def faithful(value):
+            value = value.replace("8,200亿美元", "$820 billion").replace("60万颗", "600,000 units").replace("250亿元", "RMB 25 billion")
+            return preserve_carriers(value, self._englishify)
+        native = model_protocol(messages, faithful)
+        if native is not None:
+            return native
         system, user = messages[0]["content"], messages[-1]["content"]
         if "same alphabetic keys" in system:
             import json
@@ -358,3 +365,17 @@ def test_english_report_translates_fred_unit_phrases_with_the_right_magnitude():
     translated = result["translated_md"]
     assert "250亿美元" in translated and "271.338159亿美元" in translated
     assert "Millions" not in translated and "25000" not in translated
+
+
+@pytest.mark.parametrize("source,zh", [
+    ("-3.7 billion", "-37亿"), ("−3.7 billion", "-37亿"),
+    ("-$3.7 billion", "-37亿美元"), ("$-3.7 billion", "-37亿美元"),
+    ("-0.4 million", "-40万"), ("-0.0000005 million", "-0.5"),
+    ("-3.7–-2 billion", "-37–-20亿"),
+])
+def test_signed_quantity_is_atomic_and_round_trips(source, zh):
+    protected, mapping = ReportAgent._protect_translation_tokens(source, date_target="zh")
+    restored, issues = ReportAgent._restore_translation_tokens(protected, mapping)
+    assert not issues and restored == zh
+    assert ReportAgent._translation_fact_multiset(source) == ReportAgent._translation_fact_multiset(zh)
+    assert not ReportAgent._forecast_text_facts_preserved(source, zh.replace("-", ""))

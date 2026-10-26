@@ -729,22 +729,26 @@ def delete_graph(graph_id: str):
 
 @graph_bp.route('/<graph_id>/translations/<lang>', methods=['POST'])
 def generate_graph_translation(graph_id: str, lang: str):
-    """Translate the graph panel's text (node summaries / edge facts) into <lang>.
-
-    Bounded inventory (degree-ranked top nodes + their edges), sha-keyed cache under
-    uploads/graph_translations/<graph_id>/<lang>.json — incremental regeneration
-    only translates new/changed entries; content-filter failures degrade per
-    fragment via the compliance ladder instead of failing the overlay."""
+    """Advance a bounded page of the complete source-bound graph inventory."""
     lang = (lang or '').strip().lower()
     if lang not in ('zh', 'en'):
         return jsonify({"success": False, "error": "仅支持 zh/en"}), 400
     try:
         from ..services.artifact_translation import start_translation
-        result = start_translation("graph", graph_id, lang, force=bool(request.args.get('force')))
-        return jsonify({"success": True, "data": result}), 202
+        body = request.get_json(silent=True)
+        if body is not None and not isinstance(body, dict):
+            raise ValueError("translation body must be an object")
+        body = body or {}
+        force = (request.args.get('force') or '').lower() in {'1', 'true', 'yes'}
+        result = start_translation("graph", graph_id, lang, force=force, context=body.get("context"))
+        return jsonify({"success": True, "data": result}), (202 if result['status'] == 'generating' else 200)
+    except FileNotFoundError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except (TypeError, ValueError) as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
     except Exception as e:  # noqa: BLE001
-        logger.error(f"图谱翻译失败: {e}", exc_info=True)
-        return jsonify({"success": False, "error": str(e)}), 500
+        logger.error("Graph translation failed: %s", type(e).__name__)
+        return jsonify({"success": False, "error": "translation request failed"}), 500
 
 
 @graph_bp.route('/<graph_id>/translations/<lang>', methods=['GET'])
@@ -753,8 +757,16 @@ def get_graph_translation(graph_id: str, lang: str):
     if lang not in ('zh', 'en'):
         return jsonify({"success": False, "error": "仅支持 zh/en"}), 400
     try:
+        import json
         from ..services.artifact_translation import translation_status
-        result = translation_status("graph", graph_id, lang)
+        context = json.loads(request.args['context']) if 'context' in request.args else None
+        result = translation_status("graph", graph_id, lang,
+            request_digest=request.args.get('request_digest'), context=context)
         return jsonify({"success": True, "data": result})
+    except FileNotFoundError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except (TypeError, ValueError) as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
     except Exception as e:  # noqa: BLE001
-        return jsonify({"success": False, "error": str(e)}), 500
+        logger.error("Graph translation status failed: %s", type(e).__name__)
+        return jsonify({"success": False, "error": "translation status unavailable"}), 500

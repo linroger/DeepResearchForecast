@@ -9,6 +9,10 @@ import * as sourceContext from '../src/utils/sourceContext.js'
 import * as markdown from '../src/utils/markdown.js'
 import * as officialData from '../src/utils/officialData.js'
 import * as researchTranslation from '../src/utils/researchTranslation.js'
+import * as translationJob from '../src/composables/useTranslationJob.js'
+import * as dossierTranslationAdapter from '../src/utils/dossierTranslationAdapter.js'
+import * as forecastTranslationAdapter from '../src/utils/forecastTranslationAdapter.js'
+import * as pdfDownload from '../src/utils/pdfDownload.js'
 import * as reportLanguages from '../src/utils/reportLanguages.js'
 import * as vizManifest from '../src/utils/vizManifest.js'
 import * as binaryForecasts from '../src/utils/binaryForecasts.js'
@@ -185,6 +189,7 @@ async function renderDossier(context, lang = 'en') {
   return withLocale(lang, async () => {
     const component = buildDossier({
       vue: integrationVue(), '../../i18n': i18n, '../../utils/markdown': markdown,
+      '../../composables/useTranslationJob': translationJob, '../../utils/dossierTranslationAdapter': dossierTranslationAdapter, '../../utils/pdfDownload': pdfDownload,
       '../../utils/researchTranslation': researchTranslation, '../../utils/officialData': officialData,
       '../../utils/saveTextFile': { saveTextFile: unexpected('saveTextFile') },
       '../../api/research': {
@@ -201,6 +206,7 @@ async function renderReport(context, lang = 'en', { markdownContent = '# Report\
     const calls = []
     const component = buildReport({
       vue: integrationVue(), '../../i18n': i18n, '../../utils/markdown': markdown,
+      '../../composables/useTranslationJob': translationJob, '../../utils/forecastTranslationAdapter': forecastTranslationAdapter,
       '../../utils/reportLanguages': reportLanguages, '../../utils/officialData': officialData,
       '../../utils/vizManifest': vizManifest, '../../utils/saveTextFile': { saveTextFile: unexpected('saveTextFile') },
       './BinaryForecastTable.vue': { default: buildTable({ vue, '../../i18n': i18n, '../../utils/binaryForecasts': binaryForecasts }) },
@@ -225,7 +231,7 @@ async function renderReport(context, lang = 'en', { markdownContent = '# Report\
       return state
     }
     const html = await renderToString(vue.createSSRApp(component, { reportId: 'report_context' }))
-    assert.deepEqual(calls, ['report_context'])
+    assert.deepEqual(calls, ['report_context', 'report_context'], 'report load and read-only observer reconnect')
     return html
   })
 }
@@ -277,8 +283,8 @@ test('production templates use the same literal shared component and existing tr
     assert.match(source, /defineAsyncComponent\(\(\) => import\('\.\/SourceContextPanel\.vue'\)\)/)
     assert.equal(count(source, '<SourceContextPanel '), 1)
   }
-  assert.match(dossier, /:context="dossier.news_market_context"/)
-  assert.match(report, /:context="meta.news_market_context"/)
+  assert.match(dossier, /:context="displayDossier.news_market_context"/)
+  assert.match(report, /:context="displayContext"/)
   assert.match(report, /const res = await getReport\(reportId\)[\s\S]*?meta.value = data \|\| \{\}/)
   assert.doesNotMatch(readFileSync(panelUrl, 'utf8'), /v-html|fetch\(|getReport|setInterval/)
 })

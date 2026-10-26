@@ -4,7 +4,7 @@
       <div class="ws-title">
         <span class="diamond sm">◇</span>
         <span class="ws-label">{{ L('世界状态', 'World state') }}</span>
-        <span class="ws-period mono" v-if="vm.periodLabel">{{ vm.periodLabel }}</span>
+        <span class="ws-period mono" v-if="vm.periodLabel">{{ d(vm.periodLabel) }}</span>
         <span class="ws-past mono" v-if="vm.isPast">
           {{ L('历史时段', 'past period') }} · {{ L('第', 'round ') }}{{ vm.selectedRound }}{{ L('期', '') }} / {{ vm.latestRound }}
         </span>
@@ -12,12 +12,12 @@
           {{ L('已提交', 'committed') }} {{ vm.committedRound }}
         </span>
         <button type="button" class="ws-back mono" v-if="vm.isPast" @click="backToLatest">
-          ↩ {{ L('回到最新', 'back to latest') }}<template v-if="vm.latestLabel"> · {{ vm.latestLabel }}</template>
+          ↩ {{ L('回到最新', 'back to latest') }}<template v-if="vm.latestLabel"> · {{ d(vm.latestLabel) }}</template>
         </button>
       </div>
       <div class="ws-badges">
         <span class="ws-badge" :class="'st-' + (vm.arbiterStatus || 'none')" v-if="vm.arbiterStatus">
-          {{ L('仲裁', 'arbiter') }}: {{ vm.arbiterStatus }}
+          {{ L('仲裁', 'arbiter') }}: {{ d(vm.arbiterStatus) }}
         </span>
         <span class="ws-badge st-failed" v-if="vm.arbiterFailedRounds">
           {{ vm.arbiterFailedRounds }} {{ L('轮仅机械推进', 'mechanical-only rounds') }}
@@ -32,20 +32,23 @@
           {{ L('预期反应获跟进', 'expected reactions followed') }} {{ vm.expectations.reacted }}/{{ vm.expectations.checked }}
         </span>
         <span class="ws-badge st-note">{{ L('推演投影，非观察证据', 'model projection, not evidence') }}</span>
-        <button class="ws-lang-btn" :class="{ active: overlayLang === 'zh' }" @click="toggleOverlayLang"
-                :disabled="overlayBusy" :title="L('切换中文翻译', 'Toggle Chinese translation')">
-          {{ overlayBusy ? '…' : '中' }}</button>
+        <button type="button" class="ws-lang-btn" :class="{ active: translation.lang.value === 'zh' }" @click="translation.toggle"
+          :aria-pressed="translation.lang.value === 'zh'" :title="L('切换整个世界状态的语言', 'Translate the whole world-state view')">
+          {{ translation.lang.value === 'zh' ? '原文 / English' : '中文' }}</button>
       </div>
     </div>
 
+    <TranslationJobStatus class="ws-translation" :observer="translation.observer" :L="L">
+      <span>{{ translation.feedback.value }}</span>
+    </TranslationJobStatus>
     <div class="ws-error" v-if="error"><span class="err-dot">●</span><span>{{ error }}</span></div>
 
-    <div class="ws-headline mono" v-if="vm.headlineSummary">{{ vm.headlineSummary }}</div>
-    <p class="ws-narrative" v-if="vm.narrative">{{ displayText(digestKey, vm.narrative) }}</p>
+    <div class="ws-headline mono" v-if="vm.headlineSummary">{{ d(vm.headlineSummary) }}</div>
+    <p class="ws-narrative" v-if="vm.narrative">{{ d(vm.narrative) }}</p>
     <p class="ws-narrative empty" v-else-if="!loading && hasWorld">{{ L('本时段无仲裁叙事', 'No arbiter narrative for this period') }}</p>
     <ul class="ws-problems" v-if="vm.arbiterProblems.length">
       <li v-for="(p, i) in vm.arbiterProblems" :key="'ap' + i">
-        <span class="warn-dot">▲</span><span>{{ L('仲裁问题', 'arbiter problem') }}: {{ p }}</span>
+        <span class="warn-dot">▲</span><span>{{ L('仲裁问题', 'arbiter problem') }}: {{ d(p) }}</span>
       </li>
     </ul>
     <div class="ws-decisions mono" v-if="decisionsLine">{{ decisionsLine }}</div>
@@ -56,11 +59,11 @@
         <ul class="ws-list">
           <li v-for="v in vm.variables.slice(0, 12)" :key="v.id" class="ws-var">
             <span class="ws-var-name">{{ tvar(v.id, v.name) }}</span>
-            <span class="ws-var-value mono">{{ v.display }}</span>
+            <span class="ws-var-value mono">{{ d(v.display) }}</span>
             <span class="ws-var-delta mono" v-if="v.deltaDisplay" :class="'dir-' + (v.delta ? v.delta.direction : 'flat')">
-              {{ v.deltaDisplay }}
+              {{ d(v.deltaDisplay) }}
             </span>
-            <span class="ws-var-prov" v-if="v.provenance">{{ v.provenance }}</span>
+            <span class="ws-var-prov" v-if="v.provenance">{{ d(v.provenance) }}</span>
           </li>
           <li v-if="!vm.variables.length" class="ws-empty">{{ L('暂无追踪变量', 'No tracked variables yet') }}</li>
         </ul>
@@ -72,12 +75,12 @@
         <ul class="ws-list">
           <li v-for="v in vm.variablesChanged.slice(0, 12)" :key="'vc' + v.id" class="ws-var">
             <span class="ws-var-name">{{ tvar(v.id, v.name) }}</span>
-            <span class="ws-var-delta mono" :class="'dir-' + v.direction">{{ v.display }}</span>
+            <span class="ws-var-delta mono" :class="'dir-' + v.direction">{{ d(v.display) }}</span>
           </li>
           <li v-for="v in vm.variablesAdded.slice(0, 8)" :key="'va' + v.id" class="ws-var">
             <span class="ws-kind mono">{{ L('新增', 'new') }}</span>
             <span class="ws-var-name">{{ tvar(v.id, v.name) }}</span>
-            <span class="ws-var-value mono">{{ v.display }}</span>
+            <span class="ws-var-value mono">{{ d(v.display) }}</span>
           </li>
           <li v-if="!vm.variablesChanged.length && !vm.variablesAdded.length" class="ws-empty">
             {{ L('本时段无事实变化', 'No facts changed this period') }}
@@ -90,8 +93,8 @@
         <ul class="ws-list">
           <li v-for="(m, i) in vm.moves.slice(0, 10)" :key="'m' + i" class="ws-move">
             <span class="ws-actor" v-if="m.actor">{{ m.actor }}</span>
-            <span class="ws-move-desc">{{ m.description }}</span>
-            <q class="ws-stmt" v-if="m.statement">{{ m.statement }}</q>
+            <span class="ws-move-desc">{{ d(m.description) }}</span>
+            <q class="ws-stmt" v-if="m.statement">{{ d(m.statement) }}</q>
           </li>
           <li v-if="!vm.moves.length" class="ws-empty">{{ L('无实质行动（观望）', 'No consequential move (actors held)') }}</li>
         </ul>
@@ -103,11 +106,11 @@
         </div>
         <ul class="ws-list">
           <li v-for="(c, i) in vm.consequences.slice(0, 10)" :key="'c' + i" class="ws-event" :class="{ 'ev-red-line': c.kind === 'red_line' }">
-            <span class="ws-kind mono">{{ kindLabel(c.kind) }}</span><span>{{ c.description }}</span>
+            <span class="ws-kind mono">{{ kindLabel(c.kind) }}</span><span>{{ d(c.description) }}</span>
           </li>
           <li v-for="(r, i) in vm.relationshipChanges.slice(0, 6)" :key="'r' + i" class="ws-event">
             <span class="ws-kind mono">{{ L('关系', 'relation') }}</span>
-            <span>{{ r.source }} — {{ r.target }}: {{ r.to }}<template v-if="r.direction"> ({{ r.direction }})</template></span>
+            <span>{{ r.source }} — {{ r.target }}: {{ d(r.to) }}<template v-if="r.direction"> ({{ d(r.direction) }})</template></span>
           </li>
           <li v-if="!vm.consequences.length && !vm.relationshipChanges.length" class="ws-empty">
             {{ L('本时段无新事件', 'No new events this period') }}
@@ -119,8 +122,8 @@
         <div class="ws-card-head">{{ L('待兑现与预期', 'Pending and expected') }} ({{ vm.pending.length }})</div>
         <ul class="ws-list">
           <li v-for="(p, i) in vm.pending.slice(0, 10)" :key="'p' + i" class="ws-pending">
-            <span class="ws-actor">{{ p.actor }}</span>
-            <span>{{ p.description }}</span>
+            <span class="ws-actor">{{ d(p.actor) }}</span>
+            <span>{{ d(p.description) }}</span>
             <span class="ws-due mono" v-if="p.dueRound !== null">{{ L('第', 'round ') }}{{ p.dueRound }}{{ L('期', '') }}</span>
           </li>
           <li v-if="!vm.pending.length" class="ws-empty">{{ L('无待兑现承诺', 'No open commitments') }}</li>
@@ -144,9 +147,9 @@
         </div>
         <ul class="ws-list">
           <li v-for="it in vm.offers.slice(0, 8)" :key="it.id" class="ws-offer">
-            <span class="ws-badge mono" :class="'offer-' + it.status">{{ it.status }}</span>
+            <span class="ws-badge mono" :class="'offer-' + it.status">{{ d(it.status) }}</span>
             <span class="ws-actor">{{ it.proposer }} → {{ it.recipient }}</span>
-            <span>{{ it.terms }}</span>
+            <span>{{ d(it.terms) }}</span>
             <span class="ws-due mono" v-if="!vm.isPast && it.expiresRound !== null && (it.status === 'open' || it.status === 'deferred')">
               {{ L('截至第', 'until round ') }}{{ it.expiresRound }}{{ L('期', '') }}
             </span>
@@ -163,7 +166,7 @@
 
     <details class="ws-digest" v-if="vm.digest" :open="!vm.narrative">
       <summary>{{ L('本时段推送给智能体的摘要', 'Digest shown to the agents this period') }}</summary>
-      <pre class="ws-digest-text">{{ displayText(digestKey, vm.digest) }}</pre>
+      <pre class="ws-digest-text">{{ d(vm.digest) }}</pre>
     </details>
 
     <div class="ws-timeline" role="group" :aria-label="L('选择已提交的时段', 'Select a committed period')" v-if="vm.history.length > 1">
@@ -175,16 +178,18 @@
         :class="['st-' + (h.arbiterStatus || 'none'), { current: h.isCurrent, selected: h.isSelected }]"
         :aria-pressed="h.isSelected"
         :aria-label="tickLabel(h)"
-        :title="h.headline"
+        :title="d(h.headline)"
         @click="selectRound(h.round)"
-      >{{ h.label }}<template v-if="h.factsChanged"> · {{ h.factsChanged }}Δ</template></button>
+      >{{ d(h.label) }}<template v-if="h.factsChanged"> · {{ h.factsChanged }}Δ</template></button>
     </div>
   </section>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { L } from '../../i18n'
+import { locale } from '../../i18n'
+import { useSimulationTranslation } from '../../utils/overlayTranslation'
+import TranslationJobStatus from '../TranslationJobStatus.vue'
 import { getWorldState } from '../../api/simulation'
 import {
   decisionsSummary, eventKindLabel, nextSelectedRound, resolveSelectedRound, summarizeWorldState, trackRecordSummary
@@ -192,6 +197,9 @@ import {
 
 const props = defineProps({
   simulationId: { type: String, default: '' },
+  language: { type: String, default: '' },
+  // Increases only when the parent explicitly requests translation of this view.
+  translationRequest: { type: Number, default: 0 },
   // bump to force a reload (the parent passes its refresh counter)
   refreshToken: { type: Number, default: 0 },
   pollMs: { type: Number, default: 15000 },
@@ -211,36 +219,33 @@ const error = ref('')
 // null = follow the latest committed round; a round number pins that past period across live refreshes
 const selectedRound = ref(null)
 let timer = null
-
-// 2026-10-21: 中文翻译 overlay（问题/变量名/仲裁叙事/摘要）。生成走后台 + 轮询；
-// 任何失败静默回退源文本。digestKey 跟随当前选择的轮次。
-const overlayLang = ref(null)
-const overlayBusy = ref(false)
-const overlayMap = ref({})
-const digestKey = computed(() => (selectedRound.value ? `digest:${selectedRound.value}` : 'digest:latest'))
-async function toggleOverlayLang() {
-  if (overlayBusy.value) return
-  if (overlayLang.value === 'zh') { overlayLang.value = null; return }
-  overlayBusy.value = true
-  overlayLang.value = 'zh'
-  try {
-    if (props.simulationId) {
-      const { ensureOverlay, simulationOverlayFetcher } = await import('../../utils/overlayTranslation')
-      const result = await ensureOverlay(simulationOverlayFetcher(props.simulationId), 'zh')
-      overlayMap.value = (result && result.overlay) || {}
-    }
-  } finally { overlayBusy.value = false }
-}
-function tvar(varId, sourceName) {
-  if (overlayLang.value !== 'zh') return sourceName
-  return overlayMap.value[`var:${varId}:name`] || sourceName
-}
-function displayText(key, sourceText) {
-  if (overlayLang.value !== 'zh') return sourceText
-  return overlayMap.value[key] || sourceText
-}
+let loadVersion = 0
 
 const vm = computed(() => summarizeWorldState(raw.value, selectedRound.value))
+const translation = useSimulationTranslation({
+  simulationId: () => props.simulationId,
+  language: () => props.language || locale.value,
+  context: () => ({ engine: 'oasis-legacy', platform: '', round: vm.value.selectedRound,
+    generation_id: '', revision: String(raw.value?.committed_round || ''), view: 'public', actor_id: '' }),
+  texts: () => {
+    const v = vm.value
+    return [v.periodLabel, v.latestLabel, v.headlineSummary, v.narrative, v.digest, ...v.arbiterProblems,
+      ...(v.isPast ? [...v.variablesChanged.slice(0, 12), ...v.variablesAdded.slice(0, 8)] : v.variables.slice(0, 12))
+        .flatMap(row => [row.name, row.display, row.deltaDisplay, ...(!v.isPast ? [row.provenance] : [])]),
+      ...v.moves.slice(0, 10).flatMap(row => [row.description, row.statement]),
+      ...v.consequences.slice(0, 10).map(row => row.description),
+      ...v.relationshipChanges.slice(0, 6).flatMap(row => [row.to, row.direction]),
+      ...(!v.isPast ? v.pending.slice(0, 10).map(row => row.description) : []),
+      ...v.offers.slice(0, 8).map(row => row.terms),
+      ...v.seedGaps.flatMap(row => [row.kind, row.note]),
+      ...v.history.flatMap(row => [row.label, row.headline]),
+    ]
+  },
+})
+const L = translation.L
+const d = translation.display
+const tvar = (_id, name) => d(name)
+
 const hasWorld = computed(() => !!(raw.value && raw.value.committed_round))
 const decisionsLine = computed(() => decisionsSummary(vm.value.decisions, {
   decisions: L('项决策', 'decisions'), ok: L('有效', 'ok'), held: L('观望', 'held'),
@@ -256,7 +261,7 @@ function backToLatest() {
 }
 
 // MODELLING GAPS / BEHAVIOUR badges carry their detail in the title attribute (hover)
-const gapsTitle = computed(() => vm.value.seedGaps.map((g) => `${g.kind}: ${g.subject} — ${g.note}`).join('\n'))
+const gapsTitle = computed(() => vm.value.seedGaps.map((g) => `${d(g.kind)}: ${g.subject} — ${d(g.note)}`).join('\n'))
 const behaviourTitle = computed(() => vm.value.behaviour
   ? `${vm.value.behaviour.responsiveMoves}/${vm.value.behaviour.moves} ${L('项行动回应了上期的事实变化或他方行动', 'moves answered last period\'s changes or another actor')} (${vm.value.behaviour.roundsScored} ${L('个时段', 'periods')}, ${vm.value.behaviour.offersAnswered} ${L('项应答要约', 'offers answered')}). ${L('文本层面的诊断，非真实性判定', 'Textual diagnostic, not a realism verdict')}`
   : '')
@@ -282,11 +287,11 @@ function trackRecordLine(row) {
 
 // RED LINES: a crossed red line reads as such in both languages; other kinds keep their tag
 function kindLabel(kind) {
-  return eventKindLabel(kind, { red_line: L('越过红线', 'red line crossed') })
+  return d(eventKindLabel(kind, { red_line: L('越过红线', 'red line crossed') }))
 }
 
 function tickLabel(h) {
-  const bits = [h.label, `${L('仲裁', 'arbiter')} ${h.arbiterStatus || L('无', 'none')}`]
+  const bits = [d(h.label), `${L('仲裁', 'arbiter')} ${d(h.arbiterStatus) || L('无', 'none')}`]
   if (h.factsChanged) bits.push(`${h.factsChanged} ${L('项事实变化', 'facts changed')}`)
   if (h.isCurrent) bits.push(L('最新', 'latest'))
   return bits.join(', ')
@@ -300,9 +305,11 @@ function dropStaleSelection() {
 }
 
 async function load() {
+  const ticket = ++loadVersion
   if (!props.simulationId) {
     raw.value = null
     error.value = ''
+    loading.value = false
     selectedRound.value = null
     return
   }
@@ -310,13 +317,13 @@ async function load() {
   const simId = props.simulationId
   try {
     const res = await getWorldState(simId, HISTORY_ROWS)
-    if (props.simulationId !== simId) return
+    if (props.simulationId !== simId || ticket !== loadVersion) return
     const data = res && res.data
     raw.value = data && typeof data === 'object' ? data : null
     error.value = ''
     dropStaleSelection()
   } catch (e) {
-    if (props.simulationId !== simId) return
+    if (props.simulationId !== simId || ticket !== loadVersion) return
     const status = e && e.response && e.response.status
     // 404 = the world has not committed a round yet (or legacy run): stay quiet
     if (status === 404) {
@@ -327,7 +334,7 @@ async function load() {
       error.value = L('世界状态加载失败', 'Could not load the world state')
     }
   } finally {
-    loading.value = false
+    if (ticket === loadVersion) loading.value = false
   }
 }
 
@@ -342,17 +349,22 @@ function stopPolling() {
   }
 }
 
-watch(() => props.simulationId, () => { selectedRound.value = null; load(); startPolling() })
+watch(() => props.simulationId, () => { raw.value = null; error.value = ''; selectedRound.value = null; load(); startPolling() }, { flush: 'sync' })
 watch(selectedRound, (value) => { emit('update:selectedRound', value) })
 watch(() => props.round, (value) => {
   if (value !== undefined && value !== selectedRound.value) selectedRound.value = value
 })
 watch(() => props.refreshToken, () => { load() })
+// A mount with an old token or a later data load only observes saved translations.
+watch(() => props.translationRequest, (next, previous) => {
+  if (next > (previous || 0) && translation.lang.value === 'zh') translation.start()
+}, { flush: 'post' })
 onMounted(() => { load(); startPolling() })
-onUnmounted(stopPolling)
+onUnmounted(() => { ++loadVersion; stopPolling(); translation.cancel() })
 </script>
 
 <style scoped>
+.ws-translation { padding: 8px; margin-block: 8px; background: #fff7ed; font-size: 12px; }
 .ws-panel {
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 10px;

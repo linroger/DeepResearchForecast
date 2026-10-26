@@ -701,6 +701,7 @@ def published_report_variants(
     that is not publishable (missing, failed or stale audit) is never exported.
     """
     from app.services.report_agent import ReportManager
+    from app.services.translation.artifacts import ArtifactError, assert_current
 
     previous_root = ReportManager.REPORTS_DIR
     ReportManager.REPORTS_DIR = os.path.join(UPLOADS, "reports")
@@ -709,17 +710,22 @@ def published_report_variants(
         for lang in LANGUAGES:
             if lang == primary_lang:
                 continue
-            path = os.path.join(report_dir, f"full_report.{lang}.md")
-            if not os.path.isfile(path) or not ReportManager.is_publishable(report_id, lang):
+            try:
+                snapshot = ReportManager.resolve_translation(report_id, lang)
+                if not ReportManager.is_publishable(report_id, lang):
+                    continue
+                markdown = snapshot.markdown if snapshot else ReportManager.read_translation_markdown(report_id, lang)
+                if snapshot:
+                    assert_current(snapshot, os.path.join(report_dir, "full_report.md"))
+                variants[lang] = strip_placeholder_sections(markdown)
+            except (ArtifactError, OSError):
                 continue
-            with open(path, encoding="utf-8") as f:
-                variants[lang] = strip_placeholder_sections(f.read())
         return variants
     finally:
         ReportManager.REPORTS_DIR = previous_root
 
 
-def published_dossier_variants(handoff: str, primary_lang: str | None) -> dict:
+def published_dossier_variants(handoff: str, primary_lang: str | None, *, pipeline_id=None) -> dict:
     """{lang: markdown} for research-dossier translations bound to the current source.
 
     Requires the translation status "available" for the current research_report.md
@@ -733,6 +739,19 @@ def published_dossier_variants(handoff: str, primary_lang: str | None) -> dict:
     for lang in LANGUAGES:
         if lang == primary_lang:
             continue
+        if pipeline_id is not None:
+            from app.api.research import _research_artifact
+            from app.services.translation.artifacts import ArtifactError, assert_current
+            try:
+                state, markdown, snapshot, _audit = _research_artifact(handoff, lang, pipeline_id)
+                if snapshot:
+                    assert_current(snapshot, source)
+                    if state.get("available") and markdown is not None:
+                        variants[lang] = markdown
+                    continue
+            except (ArtifactError, OSError, ValueError):
+                # A corrupt/stale v2 pointer must not fall back to older sidecars.
+                continue
         variant = os.path.join(handoff, f"research_report.{lang}.md")
         status = _read_json(os.path.join(handoff, f"research_report.translation.{lang}.json")) or {}
         audit = _read_json(os.path.join(handoff, f"research_report.final_audit.{lang}.json")) or {}
@@ -779,7 +798,7 @@ def export_dossier(
     with open(os.path.join(handoff, "research_report.md"), encoding="utf-8") as f:
         dossier_md = f.read()
     primary_lang = _markdown_language(dossier_md)
-    variants = published_dossier_variants(handoff, primary_lang)
+    variants = published_dossier_variants(handoff, primary_lang, pipeline_id=RUNS.get(key))
     # One copy for every language: the asset namespace is rebuilt from scratch, so
     # copying per language would delete the charts another language references.
     assets = copy_markdown_assets(
@@ -870,7 +889,8 @@ def refresh_demo_reports(key: str, pipeline_id: str) -> dict:
     dossier_variants = {}
     if os.path.isfile(source):
         with open(source, encoding="utf-8") as f:
-            dossier_variants = published_dossier_variants(handoff, _markdown_language(f.read()))
+            dossier_variants = published_dossier_variants(handoff, _markdown_language(f.read()),
+                                                         pipeline_id=pipeline_id)
     # Only a dossier with a published (or previously published) translation is
     # re-exported: a refresh never rewrites a single-language dossier it has no
     # reason to touch.

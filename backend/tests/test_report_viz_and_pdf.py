@@ -371,7 +371,7 @@ def test_export_pdf_builds_then_content_caches(report_folder, monkeypatch):
     md_path = report_folder / "full_report.md"
     md_path.write_text("# R\n\n中文 text changed\n", encoding="utf-8")
     pdf3 = ReportManager.export_pdf("rid")
-    assert pdf3 == pdf
+    assert pdf3 != pdf  # A new dependency set receives an immutable cache path.
     assert len(calls) == 2                        # 重新构建
 
 
@@ -418,11 +418,14 @@ def test_export_pdf_is_single_flight_per_report_language(report_folder, monkeypa
         "_validate_pdf_content",
         staticmethod(lambda path, md: (True, {"page_count": 1, "issues": []})),
     )
-    results = []
-    threads = [
-        threading.Thread(target=lambda: results.append(ReportManager.export_pdf("rid")))
-        for _ in range(5)
-    ]
+    from app.services.translation.artifacts import ArtifactError
+    results, conflicts = [], []
+    def export():
+        try:
+            results.append(ReportManager.export_pdf("rid"))
+        except ArtifactError as exc:
+            conflicts.append(exc)
+    threads = [threading.Thread(target=export) for _ in range(5)]
     for thread in threads:
         thread.start()
     for thread in threads:
@@ -431,7 +434,8 @@ def test_export_pdf_is_single_flight_per_report_language(report_folder, monkeypa
         # render for five concurrent callers, not a two-second latency cap.
         thread.join(timeout=10)
 
-    assert len(results) == 5 and len(set(results)) == 1
+    assert len(results) + len(conflicts) == 5 and len(set(results)) == 1
+    assert all(error.code == "artifact_busy" and error.status_code == 409 for error in conflicts)
     assert len(calls) == 1
 
 
@@ -497,6 +501,206 @@ def test_pdf_content_gate_accepts_parseable_plain_text(tmp_path):
     assert valid is True
     assert audit["page_count"] == 1
     assert audit["issues"] == []
+
+
+@pytest.mark.parametrize("defect", [None, "numeric_claim", "url_target"])
+def test_wrapped_visible_url_uses_exact_uri_carrier_without_relaxing_numeric_claims(tmp_path, defect):
+    import fitz
+    url = "https://example.test/copper-forecast-2027/60727111/"
+    source = "# Outlook\n\nThe market forecast retains 25 MW of capacity.\n\n[" + url + "](" + url + ")\n"
+    path = tmp_path / "wrapped-url.pdf"
+    with fitz.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 72), "Outlook")
+        page.insert_text((72, 110), "The market forecast retains " + ("26" if defect == "numeric_claim" else "25") + " MW of capacity.")
+        page.insert_text((72, 150), url[:-8])
+        page.insert_text((72, 170), url[-8:])
+        target = url.replace("60727111", "60727112") if defect == "url_target" else url
+        for top in (138, 158):
+            page.insert_link({"kind": fitz.LINK_URI, "from": fitz.Rect(70, top, 500, top + 18), "uri": target})
+        document.save(path)
+    valid, audit = ReportManager._validate_pdf_content(str(path), source)
+    assert valid is (defect is None), audit
+    if defect == "numeric_claim":
+        assert "25" in audit["missing_numeric_tokens"]
+    elif defect == "url_target":
+        assert audit["missing_url_sha256"] and "PDF lost visible URL destinations" in audit["issues"]
+    else:
+        assert audit["visible_url_carriers"] == 1 and not audit["missing_numeric_tokens"]
+
+
+@pytest.mark.parametrize("rendered", ["12345.67892026-09", "12345.6789 2027-09"])
+def test_numeric_cell_collisions_and_changed_values_remain_rejected(tmp_path, rendered):
+    import fitz
+    source = "# Measurements\n\nValue 12345.6789, period 2026-09.\n"
+    path = tmp_path / "bad-cells.pdf"
+    with fitz.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 72), "Measurements")
+        page.insert_text((72, 110), "Value " + rendered + " period.")
+        document.save(path)
+    valid, audit = ReportManager._validate_pdf_content(str(path), source)
+    assert valid is False and "2026" in audit["missing_numeric_tokens"], audit
+    if rendered == "12345.67892026-09":
+        assert "12345.6789" in audit["missing_numeric_tokens"]
+
+
+def test_changed_visible_url_cannot_supply_a_missing_operating_number(tmp_path):
+    import fitz
+    url = "https://example.test/copper/25/60727111/"
+    source = "# Outlook\n\nThe forecast retains 25 MW of capacity.\n\n[" + url + "](" + url + ")\n"
+    path = tmp_path / "changed-url-missing-claim.pdf"
+    with fitz.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 72), "Outlook")
+        page.insert_text((72, 110), "The forecast retains MW of capacity.")
+        page.insert_text((72, 150), url.replace("60727111", "60727112"))
+        page.insert_link({"kind": fitz.LINK_URI, "from": fitz.Rect(70, 138, 500, 158), "uri": url})
+        document.save(path)
+    valid, audit = ReportManager._validate_pdf_content(str(path), source)
+    assert valid is False, audit
+    assert audit["missing_visible_url_sha256"] and not audit["missing_url_sha256"]
+
+
+@pytest.mark.parametrize("missing_claim", [False, True])
+def test_prefix_url_labels_are_removed_longest_first_without_masking_claims(tmp_path, missing_claim):
+    import fitz
+    urls = ["https://example.test/", "https://example.test/2026"]
+    source = "# Outlook\n\nThe delivery year is 2026. Capacity remains 25 MW.\n\n" + "\n\n".join(
+        "[" + url + "](" + url + ")" for url in urls)
+    path = tmp_path / "prefix-urls.pdf"
+    with fitz.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 72), "Outlook")
+        page.insert_text((72, 110), "The delivery year is " + ("" if missing_claim else "2026") + ". Capacity remains 25 MW.")
+        for y, url in zip((150, 180), urls):
+            page.insert_text((72, y), url)
+            page.insert_link({"kind": fitz.LINK_URI, "from": fitz.Rect(70, y - 12, 400, y + 5), "uri": url})
+        document.save(path)
+    valid, audit = ReportManager._validate_pdf_content(str(path), source)
+    assert valid is (not missing_claim), audit
+    assert not audit["missing_visible_url_sha256"] and not audit["missing_url_sha256"]
+    if missing_claim:
+        assert "2026" in audit["missing_numeric_tokens"]
+
+
+def test_native_renderer_uses_exact_trusted_wide_table_filter_and_cleans_it(report_folder, monkeypatch):
+    calls = []
+    _install_fake_pandoc(monkeypatch, calls)
+    original_run = subprocess.run
+    filters = []
+    def inspect(cmd, **kwargs):
+        argument = next(value for value in cmd if value.startswith("--lua-filter="))
+        path = argument.split("=", 1)[1]
+        with open(path, encoding="utf-8") as stream:
+            text = stream.read()
+        assert text == ReportManager._PDF_WIDE_TABLE_FILTER
+        assert '#tbl.colspecs >= 7' in text and '\\begin{landscape}' in text
+        assert 'pdflscape' in ' '.join(cmd)
+        assert '--from=markdown-smart' in cmd
+        filters.append(path)
+        return original_run(cmd, **kwargs)
+    monkeypatch.setattr(subprocess, "run", inspect)
+    source = "# Measurements\n\n| A | B | C | D | E | F | G | H |\n|---|---|---|---|---|---|---|---|\n| a | b | 12345.6789 | 2026-09 | 25 | 35 | g | h |\n"
+    assert ReportManager.export_document_pdf(source, str(report_folder), str(report_folder / "dense.pdf"))
+    assert len(filters) == 1 and not os.path.exists(filters[0])
+
+
+def test_rejected_export_logs_bounded_audit_codes_and_counts_without_content(report_folder, monkeypatch):
+    from app.services import report_agent as module
+    source = "# Private fixture heading\n\nDO_NOT_LOG_SOURCE_TOKEN_8364\n"
+    calls, messages = [], []
+    _install_fake_pandoc(monkeypatch, calls)
+    monkeypatch.setattr(module.logger, "warning", lambda fmt, *args, **kwargs:
+                        messages.append(fmt % args if args else fmt))
+    monkeypatch.setattr(ReportManager, "_validate_pdf_content", staticmethod(lambda path, md: (False, {
+        "page_count": 4,
+        "issues": ["PDF lost visible numeric tokens", "PDF is missing 1 rendered section headings",
+                   "DO_NOT_LOG_UNTRUSTED_DETAIL_7362"],
+        "missing_numeric_tokens": {"DO_NOT_LOG_NUMERIC_KEY_6253": {"expected": 3, "actual": 1}},
+        "missing_heading_sha256": ["DO_NOT_LOG_HEADING_5234"],
+        "latin_word_coverage": .99,
+    })))
+    assert ReportManager.export_document_pdf(source, str(report_folder), str(report_folder / "private.pdf"),
+        label="DO_NOT_LOG_LABEL_4215") is None
+    audits = [line for line in messages if line.startswith("PDF content audit rejected ")]
+    assert len(audits) == 1, messages
+    message = audits[0]
+    assert "numeric_tokens_missing" in message and "headings_missing" in message
+    assert '"missing_numeric_token_kinds": 1' in message and '"page_count": 4' in message
+    assert "DO_NOT_LOG" not in message and "Private fixture heading" not in message
+    assert str(report_folder) not in message and len(message) < 1800
+
+
+@pytest.mark.parametrize("omit_fragment", [False, True])
+def test_pdf_short_han_fragment_does_not_require_whole_report_contiguity(tmp_path, omit_fragment):
+    """Real PDF with a short CJK marker moved by table/footnote reading order."""
+    import fitz
+    path = tmp_path / "english-with-han.pdf"
+    source = ("# Capacity outlook\n\n"
+              "The forecast projects steady demand growth across the regional markets.\n\n"
+              "| Region | Value |\n|---|---:|\n| Base | 25 MW |\n\n中文验证完成\n")
+    with fitz.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 72), "Capacity outlook")
+        if not omit_fragment:
+            page.insert_text((72, 105), "中文验证完成", fontname="china-s")
+        page.insert_text((72, 145), "The forecast projects steady demand growth across the regional markets.")
+        page.insert_text((72, 185), "Region   Value\nBase     25 MW")
+        document.save(path)
+    valid, audit = ReportManager._validate_pdf_content(str(path), source)
+    assert valid is (not omit_fragment), audit
+    assert not audit["missing_numeric_tokens"] and not audit["missing_heading_sha256"]
+    if omit_fragment:
+        assert audit["missing_han_chars"] and "PDF text extraction lost visible Han content" in audit["issues"]
+
+
+@pytest.mark.parametrize("omit_fragment", [False, True])
+def test_pdf_short_latin_fragment_does_not_require_whole_chinese_document_contiguity(tmp_path, omit_fragment):
+    import fitz
+    path = tmp_path / "chinese-with-latin.pdf"
+    body = "全球电力系统正在重构，电池成本下降推动长期储能部署。区域政策和并网瓶颈共同决定商业化速度。"
+    source = "# 储能展望\n\n" + body + "\n\nAlpha Beta\n"
+    with fitz.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 72), "储能展望", fontname="china-s")
+        page.insert_text((72, 105), "Alpha" if omit_fragment else "Alpha Beta")
+        page.insert_textbox(fitz.Rect(72, 145, 520, 400), body, fontname="china-s")
+        document.save(path)
+    valid, audit = ReportManager._validate_pdf_content(str(path), source)
+    assert valid is (not omit_fragment), audit
+    if omit_fragment:
+        assert "PDF text extraction lost visible Latin content" in audit["issues"]
+
+
+def test_visible_text_omits_defined_footnote_keys_but_preserves_prose_and_literal_code():
+    markdown = ("正文[^audit]。\n\n[^audit]: Footnote body remains visible.\n\n"
+                "`[^literal]`\n\n```text\n[^code]: a code example\n```\n\n"
+                "An undefined [^undefined] stays literal.\n")
+    visible = ReportManager._markdown_visible_text(markdown)
+    assert "audit" not in visible
+    assert "Footnote body remains visible." in visible
+    assert "[^literal]" in visible and "[^code]: a code example" in visible
+    assert "[^undefined]" in visible
+
+
+@pytest.mark.parametrize("omit_body", [False, True])
+def test_pdf_footnote_identifiers_are_not_visible_latin_but_body_is_required(tmp_path, omit_body):
+    import fitz
+    path = tmp_path / "footnote.pdf"
+    source = "# 产能展望\n\n这份中文报告保留完整的可见内容，脚注使用编号呈现[^audit]。\n\n[^audit]: Footnote evidence.\n"
+    with fitz.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 72), "产能展望", fontname="china-s")
+        page.insert_textbox(fitz.Rect(72, 110, 520, 300),
+                           "这份中文报告保留完整的可见内容，脚注使用编号呈现1。", fontname="china-s")
+        if not omit_body:
+            page.insert_text((72, 340), "1 Footnote evidence.")
+        document.save(path)
+    valid, audit = ReportManager._validate_pdf_content(str(path), source)
+    assert valid is (not omit_body), audit
+    if omit_body:
+        assert "PDF text extraction lost visible Latin content" in audit["issues"]
 
 
 def test_pdf_content_gate_rejects_truncated_sections_numbers_and_citations(tmp_path):

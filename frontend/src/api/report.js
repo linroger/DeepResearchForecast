@@ -80,10 +80,15 @@ export const getSectionsPartial = (reportId) => {
  * 该语种未生成（REPORT_BILINGUAL 关闭 / 同语种 / 翻译失败）→ 404（degrade-safe，调用方回退原文）。
  * @param {string} reportId
  * @param {string} lang - 'en' | 'zh'
+ * @param {{signal?: AbortSignal, generationId?: string}} [options]
  */
-export const getReportTranslationMd = (reportId, lang) => {
+export const getReportTranslationMd = (reportId, lang, { signal, generationId } = {}) => {
   // responseType text：返回体是 text/markdown 原文而非 JSON，避免 axios 误当 JSON 解析。
-  return service.get(`/api/report/${reportId}/full_report.${lang}.md`, { responseType: 'text' })
+  return service.get(`/api/report/${reportId}/full_report.${lang}.md`, {
+    responseType: 'text',
+    signal,
+    params: generationId ? { generation_id: generationId } : undefined,
+  })
 }
 
 /**

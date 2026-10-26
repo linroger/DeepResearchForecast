@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { babelParse, compileScript, parse } from '@vue/compiler-sfc'
 import * as vue from 'vue'
 import { renderToString } from 'vue/server-renderer'
 
@@ -10,24 +9,15 @@ import * as i18n from '../src/i18n.js'
 import * as officialData from '../src/utils/officialData.js'
 import * as researchTranslation from '../src/utils/researchTranslation.js'
 import { compileSfc } from './sfcHarness.mjs'
+import * as translationJob from '../src/composables/useTranslationJob.js'
+import * as dossierTranslation from '../src/utils/dossierTranslationAdapter.js'
+import * as pdfDownload from '../src/utils/pdfDownload.js'
 
-// Executes the real DossierViewer.vue setup (as dossierTranslationEnvelope.test.mjs
-// does) with only the API and the file-save helper injected. The datasets payload is
+// Executes the real DossierViewer.vue setup with API and file saving injected.
+// Translation observer lifecycle is covered by the mounted observer suite. The datasets payload is
 // the REAL research handoff data/datasets.json served by GET /api/research/<pid>/artifact/datasets.
 const filename = new URL('../src/components/research/DossierViewer.vue', import.meta.url)
-const { descriptor } = parse(readFileSync(filename, 'utf8'))
-const script = compileScript(descriptor, { id: 'dossier-official-data-test', genDefaultAs: 'DossierViewer' })
-let setupCode = script.content
-const imports = babelParse(setupCode, { sourceType: 'module' }).program.body
-  .filter(node => node.type === 'ImportDeclaration')
-for (const node of imports.reverse()) {
-  const bindings = node.specifiers.map(specifier => {
-    assert.equal(specifier.type, 'ImportSpecifier')
-    return `const ${specifier.local.name} = imports[${JSON.stringify(node.source.value)}][${JSON.stringify(specifier.imported.name)}];`
-  }).join('\n')
-  setupCode = setupCode.slice(0, node.start) + bindings + setupCode.slice(node.end)
-}
-const createComponent = new Function('imports', 'setTimeout', 'clearTimeout', `${setupCode}\nreturn DossierViewer;`)
+const createComponent = compileSfc(filename)
 
 const datasetsResponse = JSON.parse(readFileSync(
   new URL('./fixtures/official/datasets_manifest.v3_run.json', import.meta.url), 'utf8'))
@@ -55,9 +45,12 @@ function dossier(t, { artifactNames = ['datasets'], getArtifact } = {}) {
     '../../i18n': i18n,
     '../../api/research': api,
     '../../utils/researchTranslation': researchTranslation,
+    '../../composables/useTranslationJob': translationJob,
+    '../../utils/dossierTranslationAdapter': dossierTranslation,
+    '../../utils/pdfDownload': pdfDownload,
     '../../utils/officialData': officialData,
     '../../utils/saveTextFile': { saveTextFile: (...args) => saved.push(args) },
-  }, setTimeout, clearTimeout)
+  })
   const props = vue.reactive({
     pipelineId: 'pipe_A',
     dossier: { has_report: true, report: '# Research\n\nBody.', sources: [] },
@@ -66,7 +59,7 @@ function dossier(t, { artifactNames = ['datasets'], getArtifact } = {}) {
   })
   const scope = vue.effectScope()
   const state = scope.run(() => component.setup(props, { expose() {}, emit() {} }))
-  t.after(() => { state.stopTranslationPolling(); scope.stop(); i18n.locale.value = 'en' })
+  t.after(() => { scope.stop(); i18n.locale.value = 'en' })
   return { state, props, calls, saved }
 }
 
@@ -182,6 +175,9 @@ test('every series file control has its own accessible name (EN and ZH)', async 
         getArtifact: async () => datasetsResponse,
       },
       '../../utils/researchTranslation': researchTranslation,
+    '../../composables/useTranslationJob': translationJob,
+    '../../utils/dossierTranslationAdapter': dossierTranslation,
+    '../../utils/pdfDownload': pdfDownload,
       '../../utils/officialData': officialData,
       '../../utils/saveTextFile': { saveTextFile: () => {} },
     })

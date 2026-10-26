@@ -8,23 +8,25 @@
                        关键情景概率 + 最承重的一张图（引用 scenario-bars PNG）+ 3 个带日期的
                        观察指标 + 一行诚实声明（pipeline_health / 模拟运行健康，若可得）。
   · exec_brief.pdf  —— 复用 ReportManager 现成的 pandoc 引擎选择 + PyMuPDF 回退（**去掉 --toc、
-                       收紧边距**做单页版式），惰性构建 + 按源 mtime 缓存。
+                       收紧边距**做单页版式），惰性构建 + 内容与发布代际绑定缓存。
   · digest.md       —— ~15 行 newsletter 式摘要：标题 + 3 条要点 + 头号预测 + 最大市场分歧 +
                        链接路径。
 
-**双语**：以成稿语言生成；若 meta.translations[] 记录了译文版本，则对每个译文语种以同样方式从
-`full_report.<lang>.md` 再生成一份 `exec_brief.<lang>.md`（该简报本身用目标语种的小节标签）。
+**双语**：译文读取已准入的不可变发布代际；无代际指针时保留历史 sidecar 读取兼容。
+译文简报与 PDF 写入内容寻址派生目录，旧简报和已发布报告均不覆盖。
 
-全程 degrade-safe：任一工件（forecast.json / full_report.md / 图 / 运行元数据）缺失，只跳过对应
-片段，绝不抛出——一份「信息不全但结构完整」的简报永远好过 500。总开关 REPORT_EXEC_BRIEF 关闭时
+可选字段缺失时省略对应片段；所选发布代际失效或构建期间源发生变化时显式拒绝，绝不复用过期简报。总开关 REPORT_EXEC_BRIEF 关闭时
 build() 返回空 dict、不落盘。
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
+import tempfile
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..config import Config
@@ -743,95 +745,163 @@ class ExecBriefBuilder:
                 return True
         return False
 
+    _CACHE_VERSION = "exec-brief/v2"
+
+    @staticmethod
+    def _digest(value):
+        data = value if isinstance(value, bytes) else json.dumps(
+            value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(data).hexdigest()
+
+    @classmethod
+    def _capture(cls, report_id, report_dir, lang=None):
+        """Capture exact brief inputs; public generation assets never mix sidecars."""
+        from .report_agent import ReportManager
+        from .translation.artifacts import ArtifactError, figure_inventory
+        source_path = os.path.join(report_dir, "full_report.md")
+        meta = _read_json(os.path.join(report_dir, "meta.json")) or {}
+        primary = _read_text(source_path) or meta.get("markdown_content") or ""
+        snapshot = None
+        if lang:
+            snapshot = ReportManager.resolve_translation(report_id, lang)
+            if snapshot and not ReportManager.is_publishable(report_id, lang):
+                raise ArtifactError("stale_artifact", "Executive brief publication is no longer admitted; reload")
+            try:
+                md = snapshot.markdown if snapshot else ReportManager.read_translation_markdown(report_id, lang)
+            except FileNotFoundError:
+                return None
+            if not md:
+                return None
+        else:
+            md = primary
+        language = lang or _detect_lang(md)
+        forecast, info = ReportManager.load_localized_forecast(report_id, language, snapshot=snapshot)
+        if snapshot is None and not info.get("localized"):
+            # Historical primary/legacy builders also support optional unsealed
+            # fixture/old forecast files. Generation readers keep validated fallback.
+            forecast = _read_json(os.path.join(report_dir, "forecast.json"))
+        if lang:
+            display = None
+            if snapshot and "display.json" in snapshot.assets:
+                try:
+                    display = json.loads(snapshot.assets["display.json"])
+                except (TypeError, ValueError):
+                    pass
+            title = display.get("title") if isinstance(display, dict) else None
+            if not isinstance(title, str) or not title.strip():
+                heading = re.search(r"^\s*#\s+(.+?)\s*$", md, re.M)
+                title = heading.group(1).strip() if heading else str((forecast or {}).get("headline") or report_id)
+            # The translated brief must not take its title/question from primary
+            # metadata. These are admitted display/Markdown bytes, not new prose.
+            meta = {**meta, "simulation_requirement": title,
+                    "outline": {**(meta.get("outline") or {}), "title": title}}
+        summary = "" if lang else str((meta.get("outline") or {}).get("summary") or "")
+        brief = cls._render_brief(report_id, report_dir, md, forecast, meta, language, summary)
+        identity = {
+            "version": cls._CACHE_VERSION, "report_id": report_id, "lang": lang,
+            "generation": snapshot.generation if snapshot else None,
+            "source_sha256": cls._digest(primary.encode("utf-8")),
+            "markdown_sha256": cls._digest(md.encode("utf-8")),
+            "forecast_sha256": cls._digest(forecast), "meta_sha256": cls._digest(meta),
+            "brief_sha256": cls._digest(brief.encode("utf-8")),
+            "figures": figure_inventory(brief, source_path),
+        }
+        return brief, identity, (md, forecast, meta, language)
+
+    @classmethod
+    def _check_capture(cls, report_id, report_dir, lang, identity):
+        from .translation.artifacts import ArtifactError
+        current = cls._capture(report_id, report_dir, lang)
+        if current is None or current[1] != identity:
+            raise ArtifactError("stale_artifact", "Executive brief source or publication changed; retry")
+
+    @classmethod
+    def _translated_brief(cls, report_id, report_dir, lang):
+        from .translation.artifacts import artifact_lock, atomic_bytes
+        captured = cls._capture(report_id, report_dir, lang)
+        if captured is None:
+            return None
+        brief, identity, _ = captured
+        directory = Path(report_dir) / ".exec-brief" / cls._digest(identity)
+        path = directory / f"exec_brief.{lang}.md"
+        data = brief.encode("utf-8")
+        with artifact_lock(str(directory) + ".lock", blocking=False):
+            cls._check_capture(report_id, report_dir, lang, identity)
+            if not path.is_file() or path.read_bytes() != data:
+                atomic_bytes(path, data)
+            atomic_bytes(str(path) + ".manifest.json", json.dumps({"input": identity,
+                "sha256": cls._digest(data)}, sort_keys=True).encode("utf-8"))
+            cls._check_capture(report_id, report_dir, lang, identity)
+        return str(path)
+
+    @classmethod
+    def read_current(cls, report_id, report_dir, path, lang=None):
+        """Return verified bytes; delivery must not reopen a mutable legacy path."""
+        from .translation.artifacts import ArtifactError
+        try:
+            data = Path(path).read_bytes()
+        except OSError as exc:
+            raise ArtifactError("stale_artifact", "Executive brief cache is unavailable; retry") from exc
+        manifest = _read_json(str(path) + ".manifest.json")
+        if manifest:
+            cls._check_capture(report_id, report_dir, lang, manifest["input"])
+            if cls._digest(data) != manifest.get("sha256"):
+                raise ArtifactError("stale_artifact", "Executive brief cache changed; retry")
+        elif lang or str(path).endswith(".pdf"):
+            raise ArtifactError("stale_artifact", "Executive brief cache is not bound to its inputs")
+        else:
+            captured = cls._capture(report_id, report_dir)
+            if cls._digest(data) != captured[1]["brief_sha256"]:
+                raise ArtifactError("stale_artifact", "Executive brief source changed; retry")
+        return data
+
+    @classmethod
+    def assert_current(cls, report_id, report_dir, path, lang=None):
+        """Recheck a returned derived path immediately before public delivery."""
+        cls.read_current(report_id, report_dir, path, lang)
+
     # ── 主入口 ──
     @classmethod
-    def build(cls, report_id: str, report_dir: str, force: bool = False) -> Dict[str, str]:
-        """惰性构建执行简报 + 速览（+ 每个译文语种的简报），按源 mtime 缓存。返回
-        {artifact_key: 绝对路径}。REPORT_EXEC_BRIEF 关闭 → {}（不落盘）。全程 degrade-safe。
+    def build(cls, report_id: str, report_dir: str, force: bool = False, *,
+              lang: Optional[str] = None) -> Dict[str, str]:
+        """Build deterministic briefs; explicit language reads one selected generation.
 
-        源工件：full_report.md（成稿）、forecast.json（结构化预测）、meta.json（问题/摘要/译文清单）。
-        缓存键：exec_brief.md 依赖 full_report.md + forecast.json；任一更新即重建。"""
-        if not bool(_cfg("REPORT_EXEC_BRIEF", True)):
+        Primary Markdown/digest paths retain their historical contract. Translated
+        paths are immutable and callers must consume this method's returned path.
+        """
+        if not bool(_cfg("REPORT_EXEC_BRIEF", True)) or not os.path.isdir(report_dir):
             return {}
-        if not report_dir or not os.path.isdir(report_dir):
-            return {}
-
-        md_path = os.path.join(report_dir, "full_report.md")
-        forecast_path = os.path.join(report_dir, "forecast.json")
-        meta_path = os.path.join(report_dir, "meta.json")
-        from .report_agent import ReportManager
-        official_path = os.path.join(report_dir, ReportManager.OFFICIAL_DATA_FILENAME)
-
-        meta = _read_json(meta_path) or {}
-        md = _read_text(md_path)
-        if md is None:
-            # 成稿缺失时回退 meta 内嵌 markdown（save_report 会把成稿嵌进 meta）。
-            md = (meta.get("markdown_content") if isinstance(meta, dict) else None) or ""
-
-        produced: Dict[str, str] = {}
-        primary_lang = _detect_lang(md)
-        primary_variant = ReportManager._get_report_localized_forecast_path(report_id, primary_lang)
-        audit_path = ReportManager._get_report_final_audit_path(report_id)
-
-        def displayed_forecast(language):
-            # Use the same exact-source-bound strings as the report dashboard.
-            # A missing/stale localization falls back to the canonical artifact.
-            localized, info = ReportManager.load_localized_forecast(report_id, language)
-            return localized if info.get("localized") else _read_json(forecast_path)
-
-        # ① 主语言简报 + 速览
-        brief_out = cls.brief_path(report_dir)
-        digest_out = cls.digest_path(report_dir)
-        rebuild = force or not os.path.exists(digest_out) or cls._needs_rebuild(
-            brief_out, md_path, forecast_path, official_path, meta_path, primary_variant, audit_path)
-        # Deleting a localization has no remaining mtime to compare. Re-render
-        # the canonical fallback and compare content before reusing its cache.
-        if rebuild or not os.path.exists(primary_variant):
-            forecast = displayed_forecast(primary_lang)
-            lang = primary_lang
-            outline_summary = ""
-            if isinstance(meta, dict):
-                outline_summary = str((meta.get("outline") or {}).get("summary") or "")
-            brief_md = cls._render_brief(report_id, report_dir, md, forecast, meta,
-                                         lang, outline_summary)
-            digest_md = cls._render_digest(report_id, md, forecast, meta, lang, report_dir=report_dir)
-            if rebuild or _read_text(brief_out) != brief_md or _read_text(digest_out) != digest_md:
-                if _write_text_atomic(brief_out, brief_md):
-                    produced["exec_brief"] = brief_out
-                if _write_text_atomic(digest_out, digest_md):
-                    produced["digest"] = digest_out
-            else:
-                produced.update(exec_brief=brief_out, digest=digest_out)
-        else:
-            produced["exec_brief"] = brief_out
-            if os.path.exists(digest_out):
-                produced["digest"] = digest_out
-
-        # ② 译文版简报（meta.translations[]，仅 en/zh，且译文成稿存在）
-        translations = meta.get("translations") if isinstance(meta, dict) else None
-        if isinstance(translations, list):
-            for entry in translations:
-                if not isinstance(entry, dict):
-                    continue
-                tlang = str(entry.get("lang") or "").strip().lower()
-                if tlang not in cls._TRANSLATION_LANGS:
-                    continue
-                tmd_path = os.path.join(report_dir, f"full_report.{tlang}.md")
-                tmd = _read_text(tmd_path)
-                if not tmd:
-                    continue
-                tbrief_out = cls.brief_path(report_dir, tlang)
-                variant_path = ReportManager._get_report_localized_forecast_path(report_id, tlang)
-                if force or not os.path.exists(variant_path) or cls._needs_rebuild(
-                        tbrief_out, tmd_path, forecast_path, official_path, meta_path, variant_path, audit_path):
-                    # 译文简报：论点从译文成稿抽取（不传 outline.summary——它是主语言）。
-                    tbrief_md = cls._render_brief(report_id, report_dir, tmd, displayed_forecast(tlang), meta,
-                                                  tlang, outline_summary="")
-                    if _write_text_atomic(tbrief_out, tbrief_md):
-                        produced[f"exec_brief.{tlang}"] = tbrief_out
-                else:
-                    produced[f"exec_brief.{tlang}"] = tbrief_out
-
+        if lang in cls._TRANSLATION_LANGS:
+            path = cls._translated_brief(report_id, report_dir, lang)
+            return {f"exec_brief.{lang}": path} if path else {}
+        from .translation.artifacts import ArtifactError, atomic_bytes
+        captured = cls._capture(report_id, report_dir)
+        brief_md, identity, (md, forecast, meta, primary_lang) = captured
+        digest_md = cls._render_digest(report_id, md, forecast, meta, primary_lang, report_dir=report_dir)
+        brief_out, digest_out = cls.brief_path(report_dir), cls.digest_path(report_dir)
+        # Retain legacy timestamp refresh behavior, but content equality is also
+        # mandatory: equal mtimes and deleted dependencies cannot hide a change.
+        rebuild = force or cls._needs_rebuild(brief_out, *(os.path.join(report_dir, name)
+            for name in ("full_report.md", "forecast.json", "meta.json", "final_audit.json")))
+        cls._check_capture(report_id, report_dir, None, identity)
+        produced = {}
+        for key, path, value in (("exec_brief", brief_out, brief_md), ("digest", digest_out, digest_md)):
+            if not rebuild and _read_text(path) == value or _write_text_atomic(path, value):
+                if key == "digest":
+                    atomic_bytes(path + ".manifest.json", json.dumps({"input": identity,
+                        "sha256": cls._digest(value.encode("utf-8"))}, sort_keys=True).encode("utf-8"))
+                produced[key] = path
+        # Optional bulk compatibility must not make a primary brief unavailable
+        # merely because an unrelated target generation is stale.
+        for target in cls._TRANSLATION_LANGS:
+            if target == primary_lang:
+                continue
+            try:
+                path = cls._translated_brief(report_id, report_dir, target)
+                if path:
+                    produced[f"exec_brief.{target}"] = path
+            except ArtifactError:
+                continue
         return produced
 
     # ── 简报渲染（一页纸）──
@@ -1002,52 +1072,60 @@ class ExecBriefBuilder:
         lines.append("")
         return "\n".join(lines)
 
-    # ── PDF（惰性、mtime 缓存、pandoc no-toc → PyMuPDF 回退）──
+    # ── PDF（内容/代际缓存，保留 no-toc 单页版式）──
     @classmethod
     def build_pdf(cls, report_id: str, report_dir: str, lang: Optional[str] = None,
                   force: bool = False) -> Optional[str]:
-        """把 exec_brief[.<lang>].md 惰性导为一页 PDF：复用 ReportManager 的 pandoc 引擎选择与
-        PyMuPDF 回退 + 相对图表路径绝对化，但**去掉 --toc、收紧边距**做单页版式。按简报 md 的
-        mtime 缓存（md 更新即失效重建）。REPORT_EXEC_BRIEF/REPORT_PDF_EXPORT 关闭、简报缺失、
-        构建失败 → None（degrade-safe）。返回 PDF 绝对路径或 None。"""
-        if not bool(_cfg("REPORT_EXEC_BRIEF", True)):
-            return None
-        if not bool(_cfg("REPORT_PDF_EXPORT", True)):
+        """Render the current brief to an immutable PDF without touching old exports."""
+        from .report_agent import ReportManager
+        from .translation.artifacts import ArtifactError, artifact_lock, atomic_bytes, file_digest
+        if not _cfg("REPORT_EXEC_BRIEF", True) or not _cfg("REPORT_PDF_EXPORT", True):
             return None
         lang = lang if lang in cls._TRANSLATION_LANGS else None
-        brief_md_path = cls.brief_path(report_dir, lang)
-        if not os.path.exists(brief_md_path):
+        captured = cls._capture(report_id, report_dir, lang)
+        if captured is None:
             return None
-        pdf_out = cls.pdf_path(report_dir, lang)
-        # mtime 缓存：PDF 不早于简报 md 即命中。
-        try:
-            if (not force and os.path.exists(pdf_out)
-                    and os.path.getmtime(pdf_out) >= os.path.getmtime(brief_md_path)):
-                return pdf_out
-        except OSError:
-            pass
-
-        md = _read_text(brief_md_path)
-        if md is None:
-            return None
-
-        # 复用 ReportManager 的 PDF 机器（引擎选择 + 图表绝对化 + PyMuPDF 回退）。惰性导入避免
-        # 顶层耦合巨型 report_agent 模块（单向依赖，无环）。
-        from .report_agent import ReportManager
-
-        try:
-            proc_md = ReportManager._rewrite_chart_paths_for_pdf(md, report_dir)
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"exec_brief PDF 预处理失败，回退原文: {e}")
-            proc_md = md
-
-        # 主路径：pandoc（无 --toc、边距 1.8cm，单页意图）。失败回退 PyMuPDF Story。
-        if cls._export_pdf_pandoc_no_toc(report_id, proc_md, report_dir, pdf_out):
-            return pdf_out
-        if ReportManager._export_pdf_pymupdf(proc_md, report_dir, pdf_out):
-            return pdf_out
-        logger.warning(f"exec_brief PDF 导出失败（pandoc 与 PyMuPDF 均未产出）: {report_id}")
-        return None
+        md, identity, _ = captured
+        renderer = {**ReportManager._pdf_renderer_fingerprint(), "toc": False, "margin": "1.8cm",
+                    "brief_version": cls._CACHE_VERSION, "brief_pdf_policy": "content-audit/v1"}
+        cache = Path(report_dir) / ".exec-brief" / cls._digest({"input": identity, "renderer": renderer})
+        pointer = cache / "pdf.json"
+        with artifact_lock(str(cache) + ".lock", blocking=False):
+            cls._check_capture(report_id, report_dir, lang, identity)
+            cached = _read_json(str(pointer))
+            if not force and isinstance(cached, dict):
+                sha = cached.get("sha256")
+                if isinstance(sha, str) and re.fullmatch(r"[a-f0-9]{64}", sha):
+                    path = cache / sha / os.path.basename(cls.pdf_path(report_dir, lang))
+                    if file_digest(path) == sha and not path.is_symlink():
+                        cls.assert_current(report_id, report_dir, str(path), lang)
+                        return str(path)
+            with tempfile.TemporaryDirectory(prefix=".exec-brief-stage-", dir=report_dir) as staging:
+                temporary = os.path.join(staging, "exec_brief.pdf")
+                proc_md = ReportManager._rewrite_chart_paths_for_pdf(md, report_dir)
+                rendered = cls._export_pdf_pandoc_no_toc(report_id, proc_md, staging, temporary)
+                if not rendered:
+                    # Pandoc displays image alt text as a caption; Story does not.
+                    # Preserve that visible text once for the shared content gate.
+                    fallback_md = re.sub(r"!\[([^\]]+)\]\(([^)]+)\)", r"![](\2)\n\n\1", proc_md)
+                    rendered = ReportManager._export_pdf_pymupdf(fallback_md, report_dir, temporary)
+                if not rendered or not ReportManager._is_pdf_file(temporary):
+                    return None
+                valid, content_audit = ReportManager._validate_pdf_content(temporary, md)
+                if not valid:
+                    return None
+                cls._check_capture(report_id, report_dir, lang, identity)
+                data = Path(temporary).read_bytes()
+                sha = cls._digest(data)
+                path = cache / sha / os.path.basename(cls.pdf_path(report_dir, lang))
+                if file_digest(path) != sha:
+                    atomic_bytes(path, data)
+                manifest = {"input": identity, "renderer": renderer, "sha256": sha,
+                            "content_audit": content_audit}
+                atomic_bytes(str(path) + ".manifest.json", json.dumps(manifest, sort_keys=True).encode("utf-8"))
+                cls.assert_current(report_id, report_dir, str(path), lang)
+                atomic_bytes(pointer, json.dumps({"sha256": sha}).encode("utf-8"))
+                return str(path)
 
     @classmethod
     def _export_pdf_pandoc_no_toc(cls, report_id: str, md: str, folder: str,

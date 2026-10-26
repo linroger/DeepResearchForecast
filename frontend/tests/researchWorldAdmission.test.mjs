@@ -6,6 +6,7 @@ import { renderToString } from 'vue/server-renderer'
 import * as i18n from '../src/i18n.js'
 import * as liveProgress from '../src/utils/liveProgress.js'
 import * as simRecord from '../src/utils/simRecord.js'
+import * as recordTranslation from '../src/utils/simulationRecordTranslation.js'
 import * as world from '../src/utils/worldSimulationView.js'
 import * as feedRounds from '../src/utils/feedRounds.js'
 import { compileSfc } from './sfcHarness.mjs'
@@ -398,6 +399,7 @@ test('the actual world-v1 record is hidden when the dashboard selects another ta
   const rec = JSON.parse(readFileSync(new URL('./fixtures/sim/simulation_record.en.json', import.meta.url), 'utf8'))
   const RecordView = compileSfc(new URL('../src/components/research/SimulationRecordView.vue', import.meta.url))({
     vue, '../../i18n': i18n, '../../utils/simRecord': simRecord,
+    '../../utils/overlayTranslation': overlay, '../../utils/simulationRecordTranslation': recordTranslation,
   })
   const SimulationView = compileSfc(new URL('../src/components/research/SimulationView.vue', import.meta.url))({
     vue, '../../i18n': i18n, '../../utils/simRecord': simRecord, '../../utils/worldSimulationView': world,

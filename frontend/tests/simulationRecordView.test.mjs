@@ -6,6 +6,7 @@ import { renderToString } from 'vue/server-renderer'
 
 import * as i18n from '../src/i18n.js'
 import * as simRecord from '../src/utils/simRecord.js'
+import * as recordTranslation from '../src/utils/simulationRecordTranslation.js'
 import * as world from '../src/utils/worldSimulationView.js'
 import * as feedRounds from '../src/utils/feedRounds.js'
 import { compileSfc } from './sfcHarness.mjs'
@@ -52,7 +53,8 @@ const NO_PROBABILITY_LABEL_ZH = '模拟份额，非概率'
 // ---------- SimulationRecordView ----------
 function mountRecord(t, record, lang = 'en') {
   i18n.locale.value = lang
-  const component = buildRecordView({ vue, '../../i18n': i18n, '../../utils/simRecord': simRecord })
+  const component = buildRecordView({ vue, '../../i18n': i18n, '../../utils/simRecord': simRecord,
+    '../../utils/overlayTranslation': overlay, '../../utils/simulationRecordTranslation': recordTranslation })
   const props = vue.reactive({ record })
   const scope = vue.effectScope()
   const state = scope.run(() => component.setup(props, { expose() {}, emit() {}, attrs: {}, slots: {} }))
@@ -162,7 +164,7 @@ test('ZH record: the Chinese banner verbatim and Chinese labels; shares are 份�
   const r = await h.render()
   assert.ok(r.text.includes(SIM_BANNER_ZH), 'ZH banner verbatim')
   assert.match(r.text, /情景模拟 · 事后记录 模拟记录，非证据/)
-  assert.match(r.text, /健康 ok · 有效性 valid · 仲裁失败 0 轮 · 建模缺口 10 项 · 自发行动 629 次/)
+  assert.match(r.text, /健康 有效 · 有效性 valid · 仲裁失败 0 轮 · 建模缺口 10 项 · 自发行动 629 次/)
   assert.match(r.text, /已提交 3 \/ 计划 3 个时段/)
   assert.ok(r.html.includes('aria-label="选择时段"'))
   assert.equal(r.ticks.length, 3)

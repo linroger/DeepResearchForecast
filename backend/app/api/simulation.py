@@ -2150,6 +2150,8 @@ WORLD_STATE_MAX_PROBLEMS = 12      # arbiter problems kept per history row (the 
 WORLD_STATE_MAX_DIGEST = 20000     # 2026-10-21: digest 不截断（保留病理上限）
 
 
+
+
 def _bounded_jsonl_rows(path: str):
     """Dict rows of a per-run JSONL artifact, in file order, or [] when the file is missing.
 
@@ -2304,6 +2306,122 @@ def _world_interactions(world: dict, limit: int = 24) -> list:
     return out
 
 
+class _WorldStateReadError(ValueError):
+    """Keep the world-state HTTP errors while exposing a Flask-free reader."""
+
+    def __init__(self, message, status):
+        super().__init__(message)
+        self.status = status
+
+
+def _read_simulation_world_state(simulation_id: str, rows=24) -> dict:
+    """Read exactly the public /world-state projection; never create or repair files."""
+    import json
+
+    sim_dir = _contained_sim_dir(simulation_id)
+    if sim_dir is None:
+        raise FileNotFoundError(f"模拟不存在: {simulation_id}")
+    path = os.path.join(sim_dir, "world_state.json")
+    if os.path.islink(path) or not os.path.isfile(path):
+        raise FileNotFoundError("世界状态尚未生成（非反身世界模式或模拟尚在早期轮次）")
+    if os.path.getsize(path) > WORLD_STATE_MAX_BYTES:
+        raise _WorldStateReadError("世界状态文件超出大小上限", 413)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+    except ValueError:
+        raise _WorldStateReadError("世界状态文件解析失败", 500) from None
+    if not isinstance(payload, dict):
+        raise _WorldStateReadError("世界状态文件解析失败", 500)
+    world = payload.get("world") if isinstance(payload.get("world"), dict) else {}
+    try:
+        rows_wanted = max(1, min(WORLD_STATE_MAX_HISTORY, int(rows)))
+    except (TypeError, ValueError):
+        rows_wanted = 24
+    # per-round digests (what the agents were shown), keyed by round; the latest one is
+    # also the top-level ``digest`` below.  Only the text travels — never the shares.
+    digests = {}
+    for drow in _bounded_jsonl_rows(os.path.join(sim_dir, "world_digest.jsonl")):
+        if drow.get("round") is not None:
+            digests[drow.get("round")] = str(drow.get("digest") or "")[:WORLD_STATE_MAX_DIGEST]
+    history = []
+    for row in _bounded_jsonl_rows(os.path.join(sim_dir, "world_state_history.jsonl"))[-rows_wanted:]:
+        problems = row.get("arbiter_problems") if isinstance(row.get("arbiter_problems"), list) else []
+        entry = {
+            "round": row.get("round"), "period_label": row.get("period_label"),
+            "headline": str(row.get("headline") or "")[:2000],
+            "narrative": str(row.get("narrative") or "")[:8000],
+            "arbiter_status": row.get("arbiter_status"),
+            "arbiter_problems": [str(p)[:600] for p in problems[:WORLD_STATE_MAX_PROBLEMS]],
+            "decisions": row.get("decisions"),
+            "diff": row.get("diff") if isinstance(row.get("diff"), dict) else {},
+            "scenario_pressure": row.get("scenario_pressure") or {},
+            "deterministic": row.get("deterministic") or {},
+            "digest": digests.get(row.get("round"), ""),
+        }
+        # RED LINES crossed in the period (the kernel's apply summary), for the panel's past-period
+        # view once the round's events have left the recent-event window; absent when none
+        arbiter = row.get("arbiter") if isinstance(row.get("arbiter"), dict) else {}
+        crossed = arbiter.get("red_lines_crossed") if isinstance(arbiter.get("red_lines_crossed"), list) else []
+        crossed = [{k: str(c.get(k) or "")[:160] for k in ("actor", "by", "red_line")}
+                   for c in crossed[:4] if isinstance(c, dict)]
+        if crossed:
+            entry["red_lines_crossed"] = crossed
+        if row.get("error"):
+            entry["error"] = str(row.get("error"))[:200]
+        history.append(entry)
+    variables = []
+    for v in (world.get("variables") or [])[:64]:
+        if not isinstance(v, dict):
+            continue
+        hist = [h for h in (v.get("history") or []) if isinstance(h, dict)][-12:]
+        variables.append({"id": v.get("id"), "name": v.get("name"), "value": v.get("value"),
+                          "unit": v.get("unit"), "kind": v.get("kind"), "provenance": v.get("provenance"),
+                          "as_of": v.get("as_of"), "history": hist})
+    actors = []
+    for a in (world.get("actors") or [])[:64]:
+        if not isinstance(a, dict):
+            continue
+        commitments = [c for c in (a.get("commitments") or []) if isinstance(c, dict)]
+        actors.append({"agent_id": a.get("agent_id"), "name": a.get("name"),
+                       "agency_class": a.get("agency_class"), "archetype": a.get("archetype"),
+                       "capacity_per_round": a.get("capacity_per_round"),
+                       "reputation": a.get("reputation"), "last_action": a.get("last_action"),
+                       "track_record": a.get("track_record") if isinstance(a.get("track_record"), dict) else None,
+                       "pending_commitments": [c for c in commitments if c.get("status") in ("pending", "due")][:6]})
+    relationships = []
+    for r in (world.get("relationships") or [])[:200]:
+        if isinstance(r, dict):
+            relationships.append({k: r.get(k) for k in ("source", "target", "kind", "valence", "polarity",
+                                                          "strength", "last_changed_round")})
+    events = [e for e in (world.get("events") or []) if isinstance(e, dict)][-WORLD_STATE_MAX_EVENTS:]
+    data = {
+        "simulation_id": str(simulation_id),
+        "committed_round": payload.get("committed_round"),
+        "headline": str(payload.get("headline") or "")[:2000],
+        "brief": str(payload.get("brief") or "")[:4000],
+        "digest": str(payload.get("digest") or "")[:WORLD_STATE_MAX_DIGEST],
+        "summary": payload.get("summary") if isinstance(payload.get("summary"), dict) else {},
+        "question": world.get("question"),
+        "as_of_date": world.get("as_of_date"),
+        "horizon_date": world.get("horizon_date"),
+        "period": world.get("period"),
+        "variables": variables,
+        "actors": actors,
+        "relationships": relationships,
+        "pending_effects": [fx for fx in (world.get("pending_effects") or []) if isinstance(fx, dict)][:20],
+        "recent_events": events,
+        "history": history,
+        # OFFERS: open offers first, then the latest settled ones (names resolved, bounded)
+        "interactions": _world_interactions(world),
+        # MODELLING GAPS the seed reported (what the research could not ground)
+        "seed_gaps": [{"kind": str(g.get("kind") or "")[:40], "subject": str(g.get("subject") or "")[:120],
+                       "note": str(g.get("note") or "")[:160]}
+                      for g in (world.get("seed_gaps") or []) if isinstance(g, dict)][:32],
+    }
+    return data
+
+
 @simulation_bp.route('/<simulation_id>/world-state', methods=['GET'])
 def get_simulation_world_state(simulation_id: str):
     """REFLEXIVE WORLD: the latest committed world (facts, actors, relationships, events)
@@ -2317,110 +2435,12 @@ def get_simulation_world_state(simulation_id: str):
     same containment rules, so the panel can show any committed period, not only the latest.
     """
     try:
-        sim_dir = _contained_sim_dir(simulation_id)
-        if sim_dir is None:
-            return jsonify({"success": False, "error": f"模拟不存在: {simulation_id}"}), 404
-        path = os.path.join(sim_dir, "world_state.json")
-        if os.path.islink(path) or not os.path.isfile(path):
-            return jsonify({"success": False,
-                            "error": "世界状态尚未生成（非反身世界模式或模拟尚在早期轮次）"}), 404
-        if os.path.getsize(path) > WORLD_STATE_MAX_BYTES:
-            return jsonify({"success": False, "error": "世界状态文件超出大小上限"}), 413
-        import json
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                payload = json.load(f)
-        except ValueError:
-            return jsonify({"success": False, "error": "世界状态文件解析失败"}), 500
-        if not isinstance(payload, dict):
-            return jsonify({"success": False, "error": "世界状态文件解析失败"}), 500
-        world = payload.get("world") if isinstance(payload.get("world"), dict) else {}
-        try:
-            rows_wanted = max(1, min(WORLD_STATE_MAX_HISTORY, int(request.args.get("rows", 24))))
-        except (TypeError, ValueError):
-            rows_wanted = 24
-        # per-round digests (what the agents were shown), keyed by round; the latest one is
-        # also the top-level ``digest`` below.  Only the text travels — never the shares.
-        digests = {}
-        for drow in _bounded_jsonl_rows(os.path.join(sim_dir, "world_digest.jsonl")):
-            if drow.get("round") is not None:
-                digests[drow.get("round")] = str(drow.get("digest") or "")[:WORLD_STATE_MAX_DIGEST]
-        history = []
-        for row in _bounded_jsonl_rows(os.path.join(sim_dir, "world_state_history.jsonl"))[-rows_wanted:]:
-            problems = row.get("arbiter_problems") if isinstance(row.get("arbiter_problems"), list) else []
-            entry = {
-                "round": row.get("round"), "period_label": row.get("period_label"),
-                "headline": str(row.get("headline") or "")[:2000],
-                "narrative": str(row.get("narrative") or "")[:8000],
-                "arbiter_status": row.get("arbiter_status"),
-                "arbiter_problems": [str(p)[:600] for p in problems[:WORLD_STATE_MAX_PROBLEMS]],
-                "decisions": row.get("decisions"),
-                "diff": row.get("diff") if isinstance(row.get("diff"), dict) else {},
-                "scenario_pressure": row.get("scenario_pressure") or {},
-                "deterministic": row.get("deterministic") or {},
-                "digest": digests.get(row.get("round"), ""),
-            }
-            # RED LINES crossed in the period (the kernel's apply summary), for the panel's past-period
-            # view once the round's events have left the recent-event window; absent when none
-            arbiter = row.get("arbiter") if isinstance(row.get("arbiter"), dict) else {}
-            crossed = arbiter.get("red_lines_crossed") if isinstance(arbiter.get("red_lines_crossed"), list) else []
-            crossed = [{k: str(c.get(k) or "")[:160] for k in ("actor", "by", "red_line")}
-                       for c in crossed[:4] if isinstance(c, dict)]
-            if crossed:
-                entry["red_lines_crossed"] = crossed
-            if row.get("error"):
-                entry["error"] = str(row.get("error"))[:200]
-            history.append(entry)
-        variables = []
-        for v in (world.get("variables") or [])[:64]:
-            if not isinstance(v, dict):
-                continue
-            hist = [h for h in (v.get("history") or []) if isinstance(h, dict)][-12:]
-            variables.append({"id": v.get("id"), "name": v.get("name"), "value": v.get("value"),
-                              "unit": v.get("unit"), "kind": v.get("kind"), "provenance": v.get("provenance"),
-                              "as_of": v.get("as_of"), "history": hist})
-        actors = []
-        for a in (world.get("actors") or [])[:64]:
-            if not isinstance(a, dict):
-                continue
-            commitments = [c for c in (a.get("commitments") or []) if isinstance(c, dict)]
-            actors.append({"agent_id": a.get("agent_id"), "name": a.get("name"),
-                           "agency_class": a.get("agency_class"), "archetype": a.get("archetype"),
-                           "capacity_per_round": a.get("capacity_per_round"),
-                           "reputation": a.get("reputation"), "last_action": a.get("last_action"),
-                           "track_record": a.get("track_record") if isinstance(a.get("track_record"), dict) else None,
-                           "pending_commitments": [c for c in commitments if c.get("status") in ("pending", "due")][:6]})
-        relationships = []
-        for r in (world.get("relationships") or [])[:200]:
-            if isinstance(r, dict):
-                relationships.append({k: r.get(k) for k in ("source", "target", "kind", "valence", "polarity",
-                                                              "strength", "last_changed_round")})
-        events = [e for e in (world.get("events") or []) if isinstance(e, dict)][-WORLD_STATE_MAX_EVENTS:]
-        data = {
-            "simulation_id": str(simulation_id),
-            "committed_round": payload.get("committed_round"),
-            "headline": str(payload.get("headline") or "")[:2000],
-            "brief": str(payload.get("brief") or "")[:4000],
-            "digest": str(payload.get("digest") or "")[:WORLD_STATE_MAX_DIGEST],
-            "summary": payload.get("summary") if isinstance(payload.get("summary"), dict) else {},
-            "question": world.get("question"),
-            "as_of_date": world.get("as_of_date"),
-            "horizon_date": world.get("horizon_date"),
-            "period": world.get("period"),
-            "variables": variables,
-            "actors": actors,
-            "relationships": relationships,
-            "pending_effects": [fx for fx in (world.get("pending_effects") or []) if isinstance(fx, dict)][:20],
-            "recent_events": events,
-            "history": history,
-            # OFFERS: open offers first, then the latest settled ones (names resolved, bounded)
-            "interactions": _world_interactions(world),
-            # MODELLING GAPS the seed reported (what the research could not ground)
-            "seed_gaps": [{"kind": str(g.get("kind") or "")[:40], "subject": str(g.get("subject") or "")[:120],
-                           "note": str(g.get("note") or "")[:160]}
-                          for g in (world.get("seed_gaps") or []) if isinstance(g, dict)][:32],
-        }
+        data = _read_simulation_world_state(simulation_id, request.args.get("rows", 24))
         return jsonify({"success": True, "data": data})
+    except FileNotFoundError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except _WorldStateReadError as exc:
+        return jsonify({"success": False, "error": str(exc)}), exc.status
     except Exception as e:
         logger.error(f"读取世界状态失败: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
@@ -3323,23 +3343,477 @@ def get_world_result(simulation_id: str):
         return jsonify({"success": False, "error": str(exc)}), 400
 
 
-# ───────────────────── 2026-10-21: simulation translation overlay ─────────────────────
+def _translation_source_path(sim_dir: str, name: str):
+    """Only explicitly named regular sources inside this simulation may be read."""
+    path = os.path.join(sim_dir, name)
+    if os.path.realpath(path) != path or os.path.islink(path):
+        raise ValueError("indirect simulation translation source")
+    if not os.path.exists(path):
+        return None
+    if not os.path.isfile(path):
+        raise ValueError("invalid simulation translation source")
+    return path
 
+
+def _translation_source_json(sim_dir: str, name: str):
+    import json
+
+    path = _translation_source_path(sim_dir, name)
+    if path is None:
+        return None
+    if os.path.getsize(path) > WORLD_STATE_MAX_BYTES:
+        raise ValueError("simulation translation source exceeds read bound")
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def _simulation_display_value(value, unit="") -> str:
+    """Mirror WorldState's formatWorldValue for safe, source-derived UI snippets.
+
+    This is an additional display string; the original typed value and unit
+    always remain in the projection and its source fingerprint.
+    """
+    from decimal import Decimal, ROUND_HALF_UP, localcontext
+    from math import isfinite
+
+    def fixed(number, places):
+        # JavaScript toFixed uses exponential number spelling at this bound.
+        if abs(number) >= 1e21:
+            return str(float(number)).replace(".0e", "e")
+        with localcontext() as decimal_context:
+            decimal_context.prec = 40
+            return format(Decimal.from_float(float(number)).quantize(
+                Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP), "f")
+
+    if isinstance(value, bool):
+        text = "yes" if value else "no"
+    elif isinstance(value, (int, float)):
+        try:
+            finite = isfinite(value)
+        except OverflowError:
+            finite = False
+        if not finite:
+            raise ValueError("world display value must be finite")
+        magnitude = abs(value)
+        if magnitude >= 1e12:
+            text = fixed(value / 1e12, 2) + " trillion"
+        elif magnitude >= 1e9:
+            text = fixed(value / 1e9, 2) + " billion"
+        elif magnitude >= 1e6:
+            text = fixed(value / 1e6, 2) + " million"
+        elif magnitude >= 1e4:
+            text = format(int(fixed(value, 0)), ",")
+        elif float(value).is_integer():
+            text = str(int(value))
+        else:
+            text = fixed(value, 2).rstrip("0").rstrip(".")
+            if text == "-0":
+                text = "0"
+    elif value is None:
+        text = "—"
+    else:
+        text = str(value).strip()[:120]
+    unit = str(unit or "").strip()
+    if not unit or unit.lower() in {
+        "numeric", "categorical", "boolean", "text", "number", "num", "int", "integer", "float",
+        "decimal", "bool", "flag", "string", "str", "category", "enum", "date", "datetime", "timestamp",
+    }:
+        return text
+    if unit == "%":
+        return text + unit
+    if re.search(r"[$€£¥￥]", unit) or unit.lower() in {
+        "usd", "eur", "gbp", "cny", "rmb", "jpy", "hkd", "aud", "cad", "美元", "人民币", "元",
+    }:
+        return unit + text
+    return text + " " + unit
+
+
+def _simulation_world_display(world: dict) -> list:
+    """Derived strings used by worldState.js, from the public reader only."""
+    snippets = []
+    for headline in [world.get("headline"), *(row.get("headline") for row in world["history"])]:
+        parts = str(headline or "").split(" · ")
+        stop = next((i + 1 for i, part in enumerate(parts) if part.strip().startswith("arbiter=")), len(parts))
+        snippets.append(" · ".join(parts[:stop]).strip())
+    for variable in world["variables"]:
+        snippets.append(_simulation_display_value(variable.get("value"), variable.get("unit")))
+        history = variable.get("history") or []
+        if len(history) >= 2:
+            snippets.append(" → ".join(_simulation_display_value(row.get("value"), variable.get("unit"))
+                                       for row in history[-2:]))
+        # A scalar provenance is explanatory prose; structured provenance stays
+        # in the original projection with its IDs and hashes unchanged.
+        if isinstance(variable.get("provenance"), str):
+            snippets.append(variable["provenance"])
+    for row in world["history"]:
+        snippets.append(str(row.get("period_label") or f"#{row.get('round')}"))
+        diff = row.get("diff") or {}
+        for change in diff.get("variables_changed") or []:
+            if isinstance(change, dict):
+                snippets.append(" → ".join(_simulation_display_value(change.get(key), change.get("unit"))
+                                           for key in ("from", "to")))
+        for added in diff.get("variables_added") or []:
+            if isinstance(added, dict):
+                snippets.append(_simulation_display_value(added.get("value"), added.get("unit")))
+        for crossing in row.get("red_lines_crossed") or []:
+            if all(crossing.get(key) for key in ("by", "actor", "red_line")):
+                snippets.append(f"{crossing['by']} crossed {crossing['actor']}'s red line: {crossing['red_line']}")
+    return [{"text": text} for text in dict.fromkeys(snippets) if text]
+
+
+def _simulation_record_display(record: dict, selected_round) -> list:
+    """Exact simulationRecordTranslationTexts inventory; no setup or other periods.
+
+    Keep this explicit adapter aligned with simulationRecordTranslation.js and
+    simRecord.js. A raw audited record is still too broad for text admission.
+    """
+    def text(value):
+        return "" if value is None else str(value).strip()
+
+    def objects(value):
+        return [row for row in value if isinstance(row, dict)] if isinstance(value, list) else []
+
+    def items(value):
+        return value if isinstance(value, list) else []
+
+    def object_value(value):
+        return value if isinstance(value, dict) else {}
+
+    def event_text(value):
+        return text(value.get("description") or value.get("text") or value.get("name") or value.get("kind")) \
+            if isinstance(value, dict) else text(value)
+
+    def finish(values):
+        return [{"text": value} for value in dict.fromkeys(values) if isinstance(value, str) and value]
+
+    health = record.get("health") or {}
+    limits = object_value(record.get("limits"))
+    health_name, validity = text(health.get("simulation_health")) or "unknown", text(health.get("validity")) or "unknown"
+    snippets = [record.get("banner"), record.get("calendar_unit"), health_name, validity,
+                *(event_text(note) for note in items(limits.get("notes")))]
+    if (limits.get("stub") is True or health_name in {"hollow", "errored", "truncated"}
+            or validity != "valid" or record.get("rounds_committed") == 0):
+        return finish(snippets)
+    for period in objects(record.get("periods")):
+        snippets.extend((text(period.get("label")) or f"#{period.get('round')}",
+                         text(period.get("arbiter_status")) or "none"))
+        if period.get("round") != selected_round:
+            continue
+        snippets.extend((text(period.get("narrative")), *(text(value) for value in items(period.get("arbiter_problems"))),
+                         *(event_text(value) for key in ("events", "shocks_fired") for value in items(period.get(key)))))
+        for crossing in items(period.get("red_lines_crossed")):
+            if isinstance(crossing, dict) and crossing.get("red_line"):
+                snippets.append(": ".join(filter(None, (text(crossing.get("actor")), text(crossing["red_line"])))))
+            else:
+                snippets.append(event_text(crossing))
+        for shift in items(period.get("alliances")):
+            if isinstance(shift, dict) and shift.get("kind") == "alliance_move":
+                snippets.append(f"{text(shift.get('actor'))}: {text(shift.get('move'))} → {text(shift.get('target'))}")
+            elif isinstance(shift, dict) and shift.get("kind") == "relationship":
+                snippets.append(f"{text(shift.get('source'))} → {text(shift.get('target'))}: "
+                                f"{text(shift.get('from'))} → {text(shift.get('to'))}")
+            else:
+                snippets.append(event_text(shift))
+        for move in objects(period.get("moves")):
+            option = move.get("option")
+            if not isinstance(option, dict) or option.get("label"):
+                snippets.append(text(option.get("label") if isinstance(option, dict) else option))
+            commitment = move.get("commitment")
+            snippets.extend((text(move.get("public_statement") or move.get("statement")), text(move.get("terms")),
+                text(commitment.get("text") or commitment.get("description")) if isinstance(commitment, dict) else text(commitment)))
+        for fact in objects(period.get("facts_changed")):
+            if fact.get("variable") or fact.get("name"):
+                snippets.append(text(fact.get("variable") or fact.get("name")))
+            snippets.append(text(fact.get("cause")))
+        for offer in objects(period.get("offers")):
+            snippets.extend((text(offer.get("status")) or "unknown", text(offer.get("kind")), text(offer.get("terms"))))
+    overall = object_value(record.get("overall"))
+    for variable in objects(overall.get("final_variables")):
+        if variable.get("name") or variable.get("variable"):
+            snippets.append(text(variable.get("name") or variable.get("variable")))
+    shares = object_value(overall.get("shares"))
+    final, paths = shares.get("final"), object_value(shares.get("paths"))
+    per_scenario = paths.get("per_scenario")
+    # These map keys are the scenario names displayed by shareRows, not IDs.
+    for values in (final, per_scenario):
+        if isinstance(values, dict):
+            snippets.extend(values)
+    snippets.extend(text(row.get("why") or row.get("reason")) for row in objects(overall.get("turning_points")))
+    synthesis = object_value(overall.get("synthesis"))
+    snippets.extend(part.strip() for part in re.split(r"\n{2,}", text(synthesis.get("text"))) if part.strip())
+    generator = text(synthesis.get("generator")) or "deterministic"
+    if generator not in {"llm", "deterministic"}:
+        snippets.append(generator)
+    snippets.extend(event_text(gap) for gap in items(limits.get("seed_gaps")))
+    snippets.append(text(limits.get("behaviour_note")))
+    return finish(snippets)
+
+
+def _simulation_feed_rows(db_path: str):
+    """The public post/comment rows, including unchanged typed UI facts, read-only."""
+    import sqlite3
+    from pathlib import Path
+
+    if not db_path:
+        return [], []
+    connection = sqlite3.connect(Path(db_path).as_uri() + "?mode=ro", uri=True, timeout=5)
+    connection.row_factory = sqlite3.Row
+    try:
+        rows = []
+        for table in ("post", "comment"):
+            try:
+                rows.append([dict(row) for row in connection.execute(f"SELECT * FROM {table} ORDER BY {table}_id")])
+            except sqlite3.OperationalError as exc:
+                if "no such table" not in str(exc):
+                    raise ValueError("simulation feed source unavailable") from None
+                rows.append([])
+        return tuple(rows)
+    finally:
+        connection.close()
+
+
+def simulation_translation_projection(sim_id: str, context) -> dict:
+    """Return permitted source facts plus safe UI snippets, without any writes.
+
+    ``context`` selects engine/platform/round/revision/generation_id/view/actor_id
+    and optional ``surface``. An explicit record surface OR view (including
+    simulation-record/after-action-record aliases) uses the audited record's
+    rendered inventory, with an opaque seal of the entire canonical record.
+    Native world views use read_result's visibility and committed-round checks.
+    Legacy public projections use the same world-state projection and feed-round
+    readers as the UI, plus the JSON/CSV profile format served by /profiles.
+
+    Callers seal the ENTIRE returned JSON object, including numbers and identities,
+    and check submitted texts against its string leaves. This function does not
+    accept client text as source authority. Invalid scopes/source bindings raise
+    ValueError; unavailable sources raise FileNotFoundError. No Flask context,
+    SimulationManager construction, model client, generation or repair is needed.
+    """
+    import csv
+    import hashlib
+    import json
+    from pathlib import Path
+
+    if not isinstance(sim_id, str):
+        raise ValueError("invalid simulation translation id")
+    if context is None:
+        context = {}
+    if not isinstance(context, dict) or set(context) - {
+        "engine", "platform", "round", "generation_id", "revision", "view", "actor_id", "surface",
+    }:
+        raise ValueError("invalid simulation translation context")
+    for key, value in context.items():
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (str, int))
+                                  or len(str(value)) > 256):
+            raise ValueError("invalid simulation translation context field")
+        if key != "round" and value is not None and not isinstance(value, str):
+            raise ValueError("simulation translation context field must be text")
+    round_index = context.get("round")
+    if round_index in (None, ""):
+        round_index = None
+    elif isinstance(round_index, str) and re.fullmatch(r"[0-9]+", round_index):
+        round_index = int(round_index)
+    if round_index is not None and (type(round_index) is not int or round_index < 0):
+        raise ValueError("invalid simulation translation round")
+    sim_dir = _contained_sim_dir(sim_id)
+    if sim_dir is None:
+        raise ValueError("invalid simulation translation id")
+    if os.path.islink(os.path.join(os.path.realpath(Config.OASIS_SIMULATION_DATA_DIR), sim_id)):
+        raise ValueError("indirect simulation translation directory")
+    if not os.path.isdir(sim_dir):
+        raise FileNotFoundError("simulation translation source unavailable")
+    state = _translation_source_json(sim_dir, "state.json")
+    if state is not None and not isinstance(state, dict):
+        raise ValueError("invalid saved simulation state")
+    state = state or {}
+    if state.get("simulation_id", sim_id) != sim_id:
+        raise ValueError("simulation translation source identity mismatch")
+    record_aliases = {"record", "simulation-record", "after-action-record"}
+    surface, view = context.get("surface") or "", context.get("view") or "public"
+    is_record = surface in record_aliases or view in record_aliases
+    engine = state.get("simulation_engine", "oasis-legacy")
+    if (not isinstance(engine, str) or engine not in {"oasis-legacy", "world-v1"}
+            or (not is_record and context.get("engine") not in (None, "", engine))):
+        raise ValueError("simulation translation engine mismatch")
+    if not is_record and engine != "world-v1" and (os.path.lexists(os.path.join(sim_dir, "world_input_manifest.json"))
+            or any(state.get(key) for key in ("world_generation_id", "world_spec_sha256", "world_input_manifest_sha256"))):
+        raise ValueError("world artifacts require the saved world-v1 engine pin")
+    actor_id = context.get("actor_id") or None
+    platform = context.get("platform") or ""
+    generation = context.get("generation_id") or None
+    revision = context.get("revision") or None
+    if is_record:
+        if (surface not in {"", *record_aliases} or view not in {"public", *record_aliases}
+                or actor_id or platform):
+            raise ValueError("record translation requires an explicit public record scope")
+        from ..services.simulation_record_contract import load_published_record, record_sha256
+        record, status = load_published_record(sim_dir)
+        if record is None:
+            raise FileNotFoundError(f"published simulation record unavailable: {status}")
+        if record.get("simulation_id") != sim_id:
+            raise ValueError("simulation record identity mismatch")
+        record_engine = "world-v1" if record.get("engine") == "world-v1" else "oasis-legacy"
+        if (context.get("engine") not in (None, "", record_engine, record.get("engine"))
+                or ("simulation_engine" in state and record_engine != engine)):
+            raise ValueError("simulation record engine mismatch")
+        engine = record_engine
+        if generation and generation != state.get("world_generation_id"):
+            raise ValueError("simulation record generation mismatch")
+        record_revision = json.dumps([record.get(key) or "" for key in
+            ("config_hash", "generator_version", "generated_at")], ensure_ascii=False, separators=(",", ":"))
+        if revision and revision != record_revision:
+            raise ValueError("simulation record revision changed")
+        if round_index is not None and round_index not in {row.get("round") for row in record.get("periods", [])}:
+            raise ValueError("simulation record round unavailable")
+        metadata = {key: record.get(key) for key in (
+            "schema", "record_class", "epistemic_status", "simulation_id", "pipeline_id", "config_hash",
+            "engine", "language", "as_of", "horizon_date", "rounds_planned", "rounds_committed",
+            "generator_version", "generated_at")}
+        projection = {"simulation_id": sim_id, "engine": engine, "surface": "record", "record": metadata,
+                      "record_sha256": record_sha256(record), "selected_round": round_index,
+                      "display": _simulation_record_display(record, round_index)}
+    elif engine == "world-v1":
+        if surface not in {"", "live", "world"} or platform:
+            raise ValueError("invalid native world translation surface")
+        if view not in {"public", "actor", "analyst"} or (actor_id is not None and view != "actor"):
+            raise ValueError("invalid native world translation view")
+        from ..services.world_simulation.artifacts import load_inputs
+        from ..services.world_simulation.contracts import WorldError
+        from ..services.world_simulation.results import read_result
+        try:
+            for name in ("world_spec.json", "world_input_manifest.json", "world.sqlite3"):
+                if _translation_source_path(sim_dir, name) is None:
+                    raise FileNotFoundError("committed world source unavailable")
+            if not all(state.get(key) for key in (
+                    "world_generation_id", "world_spec_sha256", "world_input_manifest_sha256")):
+                raise ValueError("prepared world state is missing generation bindings")
+            spec, manifest = load_inputs(Path(sim_dir), simulation_id=sim_id,
+                expected_manifest_sha256=state["world_input_manifest_sha256"])
+            if (spec["generationId"] != state["world_generation_id"]
+                    or manifest["specSha256"] != state["world_spec_sha256"]):
+                raise ValueError("prepared world state bindings changed")
+            result = read_result(Path(sim_dir), view=view, actor_id=actor_id,
+                                 round_index=round_index, revision=revision)
+        except WorldError as exc:
+            if exc.code in {"missing_artifact", "missing_world", "world_incomplete"}:
+                raise FileNotFoundError(str(exc)) from None
+            raise ValueError(str(exc)) from None
+        if (result.get("simulationId") != sim_id or result.get("generationId") != state["world_generation_id"]
+                or (generation and result.get("generationId") != generation)):
+            raise ValueError("world translation source identity mismatch")
+        projection = {"simulation_id": sim_id, "engine": engine, "surface": "world", "world": result}
+    else:
+        if view != "public" or actor_id or generation:
+            raise ValueError("OASIS translation supports only its public projection")
+        if surface not in {"", "live", "world-state", "feed", "profiles", "personas"}:
+            raise ValueError("invalid OASIS translation surface")
+        if platform and platform not in {"reddit", "twitter"}:
+            raise ValueError("invalid OASIS translation platform")
+        projection = {"simulation_id": sim_id, "engine": engine, "surface": surface or "live"}
+        # The World State panel uses an explicit empty platform; absent context
+        # is the legacy combined public inventory. Never include a record here.
+        want_world = surface == "world-state" or (not platform and surface in {"", "live"})
+        if want_world or revision:
+            try:
+                world = _read_simulation_world_state(sim_id, WORLD_STATE_MAX_HISTORY)
+            except FileNotFoundError:
+                if surface == "world-state" or revision or "platform" in context:
+                    raise
+            else:
+                if revision and revision != str(world.get("committed_round")):
+                    raise ValueError("OASIS world revision changed")
+                if round_index is not None and round_index not in {
+                        world.get("committed_round"), *(row.get("round") for row in world["history"])}:
+                    raise ValueError("OASIS world round unavailable")
+                projection["world_state"] = world
+                projection["display"] = _simulation_world_display(world)
+        platforms = [platform] if platform else ([] if "platform" in context or surface == "world-state"
+                                                else ["reddit", "twitter"])
+        if surface in {"feed", "profiles", "personas"} and not platforms:
+            platforms = ["reddit"]
+        from ..services.feed_rounds import cached_feed_round_index, ids_for_round, public_index
+        for selected_platform in platforms:
+            public = {}
+            if surface not in {"feed", "world-state"}:
+                filename = "twitter_profiles.csv" if selected_platform == "twitter" else "reddit_profiles.json"
+                path = _translation_source_path(sim_dir, filename)
+                if path:
+                    if os.path.getsize(path) > WORLD_STATE_MAX_BYTES:
+                        raise ValueError("simulation profiles exceed read bound")
+                    with open(path, encoding="utf-8") as handle:
+                        profiles = list(csv.DictReader(handle)) if selected_platform == "twitter" else json.load(handle)
+                    if not isinstance(profiles, list) or any(not isinstance(row, dict) for row in profiles):
+                        raise ValueError("invalid simulation profiles")
+                    public["profiles_sha256"] = hashlib.sha256(json.dumps(profiles, ensure_ascii=False,
+                        sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")).hexdigest()
+                    public["profiles"] = []
+                    for row in profiles:
+                        visible = {key: row[key] for key in ("id", "agent_id", "user_id") if key in row}
+                        if any(value is not None and not isinstance(value, (str, int, float, bool))
+                               for value in visible.values()):
+                            raise ValueError("invalid simulation profile identity")
+                        for field, keys in (("name", ("name", "user_name", "username")),
+                                ("type", ("type", "category")),
+                                ("persona", ("persona", "bio", "description", "self_description"))):
+                            value = next((row[key] for key in keys if row.get(key)), "")
+                            if not isinstance(value, str):
+                                raise ValueError("invalid simulation profile display text")
+                            visible[field] = value.strip()
+                        public["profiles"].append(visible)
+            if surface not in {"profiles", "personas", "world-state"}:
+                db_path = _translation_source_path(sim_dir, selected_platform + "_simulation.db")
+                actions_path = _translation_source_path(sim_dir, selected_platform + "/actions.jsonl")
+                if db_path or actions_path:
+                    index = cached_feed_round_index(sim_dir, selected_platform)
+                    posts, comments = _simulation_feed_rows(db_path)
+                    if round_index is not None:
+                        if round_index not in {row["round"] for row in index["rounds"]}:
+                            raise ValueError("OASIS feed round unavailable")
+                        post_ids, comment_ids = ids_for_round(index, round_index, comments)
+                        post_ids, comment_ids = set(post_ids), set(comment_ids)
+                        posts = [row for row in posts if row["post_id"] in post_ids]
+                        comments = [row for row in comments if row["comment_id"] in comment_ids]
+                    posts = [{**row, "round": index["post_round"].get(row["post_id"])} for row in posts]
+                    comments = [{**row, "round": index["comment_round"].get(row["comment_id"])} for row in comments]
+                    public.update(posts=posts, comments=comments, feed_rounds=public_index(index))
+                    labels = {row["round"]: str(row.get("period_label") or f"#{row['round']}") for row in index["rounds"]}
+                    display = public.setdefault("display", [])
+                    display.extend({"text": label} for label in labels.values())
+                    display.extend({"text": f"{prefix} {labels.get(row['round'], '#' + str(row['round']))}"}
+                        for row in posts if round_index is not None and row["round"] is not None and row["round"] != round_index
+                        for prefix in ("发表于", "posted in"))
+            if public:
+                projection[selected_platform] = public
+        if not any(key in projection for key in ("world_state", "reddit", "twitter")):
+            raise FileNotFoundError("simulation public translation source unavailable")
+    # Reject non-JSON/floating NaN sources and detach the result from reader caches.
+    return json.loads(json.dumps(projection, ensure_ascii=False, allow_nan=False))
+
+
+# Display-only translation requests are bound to the exact visible text inventory.
 @simulation_bp.route('/<sim_id>/translations/<lang>', methods=['POST'])
 def generate_simulation_translation(sim_id: str, lang: str):
-    """Translate the simulation panel's text (question, scenario names, variable
-    names/rationales/latest causes, per-round digests) into <lang>. Sha-keyed cache
-    under the sim dir; compliance ladder degrades content-filter hits per fragment."""
     lang = (lang or '').strip().lower()
     if lang not in ('zh', 'en'):
         return jsonify({"success": False, "error": "仅支持 zh/en"}), 400
     try:
         from ..services.artifact_translation import start_translation
-        result = start_translation("simulation", sim_id, lang, force=bool(request.args.get('force')))
-        return jsonify({"success": True, "data": result}), 202
-    except Exception as e:  # noqa: BLE001
-        logger.error(f"模拟翻译失败: {e}", exc_info=True)
-        return jsonify({"success": False, "error": str(e)}), 500
+        body = request.get_json(silent=True)
+        if body is None:
+            body = {}
+        if not isinstance(body, dict):
+            raise ValueError("translation body must be an object")
+        force = (request.args.get('force') or '').lower() in {'1', 'true', 'yes'}
+        result = start_translation("simulation", sim_id, lang, force=force,
+            texts=body.get("texts"), context=body.get("context"))
+        return jsonify({"success": True, "data": result}), (202 if result["status"] == "generating" else 200)
+    except FileNotFoundError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except (TypeError, ValueError) as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        logger.error("模拟翻译失败: %s", type(exc).__name__)
+        return jsonify({"success": False, "error": "translation request failed"}), 500
 
 
 @simulation_bp.route('/<sim_id>/translations/<lang>', methods=['GET'])
@@ -3348,8 +3822,16 @@ def get_simulation_translation(sim_id: str, lang: str):
     if lang not in ('zh', 'en'):
         return jsonify({"success": False, "error": "仅支持 zh/en"}), 400
     try:
+        import json
         from ..services.artifact_translation import translation_status
-        result = translation_status("simulation", sim_id, lang)
+        context = json.loads(request.args['context']) if 'context' in request.args else None
+        result = translation_status("simulation", sim_id, lang,
+            request_digest=request.args.get("request_digest"), context=context)
         return jsonify({"success": True, "data": result})
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"success": False, "error": str(e)}), 500
+    except FileNotFoundError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except (TypeError, ValueError) as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        logger.error("模拟翻译读取失败: %s", type(exc).__name__)
+        return jsonify({"success": False, "error": "translation status unavailable"}), 500

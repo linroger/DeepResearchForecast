@@ -57,63 +57,85 @@ def test_ladder_non_filter_error_fails_fast():
     assert out == "" and level == 0 and llm.calls == 1
 
 
+class _ModelPairsLLM:
+    """Scripted native translate/review transport for these two pair/cache cases."""
+    model = 'controlled-raw-translator'
+    def __init__(self, outputs):
+        self.outputs = list(outputs)
+        self.calls = 0
+        self.expected = {}
+
+    def chat(self, messages, **kwargs):
+        from model_translation_fakes import model_protocol
+        self.calls += 1
+        payload = json.loads(messages[-1]['content'])
+        if 'entries' in payload:
+            output = self.outputs.pop(0)
+            if not isinstance(output, dict):
+                return output
+            assert set(output) == set(payload['entries'])
+            self.expected.update({source: output[key] for key, source in payload['entries'].items()})
+        return model_protocol(messages, self.expected.__getitem__)
+
+
 def test_translate_pairs_batch_and_fallback():
-    llm = _FakeLLM([
-        json.dumps({"a": "甲", "b": "乙"}, ensure_ascii=False),
-    ])
+    llm = _ModelPairsLLM([{"a": "甲", "b": "乙"}])
     mapping, level = translate_pairs(llm, [("a", "one"), ("b", "two")], "简体中文")
     assert mapping == {"a": "甲", "b": "乙"} and level == 0
-    llm2 = _FakeLLM(["not json"])
+    assert llm.calls == 2 and mapping.calls_used == 2
+    assert set(mapping.receipts) == {'a', 'b'}
+    llm2 = _ModelPairsLLM(["not json", "not json"])
     mapping2, _ = translate_pairs(llm2, [("a", "one")], "简体中文")
-    assert mapping2 == {}
+    assert mapping2 == {} and llm2.calls == 2
 
 
 def test_simulation_overlay_cache_incremental(tmp_path, monkeypatch):
+    from app.config import Config
     from app.services import artifact_translation as at
+    from model_translation_fakes import model_protocol
 
+    monkeypatch.setattr(Config, "UPLOAD_FOLDER", str(tmp_path / "uploads"))
+    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(tmp_path))
     sim_dir = tmp_path / "sim_test123"
     sim_dir.mkdir()
-    world = {"world": {
-        "question": "Who governs France?",
-        "scenarios": [{"name": "Muddle through"}, {"name": "Crisis"}],
-        "variables": [
-            {"id": "v1", "name": "Deficit pct", "rationale": "Official estimate from INSEE",
-             "history": [{"cause": "seed"}]},
-        ],
-    }}
-    (sim_dir / "world_state.json").write_text(json.dumps(world), encoding="utf-8")
-    monkeypatch.setattr(at, "_sim_dir", lambda sid: str(sim_dir) if sid == "sim_test123" else None)
+    world = {"question": "Who governs France?",
+             "scenarios": [{"name": "Muddle through"}, {"name": "Crisis"}],
+             "variables": [{"id": "v1", "name": "Deficit pct", "rationale": "Official estimate from INSEE"}]}
+    source_path = sim_dir / "world_state.json"
+    source_path.write_text(json.dumps(world), encoding="utf-8")
+    # This case isolates cache reuse against a declared server projection. Real
+    # OASIS/world/record visibility readers have their own durable route scenarios.
+    monkeypatch.setattr(at, "_simulation_projection", lambda sid, context: json.loads(source_path.read_text()))
+    values = {"Who governs France?": "谁治理法国？", "Who governs France now?": "现在谁治理法国？",
+              "Muddle through": "勉力维持", "Crisis": "危机", "Deficit pct": "赤字率",
+              "Official estimate from INSEE": "INSEE 官方估计"}
 
-    llm = _FakeLLM([
-        json.dumps({
-            "world:question": "谁治理法国？",
-            "scenario:0": "勉力维持",
-            "scenario:1": "危机",
-            "var:v1:name": "赤字率",
-            "var:v1:rationale": "INSEE 官方估计",
-        }, ensure_ascii=False),
-    ])
+    class NativeModel:
+        model = "controlled-native-cache"
+        def __init__(self):
+            self.calls = []
+        def chat(self, messages, **kwargs):
+            self.calls.append(json.loads(messages[-1]["content"]))
+            return model_protocol(messages, values.__getitem__)
+
+    llm = NativeModel()
     monkeypatch.setattr("app.utils.llm_client.LLMClient", lambda: llm)
     result = at.simulation_translation("sim_test123", "zh")
-    assert result["status"] == "available"
-    ov = result["overlay"]
-    assert ov["world:question"] == "谁治理法国？"
-    assert ov["var:v1:name"] == "赤字率"
-    cache_path = sim_dir / "translations" / "zh.json"
-    assert cache_path.exists()
-
-    llm2 = _FakeLLM([])
-    monkeypatch.setattr("app.utils.llm_client.LLMClient", lambda: llm2)
+    assert result["status"] == "available", result
+    assert result["overlay"]["path:visible/question"] == "谁治理法国？"
+    assert result["overlay"]["path:visible/variables/0/name"] == "赤字率"
+    calls = len(llm.calls)
     result2 = at.simulation_translation("sim_test123", "zh")
-    assert result2["cached"] == result2["total_candidates"] and llm2.calls == 0
+    assert result2["cached"] == result2["total_candidates"] and len(llm.calls) == calls
+    selected = at.simulation_translation("sim_test123", "zh", texts=[world["question"]])
+    assert selected["status"] == "available" and len(llm.calls) == calls
 
-    world["world"]["question"] = "Who governs France now?"
-    (sim_dir / "world_state.json").write_text(json.dumps(world), encoding="utf-8")
-    llm3 = _FakeLLM([json.dumps({"world:question": "现在谁治理法国？"}, ensure_ascii=False)])
-    monkeypatch.setattr("app.utils.llm_client.LLMClient", lambda: llm3)
+    world["question"] = "Who governs France now?"
+    source_path.write_text(json.dumps(world), encoding="utf-8")
     result3 = at.simulation_translation("sim_test123", "zh")
-    assert llm3.calls == 1
-    assert result3["overlay"]["world:question"] == "现在谁治理法国？"
+    assert result3["source_fingerprint"] != result["source_fingerprint"]
+    assert result3["overlay"]["path:visible/question"] == "现在谁治理法国？"
+    assert len(llm.calls) == calls + 2  # A changed source snapshot cannot import old-scope receipts.
 
 
 # ---- 2026-10-21: unclipped sim text + flat direction + hedged-commitment plans ----

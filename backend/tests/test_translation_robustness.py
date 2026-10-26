@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -129,11 +130,12 @@ def reports_tmp(tmp_path, monkeypatch):
     reports_dir = tmp_path / "reports"
     reports_dir.mkdir()
     monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(reports_dir))
+    monkeypatch.setattr(Config, "UPLOAD_FOLDER", str(tmp_path / "uploads"))
     return reports_dir
 
 
 def _dead_pid() -> int:
-    proc = subprocess.Popen([sys.executable, "-c", "pass"])
+    proc = subprocess.Popen([sys.executable, "-B", os.path.join(os.path.dirname(__file__), "fixtures", "orphan_owner.py"), "--mode", "exit"])
     proc.wait()
     return proc.pid
 
@@ -201,7 +203,9 @@ def test_dossier_translation_owned_by_a_dead_process_reports_interrupted(tmp_pat
         "status": "generating", "available": False, "owner": f"pid:{os.getpid()}",
     }), encoding="utf-8")
     data = client.get("/api/research/pipe_test/dossier/translations/zh").get_json()["data"]
-    assert data["status"] == "generating"
+    assert data["status"] == "interrupted"
+    assert data.get("translation_job") is None
+    assert data["issues"]  # A legacy PID record cannot claim a live durable operation.
 
 
 def test_rejected_translation_names_provider_failures():
@@ -218,7 +222,10 @@ def test_rejected_translation_names_provider_failures():
     source = "# Title\n\n## Part\n\nThe committee published the whole outlook in English only.\n"
     result = _worker(Down()).translate_research_markdown(source)
     assert result["available"] is False
-    assert "translation model call(s) failed" in result["issues"][0]
+    assert any("provider_failure" in issue for issue in result["issues"])
+    assert "Connection error." not in json.dumps(result["audit"]["model_translation"])
+    assert result["audit"]["model_translation"]["job"]["job_state"] == "failed"
+    assert result["audit"]["model_translation"]["calls_used"] == 1
 
 
 def test_translation_calls_carry_a_bounded_request_timeout(monkeypatch):
@@ -254,47 +261,48 @@ def test_translation_calls_carry_a_bounded_request_timeout(monkeypatch):
     assert "timeout" not in captured[2]
 
 
-def test_integrity_retries_run_concurrently(reports_tmp, monkeypatch):
-    """Sections that need an integrity retry are retried in parallel: two retry calls
-    must meet at a barrier, which would time out if they ran one after another."""
-    import threading
+def test_default_repairs_only_rejected_sections_once(reports_tmp, monkeypatch):
+    """The model-led path batches readable sections and repairs only rejected keys.
 
-    monkeypatch.setattr(Config, "REPORT_TRANSLATION_CONCURRENCY", 4)
-    barrier = threading.Barrier(2, timeout=5)
-    met = []
-
-    class RetryNeedsPeers:
-        model = "fake"
-        provider = "fake"
-
-        def chat(self, messages=None, temperature=0.0, max_tokens=4096, tier="strong", **_kw):
-            system, user = messages[0]["content"], messages[-1]["content"]
-            if "INTEGRITY RETRY" in system:
-                try:
-                    barrier.wait()
-                    met.append(True)
-                except threading.BrokenBarrierError:
-                    met.append(False)
-                return "## 第一部分\n\n这一节已经完整翻译成中文了。"
-            if "same alphabetic keys" in system:
-                return json.dumps(json.loads(user), ensure_ascii=False)  # refuse → English
-            return user
-
-        def chat_json(self, messages=None, **_kw):
-            return {}
-
-    sections = "".join(
-        f"## Part {name}\n\nThis section stays in English because the model refused it here.\n\n"
-        for name in ("One", "Two")
-    )
-    report = Report(
-        report_id="report_parallel_retries", simulation_id="sim", graph_id="graph",
-        simulation_requirement="req", status=ReportStatus.COMPLETED,
-        markdown_content="# Title\n\n" + sections,
-    )
+    Provider admission has independent real-thread controls; no legacy parallel
+    integrity ladder is part of the default engine.
+    """
+    monkeypatch.setenv("DRF_TRANSLATION_MAX_CONCURRENCY", "2")
+    prompts = []
+    sources = {"# Title": "# 标题",
+        "## Part One\n\nThe committee delayed approval.": "## 第一部分\n\n委员会延后批准。",
+        "## Part Two\n\nThe market expects restrictions.": "## 第二部分\n\n市场预期限制措施。"}
+    class Model:
+        model = "controlled"
+        def chat(self, messages, **kwargs):
+            payload = json.loads(messages[-1]["content"])
+            prompts.append(payload)
+            if "entries" in payload:
+                values = {key: sources[source] for key, source in payload["entries"].items()}
+                if not payload.get("repair"):
+                    for key, source in payload["entries"].items():
+                        if "Part Two" in source:
+                            values[key] = source
+                else:
+                    assert list(payload["entries"].values()) == [list(sources)[2]]
+                return json.dumps({"translations": values})
+            return json.dumps({"reviews": {key: {
+                "faithful": pair["translation"] == sources[pair["source"]],
+                "complete": True, "target_language": pair["translation"] != pair["source"],
+                "issues": [] if pair["translation"] == sources[pair["source"]] else ["untranslated"]}
+                for key, pair in payload["pairs"].items()}})
+    body = "\n\n".join(sources) + "\n"
+    report = Report(report_id="report_bounded_retry", simulation_id="sim", graph_id="graph",
+        simulation_requirement="req", status=ReportStatus.COMPLETED, markdown_content=body)
     ReportManager.save_report(report)
-    _worker(RetryNeedsPeers())._generate_bilingual_report("report_parallel_retries", report)
-    assert met and all(met), "integrity retries did not overlap"
+    _worker(Model())._generate_bilingual_report(report.report_id, report)
+    snapshot = ReportManager.resolve_translation(report.report_id, "zh")
+    assert snapshot is not None
+    translated = snapshot.markdown
+    assert snapshot.audit["model_translation"]["complete"] is True
+    assert Path(ReportManager._get_report_markdown_path(report.report_id)).read_text() == body
+    assert translated and "委员会延后批准" in translated and "市场预期限制措施" in translated
+    assert len(prompts) == 4 and sum(bool(p.get("repair")) for p in prompts) == 1
 
 
 def test_live_owner_is_trusted_through_a_long_section(reports_tmp, monkeypatch):
@@ -354,7 +362,8 @@ def test_fused_letter_digit_identifiers_are_kept_verbatim():
 
 def test_fiscal_year_forecast_field_localizes(reports_tmp):
     """report_c83f21765b96: GLM rewrote raw "FY2030" as "2030财年", adding a loose 2030
-    the guard rejected, so the dashboard field stayed English."""
+    the old guard rejected. The new raw model path admits the reviewed equivalent
+    year representation while retaining typed forecast IDs and probability."""
     class GlmLike:
         model = "fake"
         provider = "fake"
@@ -366,6 +375,10 @@ def test_fiscal_year_forecast_field_localizes(reports_tmp):
                 text = text.replace("FY2030", "2030财年")  # what GLM does to a raw FY
                 return text.replace("annual report", "年报").replace("deliveries", "交付量")
 
+            from model_translation_fakes import model_protocol
+            native = model_protocol(messages, _zh)
+            if native is not None:
+                return native
             if "same alphabetic keys" in system:
                 return json.dumps({k: _zh(v) for k, v in json.loads(user).items()},
                                   ensure_ascii=False)
@@ -379,5 +392,5 @@ def test_fiscal_year_forecast_field_localizes(reports_tmp):
         "resolution_criteria": "annual report FY2030 deliveries",
     }]}
     localized, summary = _worker(GlmLike())._localize_forecast(forecast, "zh")
-    assert localized["binary_forecasts"][0]["resolution_criteria"] == "年报 FY2030 交付量"
+    assert localized["binary_forecasts"][0]["resolution_criteria"] == "年报 2030财年 交付量"
     assert summary["complete"] is True

@@ -4,7 +4,10 @@ Report API路由
 """
 
 import hashlib
+import json
 import os
+import re
+import sqlite3
 import time
 import traceback
 import threading
@@ -20,10 +23,38 @@ from ..services.backtest_mode import pipeline_for_simulation
 from ..services.simulation_manager import SimulationManager
 from ..models.project import ProjectManager
 from ..models.task import TaskManager, TaskStatus
+from ..services.translation import scheduler as translation_scheduler
+from ..services.translation.artifacts import ArtifactError
+from ..services.translation.contracts import TranslationError
 from ..utils.chart_html import inline_plotly_bundle
 from ..utils.logger import get_logger
 
 logger = get_logger('mirofish.api.report')
+
+
+@report_bp.errorhandler(ArtifactError)
+def _artifact_error_response(exc):
+    return jsonify({"success": False, "error": str(exc), "code": exc.code}), exc.status_code
+
+
+@report_bp.errorhandler(sqlite3.Error)
+@report_bp.errorhandler(TranslationError)
+def _translation_service_error_response(exc):
+    return jsonify({"success": False, "error": "Translation coordination is unavailable; retry shortly",
+                    "code": "translation_service_unavailable"}), 503
+
+
+def _validate_report_id(report_id):
+    if not isinstance(report_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", report_id):
+        raise ArtifactError("invalid_report_id", "Invalid report identity", 400)
+
+
+def _requested_artifact_identity(*names):
+    values = [value for name in names for value in request.args.getlist(name)]
+    if any(len(request.args.getlist(name)) > 1 for name in names) or (
+            values and (not values[0] or any(value != values[0] for value in values))):
+        raise ArtifactError("invalid_artifact_identity", "Conflicting or empty artifact identity", 400)
+    return values[0] if values else None
 
 
 @report_bp.before_request
@@ -34,6 +65,8 @@ def _verify_world_report_request():
         return None  # CORS preflight carries no report data
     try:
         report_id = (request.view_args or {}).get("report_id")
+        if report_id:
+            _validate_report_id(report_id)
         if report_id and request.method != "DELETE":
             ReportManager.load_world_result(report_id)
         elif request.endpoint in {"report.generate_report", "report.chat_with_report_agent"}:
@@ -156,6 +189,181 @@ def _report_publication_payload(report):
     if record_ref:
         payload["simulation_record_ref"] = record_ref
     return payload
+
+
+def _report_display_document(report):
+    """Canonical public display inventory, shared by identity and render readers."""
+    directory = ReportManager._get_report_folder(report.report_id)
+    manifest = []
+    try:
+        with open(os.path.join(directory, "viz_manifest.json"), encoding="utf-8") as handle:
+            manifest = json.load(handle)
+        if isinstance(manifest, dict):
+            manifest = manifest.get("items") or manifest.get("charts") or []
+    except (OSError, ValueError):
+        pass
+    # The display must obey the same chart-path admission as the normal API.
+    from pathlib import PurePosixPath
+    def chart_path(value):
+        if (not isinstance(value, str) or "\\" in value or "%" in value
+                or any(ord(char) < 32 or ord(char) == 127 for char in value)):
+            return None
+        path = PurePosixPath(value.strip().removeprefix("./"))
+        return path.as_posix() if (not path.is_absolute() and ".." not in path.parts
+            and len(path.parts) > 1 and path.parts[0] == "charts") else None
+    safe_manifest = []
+    for item in manifest if isinstance(manifest, list) else []:
+        if not isinstance(item, dict) or not chart_path(item.get("path")):
+            continue
+        item = {**item, "path": chart_path(item["path"])}
+        if "png_path" in item:
+            if chart_path(item["png_path"]):
+                item["png_path"] = chart_path(item["png_path"])
+            else:
+                item.pop("png_path")
+        safe_manifest.append(item)
+    outline = report.outline.to_dict() if getattr(report, "outline", None) else {}
+    heading = (report.markdown_content or "").split("\n", 1)[0].lstrip("# ")
+    document = {"title": outline.get("title") or heading,
+        "news_market_context": ReportManager.load_report_news_market_context(report.report_id),
+        "viz_manifest": safe_manifest, "failed_sections": list(getattr(report, "failed_sections", None) or [])}
+    return document
+
+
+def _report_structured_source_fingerprint(report):
+    source = {"display": _report_display_document(report),
+              "forecast_sha256": ReportManager._sha256_file(
+                  os.path.join(ReportManager._get_report_folder(report.report_id), "forecast.json"))}
+    return hashlib.sha256(json.dumps(source, sort_keys=True, ensure_ascii=False,
+                                     separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _report_display(report, lang, *, generate=False, force=False, snapshot=None):
+    """Use one sealed display for public readers; workers inspect current candidates."""
+    from ..services.artifact_translation import display_document
+    directory = ReportManager._get_report_folder(report.report_id)
+    document = _report_display_document(report)
+    result = display_document(directory, "report", report.report_id, lang, document,
+                              generate=generate, force=force)
+    state = {**result["structured_translation"], "complete": result["coverage"]["complete"],
+             "coverage": result["coverage"]}
+    if snapshot is not None and not generate:
+        raw = snapshot.assets.get("display.json")
+        try:
+            sealed = json.loads(raw) if raw is not None else None
+        except (ValueError, TypeError) as exc:
+            raise ArtifactError("invalid_artifact", "Published display asset is invalid") from exc
+        sealed_state = sealed.get("structured_translation") if isinstance(sealed, dict) else None
+        if (isinstance(sealed_state, dict)
+                and sealed_state.get("source_fingerprint") == _report_structured_source_fingerprint(report)):
+            coverage = sealed_state.get("coverage", {}).get("display")
+            if not isinstance(coverage, dict) or not {"complete", "translated", "total"} <= coverage.keys():
+                raise ArtifactError("invalid_artifact", "Published display coverage is invalid")
+            state = {**state, "coverage": coverage, "complete": coverage["complete"],
+                     "partial": not coverage["complete"],
+                     "pending": max(0, coverage["total"] - coverage["translated"]),
+                     "issues": list(sealed_state.get("issues") or [])}
+            result["display"] = sealed
+        else:
+            # Never borrow a mutable sidecar for a body whose generation lacks a
+            # matching display. Show canonical text with explicit pending coverage.
+            total = result["coverage"]["total"]
+            state = {**state, "coverage": {"translated": 0, "total": total, "complete": not total},
+                     "complete": not total, "partial": bool(total), "pending": total,
+                     "issues": ["Published display needs translation for the current source"] if total else []}
+            result["display"] = document
+    return {"display": {**result["display"], "translation_status": state},
+            "translation_status": state, "structured_translation": state}
+
+
+def _report_structured(report, lang, *, forecast_state=None, snapshot=None):
+    """Read the combined forecast/display projection; this never acquires work."""
+    display = _report_display(report, lang, snapshot=snapshot)
+    view = display["translation_status"]
+    forecast, localization = (forecast_state if forecast_state is not None
+                              else ReportManager.load_localized_forecast(report.report_id, lang, snapshot=snapshot))
+    present = isinstance(forecast, dict)
+    fields = list(ReportAgent._forecast_text_fields(forecast)) if present else []
+    forecast_complete = not present or localization.get("complete") is True
+    unresolved = sum(ReportAgent._forecast_text_is_residual(text, lang) for _path, text in fields)
+    forecast_pending = max(1, unresolved) if present and not forecast_complete else 0
+    # Identity is canonical even before a localized sidecar exists, so repair
+    # progress itself cannot invalidate the enclosing durable operation.
+    source_sha = ReportManager._sha256_file(
+        os.path.join(ReportManager._get_report_folder(report.report_id), "forecast.json"))
+    complete = view["complete"] and forecast_complete
+    partial = bool(view.get("partial")) or not complete
+    issues = list(view.get("issues") or [])
+    if not forecast_complete:
+        issues.append("Forecast dashboard text remains untranslated or its localization proof is incomplete; retry structured translation.")
+    coverage = {
+        "translated": view["coverage"]["translated"] + max(0, len(fields) - forecast_pending),
+        "total": view["coverage"]["total"] + len(fields), "complete": complete,
+        "display": view["coverage"],
+        "forecast": {"translated": max(0, len(fields) - forecast_pending), "total": len(fields),
+                     "complete": forecast_complete},
+    }
+    state = {**view, "status": "partial" if partial else "available",
+        "complete": complete, "partial": partial,
+        "pending": view["pending"] + forecast_pending, "retryable": partial,
+        "coverage": coverage, "issues": issues, "display_complete": view["complete"],
+        "forecast": {**localization, "present": present, "complete": forecast_complete,
+                     "pending": forecast_pending, "source_forecast_sha256": source_sha},
+        "source_fingerprint": _report_structured_source_fingerprint(report)}
+    return {"display": {**display["display"], "translation_status": state, "structured_translation": state},
+            "translation_status": state, "structured_translation": state}
+
+
+def _repair_report_structured(report, lang, force=False, *, expected_identity):
+    """Run only inside the elected scheduler; never rewrite the accepted body."""
+    from ..utils.llm_client import LLMClient
+    from ..utils.telemetry import LLMCache
+    directory = ReportManager._get_report_folder(report.report_id)
+    lock_path = os.path.join(directory, "structured_translation." + lang + ".lock")
+    with ReportManager._advisory_file_lock(lock_path), LLMCache.bypass():
+        _check_report_translation_source(report.report_id, lang, expected_identity)
+        if not ReportManager.is_publishable(report.report_id, _report_publication_lang(report, lang)):
+            raise ArtifactError("translation_unpublished", "Translation is not admitted for display repair")
+        forecast, localization = ReportManager.load_localized_forecast(report.report_id, lang)
+        if isinstance(forecast, dict) and (force or localization.get("complete") is not True):
+            worker = ReportAgent.__new__(ReportAgent)
+            worker.llm = LLMClient()
+            worker.output_language = "Chinese" if lang == "zh" else "English"
+            worker.simulation_id, worker.graph_id = report.simulation_id, report.graph_id
+            worker._forecast_spine = forecast
+            worker._ensure_localized_forecast(report.report_id, lang, force=force)
+        report = _check_report_translation_source(report.report_id, lang, expected_identity)
+        if not ReportManager.is_publishable(report.report_id, _report_publication_lang(report, lang)):
+            raise ArtifactError("translation_unpublished", "Translation publication changed during repair")
+        _report_display(report, lang, generate=True, force=force)
+        _check_report_translation_source(report.report_id, lang, expected_identity)
+
+
+def _assert_report_snapshot_current(report_id, lang, snapshot):
+    if snapshot is None:
+        return
+    publication = ReportManager.publication_status(report_id, lang)
+    primary = ReportManager.publication_status(report_id)
+    if (not publication.get("publishable") or publication.get("generation_id") != snapshot.generation
+            or primary.get("markdown_sha256") != snapshot.source_sha256):
+        raise ArtifactError("stale_artifact", "Report publication changed while reading; reload")
+
+
+def _with_report_display_status(state, report, lang, *, public=False):
+    # No generation pointer retains the historical, source-validated legacy
+    # readers. Once a pointer exists, public reads cannot mix candidate sidecars.
+    snapshot = (ReportManager.resolve_translation(report.report_id, lang)
+                if public and _report_publication_lang(report, lang) is not None else None)
+    if snapshot and state.get("generation_id") not in (None, snapshot.generation):
+        raise ArtifactError("stale_artifact", "Report publication changed while reading; reload")
+    display = _report_structured(report, lang, snapshot=snapshot)
+    if snapshot:
+        _assert_report_snapshot_current(report.report_id, lang, snapshot)
+        display["generation_id"] = snapshot.generation
+    structured = display["structured_translation"]
+    return {**state, **display,
+            "partial": bool(state.get("partial")) or bool(structured.get("partial")) or not structured["complete"],
+            "issues": list(state.get("issues") or []) + structured["issues"]}
 
 
 def _publication_rejection(report_id: str, lang=None, publication=None):
@@ -331,45 +539,239 @@ def _gate_agent_log(report_id: str, logs):
     }
 
 
-def _active_translation_task(report_id: str, lang: str):
-    """Return the newest in-flight task for exactly one report/language pair.
-
-    2026-10-18 修复：进程内 PROCESSING 状态没有时限——worker 线程若在失败处理路径
-    本身死掉（BaseException / 写状态文件的 OSError），任务永远停在 PROCESSING，
-    _active_translation_task 无年龄上限地命中 → 之后每次 POST 都 202「进行中」，
-    只能重启后端解困（TaskManager.cleanup_old_tasks 只清终态且无人调用）。这里按
-    updated_at 加 15 分钟上限：超龄的 in-flight 任务视为僵尸、不再短路重试。"""
-    _ZOMBIE_TASK_S = 900.0
-    now = time.time()
-    for task in TaskManager().list_tasks(task_type="report_translate"):
-        metadata = task.get("metadata") or {}
-        if (metadata.get("report_id") == report_id
-                and metadata.get("lang") == lang
-                and task.get("status") in {
-                    TaskStatus.PENDING.value, TaskStatus.PROCESSING.value,
-                }):
-            updated = task.get("updated_at")
-            age = None
-            if isinstance(updated, str):
-                try:
-                    from datetime import datetime as _dt
-                    age = now - _dt.fromisoformat(updated).timestamp()
-                except ValueError:
-                    age = None
-            if age is not None and age > _ZOMBIE_TASK_S:
-                continue  # 僵尸 in-flight：不再当作「正在跑」阻塞重试
-            return task
-    return None
+_REPORT_TRANSLATION_KIND = "report_translation"
+_TRANSLATION_ACTIVE = {"queued", "pending", "running", "processing", "waiting_provider"}
+_TRANSLATION_RETRYABLE = {"failed", "interrupted", "cancelled"}
 
 
-def _launch_translation_thread(target) -> None:
-    """Small seam kept explicit so API tests can run the worker synchronously.
+def _translation_report(report_id, lang):
+    _validate_report_id(report_id)
+    if lang not in ReportManager._TRANSLATION_LANGS:
+        raise ArtifactError("unsupported_language", "Unsupported translation language", 400)
+    report = ReportManager.get_report(report_id)
+    if report is None:
+        raise ArtifactError("report_not_found", "Report does not exist", 404)
+    if report.report_id != report_id:
+        raise ArtifactError("report_identity_mismatch", "Report identity does not match the requested resource")
+    return report
 
-    2026-10-18 修复：复制 contextvars 再提交——裸线程不继承 run 上下文，worker 的
-    LLM 计量全部落入 _global 桶，per-run 预算/成本归集失真（telemetry 警告已点名）。"""
-    import contextvars as _cv
-    _ctx = _cv.copy_context()
-    threading.Thread(target=_ctx.run, args=(target,), daemon=True).start()
+
+def _report_publication_lang(report, lang):
+    """The primary language uses the canonical body, not a translation sidecar."""
+    source_lang = ReportAgent._detect_translation_target(report.markdown_content or "")[0]
+    return None if lang == source_lang else lang
+
+
+def _report_translation_identity(report, lang, mode):
+    # Identity depends only on canonical source, never translated cache contents.
+    from ..services.translation.artifacts import figure_inventory
+    directory = ReportManager._get_report_folder(report.report_id)
+    return {
+        "kind": _REPORT_TRANSLATION_KIND, "ref_id": report.report_id,
+        "target_lang": lang, "scope": mode,
+        "source_markdown_sha256": hashlib.sha256((report.markdown_content or "").encode()).hexdigest(),
+        "source_structured_sha256": _report_structured_source_fingerprint(report),
+        "source_figures": figure_inventory(report.markdown_content or "",
+                                           ReportManager._get_report_markdown_path(report.report_id)),
+        "source_files": {name: ReportManager._sha256_file(os.path.join(directory, name))
+                         for name in ("full_report.md", "final_audit.json", "citations.json")},
+    }
+
+
+def _check_report_translation_source(report_id, lang, identity):
+    translation_scheduler.assert_current_task_active()
+    report = _translation_report(report_id, lang)
+    ReportManager.load_world_result(report_id)
+    if identity.get("scope") not in {"body", "structured"}:
+        raise ArtifactError("translation_job_mismatch", "Invalid report translation scope")
+    if identity != _report_translation_identity(report, lang, identity["scope"]):
+        raise ArtifactError("translation_source_changed", "Report source changed; reload before retrying")
+    if not ReportManager.is_publishable(report_id):
+        raise ArtifactError("translation_source_unpublished", "Report source is no longer publishable")
+    return report
+
+
+def _report_translation_handler(payload):
+    """Named durable operation; all provider work starts after source admission."""
+    try:
+        return _run_report_translation(payload)
+    except ArtifactError as exc:
+        raise TranslationError(exc.code, str(exc), retryable=exc.code not in {
+            "translation_source_changed", "translation_job_mismatch", "report_not_found",
+            "translation_source_unpublished",
+        }) from exc
+
+
+def _run_report_translation(payload):
+    report_id, lang = payload["report_id"], payload["lang"]
+    identity = payload["identity"]
+    report = _check_report_translation_source(report_id, lang, identity)
+    force = payload.get("force") is True
+    # This flag selects the replacement namespace, keyed by current_task_id in
+    # the core service. Replaying it on the same durable task resumes candidates;
+    # dropping it would switch to the old accepted job and abandon the refresh.
+    publication_lang = _report_publication_lang(report, lang)
+    publication = ReportManager.publication_status(report_id, publication_lang)
+    replacement_pending = force and publication.get("generation_id") == payload.get("previous_generation_id")
+    if identity["scope"] == "body" and (not publication.get("publishable") or replacement_pending):
+        result = ReportManager.generate_translation_variant(report_id, lang, force=force)
+        _check_report_translation_source(report_id, lang, identity)
+        if not (result.get("available") and result.get("updated", True)
+                and ReportManager.is_publishable(report_id, lang)):
+            raise TranslationError("translation_not_admitted", "Translation did not pass publication checks", retryable=True)
+    _repair_report_structured(report, lang, force=force, expected_identity=identity)
+    report = _check_report_translation_source(report_id, lang, identity)
+    state = _with_report_display_status(
+        ReportManager.translation_status(report_id, lang, report=report), report, lang)
+    if not state["structured_translation"]["complete"]:
+        raise TranslationError("translation_structured_incomplete", "Structured translation remains incomplete; retry pending work", retryable=True)
+    if publication_lang is not None:
+        snapshot = ReportManager.refresh_translation_assets(report_id, lang, {
+            "display.json": json.dumps(state["display"], ensure_ascii=False, sort_keys=True).encode("utf-8"),
+        })
+        if snapshot is None:
+            raise TranslationError("translation_assets_unpublished", "Structured assets could not be published", retryable=True)
+    _check_report_translation_source(report_id, lang, identity)
+    state = _with_report_display_status(
+        ReportManager.translation_status(report_id, lang, report=report), report, lang)
+    return state
+
+
+def _authorize_report_translation_resource(selection, action):
+    """Resolve untrusted resource selection using the report facade's gates."""
+    if (action not in {"retry", "cancel"} or not isinstance(selection, dict)
+            or set(selection) - {"report_id", "lang", "scope", "mode"}):
+        return None
+    report_id, lang = selection.get("report_id"), selection.get("lang")
+    mode = selection.get("scope", selection.get("mode"))
+    if (not isinstance(report_id, str) or not isinstance(lang, str)
+            or not isinstance(mode, str) or mode not in {"body", "structured"}
+            or ("mode" in selection and selection["mode"] != mode)):
+        return None
+    lang = lang.strip().lower()
+    try:
+        report = _translation_report(report_id, lang)
+        ReportManager.load_world_result(report_id)
+        if not ReportManager.is_publishable(report_id):
+            return None
+        if action == "retry":
+            if mode == "body" and not getattr(Config, "REPORT_BILINGUAL", True):
+                return None
+            if mode == "structured" and not ReportManager.is_publishable(report_id, _report_publication_lang(report, lang)):
+                return None
+        return _report_translation_identity(report, lang, mode)
+    except (ArtifactError, OSError, ValueError, TypeError, KeyError):
+        # Generic actions expose neither inaccessible resource details nor a
+        # stored identity as authority. Their route supplies the stable 403.
+        return None
+
+
+def register_translation_handler():
+    """Idempotently register execution and resource-scoped generic actions."""
+    from .translations import register_resource_authorizer
+    translation_scheduler.register_handler(_REPORT_TRANSLATION_KIND, _report_translation_handler)
+    register_resource_authorizer(_REPORT_TRANSLATION_KIND, _authorize_report_translation_resource)
+
+
+def _remember_report_translation_job(report_id, lang, job):
+    """Persist only the reconnect locator; the scheduler retains job authority."""
+    ReportManager._set_translation_runtime_status(report_id, lang, "scheduled",
+        translation_job_id=job["job_id"], task_id=job["job_id"],
+        source_markdown_sha256=job["identity"]["source_markdown_sha256"])
+    return job
+
+
+def enqueue_report_translation(report_id, lang, *, force=False, mode="body"):
+    """Enqueue or attach after primary publication, without a Flask request.
+
+    Automatic completion and manual POST use the same source identity, payload,
+    handler and reconnect locator. Failed/interrupted work is only attached here;
+    explicit retry remains the POST/scheduler retry boundary.
+    """
+    lang = str(lang or "").strip().lower()
+    if mode not in {"body", "structured"}:
+        raise ArtifactError("translation_job_mismatch", "Invalid report translation scope", 400)
+    report = _translation_report(report_id, lang)
+    ReportManager.load_world_result(report_id)
+    if not ReportManager.is_publishable(report_id):
+        raise ArtifactError("translation_source_unpublished", "Report source is not publishable")
+    publication_lang = _report_publication_lang(report, lang)
+    if publication_lang is None:
+        mode = "structured"
+    if (force or mode == "body") and not getattr(Config, "REPORT_BILINGUAL", True):
+        raise ArtifactError("translation_disabled", "Report translation is disabled")
+    publication = ReportManager.publication_status(report_id, publication_lang)
+    if mode == "structured" and not publication.get("publishable"):
+        raise ArtifactError("translation_unpublished", "Structured repair requires an admitted body")
+    identity = _report_translation_identity(report, lang, mode)
+    existing = _report_translation_job(report, lang)
+    if existing and ((existing.get("job_state") or existing.get("status")) in _TRANSLATION_ACTIVE
+                     or (not force and existing.get("identity") == identity)):
+        return _remember_report_translation_job(report_id, lang, existing)
+    regenerate = bool(force and publication.get("publishable"))
+    register_translation_handler()
+    job = translation_scheduler.submit(_REPORT_TRANSLATION_KIND, identity,
+        {"report_id": report_id, "lang": lang, "identity": identity, "force": regenerate,
+         "previous_generation_id": publication.get("generation_id")}, force=regenerate)
+    return _remember_report_translation_job(report_id, lang, job)
+
+
+def _report_translation_job(report, lang, task_id=None, *, tolerate_unavailable=False):
+    """The legacy runtime file is a locator only, never execution authority."""
+    explicit = bool(task_id)
+    if not explicit:
+        locator = ReportManager._load_translation_runtime_status(report.report_id, lang) or {}
+        task_id = locator.get("translation_job_id")
+    if not task_id:
+        return None
+    try:
+        job = translation_scheduler.status(task_id)
+    except (OSError, sqlite3.Error, TranslationError) as exc:
+        if tolerate_unavailable and not explicit:
+            return None  # Accepted publication is independent of coordination storage.
+        raise TranslationError("store_unavailable", "Translation coordination is unavailable") from exc
+    if job is None:
+        if explicit:
+            raise ArtifactError("translation_job_not_found", "Translation job does not exist", 404)
+        return None
+    identity = job.get("identity") or {}
+    if (job.get("kind") != _REPORT_TRANSLATION_KIND
+            or identity.get("ref_id") != report.report_id or identity.get("target_lang") != lang
+            or identity.get("scope") not in {"body", "structured"}):
+        raise ArtifactError("translation_job_mismatch", "Task does not match this report and language")
+    if identity != _report_translation_identity(report, lang, identity["scope"]):
+        if explicit:
+            raise ArtifactError("translation_source_changed", "Report source changed; reload before retrying")
+        return None  # A source edit must not reconnect to an old-source operation.
+    return job
+
+
+def _with_translation_job(state, job):
+    if job is None:
+        if state.get("status") in {"generating", "pending", "processing"}:
+            # Legacy PID/heartbeat files cannot assert live ownership after cutover.
+            return {**state, "status": "interrupted", "task_id": None}
+        return state
+    execution = job.get("job_state") or job.get("status")
+    legacy = {"queued": "pending", "running": "processing", "waiting_provider": "processing"}.get(execution, execution)
+    structured = dict(state["structured_translation"])
+    if execution in _TRANSLATION_ACTIVE:
+        structured.update(status="generating", retryable=False)
+    elif execution in _TRANSLATION_RETRYABLE and not structured["complete"]:
+        structured.update(status="partial", retryable=True)
+    display = {**state["display"], "translation_status": structured, "structured_translation": structured}
+    result = job.get("result") or {}
+    # A structured repair retains the audited body. A body refresh's task-bound
+    # availability describes its own outcome; published_available remains explicit.
+    available = bool(state.get("available"))
+    if (job.get("identity") or {}).get("scope") == "body":
+        available = bool(available and execution == "completed" and result.get("available")
+                         and result.get("updated", True))
+    return {**state, "published_available": bool(state.get("available")), "available": available,
+            "status": legacy, "task_id": job["job_id"], "translation_job": job,
+            "progress": job.get("progress", 100 if execution == "completed" else 0),
+            "message": job.get("message", ""), "error": job.get("error"), "result": job.get("result"),
+            "display": display, "translation_status": structured, "structured_translation": structured}
 
 
 # ============== 报告生成接口 ==============
@@ -740,11 +1142,23 @@ def get_report_forecast(report_id: str):
             "success": False,
             "error": f"不支持的语种: {lang}（仅 en / zh）",
         }), 400
+    snapshot = (ReportManager.resolve_translation(report_id, lang)
+                if lang and _report_publication_lang(report, lang) is not None else None)
     if lang is None:
         forecast = ReportManager.load_structured_forecast(report_id)
         localization = {"requested_lang": None, "localized": False}
     else:
-        forecast, localization = ReportManager.load_localized_forecast(report_id, lang)
+        forecast, localization = ReportManager.load_localized_forecast(report_id, lang, snapshot=snapshot)
+    display = _report_structured(report, lang, forecast_state=(forecast, localization), snapshot=snapshot) if lang else {}
+    if snapshot:
+        _assert_report_snapshot_current(report_id, lang, snapshot)
+        display["generation_id"] = snapshot.generation
+    if lang:
+        job = _report_translation_job(report, lang, tolerate_unavailable=True)
+        if job:
+            display = _with_translation_job(display, job)
+            # Forecast availability is independent of a body refresh's outcome.
+            display.pop("available", None)
     return jsonify({
         "success": True,
         "data": {
@@ -753,6 +1167,7 @@ def get_report_forecast(report_id: str):
             "forecast": forecast,
             "available": forecast is not None,
             "localization": localization,
+            **display,
         },
     })
 
@@ -963,22 +1378,38 @@ def get_report_translation_md(report_id: str, lang: str):
                 "error": f"报告不存在: {report_id}",
             }), 404
 
-        md_path = ReportManager._get_report_translation_path(report_id, lang)
-        if not os.path.exists(md_path):
+        snapshot = ReportManager.resolve_translation(report_id, lang)
+        expected = _requested_artifact_identity("generation_id", "generation")
+        if expected and (snapshot is None or snapshot.generation != expected):
+            raise ArtifactError("stale_artifact", "Displayed translation changed; reload before downloading")
+        markdown = snapshot.markdown if snapshot else ReportManager.read_translation_markdown(report_id, lang)
+        if not markdown:
             return jsonify({
                 "success": False,
                 "error": f"该报告暂无 {lang} 版本: {report_id}"
             }), 404
-        if not ReportManager.is_publishable(report_id, lang):
-            return _publication_rejection(report_id, lang)
+        publication = ReportManager.publication_status(report_id, lang)
+        if not publication.get("publishable"):
+            return _publication_rejection(report_id, lang, publication)
+        markdown_sha = hashlib.sha256(markdown.encode("utf-8")).hexdigest()
+        source_sha = ReportManager.publication_status(report_id).get("markdown_sha256")
+        expected_source = _requested_artifact_identity("source_sha256", "source_markdown_sha256")
+        if (publication.get("markdown_sha256") != markdown_sha
+                or (expected_source is not None and expected_source != source_sha)
+                or (snapshot and (publication.get("generation_id") != snapshot.generation
+                    or source_sha != snapshot.source_sha256))):
+            raise ArtifactError("stale_artifact", "Translation publication changed while reading; reload")
 
-        return send_file(
-            md_path,
+        return Response(
+            markdown,
             mimetype="text/markdown",
-            as_attachment=True,
-            download_name=f"{report_id}.{lang}.md",
+            headers={"Content-Disposition": f'attachment; filename="{report_id}.{lang}.md"'},
         )
 
+    except ArtifactError as exc:
+        return _artifact_error_response(exc)
+    except FileNotFoundError:
+        return jsonify({"success": False, "error": "Requested translation does not exist"}), 404
     except Exception as e:
         logger.error(f"获取双语报告失败: {str(e)}")
         return jsonify({
@@ -990,243 +1421,47 @@ def get_report_translation_md(report_id: str, lang: str):
 
 @report_bp.route('/<report_id>/translations/<lang>', methods=['POST'])
 def generate_report_translation(report_id: str, lang: str):
-    """Start one publication-gated, deduplicated language-variant retry.
-
-    Report completion still attempts translation automatically.  This endpoint
-    exists so a rejected/temporarily failed sidecar remains recoverable from the
-    UI without rerunning research, graph, simulation, or the English report.
-    """
+    """Explicit start/retry/refresh boundary for one source-bound durable job."""
     lang = (lang or "").strip().lower()
-    if lang not in ReportManager._TRANSLATION_LANGS:
-        return jsonify({
-            "success": False,
-            "error": f"不支持的语种: {lang}（仅 en / zh）",
-        }), 400
-    report = ReportManager.get_report(report_id)
-    if report is None:
-        return jsonify({
-            "success": False,
-            "error": f"报告不存在: {report_id}",
-        }), 404
-    # ?force=1 regenerates a published variant (e.g. one an older translation engine
-    # produced — translation_status reports it as outdated); the published variant
-    # stays until the new one passes the audit.
+    report = _translation_report(report_id, lang)
     force = (request.args.get("force") or "").strip().lower() in {"1", "true", "yes"}
-    task_manager = TaskManager()
-
-    def _in_progress_response(state, active):
-        return jsonify({
-            "success": True,
-            "data": {
-                **state,
-                # A task-bound answer describes the task: an update of a published
-                # variant is not "available" until the task itself succeeds.
-                "available": False,
-                "status": active["status"],
-                "task_id": active["task_id"],
-                "progress": active.get("progress", 0),
-                "message": active.get("message", ""),
-            },
-        }), 202
-
-    # A running generation holds the lease below for its whole run (minutes).
-    # Answer a duplicate request (second tab, click after a reload) from the task
-    # and durable runtime state first, instead of blocking it on that lease.
-    active = _active_translation_task(report_id, lang)
-    if active:
-        state = ReportManager.translation_status(report_id, lang, report=report)
-        return _in_progress_response(state, active)
-    state = ReportManager.translation_status(report_id, lang, report=report)
-    if state.get("status") == "generating":
-        return jsonify({"success": True, "data": state}), 202
-
-    with ReportManager._translation_generation_lease(report_id, lang):
-        # Re-read under the cross-process lease.  This makes the durable task
-        # record the deduplication authority even when another worker owns the
-        # in-memory TaskManager entry.
-        state = ReportManager.translation_status(report_id, lang, report=report)
-        regenerate = bool(force and state.get("available"))
-        if state.get("available") and not regenerate:
-            return jsonify({"success": True, "data": state})
-        active = _active_translation_task(report_id, lang)
-        if active:
-            return _in_progress_response(state, active)
-        if state.get("status") == "generating":
-            return jsonify({"success": True, "data": state}), 202
-        if not state.get("can_generate"):
-            return jsonify({
-                "success": False,
-                "error": "该报告当前不能生成所请求的翻译版本",
-                "data": state,
-            }), 409
-
-        task_id = task_manager.create_task(
-            task_type="report_translate",
-            metadata={"report_id": report_id, "lang": lang},
-        )
-        source_sha = hashlib.sha256(
-            (report.markdown_content or "").encode("utf-8")
-        ).hexdigest()
-        owner = f"pid:{os.getpid()}"
-        ReportManager._set_translation_runtime_status(
-            report_id,
-            lang,
-            TaskStatus.PENDING.value,
-            source_markdown_sha256=source_sha,
-            task_id=task_id,
-            owner=owner,
-            progress=0,
-            message="翻译任务已排队",
-            issues=[],
-        )
-
-    def run_translation() -> None:
-        try:
-            task_manager.update_task(
-                task_id,
-                status=TaskStatus.PROCESSING,
-                progress=5,
-                message="正在生成并审计翻译版本",
-            )
-            result = ReportManager.generate_translation_variant(
-                report_id,
-                lang,
-                progress_callback=lambda progress, message: task_manager.update_task(
-                    task_id,
-                    status=TaskStatus.PROCESSING,
-                    progress=progress,
-                    message=message,
-                ),
-                force=regenerate,
-            )
-            if result.get("available") and result.get("updated", True):
-                # A partial translation (sections the provider content filter kept in
-                # the source language) is published and disclosed, not a failure.
-                verified = result.get("translation")
-                verified = verified if isinstance(verified, dict) else {}
-                verbatim_chunks = list(verified.get("verbatim_chunks") or [])
-                ReportManager._set_translation_runtime_status(
-                    report_id,
-                    lang,
-                    "partial" if verbatim_chunks else "available",
-                    source_markdown_sha256=source_sha,
-                    task_id=task_id,
-                    owner=owner,
-                    markdown_sha256=result.get("markdown_sha256"),
-                    progress=100,
-                    message=(
-                        "translation passed isolated publication audit"
-                        + (f" with {len(verbatim_chunks)} source-language region(s) kept verbatim"
-                           if verbatim_chunks else "")
-                    ),
-                    issues=[],
-                    verbatim_chunks=verbatim_chunks,
-                )
-                task_manager.complete_task(task_id, result=result)
-                return
-            issues = "; ".join(result.get("issues") or [])
-            ReportManager._set_translation_runtime_status(
-                report_id,
-                lang,
-                "failed",
-                source_markdown_sha256=source_sha,
-                task_id=task_id,
-                owner=owner,
-                progress=100,
-                message=issues or "翻译版本未通过发布审计",
-                issues=list(result.get("issues") or [])[:12],
-            )
-            task_manager.fail_task(task_id, issues or "翻译版本未通过发布审计")
-        except Exception as exc:  # noqa: BLE001 — task captures exact terminal failure
-            logger.error(
-                "报告翻译任务失败 report_id=%s lang=%s: %s",
-                report_id,
-                lang,
-                exc,
-            )
-            ReportManager._set_translation_runtime_status(
-                report_id,
-                lang,
-                "failed",
-                source_markdown_sha256=source_sha,
-                task_id=task_id,
-                owner=owner,
-                progress=100,
-                message=str(exc),
-                issues=[str(exc)],
-            )
-            task_manager.fail_task(task_id, str(exc))
-
-    _launch_translation_thread(run_translation)
-    return jsonify({
-        "success": True,
-        "data": {
-            **state,
-            "available": False,
-            "status": TaskStatus.PENDING.value,
-            "task_id": task_id,
-            "progress": 0,
-            "message": "翻译任务已启动",
-        },
-    }), 202
+    task_id = (request.args.get("task_id") or "").strip()
+    job = _report_translation_job(report, lang, task_id)
+    state = _with_report_display_status(
+        ReportManager.translation_status(report_id, lang, report=report), report, lang, public=True)
+    if job and (job.get("job_state") or job.get("status")) in _TRANSLATION_ACTIVE:
+        return jsonify({"success": True, "data": _with_translation_job(state, job)}), (200 if state.get("available") and job["identity"]["scope"] == "structured" else 202)
+    if not ReportManager.is_publishable(report_id):
+        return _publication_rejection(report_id)
+    retrying = bool(job and not force and
+                    (job.get("job_state") or job.get("status")) in _TRANSLATION_RETRYABLE)
+    if not force and not retrying and state.get("available") and state["structured_translation"]["complete"]:
+        return jsonify({"success": True, "data": state}), 200
+    if (force or not state.get("available")) and not getattr(Config, "REPORT_BILINGUAL", True):
+        return jsonify({"success": False, "error": "Report translation is disabled", "data": state}), 409
+    if state.get("status") == "source_language" and not state.get("available"):
+        return jsonify({"success": False, "error": "Requested language is not a translation target", "data": state}), 409
+    if retrying:
+        register_translation_handler()
+        job = translation_scheduler.retry(job["job_id"])
+        _remember_report_translation_job(report_id, lang, job)
+    else:
+        mode = "structured" if state.get("available") and not force else "body"
+        job = enqueue_report_translation(report_id, lang, force=force, mode=mode)
+    data = _with_translation_job(state, job)
+    return jsonify({"success": True, "data": data}), (200 if data["available"] else 202)
 
 
 @report_bp.route('/<report_id>/translations/<lang>/status', methods=['GET'])
 def get_report_translation_status(report_id: str, lang: str):
-    """Return durable artifact state plus optional in-memory task progress."""
+    """Read admitted content and scheduler state without acquiring provider work."""
     lang = (lang or "").strip().lower()
-    if lang not in ReportManager._TRANSLATION_LANGS:
-        return jsonify({"success": False, "error": "不支持的语种"}), 400
-    report = ReportManager.get_report(report_id)
-    if report is None:
-        return jsonify({
-            "success": False,
-            "error": f"报告不存在: {report_id}",
-        }), 404
-    state = ReportManager.translation_status(report_id, lang, report=report)
-    task_id = (request.args.get("task_id") or "").strip()
-    task = TaskManager().get_task(task_id) if task_id else None
-    if task is not None:
-        task_data = task.to_dict()
-        metadata = task_data.get("metadata") or {}
-        if metadata.get("report_id") != report_id or metadata.get("lang") != lang:
-            return jsonify({
-                "success": False,
-                "error": "任务与报告或语种不匹配",
-            }), 409
-        task_result = task_data.get("result")
-        task_result = task_result if isinstance(task_result, dict) else {}
-        return jsonify({
-            "success": True,
-            "data": {
-                **state,
-                # Availability of *this task's* output: while updating a published
-                # variant the old one stays available, which must not read as done.
-                "available": bool(
-                    task_data["status"] == TaskStatus.COMPLETED.value
-                    and task_result.get("available")
-                    and task_result.get("updated", True)
-                ),
-                "status": task_data["status"],
-                "task_id": task_id,
-                "progress": task_data.get("progress", 0),
-                "message": task_data.get("message", ""),
-                "error": task_data.get("error"),
-                "result": task_data.get("result"),
-            },
-        })
-    if state.get("available"):
-        return jsonify({"success": True, "data": state})
-
-    active = _active_translation_task(report_id, lang)
-    if active:
-        state.update({
-            "status": active["status"],
-            "task_id": active["task_id"],
-            "progress": active.get("progress", 0),
-            "message": active.get("message", ""),
-        })
-    return jsonify({"success": True, "data": state})
+    report = _translation_report(report_id, lang)
+    job = _report_translation_job(report, lang, (request.args.get("task_id") or "").strip(),
+                                  tolerate_unavailable=True)
+    state = _with_report_display_status(
+        ReportManager.translation_status(report_id, lang, report=report), report, lang, public=True)
+    return jsonify({"success": True, "data": _with_translation_job(state, job)})
 
 
 # ============== 报告 PDF 导出接口（PDF-1）==============
@@ -1256,12 +1491,15 @@ def get_report_pdf(report_id: str):
         # English/primary PDF 后仍让调用方误以为拿到了所请求的语言。
         raw_lang = request.args.get('lang')
         lang = (raw_lang or '').strip().lower()
-        if raw_lang is not None and lang and lang not in ReportManager._TRANSLATION_LANGS:
+        if raw_lang is not None and (lang not in ReportManager._TRANSLATION_LANGS
+                                     or len(request.args.getlist("lang")) != 1):
             return jsonify({
                 "success": False,
                 "error": f"不支持的语种: {lang}（仅 en / zh）",
             }), 400
-        lang = lang if lang in ReportManager._TRANSLATION_LANGS else None
+        requested_lang = lang if lang in ReportManager._TRANSLATION_LANGS else None
+        primary_lang = ReportAgent._detect_translation_target(report.markdown_content or "")[0]
+        lang = requested_lang if requested_lang != primary_lang else None
 
         if not getattr(Config, "REPORT_PDF_EXPORT", True):
             return jsonify({
@@ -1270,8 +1508,16 @@ def get_report_pdf(report_id: str):
                 "code": "pdf_export_disabled",
             }), 503
 
-        if not ReportManager.is_publishable(report_id, lang):
-            return _publication_rejection(report_id, lang)
+        primary = ReportManager.publication_status(report_id)
+        publication = ReportManager.publication_status(report_id, lang) if lang else primary
+        if not publication.get("publishable"):
+            return _publication_rejection(report_id, lang, publication)
+        expected = _requested_artifact_identity("generation_id", "generation")
+        if expected is not None and expected != publication.get("generation_id"):
+            raise ArtifactError("stale_artifact", "Displayed translation changed; reload before exporting")
+        expected_source = _requested_artifact_identity("source_sha256", "source_markdown_sha256")
+        if expected_source is not None and expected_source != primary.get("markdown_sha256"):
+            raise ArtifactError("stale_artifact", "Displayed report source changed; reload before exporting")
 
         pdf_path = ReportManager.export_pdf(report_id, lang=lang)
         if not pdf_path or not os.path.exists(pdf_path):
@@ -1281,7 +1527,14 @@ def get_report_pdf(report_id: str):
                 "code": "pdf_build_failed",
             }), 503
 
-        download_name = f"{report_id}.{lang}.pdf" if lang else f"{report_id}.pdf"
+        current = ReportManager.publication_status(report_id, lang)
+        if (not current.get("publishable")
+                or ReportManager.publication_status(report_id).get("markdown_sha256") != primary.get("markdown_sha256")
+                or any(current.get(key) != publication.get(key)
+                for key in ("generation_id", "markdown_sha256", "source_markdown_sha256"))):
+            raise ArtifactError("stale_artifact", "Report publication changed while exporting; retry")
+
+        download_name = f"{report_id}.{requested_lang}.pdf" if requested_lang else f"{report_id}.pdf"
         return send_file(
             pdf_path,
             as_attachment=True,
@@ -1289,6 +1542,8 @@ def get_report_pdf(report_id: str):
             mimetype="application/pdf",
         )
 
+    except ArtifactError as exc:
+        return _artifact_error_response(exc)
     except Exception:  # noqa: BLE001 - return a stable public error contract
         logger.exception("导出报告 PDF 发生未预期错误 report_id=%s", report_id)
         return jsonify({
@@ -1305,7 +1560,7 @@ def get_report_exec_brief(report_id: str):
     """惰性构建并返回一页高管简报 reports/{id}/exec_brief[.<lang>].md（DELIV-1）。
 
     与 /pdf 同思路：首次访问（或 full_report.md / forecast.json 更新后）确定性再生（NO LLM，只从
-    成稿 + forecast.json 抽取），随后按源 mtime 缓存复用。REPORT_EXEC_BRIEF 关闭 / 报告缺失 / 简报
+    成稿 + forecast.json 抽取），译文按内容与发布代际缓存复用。REPORT_EXEC_BRIEF 关闭 / 报告缺失 / 简报
     未生成 → 404（degrade-safe）。
 
     BILINGUAL：可选 ?lang=en|zh 从译文简报 exec_brief.<lang>.md 取（缺省/非法 → 主语言简报，行为默认）。
@@ -1329,28 +1584,39 @@ def get_report_exec_brief(report_id: str):
 
         lang = (request.args.get('lang') or '').strip().lower()
         lang = lang if lang in ExecBriefBuilder._TRANSLATION_LANGS else None
+        if lang == ReportAgent._detect_translation_target(report.markdown_content or "")[0]:
+            lang = None
 
-        if not ReportManager.is_publishable(report_id, lang):
-            return _publication_rejection(report_id, lang)
+        publication = ReportManager.publication_status(report_id, lang)
+        if not publication.get("publishable"):
+            return _publication_rejection(report_id, lang, publication)
+        expected = _requested_artifact_identity("generation_id", "generation")
+        if expected is not None and expected != publication.get("generation_id"):
+            raise ArtifactError("stale_artifact", "Displayed report generation changed; reload")
 
         report_dir = ReportManager._get_report_folder(report_id)
-        ExecBriefBuilder.build(report_id, report_dir)
-
-        brief_path = ExecBriefBuilder.brief_path(report_dir, lang)
-        if not os.path.exists(brief_path):
+        produced = ExecBriefBuilder.build(report_id, report_dir, lang=lang)
+        brief_path = produced.get(f"exec_brief.{lang}" if lang else "exec_brief")
+        if not brief_path or not os.path.exists(brief_path):
             return jsonify({
                 "success": False,
                 "error": "执行简报不可用（未开启 REPORT_EXEC_BRIEF、缺该语种版本或构建失败）"
             }), 404
+        brief_bytes = ExecBriefBuilder.read_current(report_id, report_dir, brief_path, lang)
+        current = ReportManager.publication_status(report_id, lang)
+        if (not current.get("publishable") or any(current.get(key) != publication.get(key)
+                for key in ("generation_id", "markdown_sha256"))):
+            raise ArtifactError("stale_artifact", "Report publication changed while building the brief")
 
-        return send_file(
-            brief_path,
+        return Response(
+            brief_bytes,
             mimetype="text/markdown",
-            as_attachment=True,
-            download_name=(f"{report_id}.exec_brief.{lang}.md" if lang
-                           else f"{report_id}.exec_brief.md"),
+            headers={"Content-Disposition": 'attachment; filename="' + (
+                f"{report_id}.exec_brief.{lang}.md" if lang else f"{report_id}.exec_brief.md") + '"'},
         )
 
+    except ArtifactError as exc:
+        return _artifact_error_response(exc)
     except Exception as e:
         logger.error(f"获取执行简报失败: {str(e)}")
         return jsonify({
@@ -1365,7 +1631,7 @@ def get_report_exec_brief_pdf(report_id: str):
     """惰性构建并返回一页高管简报 PDF reports/{id}/exec_brief[.<lang>].pdf（DELIV-1）。
 
     先确保简报 md 存在（build），再复用 pandoc 引擎选择 + PyMuPDF 回退导出（去 --toc、收紧边距做单
-    页），按简报 md 的 mtime 缓存。REPORT_EXEC_BRIEF / REPORT_PDF_EXPORT 关闭、报告/简报缺失、构建
+    页），按内容与发布代际缓存。REPORT_EXEC_BRIEF / REPORT_PDF_EXPORT 关闭、报告/简报缺失、构建
     失败 → 404（degrade-safe）。BILINGUAL：?lang=en|zh 取译文简报 PDF。
     """
     try:
@@ -1387,19 +1653,27 @@ def get_report_exec_brief_pdf(report_id: str):
 
         lang = (request.args.get('lang') or '').strip().lower()
         lang = lang if lang in ExecBriefBuilder._TRANSLATION_LANGS else None
+        if lang == ReportAgent._detect_translation_target(report.markdown_content or "")[0]:
+            lang = None
 
-        if not ReportManager.is_publishable(report_id, lang):
-            return _publication_rejection(report_id, lang)
+        publication = ReportManager.publication_status(report_id, lang)
+        if not publication.get("publishable"):
+            return _publication_rejection(report_id, lang, publication)
+        expected = _requested_artifact_identity("generation_id", "generation")
+        if expected is not None and expected != publication.get("generation_id"):
+            raise ArtifactError("stale_artifact", "Displayed report generation changed; reload")
 
         report_dir = ReportManager._get_report_folder(report_id)
-        # 先构建 md（PDF 依赖简报 md），再导 PDF。
-        ExecBriefBuilder.build(report_id, report_dir)
         pdf_path = ExecBriefBuilder.build_pdf(report_id, report_dir, lang=lang)
         if not pdf_path or not os.path.exists(pdf_path):
             return jsonify({
                 "success": False,
                 "error": "执行简报 PDF 不可用（未开启 REPORT_EXEC_BRIEF/REPORT_PDF_EXPORT、缺该语种版本或构建失败）"
             }), 404
+        current = ReportManager.publication_status(report_id, lang)
+        if (not current.get("publishable") or any(current.get(key) != publication.get(key)
+                for key in ("generation_id", "markdown_sha256"))):
+            raise ArtifactError("stale_artifact", "Report publication changed while rendering the brief")
 
         download_name = (f"{report_id}.exec_brief.{lang}.pdf" if lang
                          else f"{report_id}.exec_brief.pdf")
@@ -1410,6 +1684,8 @@ def get_report_exec_brief_pdf(report_id: str):
             mimetype="application/pdf",
         )
 
+    except ArtifactError as exc:
+        return _artifact_error_response(exc)
     except Exception as e:
         logger.error(f"导出执行简报 PDF 失败: {str(e)}")
         return jsonify({
@@ -1423,8 +1699,8 @@ def get_report_exec_brief_pdf(report_id: str):
 def get_report_digest(report_id: str):
     """惰性构建并返回 ~15 行 newsletter 式速览 reports/{id}/digest.md（DELIV-1）。
 
-    与 /exec-brief 同源（build 一次同时产简报 + 速览），按 full_report.md / forecast.json 的 mtime
-    缓存。REPORT_EXEC_BRIEF 关闭 / 报告缺失 / 速览未生成 → 404（degrade-safe）。
+    与 /exec-brief 同源（build 一次同时产简报 + 速览），验证构建返回的内容与源指纹。
+    REPORT_EXEC_BRIEF 关闭 / 报告缺失 / 本次速览构建失败 → 404。
     """
     try:
         from ..services.exec_brief import ExecBriefBuilder
@@ -1442,26 +1718,32 @@ def get_report_digest(report_id: str):
                 "error": f"报告不存在: {report_id}"
             }), 404
 
-        if not ReportManager.is_publishable(report_id):
-            return _publication_rejection(report_id)
+        publication = ReportManager.publication_status(report_id)
+        if not publication.get("publishable"):
+            return _publication_rejection(report_id, publication=publication)
 
         report_dir = ReportManager._get_report_folder(report_id)
-        ExecBriefBuilder.build(report_id, report_dir)
-
-        digest_path = ExecBriefBuilder.digest_path(report_dir)
-        if not os.path.exists(digest_path):
+        produced = ExecBriefBuilder.build(report_id, report_dir)
+        digest_path = produced.get("digest")
+        if not digest_path or not os.path.exists(digest_path):
             return jsonify({
                 "success": False,
                 "error": "速览不可用（未开启 REPORT_EXEC_BRIEF 或构建失败）"
             }), 404
+        digest_bytes = ExecBriefBuilder.read_current(report_id, report_dir, digest_path)
+        current = ReportManager.publication_status(report_id)
+        if (not current.get("publishable")
+                or current.get("markdown_sha256") != publication.get("markdown_sha256")):
+            raise ArtifactError("stale_artifact", "Report publication changed while building the digest")
 
-        return send_file(
-            digest_path,
+        return Response(
+            digest_bytes,
             mimetype="text/markdown",
-            as_attachment=True,
-            download_name=f"{report_id}.digest.md",
+            headers={"Content-Disposition": f'attachment; filename="{report_id}.digest.md"'},
         )
 
+    except ArtifactError as exc:
+        return _artifact_error_response(exc)
     except Exception as e:
         logger.error(f"获取速览失败: {str(e)}")
         return jsonify({

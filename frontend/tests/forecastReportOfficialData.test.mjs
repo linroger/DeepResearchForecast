@@ -4,6 +4,8 @@ import test from 'node:test'
 import * as vue from 'vue'
 import { renderToString } from 'vue/server-renderer'
 
+import * as translationObserver from '../src/composables/useTranslationJob.js'
+import * as forecastTranslationAdapter from '../src/utils/forecastTranslationAdapter.js'
 import * as binaryForecasts from '../src/utils/binaryForecasts.js'
 import * as i18n from '../src/i18n.js'
 import * as markdown from '../src/utils/markdown.js'
@@ -55,6 +57,8 @@ async function render({ sourceLang = 'en', official = lang => OFFICIAL[lang] } =
   const report = buildReport({
     vue,
     '../../api/report': api,
+    '../../composables/useTranslationJob': translationObserver,
+    '../../utils/forecastTranslationAdapter': forecastTranslationAdapter,
     './BinaryForecastTable.vue': { default: table },
     '../../utils/markdown': markdown,
     '../../utils/vizManifest': vizManifest,

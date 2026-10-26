@@ -18,6 +18,7 @@ import pytest
 
 from app.services import translation_dates as td
 from app.services.report_agent import ReportAgent
+from model_translation_fakes import model_protocol, raw_fixture_zh
 
 
 # ─────────────────────────────── recognizer ───────────────────────────────
@@ -346,9 +347,15 @@ class GlmLikeTranslator:
     def __init__(self):
         self.temperatures = []
 
+    def _render(self, value):
+        return raw_fixture_zh(value)
+
     def chat(self, messages=None, temperature=0.0, max_tokens=4096, tier="strong", **_kw):
         self.temperatures.append(temperature)
         system, user = messages[0]["content"], messages[-1]["content"]
+        response = model_protocol(messages, self._render)
+        if response is not None:
+            return response
         if "same alphabetic keys" in system:
             return json.dumps(
                 {key: _glm_like(core) for key, core in json.loads(user).items()},
@@ -386,8 +393,8 @@ def test_user_sentence_translates_and_passes_the_publication_audit():
     result = _worker(GlmLikeTranslator()).translate_research_markdown(_SOURCE)
     audit = result["audit"]
     assert result["available"] is True, audit["issues"]
-    assert audit["number_parity"]["passed"] is True
-    assert audit["language_lint"]["language_contamination"]["lines"] == 0
+    assert audit["fact_fidelity"]["passed"] is True
+    assert audit["model_translation"]["complete"] is True
     translated = result["translated_md"]
     assert "2024年12月" in translated and "2025年10月" in translated
     assert "2033年12月31日" in translated
@@ -406,16 +413,15 @@ def test_day_range_sentence_translates_whole_and_passes_the_publication_audit():
     result = _worker(GlmLikeTranslator()).translate_research_markdown(_RANGE_SOURCE)
     audit = result["audit"]
     assert result["available"] is True, audit["issues"]
-    assert audit["number_parity"]["passed"] is True
+    assert audit["fact_fidelity"]["passed"] is True
     translated = result["translated_md"]
     assert "2026年11月9日–10日" in translated and "12月8日–9日" in translated
     assert "November" not in translated and "December" not in translated
     assert "–10、2026" not in translated
 
 
-def test_pre_fix_pipeline_reproduces_the_contamination_failure(monkeypatch):
-    """Guard the guard: with date protection and date-aware parity switched off, the
-    same GLM-like model leaves the sentence English and the audit withholds it."""
+def test_model_led_default_does_not_depend_on_legacy_date_masking_or_token_bags(monkeypatch):
+    """The default reads complete dates and does not run obsolete token-bag repair."""
     monkeypatch.setattr(td, "target_code_for_language", lambda _name: None)
     monkeypatch.setattr(
         ReportAgent, "_translation_fact_multiset",
@@ -426,10 +432,21 @@ def test_pre_fix_pipeline_reproduces_the_contamination_failure(monkeypatch):
         classmethod(lambda cls, md: cls._folded_number_multiset(md)),
     )
     result = _worker(GlmLikeTranslator()).translate_research_markdown(_SOURCE)
-    assert result["available"] is False
-    assert any(
-        "target-language contamination" in issue for issue in result["audit"]["issues"]
-    )
+    assert result["available"] is True, result["audit"]["issues"]
+    assert result["audit"]["model_translation"]["complete"] is True
+    assert "2024年12月" in result["translated_md"] and "2033年12月31日" in result["translated_md"]
+
+
+def test_fixture_model_review_rejects_wrong_amount_and_untranslated_source():
+    llm = GlmLikeTranslator()
+    source = "The balance is $3.7 billion and approval odds are 45% [S1]."
+    payload = {"target_language": "zh", "pairs": {"amount": {"source": source,
+        "translation": llm._render(source).replace("37亿美元", "38亿美元")},
+        "echo": {"source": source, "translation": source}}}
+    reply = json.loads(llm.chat(messages=[{"role": "system", "content": "Review"},
+        {"role": "user", "content": json.dumps(payload)}]))
+    assert reply["reviews"]["amount"]["faithful"] is False
+    assert reply["reviews"]["echo"]["complete"] is False
 
 
 def test_repair_rounds_sample_warmer_instead_of_replaying_the_same_request():

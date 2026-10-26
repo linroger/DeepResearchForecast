@@ -14,19 +14,24 @@
           <p v-if="showRecord" class="sv-caveat">{{ L('声明假设下的条件路径；不是经过校准的概率预测。', 'Conditional pathway under declared assumptions; not a calibrated probability forecast.') }}</p>
         </div>
         <div class="sv-controls">
+          <button v-if="showRecord" type="button" class="refresh-btn" :aria-pressed="translation.lang.value === 'zh'"
+            @click="toggleTranslation">{{ translation.lang.value === 'zh' ? '原文 / English' : '中文 · 翻译整个模拟' }}</button>
           <div class="segmented" role="tablist" :aria-label="L('视图选择', 'Select view')">
             <button type="button" class="seg-btn" :class="{ active: showRecord }" :aria-pressed="showRecord" @click="showRecord = true">{{ L('记录', 'Record') }}</button>
             <button type="button" class="seg-btn" :class="{ active: !showRecord }" :aria-pressed="!showRecord" @click="showRecord = false">{{ L('实时视图', 'Live view') }}</button>
           </div>
         </div>
       </header>
-      <SimulationRecordView v-if="showRecord" :record="record" />
+      <SimulationRecordView v-if="showRecord" :record="record" :simulation-id="simulationId"
+        :generation-id="worldGenerationId" :engine="engine" :language="translation.lang.value"
+        :translation-request="recordTranslationRequest" />
     </section>
     <WorldSimulationView
       v-if="!record || !showRecord"
       :key="simulationId + ':' + worldGenerationId"
       :simulation-id="simulationId"
       :generation-id="worldGenerationId"
+      :language="translation.lang.value"
     />
     <div v-if="recordNotice" class="record-notice" role="status">
       <span>{{ recordNotice }}</span>
@@ -46,6 +51,8 @@
       </div>
 
       <div class="sv-controls">
+        <button type="button" class="refresh-btn" :aria-pressed="translation.lang.value === 'zh'"
+          @click="toggleTranslation">{{ translation.lang.value === 'zh' ? '原文 / English' : '中文 · 翻译整个模拟' }}</button>
         <!-- ADR 0003: Record | Live view toggle, present only once a gate-passed record exists -->
         <div v-if="record" class="segmented" role="tablist" :aria-label="L('视图选择', 'Select view')">
           <button type="button" class="seg-btn" :class="{ active: showRecord }" :aria-pressed="showRecord" @click="showRecord = true">{{ L('记录', 'Record') }}</button>
@@ -87,6 +94,9 @@
       </div>
     </header>
 
+    <TranslationJobStatus v-if="!record || !showRecord" class="sv-translation" :observer="translation.observer" :L="L">
+      <span>{{ translation.feedback.value }}</span>
+    </TranslationJobStatus>
     <div v-if="recordNotice" class="record-notice" role="status">
       <span>{{ recordNotice }}</span>
       <button type="button" class="refresh-btn" :disabled="loading" @click="retryRecord">{{ L('重试读取记录', 'Retry record') }}</button>
@@ -99,7 +109,9 @@
 
     <!-- ===== ADR 0003: after-action record — the default view once a gate-passed record exists;
          the live layout (stats, world state, feed) is one toggle away ===== -->
-    <SimulationRecordView v-if="record && showRecord" :record="record" />
+    <SimulationRecordView v-if="record && showRecord" :record="record" :simulation-id="simulationId"
+      :generation-id="worldGenerationId" :engine="engine" :language="translation.lang.value"
+      :translation-request="recordTranslationRequest" />
     <template v-else>
     <!-- ===== Stats strip ===== -->
     <section class="stats-strip" v-if="statTiles.length || hasRoundInfo">
@@ -109,7 +121,7 @@
       </div>
       <div class="stat-tile" v-if="runnerStatus">
         <span class="stat-label">{{ L('运行状态','Status') }}</span>
-        <span class="stat-value mono">{{ runnerStatus }}</span>
+        <span class="stat-value mono">{{ d(runnerStatus) }}</span>
       </div>
       <div
         class="stat-tile"
@@ -126,6 +138,8 @@
       :simulation-id="props.simulationId"
       :refresh-token="refreshToken"
       :round="selectedRound"
+      :language="translation.lang.value"
+      :translation-request="worldStateTranslationRequest"
       @update:selected-round="onSelectRound"
     />
 
@@ -150,10 +164,10 @@
               </div>
               <div class="persona-id">
                 <span class="persona-name">{{ personaName(p) }}</span>
-                <span class="persona-type" v-if="personaType(p)">{{ personaType(p) }}</span>
+                <span class="persona-type" v-if="personaType(p)">{{ d(personaType(p)) }}</span>
               </div>
             </div>
-            <p class="persona-snippet" v-if="personaSnippet(p)">{{ personaSnippet(p) }}</p>
+            <p class="persona-snippet" v-if="personaSnippet(p)">{{ d(personaSnippet(p)) }}</p>
             <p class="persona-snippet empty" v-else>{{ L('暂无人设描述','No persona description') }}</p>
           </article>
         </div>
@@ -175,7 +189,7 @@
           <span class="diamond sm">◇</span>
           <span class="col-label">{{ L('信息流','Feed') }} ({{ posts.length }})</span>
           <span class="feed-period mono" v-if="selectedRound !== null">
-            · {{ selectedPeriodLabel }}
+            · {{ d(selectedPeriodLabel) }}
           </span>
           <button type="button" class="feed-all mono" v-if="selectedRound !== null" @click="showAllPeriods">
             ↩ {{ L('全部时段','all periods') }}
@@ -200,12 +214,12 @@
                 <span class="post-sub">
                   <span class="plat-tag">{{ platformTag }}</span>
                   <span class="post-time mono" v-if="relativeTime(post)">· {{ relativeTime(post) }}</span>
-                  <span class="post-period mono" v-if="periodNote(post)">· {{ periodNote(post) }}</span>
+                  <span class="post-period mono" v-if="periodNote(post)">· {{ d(periodNote(post)) }}</span>
                 </span>
               </div>
             </div>
 
-            <p class="post-text" v-if="postText(post)">{{ postText(post) }}</p>
+            <p class="post-text" v-if="postText(post)">{{ d(postText(post)) }}</p>
             <p class="post-text empty" v-else>{{ L('（无内容）','(No content)') }}</p>
 
             <div class="post-metrics" v-if="hasLikes(post)">
@@ -230,7 +244,7 @@
                   <span class="reply-author">{{ commentAuthorName(c) }}</span>
                   <span class="reply-time mono" v-if="relativeTime(c)">· {{ relativeTime(c) }}</span>
                 </div>
-                <p class="reply-text">{{ commentText(c) }}</p>
+                <p class="reply-text">{{ d(commentText(c)) }}</p>
                 <div class="reply-metrics" v-if="commentLikeCount(c)">
                   <span class="metric">♥ {{ commentLikeCount(c) }}</span>
                 </div>
@@ -241,7 +255,7 @@
 
         <div class="empty-state" v-else-if="!loading && selectedRound !== null">
           <span class="empty-icon">◇</span>
-          <span class="empty-text">{{ L('本时段无帖子','No posts in this period') }} · {{ selectedPeriodLabel }}</span>
+          <span class="empty-text">{{ L('本时段无帖子','No posts in this period') }} · {{ d(selectedPeriodLabel) }}</span>
         </div>
 
         <div class="empty-state" v-else-if="!loading">
@@ -269,7 +283,9 @@
 
 <script setup>
 import { ref, computed, onUnmounted, watch } from 'vue'
-import { L } from '../../i18n'
+import { locale } from '../../i18n'
+import { useSimulationTranslation } from '../../utils/overlayTranslation'
+import TranslationJobStatus from '../TranslationJobStatus.vue'
 import WorldStatePanel from './WorldStatePanel.vue'
 import WorldSimulationView from './WorldSimulationView.vue'
 import SimulationRecordView from './SimulationRecordView.vue'
@@ -324,6 +340,8 @@ const record = ref(null)
 const recordStatus = ref(null)
 const recordPublicationStatus = ref('')
 const showRecord = ref(true)
+const recordTranslationRequest = ref(0)
+const worldStateTranslationRequest = ref(0)
 let recordRetries = 0
 const RECORD_RETRY_MS = 15000
 const RECORD_RETRY_MAX = 4
@@ -466,14 +484,14 @@ function repostAuthorName(post) {
 }
 
 function authorName(post) {
-  if (!isPlainObject(post)) return 'Agent'
+  if (!isPlainObject(post)) return L('智能体', 'Agent')
   const id = post.user_id ?? post.agent_id ?? post.author_id ?? post.id
   if (id !== undefined && id !== null) {
     const mapped = userMap.value[String(id)]
     if (mapped) return mapped
-    return 'Agent ' + id
+    return L('智能体 ', 'Agent ') + id
   }
-  return 'Agent'
+  return L('智能体', 'Agent')
 }
 
 function likeCount(post) {
@@ -505,14 +523,14 @@ function commentText(c) {
 }
 
 function commentAuthorName(c) {
-  if (!isPlainObject(c)) return 'Agent'
+  if (!isPlainObject(c)) return L('智能体', 'Agent')
   const id = c.user_id ?? c.agent_id ?? c.author_id ?? c.id
   if (id !== undefined && id !== null) {
     const mapped = userMap.value[String(id)]
     if (mapped) return mapped
-    return 'Agent ' + id
+    return L('智能体 ', 'Agent ') + id
   }
-  return 'Agent'
+  return L('智能体', 'Agent')
 }
 
 function commentLikeCount(c) {
@@ -669,6 +687,7 @@ const STAT_LABELS = {
   total_actions: ['总动作', 'Total actions'],
   total_posts: ['总帖子', 'Total posts'],
   total_agents: ['总智能体', 'Total agents'],
+  agents_count: ['智能体数量', 'Agents count'],
   total_comments: ['总评论', 'Total comments'],
   total_likes: ['总点赞', 'Total likes'],
   total_rounds: ['总回合', 'Total rounds'],
@@ -703,6 +722,33 @@ function formatNumber(n) {
   if (!Number.isFinite(n)) return String(n)
   if (Math.abs(n) >= 1000) return n.toLocaleString('en-US')
   return String(n)
+}
+
+// Translate all prose that this page actually renders, not just the world digest.
+// Profile names, actor IDs, numeric stats and source data stay authoritative.
+const liveTranslationActive = computed(() => engine.value === LEGACY_ENGINE && !(record.value && showRecord.value))
+const translation = useSimulationTranslation({
+  simulationId: () => liveTranslationActive.value ? props.simulationId : '',
+  language: () => locale.value,
+  context: () => ({ engine: LEGACY_ENGINE, platform: platform.value, round: selectedRound.value,
+    generation_id: worldGenerationId.value || '', revision: '', view: 'public', actor_id: '' }),
+  texts: () => liveTranslationActive.value ? [
+    ...profiles.value.flatMap(p => [personaSnippet(p), personaType(p)]),
+    ...posts.value.map(postText), ...comments.value.map(commentText),
+    selectedPeriodLabel.value,
+    ...posts.value.map(post => postPeriodNote(post, selectedRound.value, feedRounds.value, '发表于')),
+  ] : [],
+})
+const L = translation.L
+const d = translation.display
+
+function toggleTranslation() {
+  // Each visible child owns its inventory. Forward the explicit click, never a
+  // language/source change, so both the live feed and world state can start.
+  translation.toggle()
+  if (translation.lang.value !== 'zh') return
+  if (record.value && showRecord.value) recordTranslationRequest.value++
+  else if (liveTranslationActive.value) worldStateTranslationRequest.value++
 }
 
 // ===== Data loading =====
@@ -933,6 +979,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.sv-translation { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 12px; background: #fff7ed; font-size: 13px; }
 .sim-view {
   --orange: #FF4500;
   --border: #E5E5E5;

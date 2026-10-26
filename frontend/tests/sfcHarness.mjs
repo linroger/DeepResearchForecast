@@ -16,12 +16,13 @@ function injectImports(code) {
       if (specifier.type === 'ImportDefaultSpecifier') {
         return `const ${specifier.local.name} = imports[${source}].default;`
       }
+      if (specifier.type === 'ImportNamespaceSpecifier') return `const ${specifier.local.name} = imports[${source}];`
       assert.equal(specifier.type, 'ImportSpecifier')
       return `const ${specifier.local.name} = imports[${source}][${JSON.stringify(specifier.imported.name)}];`
     }).join('\n')
     out = out.slice(0, node.start) + bindings + out.slice(node.end)
   }
-  return out
+  return out.replaceAll('import.meta.env', '(imports.__env || {})')
 }
 
 /**
@@ -44,6 +45,12 @@ export function compileSfc(url) {
   const renderFactory = new Function('imports',
     `${injectImports(template.code).replace(/^export function render/m, 'function render')}\nreturn render;`)
   return imports => {
+    // Use the real common status child in every component integration test.
+    // Explicit test overrides still win; no translation behavior is mocked.
+    if (!filename.endsWith('/TranslationJobStatus.vue')) {
+      const status = compileSfc(new URL('../src/components/TranslationJobStatus.vue', import.meta.url))({ vue: imports.vue })
+      imports = { '../TranslationJobStatus.vue': { default: status }, './TranslationJobStatus.vue': { default: status }, ...imports }
+    }
     const component = scriptFactory(imports)
     component.render = renderFactory(imports)
     return component

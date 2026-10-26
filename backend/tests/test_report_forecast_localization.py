@@ -15,6 +15,8 @@ import re
 
 import pytest
 
+from model_translation_fakes import model_protocol, preserve_carriers, raw_fixture_zh
+
 from app.config import Config
 from app.services import forecast_extractor as fe
 from app.services.report_agent import Report, ReportAgent, ReportManager, ReportStatus
@@ -79,12 +81,19 @@ class Translator:
         self.calls = 0
 
     def _translate(self, system: str, text: str) -> str:
-        return _to_en(text) if "English" in system else _to_zh(text)
+        return preserve_carriers(text, _to_en) if "English" in system else raw_fixture_zh(text)
 
     def chat(self, messages=None, temperature=0.0, max_tokens=4096, tier="strong", **_kw):
         self.calls += 1
         self.bypass_seen.append(LLMCache.bypassed())
         system, user = messages[0]["content"], messages[-1]["content"]
+        try:
+            target = json.loads(user).get("target_language")
+        except (TypeError, ValueError, AttributeError):
+            target = None
+        response = model_protocol(messages, lambda text: self._translate("English" if target == "en" else "Mandarin", text))
+        if response is not None:
+            return response
         if "same alphabetic keys" in system:
             return json.dumps(
                 {key: self._translate(system, core) for key, core in json.loads(user).items()},

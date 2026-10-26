@@ -1,0 +1,367 @@
+[
+  {
+    "report_id": "report_213f3e2bcc79",
+    "audited_at": "2026-10-24T20:50:03.704119+00:00",
+    "audit_sha256": "0720808d475306a03880b50076419c4c2076a632f35aaa036450bf04cd68d69a",
+    "hard_passed": false,
+    "calls_used": 20,
+    "sections": 22,
+    "reviewed_sections": 20,
+    "issues": [
+      "translation has no complete source-bound semantic review",
+      "section:12: translation/review failed (ValueError)",
+      "section:17: translation/review failed (ValueError)"
+    ],
+    "failed_sections": [
+      {
+        "key": "section:12",
+        "source_chars": 5184,
+        "source_sha256": "47e825c04337fe4602b67830b0535ea7d045b47ebd19fc0a926c14edbfd0c16e",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": null,
+        "issues": [
+          "translation/review failed (ValueError)"
+        ]
+      },
+      {
+        "key": "section:17",
+        "source_chars": 5922,
+        "source_sha256": "22db72ba531d929cf0191b9ceda02b77cf407a9ccb7f40f9cdc8120b59b0a8ea",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": null,
+        "issues": [
+          "translation/review failed (ValueError)"
+        ]
+      }
+    ],
+    "valid_section_receipts": 20,
+    "canonical_source_matches_audit": true
+  },
+  {
+    "report_id": "report_8f0bea34ec96",
+    "audited_at": "2026-10-24T19:28:18.350575+00:00",
+    "audit_sha256": "5fca1928ee12c631fea90963a72baa5dc471215ffd1b19b8211d8a047fad8336",
+    "hard_passed": false,
+    "calls_used": 16,
+    "sections": 22,
+    "reviewed_sections": 21,
+    "issues": [
+      "translation has no complete source-bound semantic review",
+      "section:16: translation/review failed (ValueError)"
+    ],
+    "failed_sections": [
+      {
+        "key": "section:16",
+        "source_chars": 6832,
+        "source_sha256": "033a675877804be0e711c8d4b01c12a303a86d62cc999a0da1e3accca8b88567",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": null,
+        "issues": [
+          "translation/review failed (ValueError)"
+        ]
+      }
+    ],
+    "valid_section_receipts": 21,
+    "canonical_source_matches_audit": true
+  },
+  {
+    "report_id": "report_345916a4404c",
+    "audited_at": "2026-10-23T23:20:48.821647+00:00",
+    "audit_sha256": "2118b8fdd9098df604cab1d7d1b3a135180cbe0847e8e41f52378f52a0fdb0cb",
+    "hard_passed": false,
+    "calls_used": 17,
+    "sections": 22,
+    "reviewed_sections": 20,
+    "issues": [
+      "translation has no complete source-bound semantic review",
+      "section:19: translation/review failed (ValueError)",
+      "section:21: translation/review failed (ValueError)"
+    ],
+    "failed_sections": [
+      {
+        "key": "section:19",
+        "source_chars": 5834,
+        "source_sha256": "9a3311f8cd4a83bae198775f9b0bff6a2e84a0181b8c94fcd347cddb8ac0c37a",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": {
+          "source_sha256": "9a3311f8cd4a83bae198775f9b0bff6a2e84a0181b8c94fcd347cddb8ac0c37a",
+          "candidate_sha256": "1e5881062bbac7ac0f2584f130424a0394e2187362abbc3b3380006b079feb09",
+          "attempt": 1,
+          "differences": [
+            {
+              "path": "structure[3][3][3][3][0][3][0]",
+              "expected": {
+                "preview_type": "list",
+                "preview_sha256": "7bc992ed591335bf17945b0c33748bdc6c683f2a5b375b1f06ec3bedefdae25d",
+                "truncated": false
+              },
+              "actual": {
+                "preview_type": "NoneType",
+                "preview_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+                "truncated": false
+              }
+            }
+          ]
+        },
+        "issues": [
+          "translation/review failed (ValueError)"
+        ]
+      },
+      {
+        "key": "section:21",
+        "source_chars": 5154,
+        "source_sha256": "b10eb0f56f286f5b4f6fec1696c540509fdf41187ce51dd3d8e96ef4c317a4a4",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": null,
+        "issues": [
+          "translation/review failed (ValueError)"
+        ]
+      }
+    ],
+    "valid_section_receipts": 20,
+    "canonical_source_matches_audit": true
+  },
+  {
+    "report_id": "report_a9d67f7febed",
+    "audited_at": "2026-10-23T20:47:10.441202+00:00",
+    "audit_sha256": "2fc562fa44aba230ac37e6534ba2439905153435d8fc8b8142f5cc605e5a7eb6",
+    "hard_passed": false,
+    "calls_used": 12,
+    "sections": 19,
+    "reviewed_sections": 6,
+    "issues": [
+      "translation has no complete source-bound semantic review",
+      "section:0: translation/review failed (ValueError)",
+      "section:1: translation/review failed (ValueError)",
+      "section:2: translation/review failed (ValueError)",
+      "section:3: translation/review failed (ValueError)",
+      "section:4: translation/review failed (ValueError)",
+      "section:5: translation/review failed (ValueError)",
+      "section:6: parsed Markdown structure, code, HTML or link destinations changed",
+      "section:8: semantic review rejected translation, 中文正文中夹杂英文单词：'已协调了 precisely 这一行动'（应为'正是/恰是这一行动'）, 中文正文中夹杂英文单词：'冶炼厂的 remedy 就是收缩'（应为'补救办法/对策就是收缩'）",
+      "section:9: translation/review failed (ValueError)",
+      "section:10: translation/review failed (ValueError)",
+      "section:11: translation/review failed (ValueError)",
+      "section:12: translation/review failed (ValueError)",
+      "section:14: parsed Markdown structure, code, HTML or link destinations changed"
+    ],
+    "failed_sections": [
+      {
+        "key": "section:0",
+        "source_chars": 128,
+        "source_sha256": "c13214ccb7f9130559f30ecce1328a88cec76351d7bfa170835fa2981f066721",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": null,
+        "issues": [
+          "translation/review failed (ValueError)"
+        ]
+      },
+      {
+        "key": "section:1",
+        "source_chars": 6196,
+        "source_sha256": "b8ac8045c77725c569e4495a841b62cad9c8e844ff6eb5f1207011a8efabc9f1",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": null,
+        "issues": [
+          "translation/review failed (ValueError)"
+        ]
+      },
+      {
+        "key": "section:2",
+        "source_chars": 1941,
+        "source_sha256": "173f3dcd49eeef35e46fa755570254e4d8b293e167bfbebba4b34826c70a0ea7",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": null,
+        "issues": [
+          "translation/review failed (ValueError)"
+        ]
+      },
+      {
+        "key": "section:3",
+        "source_chars": 2156,
+        "source_sha256": "4b24bcf70a18cd20ae6157110e40db0c694b2acb9a14cef7003e8abff6b1d148",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": null,
+        "issues": [
+          "translation/review failed (ValueError)"
+        ]
+      },
+      {
+        "key": "section:4",
+        "source_chars": 114,
+        "source_sha256": "2b20417d8cae35c44e50048953ceaeaa2b787d9b3fb6129c2bebc42a7b7328da",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": null,
+        "issues": [
+          "translation/review failed (ValueError)"
+        ]
+      },
+      {
+        "key": "section:5",
+        "source_chars": 1568,
+        "source_sha256": "cd200fc575c898d78b501b7be90d475e2a79392717ecd7f0bf4d3146c9ae6e9b",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": null,
+        "issues": [
+          "translation/review failed (ValueError)"
+        ]
+      },
+      {
+        "key": "section:6",
+        "source_chars": 5402,
+        "source_sha256": "44e175c50360eec407bd50213a3d13b321062eceb798b01a268243dcf69daace",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": {
+          "source_sha256": "44e175c50360eec407bd50213a3d13b321062eceb798b01a268243dcf69daace",
+          "candidate_sha256": "5986174f4daa116e1401d1258df8b3506cd3a9739b35406e967cc9b09b18aa34",
+          "attempt": 2,
+          "differences": [
+            {
+              "path": "structure[28]",
+              "expected": {
+                "preview_type": "list",
+                "preview_sha256": "b01b89d926b030f6f8c751948c87f766830063cb99c698f7532a0d06745a4edb",
+                "truncated": false
+              },
+              "actual": {
+                "preview_type": "NoneType",
+                "preview_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+                "truncated": false
+              }
+            }
+          ]
+        },
+        "issues": [
+          "parsed Markdown structure, code, HTML or link destinations changed"
+        ]
+      },
+      {
+        "key": "section:8",
+        "source_chars": 5097,
+        "source_sha256": "16b1ad3810ecfb4b23ef84036bf7ab4411b948350438e98214bc484881827a4b",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": null,
+        "issues": [
+          "semantic review rejected translation",
+          "中文正文中夹杂英文单词：'已协调了 precisely 这一行动'（应为'正是/恰是这一行动'）",
+          "中文正文中夹杂英文单词：'冶炼厂的 remedy 就是收缩'（应为'补救办法/对策就是收缩'）"
+        ]
+      },
+      {
+        "key": "section:9",
+        "source_chars": 5263,
+        "source_sha256": "6b7fef6ea26a6d5506f1a27123eeb9cc1b2b945cdc08f1f9a68ba5b9dfc9ffc9",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": null,
+        "issues": [
+          "translation/review failed (ValueError)"
+        ]
+      },
+      {
+        "key": "section:10",
+        "source_chars": 3750,
+        "source_sha256": "cefed8a04f26b9343f32864ba49b1404682481e6fbcc47d855460a7628c8ddb3",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": null,
+        "issues": [
+          "translation/review failed (ValueError)"
+        ]
+      },
+      {
+        "key": "section:11",
+        "source_chars": 4057,
+        "source_sha256": "5d676942776ddcc992eed85fef40cd8ec0bc093329c7f558da4b717da9a59bae",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": null,
+        "issues": [
+          "translation/review failed (ValueError)"
+        ]
+      },
+      {
+        "key": "section:12",
+        "source_chars": 2807,
+        "source_sha256": "653396bd50a71054eb9329f1142ac61f6590cc83a3425ae9d2dca0a0f7d78e8c",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": null,
+        "issues": [
+          "translation/review failed (ValueError)"
+        ]
+      },
+      {
+        "key": "section:14",
+        "source_chars": 2169,
+        "source_sha256": "77f9573094a177491d78d8d5c1bf1d3a4d6ee0ff585367701efcb18f0a911835",
+        "source_preserved": true,
+        "has_receipt": false,
+        "last_structure_failure": {
+          "source_sha256": "77f9573094a177491d78d8d5c1bf1d3a4d6ee0ff585367701efcb18f0a911835",
+          "candidate_sha256": "102fe4c24911e9ea676f3c9ce1848b4ca5e12b988ffae75ed03ab9c291db6a31",
+          "attempt": 2,
+          "differences": [
+            {
+              "path": "structure[10][3][0]",
+              "expected": {
+                "preview_type": "NoneType",
+                "preview_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+                "truncated": false
+              },
+              "actual": {
+                "preview_type": "list",
+                "preview_sha256": "7bc992ed591335bf17945b0c33748bdc6c683f2a5b375b1f06ec3bedefdae25d",
+                "truncated": false
+              }
+            },
+            {
+              "path": "structure[12][3][0]",
+              "expected": {
+                "preview_type": "list",
+                "preview_sha256": "7bc992ed591335bf17945b0c33748bdc6c683f2a5b375b1f06ec3bedefdae25d",
+                "truncated": false
+              },
+              "actual": {
+                "preview_type": "NoneType",
+                "preview_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+                "truncated": false
+              }
+            },
+            {
+              "path": "structure[13]",
+              "expected": {
+                "preview_type": "list",
+                "preview_sha256": "b01b89d926b030f6f8c751948c87f766830063cb99c698f7532a0d06745a4edb",
+                "truncated": false
+              },
+              "actual": {
+                "preview_type": "NoneType",
+                "preview_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+                "truncated": false
+              }
+            }
+          ]
+        },
+        "issues": [
+          "parsed Markdown structure, code, HTML or link destinations changed"
+        ]
+      }
+    ],
+    "valid_section_receipts": 6,
+    "canonical_source_matches_audit": true
+  }
+]

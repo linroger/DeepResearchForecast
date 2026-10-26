@@ -65,10 +65,11 @@
 
 <script setup>
 import { computed } from 'vue'
-import { L } from '../../i18n'
+import { L as appL } from '../../i18n'
 import { sourceContextView } from '../../utils/sourceContext'
 
-const props = defineProps({ context: { type: Object, default: null } })
+const props = defineProps({ context: { type: Object, default: null }, lang: { type: String, default: '' } })
+function L(zh, en) { return props.lang === 'zh' ? zh : props.lang === 'en' ? (en ?? zh) : appL(zh, en) }
 const view = computed(() => sourceContextView(props.context))
 const states = {
   ok: ['可用', 'Available'], verified_empty: ['已核实无结果', 'Verified empty'],
