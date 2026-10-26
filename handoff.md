@@ -1,3 +1,5 @@
+> Translation redesign complete: [verified outcomes and delivery](docs/handoff/translation-hardening-pdf/handoff.md). Code commit `ddb0ff5c` is published on `codex/translation-redesign`; existing reports and unrelated work were preserved.
+
 > Simulation/report boundary — complete and delivered: [completion and evidence](docs/handoff/simulation-after-action-record/completion.md), [ADR 0003](docs/adr/0003-simulation-after-action-record-and-report-bridge.md), and [current handoff](docs/handoff/simulation-after-action-record/handoff.md). The verified feature is on `codex/simulation-report-boundary`; active source preserves the separate Mandarin work. Fresh-provider calibration/acceptance remains a separate exercise.
 
 > Context propagation audit: [current handoff](docs/handoff/context-propagation-audit/handoff.md). Final4533-case guarded gate and independent review are accepted; source delivery is verified on main, with explicit coverage/live limits.

@@ -1,7 +1,7 @@
 # Unified translation architecture
 
 **Date:** 2026-10-26 (Asia/Shanghai)
-**Status:** Approved by the user; implementation in progress.
+**Status:** Complete; implemented and verified. See verification.md and handoff.md for delivery and evidence.
 
 ## 1. Problem and intended outcome
 

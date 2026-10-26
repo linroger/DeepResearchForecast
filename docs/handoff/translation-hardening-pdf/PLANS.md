@@ -1,7 +1,7 @@
 # Unified translation-system redesign and language-aware export
 
 **Date:** 2026-10-26 (Asia/Shanghai)
-**Status:** Approved by the user; implementation in progress.
+**Status:** Complete; implemented and verified. See verification.md and handoff.md for delivery and evidence.
 **User direction:** Rearchitect the whole translation system for robustness and efficiency instead of accumulating patches.
 **Design authority:** [architecture.md](architecture.md).
 **Evidence:** [findings.md](findings.md), [saved-failure-evidence.json](saved-failure-evidence.json), [diagnostic-probes.json](diagnostic-probes.json).

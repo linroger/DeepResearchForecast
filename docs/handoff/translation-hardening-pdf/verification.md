@@ -1,7 +1,7 @@
 # Translation redesign verification
 
 **Date:** 2026-10-26 (Asia/Shanghai)
-**Status:** Functional acceptance complete. Scoped commit and remote delivery are being finalized.
+**Status:** Complete. Code commit `ddb0ff5c0aeeb27f30a68dd751f232d9d5652bd0` is published on `legacy/codex/translation-redesign`.
 
 ## Implemented behavior
 
@@ -46,4 +46,4 @@ Two pre-existing demo-asset availability checks are explicitly excluded and neve
 
 The managed worktree is `/Users/rogerlin/.codex/worktrees/translation-redesign/DeepResearchForecast`, branch `codex/translation-redesign`, based on `6ab52f7746bf7ec55e9f9921c71ba4ab08e33c01`. Its separate index preserves the primary checkout's staged `news_market_context.py` and unrelated changes. The delivery policy excludes unrelated forecast-task, grounding, provider, layout and demo changes while including required translation dependencies.
 
-Configured `origin` (`DeepAgentForecast`) is archived. Configured `legacy` (`DeepResearchForecast`) is active, and its GitHub commit endpoint confirms the exact base commit. The feature branch will be pushed there without changing remote configuration or merging `main`. Final commit/push receipts are recorded in the handoff after delivery.
+Configured `origin` (`DeepAgentForecast`) is archived. Configured `legacy` (`DeepResearchForecast`) is active, and its GitHub commit endpoint confirms the exact base commit. The feature branch was pushed there successfully, without changing remote configuration or merging `main`. The managed delivery worktree was clean after the code commit. Closing documentation is a separate documentation-only commit; production/test bytes remain unchanged.

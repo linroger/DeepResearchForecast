@@ -1,8 +1,8 @@
 # Handoff: translation hardening and language-aware PDF export
 
-**Last Updated (UTC):** 2026-10-26T02:44:08.667930+00:00
-**Status:** In Progress — approved redesign implementation
-**Current Focus:** Fix real-report PDF content-audit rejection, finish current-source regression and isolated delivery validation, then commit/push the scoped redesign.
+**Last Updated (UTC):** 2026-10-26T07:31:19.054054+00:00
+**Status:** Complete
+**Current Focus:** No required translation work remains. Use verification.md and the delivery branch for future changes.
 
 ## 1) Request & Context
 The user requests robust translation across every tab with a translation control and report PDF export in the displayed language: Mandarin when already translated, otherwise English. Reported failures include missing complete source-bound semantic review and section 12, 16, and 17 translation/review failures recorded only as ValueError. The current checkout is claude/sim-provenance-s0 and contains extensive existing modified, staged, and untracked work. Preserve all existing work and saved reports. The user supplied AGENTS.md requires a PLANS.md and plan approval before coding a complex feature. Investigation and documentation can proceed now.
@@ -26,7 +26,7 @@ First establish the current baseline and exact failure paths. Inspect UI transla
 - [x] Obtain required implementation approval: user explicitly approved full redesign and end-to-end tests.
 - [x] Implement the approved unified translation architecture and all adapters.
 - [x] Run regression, real-browser, native/live PDF, build and independent review checks; see verification.md.
-- [ ] Deliver owned changes with clear evidence and remaining limits.
+- [x] Deliver owned changes: code commit ddb0ff5c pushed to legacy/codex/translation-redesign; the managed delivery worktree is clean.
 
 ## 5) Findings, Decisions, Assumptions
 The checkout already contains a model-led translation implementation and a forecast-report PDF button. Their presence does not establish end-to-end correctness. Extend current code after tracing its actual contracts. Existing accepted translations and immutable source facts remain authoritative.
@@ -73,3 +73,17 @@ The active scope is the unified redesign in architecture.md and the six delivery
 - 2026-10-26T05:24:44.361861+00:00: Actual localhost service refreshed safely after confirming51completed pipelines/noactivetranslations; heldlauncher PTY session47190 is keeping5001/3000alive (detachedchildren were reaped bytoolhost). Exactlyone normal livePOST was made for report_8f0bea34ec96 Mandarin, jobtj_d10640aa0e2e4a32b712f99fd107a43c. It completed underconfiguredGLM5.3 with noissues: body22/22accepted,21legacyreviewsimported,2bodymodelcalls; structureddisplay34/34accepted,4calls. Primary full_report.md/forecast.json/final_audit.json/citations.json hashes unchanged. Private receipts at /Users/rogerlin/Documents/Codex/evidence/translation-redesign-2026-10-26/live-copper. BOTH actualEnglish/Mandarin PDFs returned503 afterPandocreportedrenderingsuccess; originalreportsremainedintact. This is a required unresolvedexportacceptancecase, notproviderfailure. Private exactsource/charts/citations copies are in live-copper/pdf-repro; nativeworker Erdos resumedtoinspectrawPDF/contentgate, reportworker Maxwell owns anyverifiedsourcefix. No bodyregeneration oradditionalpaidPOSTneeded. Legacy25-testmigration gate passed afterfullrun941/15/2; parent ladderfixture11passed. Frontend495/495plus48/48repeatedfocusedcases nowpass; onlytesttimingchangedafterreal7surfacebrowser acceptance.
 
 - 2026-10-26T06:42:44.884884+00:00: LivePDFendpoints now200forEnglish35pages/Mandarin28pages,6images each, noreplacementglyphs. Rendererwide-table/URI/SMART fixes independentlypassedactualcopiedinputsandstress; originalbodiesnotregenerated. Currentwhole-checkoutbackend966/2excludedpassed, frontend495/buildpassed. Isolateddelivery965/1identifiedrequiredsharedclassifierdependency; scopedfive-lineguard admitted,67affectedchecks passed. Remoteoriginarchived/read-only, activeconfiguredlegacyhasexactbase6ab; baselineassetissue filedas #9 there. Featureflagfix_full_mandarin_translation settrue afterfunctionalacceptance, progresslogappended, verification.mdcreated. Scopecommit/push remainsfinalstep.
+
+## Completion and next-session prompt
+
+The approved redesign is implemented, reviewed, tested, activated locally and published on `codex/translation-redesign` in the active configured `legacy` remote (`linroger/DeepResearchForecast`). Code commit: `ddb0ff5c0aeeb27f30a68dd751f232d9d5652bd0`. The configured `origin` is archived and was not changed. No main-branch merge or static-site deployment occurred.
+
+Current evidence: 966 backend cases passed in the working checkout with two explicitly excluded pre-existing demo-asset checks; 495 frontend tests and the production build pass; all seven real-browser surfaces and four controlled downloads pass. The extracted delivery tree passed 965 cases before the one required classifier dependency was restored; its original failure and 66 related controls then passed. Both actual live PDFs return HTTP200 in the correct language, with 35 English and 28 Mandarin pages. The live Mandarin report reused21 of22 reviewed body sections and used2 new model calls for the remaining section; display fields used4 calls. No additional model calls occurred during export.
+
+All1,878 baseline report artifacts remain present. Only the recovered report's `meta.json` intentionally gained translation metadata; the other1,877 files and all canonical report/forecast/audit/citation bytes are unchanged. The primary checkout's existing staged news-context change and unrelated dirty work remain preserved. Local services are healthy on5001/3000 in held launcher session69388. Stop them only through the verified existing launcher when needed.
+
+The only separate follow-up is the pre-existing static-demo asset issue: https://github.com/linroger/DeepResearchForecast/issues/9. It is outside the requested translation redesign. Private evidence, PDFs and preservation receipts are retained under `/Users/rogerlin/Documents/Codex/evidence/translation-redesign-2026-10-26`.
+
+> Future session: Read this handoff and verification.md. Start from the published translation branch or explicitly integrate its code commit. Preserve the primary checkout's unrelated changes and original reports. Do not regenerate accepted translations or run paid provider work merely to inspect status. Reuse the committed regression/browser/native-PDF fixtures for any new defect; distinguish controlled transport, native rendering and actual live-provider evidence. No remaining implementation step is required for this request.
+
+- 2026-10-26T07:31:19.054054+00:00: Code commit ddb0ff5c0aeeb27f30a68dd751f232d9d5652bd0 created in the isolated managed worktree and successfully pushed to the active configured legacy remote. Functional and delivery scope completed; closing documentation records exact acceptance and preserved baseline boundaries.
