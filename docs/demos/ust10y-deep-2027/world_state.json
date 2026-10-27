@@ -1,0 +1,3683 @@
+{
+ "actors": [
+  {
+   "agency_class": "central_bank",
+   "agent_id": 0,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "commitment_description": "在2027年12月14–15日FOMC会议上依据届时通胀、就业与通胀预期数据评估政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变，若通胀或预期再度上行，进一步收紧仍在选项内。",
+    "commitment_id": "c0_13_6",
+    "commitment_reviewed": true,
+    "commitment_target_ids": [],
+    "kind": "operational",
+    "label": "Deliver commitment [c0_13_6]: 在2027年12月14–15日FOMC会议上依据届时通胀、就业与通胀预期数据评估政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变，若通胀或预期再度上行，进一步收紧仍在选项内。",
+    "magnitude": 0.6,
+    "option_id": "fulfill:c0_13_6",
+    "resolution": "success",
+    "resolution_rationale": "FOMC于12月14–15日按数据逐会评估并投票维持区间不变，完全兑现承诺内容",
+    "reversibility": "reversible",
+    "round": 14,
+    "statement": "联邦公开市场委员会于2027年12月14–15日会议评估最新数据后，决定维持联邦基金目标区间于4.375%–4.500%。委员会注意到核心PCE环比继续走弱、10年期盈亏平衡通胀稳定于约2.3%的积极进展，但密歇根一年期通胀预期仍处高位，委员会认为在通胀持续向2%目标回落取得更大信心之前，维持限制性政策立场是适当的。缩表已于2025年12月结束，总资产约6.75万亿美元，将继续维持银行体系充足的储备。委员会将持续监测后续信息对经济前景的影响，政策路径逐会决定。",
+    "status": "ok",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "美联储(FOMC)",
+   "pending_commitments": [],
+   "reputation": 0.76,
+   "track_record": {
+    "broken": 0,
+    "kept": 6,
+    "lapsed": 0,
+    "open": 0,
+    "outcomes": {
+     "success": 13
+    },
+    "released": 0,
+    "reliability": 1.0,
+    "reputation": 0.76,
+    "resolved": 6
+   }
+  },
+  {
+   "agency_class": "sovereign_government",
+   "agent_id": 1,
+   "archetype": "actor",
+   "capacity_per_round": 3,
+   "last_action": {
+    "commitment_description": "按11月季度再融资声明执行拍卖日历与发行规模，并于2028年2月发布季度借款估计与再融资声明",
+    "commitment_id": "c1_13_5",
+    "commitment_reviewed": true,
+    "commitment_target_ids": [],
+    "kind": "operational",
+    "label": "Deliver commitment [c1_13_5]: 按11月季度再融资声明执行拍卖日历与发行规模，并于2028年2月发布季度借款估计与再融资声明",
+    "magnitude": 0.6,
+    "option_id": "fulfill:c1_13_5",
+    "resolution": "success",
+    "resolution_rationale": "11月声明的拍卖日历与1250亿美元发行已按计划执行完毕，2月再融资声明属既定未来日程，本阶段承诺已交付",
+    "reversibility": "reversible",
+    "round": 14,
+    "statement": "财政部确认：11月季度再融资声明所载拍卖日历已按计划执行完毕，本季度3年期、10年期与30年期国债合计1250亿美元发行顺利完成，历次拍卖投标倍数、尾差与间接投标占比均处正常区间，常规发行在债务上限上调生效后平稳运行。TGA余额维持既定目标区间并继续每周披露。财政部将于2028年2月按日历发布季度借款估计与再融资声明，届时评估附息券与FRN规模指引及票据融资结构。",
+    "status": "ok",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "美国财政部",
+   "pending_commitments": [],
+   "reputation": 0.76,
+   "track_record": {
+    "broken": 0,
+    "kept": 5,
+    "lapsed": 0,
+    "open": 0,
+    "outcomes": {
+     "partial": 1,
+     "success": 13
+    },
+    "released": 0,
+    "reliability": 1.0,
+    "reputation": 0.76,
+    "resolved": 5
+   }
+  },
+  {
+   "agency_class": "central_bank",
+   "agent_id": 2,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "commitment_description": "在2027年12月14–15日FOMC会议上依据届时的核心PCE、就业与通胀预期数据逐会评估并决定政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变；若密歇根一年期预期再度上行或通胀再加速，进一步收紧仍在选项内。",
+    "commitment_id": "c2_13_7",
+    "commitment_reviewed": true,
+    "commitment_target_ids": [],
+    "kind": "operational",
+    "label": "Deliver commitment [c2_13_7]: 在2027年12月14–15日FOMC会议上依据届时的核心PCE、就业与通胀预期数据逐会评估并决定政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变；若密歇根一年期预期再度上行或通胀再加速，进一步收紧仍在选项内。",
+    "magnitude": 0.4,
+    "option_id": "fulfill:c2_13_7",
+    "resolution": "success",
+    "resolution_rationale": "投票委员依据核心PCE与密歇根预期数据完成逐会评估并一致维持区间，承诺兑现",
+    "reversibility": "reversible",
+    "round": 14,
+    "statement": "联邦公开市场委员会于12月14–15日会议完成对政策利率的逐会评估：鉴于近期核心PCE环比继续走弱、盈亏平衡通胀稳定于约2.3%，委员会以一致投票决定维持联邦基金目标区间于4.375%–4.500%。密歇根一年期通胀预期仍处高位，委员会对通胀上行意外的容忍度维持低位；充分限制性立场将保持至通胀向2%目标可持续回落，若预期或通胀再度上行，进一步收紧仍在选项内。政策路径逐会决定。",
+    "status": "ok",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "鲍威尔及FOMC投票委员",
+   "pending_commitments": [],
+   "reputation": 0.76,
+   "track_record": {
+    "broken": 0,
+    "kept": 6,
+    "lapsed": 1,
+    "open": 0,
+    "outcomes": {
+     "success": 13
+    },
+    "released": 0,
+    "reliability": 0.857,
+    "reputation": 0.76,
+    "resolved": 7
+   }
+  },
+  {
+   "agency_class": "central_bank",
+   "agent_id": 3,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.4,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "日银发布12月会议声明，维持2.0%并灵活购债，普通公开声明即完成",
+    "reversibility": "reversible",
+    "round": 14,
+    "statement": "日本银行货币政策会议(2027年12月)决定:维持政策利率于2.0%不变。委员会评估物价走势与金融体系状况后认为,当前金融条件与实现2%物价稳定目标的路径基本一致;鉴于超长期收益率此前触及高位,本行将继续灵活实施购债操作,防范国债收益率过度波动。本行重申,政策调整以本国物价与金融稳定为唯一依归,关注汇率对物价的影响,对未来政策路径不作预判。",
+    "status": "ok",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "日本银行(BOJ)",
+   "pending_commitments": [],
+   "reputation": 0.74,
+   "track_record": {
+    "broken": 0,
+    "kept": 5,
+    "lapsed": 1,
+    "open": 0,
+    "outcomes": {
+     "success": 12
+    },
+    "released": 0,
+    "reliability": 0.833,
+    "reputation": 0.74,
+    "resolved": 6
+   }
+  },
+  {
+   "agency_class": "legislature",
+   "agent_id": 4,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.3,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "国会发布年终通报，属事实性沟通，无待兑现承诺",
+    "reversibility": "reversible",
+    "round": 14,
+    "statement": "本院年终通报:拨款与债务上限打包立法已于年内完成并经总统签署生效,联邦资金安排恢复常态,FY2028十二项拨款法案已列入两院明年1月起的正式审议日程,各委员会组织工作将于新国会会期首月完成。本院对国债收益率水平与市场走势不作任何官方评论,财政相关数据以国会预算办公室基线与财政部正式文件为准。",
+    "status": "ok",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "美国国会",
+   "pending_commitments": [
+    {
+     "description": "2028年1月底前完成FY2028拨款法案的委员会审议安排并公布两院审议日程",
+     "due_round": 15,
+     "id": "c4_14_6",
+     "made_round": 14,
+     "source": "decision",
+     "status": "pending"
+    }
+   ],
+   "reputation": 0.41,
+   "track_record": {
+    "broken": 1,
+    "kept": 1,
+    "lapsed": 3,
+    "open": 1,
+    "outcomes": {
+     "partial": 4,
+     "success": 3
+    },
+    "released": 0,
+    "reliability": 0.2,
+    "reputation": 0.41,
+    "resolved": 5
+   }
+  },
+  {
+   "agency_class": "regulator_agency",
+   "agent_id": 5,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.3,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "外管局按期发布储备数据与审慎声明，未对市场造成扰动",
+    "reversibility": "reversible",
+    "round": 9,
+    "statement": "国家外汇管理局公布2027年6月末外汇储备规模数据。6月末，我国外汇储备规模总体保持充裕，跨境资金流动均衡有序。储备经营管理始终坚持安全性、流动性、收益性原则，根据市场情况动态优化资产配置。注意到近期境外主要经济体货币政策与财政融资安排密集调整、长端收益率与期限溢价处于高位，我局将继续审慎评估市场环境变化对储备资产管理的影响，相关猜测性报道不作评论，请以我局官方发布为准。",
+    "status": "ok",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "中国国家外汇管理局",
+   "pending_commitments": [],
+   "reputation": 0.56,
+   "track_record": {
+    "broken": 0,
+    "kept": 0,
+    "lapsed": 0,
+    "open": 0,
+    "outcomes": {
+     "success": 3
+    },
+    "released": 0,
+    "reliability": null,
+    "reputation": 0.56,
+    "resolved": 0
+   }
+  }
+ ],
+ "as_of_date": "2026-10-26",
+ "brief": "# WORLD STATE — as of 2027-12-31 (after 2027-12)\n## Key facts\n- 10年期国债收益率: 5.01% (was 5.02% last period; falling 5 periods running)\n- 央行政策利率: 4.57 % 年率 (was 4.35 % 年率 last period)\n- 期限溢价: 0.91% (was 0.92% last period)\n- 10年期TIPS实际收益率: 2.69%\n- 10年期国债收益率月均: 5.1%\n- 2s10s利差: 0.3%\n- 债务上限立法签署生效: yes\n- 联邦政府停摆状态: no\n- 非常规措施剩余空间: 已解除：债务上限上调5万亿美元并签署生效，常规发行恢复\n- 日本美债持仓: 1048.58 十亿美元\n- 日本政策利率: 2%\n- 10年期盈亏平衡通胀率: 2.33%\n- 财政部-国会拨款协同框架生效: yes\n- 10年期JGB收益率盘中高点: 3.1%\n## Moves last period\n- 美国财政部: Deliver commitment [c1_13_5]: 按11月季度再融资声明执行拍卖日历与发行规模，并于2028年2月发布季度借款估计与再融资声明 — \"财政部确认：11月季度再融资声明所载拍卖日历已按计划执行完毕，本季度3年期、10年期与30年期国债合计1250亿美元发行顺利完成，历次拍卖投标倍数、尾差与间接投标占比均处正常区间，常规发行在债务上限上调生效后平稳运行。TGA余额维持既定目标区间并继续每周披露。财政部将于2028年2月按日历发布季度借款估计与再融资声明…\"\n- 日本银行(BOJ): Issue a public statement or warning — \"日本银行货币政策会议(2027年12月)决定:维持政策利率于2.0%不变。委员会评估物价走势与金融体系状况后认为,当前金融条件与实现2%物价稳定目标的路径基本一致;鉴于超长期收益率此前触及高位,本行将继续灵活实施购债操作,防范国债收益率过度波动。本行重申,政策调整以本国物价与金融稳定为唯一依归,关注汇率对物价的影响,…\"\n- 美国国会: Issue a public statement or warning — \"本院年终通报:拨款与债务上限打包立法已于年内完成并经总统签署生效,联邦资金安排恢复常态,FY2028十二项拨款法案已列入两院明年1月起的正式审议日程,各委员会组织工作将于新国会会期首月完成。本院对国债收益率水平与市场走势不作任何官方评论,财政相关数据以国会预算办公室基线与财政部正式文件为准。\"\n- 鲍威尔及FOMC投票委员: Deliver commitment [c2_13_7]: 在2027年12月14–15日FOMC会议上依据届时的核心PCE、就业与通胀预期数据逐会评估并决定政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变；若密歇根一年期预期再度上行或通胀再加速，进一步收紧仍在选项内。 — \"联邦公开市场委员会于12月14–15日会议完成对政策利率的逐会评估：鉴于近期核心PCE环比继续走弱、盈亏平衡通胀稳定于约2.3%，委员会以一致投票决定维持联邦基金目标区间于4.375%–4.500%。密歇根一年期通胀预期仍处高位，委员会对通胀上行意外的容忍度维持低位；充分限制性立场将保持至通胀向2%目标可持续回落，若…\"\n- 美联储(FOMC): Deliver commitment [c0_13_6]: 在2027年12月14–15日FOMC会议上依据届时通胀、就业与通胀预期数据评估政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变，若通胀或预期再度上行，进一步收紧仍在选项内。 — \"联邦公开市场委员会于2027年12月14–15日会议评估最新数据后，决定维持联邦基金目标区间于4.375%–4.500%。委员会注意到核心PCE环比继续走弱、10年期盈亏平衡通胀稳定于约2.3%的积极进展，但密歇根一年期通胀预期仍处高位，委员会认为在通胀持续向2%目标回落取得更大信心之前，维持限制性政策立场是适当的。…\"\n## Consequences and events\n- [2027-12-31] 预测结算日：按DGS10日频官方收盘值结算\n- 美国国会's commitment lapsed: 10月底前完成拨款与债务上限打包文本的两院全体表决,并送交总统签署\n- 若核心PCE回落停滞或密歇根预期再度上行，12月FOMC或再加息25bp\n- Did not materialise: 12月14–15日FOMC会议：若10–11月核心PCE继续走弱且密歇根预期回落，可能讨论降息，短端与长端收益率温和下行\n- 12月14–15日FOMC一致维持4.375%–4.50%区间，声明强调限制性立场延续，市场反应温和，短端持稳、长端小幅下行\n- 财政部11月声明的1250亿美元中长期国债拍卖顺利完成，投标倍数与间接占比正常，年末供给压力未推高期限溢价\n- 日银维持利率2.0%并承诺灵活购债防范超长端波动，JGB高位企稳，美日利差预期稳定，日本投资者美债需求未变\n- 国会年终通报确认FY2028拨款按正常日程推进，未对收益率发表评论，市场视其为中性\n- 美联储(FOMC) fulfilled commitment [c0_13_6]: 在2027年12月14–15日FOMC会议上依据届时通胀、就业与通胀预期数据评估政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变，若通胀或预期再度上行，进一步收紧仍在选项内。\n- 美国财政部 fulfilled commitment [c1_13_5]: 按11月季度再融资声明执行拍卖日历与发行规模，并于2028年2月发布季度借款估计与再融资声明\n## Alliances and rivalries\n- 美国国会 — 美国财政部: now allied (closer)\n- 鲍威尔及FOMC投票委员 — 美联储(FOMC): now allied (closer)\n## Track records\n- 美国国会: kept 1 of 5 commitments (3 lapsed, 1 broken); moves 3 succeeded, 4 partly succeeded\n- 鲍威尔及FOMC投票委员: kept 6 of 7 commitments (1 lapsed); moves 13 succeeded\n- 日本银行(BOJ): kept 5 of 6 commitments (1 lapsed); moves 12 succeeded\n- 美联储(FOMC): kept 6 of 6 commitments; moves 13 succeeded\n- 美国财政部: kept 5 of 5 commitments; moves 13 succeeded, 1 partly succeeded\n- 中国国家外汇管理局: moves 3 succeeded\n## Pending and announced\n- 美国国会: 2028年1月底前完成FY2028拨款法案的委员会审议安排并公布两院审议日程 (due period 15)\n- Expected: 2028年2月季度再融资声明若上调附息券规模，期限溢价或再度回升 (around period 16)",
+ "committed_round": 14,
+ "digest": "12月FOMC维持利率不变，声明与市场预期一致，长端在月末结算前于5.0%附近窄幅整理；财政部再融资拍卖平稳消化，期限溢价小幅回落。日银维持2%利率并表态防范超长端过度波动，美日利差预期稳定，境外需求未现异动。国会年终通报无新增财政信息，对收益率影响中性。结算日DGS10收于约5.01%。\nMoves:\n- 美国财政部: Deliver commitment [c1_13_5]: 按11月季度再融资声明执行拍卖日历与发行规模，并于2028年2月发布季度借款估计与再融资声明: \"财政部确认：11月季度再融资声明所载拍卖日历已按计划执行完毕，本季度3年期、10年期与30年期国债合计1250亿美元发行顺利完成，历次拍卖投标倍数、尾差与间接投标占比均处正常区间，常规发行在债务上限上调生效后平稳运行。TGA余额维持既定目标区间并继续每周披露。财政部将于2028年2月按日历发布季度借款估计与再融资声明，届时评估附息券与FRN规模指引及票据融资结构。\"\n- 日本银行(BOJ): Issue a public statement or warning: \"日本银行货币政策会议(2027年12月)决定:维持政策利率于2.0%不变。委员会评估物价走势与金融体系状况后认为,当前金融条件与实现2%物价稳定目标的路径基本一致;鉴于超长期收益率此前触及高位,本行将继续灵活实施购债操作,防范国债收益率过度波动。本行重申,政策调整以本国物价与金融稳定为唯一依归,关注汇率对物价的影响,对未来政策路径不作预判。\"\n- 美国国会: Issue a public statement or warning: \"本院年终通报:拨款与债务上限打包立法已于年内完成并经总统签署生效,联邦资金安排恢复常态,FY2028十二项拨款法案已列入两院明年1月起的正式审议日程,各委员会组织工作将于新国会会期首月完成。本院对国债收益率水平与市场走势不作任何官方评论,财政相关数据以国会预算办公室基线与财政部正式文件为准。\"\n- 鲍威尔及FOMC投票委员: Deliver commitment [c2_13_7]: 在2027年12月14–15日FOMC会议上依据届时的核心PCE、就业与通胀预期数据逐会评估并决定政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变；若密歇根一年期预期再度上行或通胀再加速，进一步收紧仍在选项内。: \"联邦公开市场委员会于12月14–15日会议完成对政策利率的逐会评估：鉴于近期核心PCE环比继续走弱、盈亏平衡通胀稳定于约2.3%，委员会以一致投票决定维持联邦基金目标区间于4.375%–4.500%。密歇根一年期通胀预期仍处高位，委员会对通胀上行意外的容忍度维持低位；充分限制性立场将保持至通胀向2%目标可持续回落，若预期或通胀再度上行，进一步收紧仍在选项内。政策路径逐会决定。\"\n- 美联储(FOMC): Deliver commitment [c0_13_6]: 在2027年12月14–15日FOMC会议上依据届时通胀、就业与通胀预期数据评估政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变，若通胀或预期再度上行，进一步收紧仍在选项内。: \"联邦公开市场委员会于2027年12月14–15日会议评估最新数据后，决定维持联邦基金目标区间于4.375%–4.500%。委员会注意到核心PCE环比继续走弱、10年期盈亏平衡通胀稳定于约2.3%的积极进展，但密歇根一年期通胀预期仍处高位，委员会认为在通胀持续向2%目标回落取得更大信心之前，维持限制性政策立场是适当的。缩表已于2025年12月结束，总资产约6.75万亿美元，将继续维持银行体系充足的储备。委员会将持续监测后续信息对经济前景的影响，政策路径逐会决定。\"\nFacts that changed:\n- 10年期国债收益率: 5.02% → 5.01%\n- 央行政策利率: 4.35 % 年率 → 4.57 % 年率\n- 期限溢价: 0.92% → 0.91%\nEvents and consequences:\n- [2027-12-31] 预测结算日：按DGS10日频官方收盘值结算\n- 美国国会's commitment lapsed: 10月底前完成拨款与债务上限打包文本的两院全体表决,并送交总统签署\n- 若核心PCE回落停滞或密歇根预期再度上行，12月FOMC或再加息25bp\n- Did not materialise: 12月14–15日FOMC会议：若10–11月核心PCE继续走弱且密歇根预期回落，可能讨论降息，短端与长端收益率温和下行\n- 12月14–15日FOMC一致维持4.375%–4.50%区间，声明强调限制性立场延续，市场反应温和，短端持稳、长端小幅下行\n- 财政部11月声明的1250亿美元中长期国债拍卖顺利完成，投标倍数与间接占比正常，年末供给压力未推高期限溢价\n- 日银维持利率2.0%并承诺灵活购债防范超长端波动，JGB高位企稳，美日利差预期稳定，日本投资者美债需求未变\n- 国会年终通报确认FY2028拨款按正常日程推进，未对收益率发表评论，市场视其为中性\nAlliances and rivalries:\n- 美国国会 — 美国财政部: allied (closer)\n- 鲍威尔及FOMC投票委员 — 美联储(FOMC): allied (closer)",
+ "headline": "",
+ "history": [
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "e545389bf1f4ff7e1073249eeb387aa901debe4744dc2c920bdb7f7730294b8b",
+     "problems": [
+      "$.action_resolutions[4]: unknown fields"
+     ],
+     "source_hash": "bba2d80ca54f51d76c058bb0d65db1e02fbd6ca9547614eb7d60ced427e18403",
+     "status": "invalid"
+    },
+    {
+     "attempt": 2,
+     "candidate_hash": "8db6eeee157fd42571d95f9b070804bd4a599ee57b3e1926cb53f915f5648690",
+     "problems": [],
+     "source_hash": "bba2d80ca54f51d76c058bb0d65db1e02fbd6ca9547614eb7d60ced427e18403",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 5,
+    "total": 5
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Introduce or advance a bill → 美国财政部",
+     "Change the policy rate or guidance"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [
+     "[2026-10-28] FOMC会议（待开）",
+     "[2026-10-29] 日本银行会议及十月经济与物价展望（10月29–30日）",
+     "[2026-11-02] 财政部借款估计发布",
+     "[2026-11-04] 财政部季度再融资政策声明"
+    ],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": 0.15,
+      "source": "美联储(FOMC)",
+      "target": "美国财政部",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 4.989,
+      "id": "10年期国债收益率",
+      "name": "10年期国债收益率",
+      "to": 4.938000000000001,
+      "unit": "%"
+     },
+     {
+      "from": 0.96,
+      "id": "期限溢价",
+      "name": "期限溢价",
+      "to": 0.977,
+      "unit": "%"
+     },
+     {
+      "from": 3.005,
+      "id": "10年期jgb收益率盘中高点",
+      "name": "10年期JGB收益率盘中高点",
+      "to": 3.0475,
+      "unit": "%"
+     }
+    ]
+   },
+   "digest": "FOMC维持利率不变并重申限制性立场，鲍威尔措辞与之一致，市场对12月降息预期小幅降温。财政部11月4日再融资声明如预期维持附息券规模不变、延续票据依赖，供给冲击担忧有限。BOJ加息25bp至1.25%，日元回流压力叠加高位期限溢价，10年期美债收益率高位小幅回落至4.93%附近。\nMoves:\n- 美联储(FOMC): Issue a public statement or warning: \"FOMC于10月28日会议决定将联邦基金利率目标区间维持在3.750%–4.000%。委员会判断,通胀仍处于高位,货币政策将继续保持限制性立场,以支持通胀更及时地回归2%目标。委员会将持续监测后续信息对经济前景的影响,并重申维持银行体系充足的储备水平。\"\n- 美国财政部: Issue a public statement or warning: \"财政部将于11月2日发布借款估计、11月4日发布季度再融资声明。基于8月指引,财政部预计未来至少几个季度维持名义附息券与FRN拍卖规模不变,继续以票据作为主要过渡性融资工具,并预计TGA于10月下旬达到约1.05万亿美元峰值。财政部正持续监测期限溢价与私人票据需求,并通过TBAC咨询机制评估发行结构的潜在调整。\"\n- 鲍威尔及FOMC投票委员: Issue a public statement or warning: \"在10月28日会议上，委员会一致决定将联邦基金利率目标区间维持在3.875%。通胀仍处于高位，委员会将依据数据及风险展望逐会评估，政策路径取决于通胀向2%目标回落的可持续进展。我们不预设路径，但重申：充分限制性立场是恢复价格稳定的必要条件。\"\n- 美国国会: Introduce or advance a bill (→ 美国财政部): \"本院拨款委员会已就FY2027综合拨款法案框架展开两院协商,目标是在12月11日持续决议到期前完成院会表决,避免政府资金中断。债务上限问题将在新一届国会议程中依程序处理,本院不对市场走势或财政部操作发表评论。\"\n- 日本银行(BOJ): Change the policy rate or guidance: \"日本银行货币政策会议(2026年10月29-30日)决定将无担保隔夜拆借利率上调25个基点至1.25%,同时发布10月经济与物价展望报告,维持2027、2028年度物价预测并重申将关注汇率变动对物价的影响,继续以本国物价与金融稳定为依归渐进推进货币政策正常化。\"\nFacts that changed:\n- 10年期国债收益率: 4.99% → 4.94%\n- 期限溢价: 0.96% → 0.98%\n- 10年期JGB收益率盘中高点: 3% → 3.05%\nEvents and consequences:\n- [2026-10-28] FOMC会议（待开）\n- [2026-10-29] 日本银行会议及十月经济与物价展望（10月29–30日）\n- [2026-11-02] 财政部借款估计发布\n- [2026-11-04] 财政部季度再融资政策声明\n- 11月4日季度再融资声明维持名义附息券与FRN规模不变，市场反应温和，长端收益率小幅下行\n- BOJ加息25bp后日元走强，部分日本投资者回流本国债市，美债外资买盘边际减弱\n- 国会就FY2027综合拨款法案框架展开两院协商，市场暂未计入政府停摆风险溢价\nAlliances and rivalries:\n- 美联储(FOMC) — 美国财政部: neutral (closer)",
+   "headline": "2026-10: 5 decisions · 3 facts changed · 3 events · arbiter=applied · FOMC维持利率不变并重申限制性立场，鲍威尔措辞与之一致，市场对12月降息预期小幅降温。财政部11月4日再融资声明如预期维持附息券规模不变、延续票据依赖，供给冲击担忧有限。BOJ加息25bp至1.25%，日元回流压力叠加高位期限溢价，10年期美债收益率高位小幅回落至4.93%附…",
+   "narrative": "FOMC维持利率不变并重申限制性立场，鲍威尔措辞与之一致，市场对12月降息预期小幅降温。财政部11月4日再融资声明如预期维持附息券规模不变、延续票据依赖，供给冲击担忧有限。BOJ加息25bp至1.25%，日元回流压力叠加高位期限溢价，10年期美债收益率高位小幅回落至4.93%附近。",
+   "period_label": "2026-10",
+   "round": 1,
+   "scenario_pressure": {
+    "再度上行": "flat",
+    "回落走低": "flat",
+    "极端突破": "flat",
+    "高位企稳": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "8db3b6fc826b73509bf2bfca5d3e89af1b630071fc6b1712e5143cf49b3f46a7",
+     "problems": [],
+     "source_hash": "a93f62050feb06c10e38fb9cc904d0c0ea7cf8efb481978a76cf79fdae4c66b2",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 4,
+    "total": 4
+   },
+   "deterministic": {
+    "actions": [
+     "Deliver commitment [c0_1_1]: 12月9日FOMC会议将依据届时数据评估是否进一步收紧政策利率",
+     "Accommodate or publicly answer 美国国会's move → 美国国会",
+     "Change the policy rate or guidance",
+     "Deliver commitment [c3_1_1]: Change the policy rate or guidance (announced)"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Did not materialise: 12月11日CR到期前拨款谈判若破裂，期限溢价或上行",
+     "Did not materialise: 若通胀持续高企，FOMC12月维持利率但暗示更久限制性立场，实际收益率小幅上行"
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [
+     "[2026-12-09] FOMC会议；期货隐含加息概率72.8%",
+     "[2026-12-11] 拨款持续决议到期"
+    ],
+    "shocks_fired": [
+     {
+      "affects": [
+       "美国国会",
+       "美国财政部"
+      ],
+      "base_rate": "34% 2026年12月 (2026-12-01 to 2026-12-31)",
+      "event": "2026年12月政府停摆(Kalshi定价,转引)",
+      "id": "shock_2026年12月政府停摆_kalshi定价_转引_202612_202612",
+      "probability": 0.34,
+      "source": "Government Shutdown Odds December 2026: 34% on Kalshi, Live [S70]",
+      "to_size": [],
+      "variables_changed": []
+     }
+    ]
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "from": null,
+      "polarity": -0.15,
+      "source": "美国国会",
+      "target": "美联储(FOMC)",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "联邦政府停摆状态",
+      "name": "联邦政府停摆状态",
+      "unit": "",
+      "value": true
+     },
+     {
+      "id": "日本政策利率",
+      "name": "日本政策利率",
+      "unit": "%",
+      "value": 1.5
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 4.938000000000001,
+      "id": "10年期国债收益率",
+      "name": "10年期国债收益率",
+      "to": 5.01535,
+      "unit": "%"
+     },
+     {
+      "from": 5.186,
+      "id": "10年期国债收益率月均",
+      "name": "10年期国债收益率月均",
+      "to": 5.0789,
+      "unit": "%"
+     },
+     {
+      "from": 3.875,
+      "id": "央行政策利率",
+      "name": "央行政策利率",
+      "to": 4.125,
+      "unit": "% 年率"
+     },
+     {
+      "from": 2.638,
+      "id": "10年期tips实际收益率",
+      "name": "10年期TIPS实际收益率",
+      "to": 2.6907,
+      "unit": "%"
+     },
+     {
+      "from": 0.977,
+      "id": "期限溢价",
+      "name": "期限溢价",
+      "to": 1.0110000000000001,
+      "unit": "%"
+     },
+     {
+      "from": 2.351,
+      "id": "10年期盈亏平衡通胀率",
+      "name": "10年期盈亏平衡通胀率",
+      "to": 2.3246499999999997,
+      "unit": "%"
+     },
+     {
+      "from": 0.62,
+      "id": "平滑衰退概率",
+      "name": "平滑衰退概率",
+      "to": 0.8370000000000001,
+      "unit": "%"
+     },
+     {
+      "from": 0.338,
+      "id": "2s10s利差",
+      "name": "2s10s利差",
+      "to": 0.2887,
+      "unit": "%"
+     },
+     {
+      "from": 0.896,
+      "id": "3m10y利差",
+      "name": "3M10Y利差",
+      "to": 0.8483999999999999,
+      "unit": "%"
+     },
+     {
+      "from": 4.6,
+      "id": "密歇根一年期通胀预期",
+      "name": "密歇根一年期通胀预期",
+      "to": 4.515,
+      "unit": "%"
+     },
+     {
+      "from": 3.0475,
+      "id": "10年期jgb收益率盘中高点",
+      "name": "10年期JGB收益率盘中高点",
+      "to": 3.08575,
+      "unit": "%"
+     },
+     {
+      "from": 8270.0,
+      "id": "2026年票据净供给估计",
+      "name": "2026年票据净供给估计",
+      "to": 8525.0,
+      "unit": "亿美元"
+     }
+    ]
+   },
+   "digest": "12月FOMC如期加息25bp至4.125%中值，声明明朗但强调数据依赖；同月政府停摆实际发生（Kalshi 34%风险兑现），财政部被迫启动应急现金管理并加大票据发行。加息推高短端与实际收益率，但停摆带来的增长担忧部分抵消长端压力，10年期收益率小幅上行至5.02%，期限溢价因停摆与供给担忧升至1.02%。BOJ同月加息至1.50%，JGB高点升至3.10%，美日利差收窄但境外官方持仓暂无明显变动。\nMoves:\n- 美联储(FOMC): Deliver commitment [c0_1_1]: 12月9日FOMC会议将依据届时数据评估是否进一步收紧政策利率: \"FOMC于12月9日会议决定将联邦基金利率目标区间上调25个基点至4.000%–4.250%（区间中值4.125%）。委员会判断，通胀仍处于高位且回落进展不及预期，进一步收紧政策立场将支持通胀更及时地回归2%目标。投票比例为11–1。委员会将持续监测后续信息对经济前景的影响，并重申维持银行体系充足的储备水平。\"\n- 美国财政部: Accommodate or publicly answer 美国国会's move (→ 美国国会): \"财政部注意到两院就FY2027综合拨款法案框架的协商进展，敦促国会在12月11日持续决议到期前完成拨款安排，避免政府资金中断对国债市场运转与财政部现金管理计划造成不必要扰动。财政部已为潜在的资金缺口情境准备应急管理安排，并重申再融资指引不变：未来至少几个季度维持名义附息券与FRN拍卖规模不变，票据为过渡性融资工具。\"\n- 鲍威尔及FOMC投票委员: Change the policy rate or guidance: \"在12月9日会议上，委员会以多数票决定将联邦基金利率目标区间上调25个基点至4.000%–4.250%。自9月以来，通胀数据未显示向2%目标回落的可持续进展，密歇根一年期通胀预期仍处高位，委员会判断需要更严格的立场以支持通胀更及时回归目标。政策路径仍将逐会评估，我们不预设路径。\"\n- 日本银行(BOJ): Deliver commitment [c3_1_1]: Change the policy rate or guidance (announced): \"日本银行货币政策会议(2026年12月16-17日)决定将无担保隔夜拆借利率上调25个基点至1.50%，并重申耐心推进货币政策正常化，政策判断继续以本国物价与金融体系稳定为依归。会议同时确认将关注汇率变动对物价的影响，并通过常规购债操作应对国债收益率的过度波动。下一次货币政策会议定于2027年1月21-22日召开，届时将发布经济与物价展望报告。\"\nFacts that changed:\n- 10年期国债收益率: 4.94% → 5.02%\n- 10年期国债收益率月均: 5.19% → 5.08%\n- 央行政策利率: 3.88 % 年率 → 4.12 % 年率\n- 10年期TIPS实际收益率: 2.64% → 2.69%\n- 期限溢价: 0.98% → 1.01%\n- 10年期盈亏平衡通胀率: 2.35% → 2.32%\n- 平滑衰退概率: 0.62% → 0.84%\n- 2s10s利差: 0.34% → 0.29%\n- New: 联邦政府停摆状态 = yes\n- New: 日本政策利率 = 1.5%\nEvents and consequences:\n- [2026-12-09] FOMC会议；期货隐含加息概率72.8%\n- [2026-12-11] 拨款持续决议到期\n- Did not materialise: 12月11日CR到期前拨款谈判若破裂，期限溢价或上行\n- Did not materialise: 若通胀持续高企，FOMC12月维持利率但暗示更久限制性立场，实际收益率小幅上行\n- 2026年12月政府停摆(Kalshi定价,转引) — a researched risk materialised\n- 政府停摆发生后市场避险情绪温和升温，短端国债与回购利率出现小幅摩擦，财政部启动应急现金管理\n- FOMC加息25bp后市场定价2027年上半年进一步加息概率约35%，鲍威尔强调不预设路径\n- 部分国会议员批评加息时点与停摆叠加加剧融资压力，但不直接对抗美联储\nAlliances and rivalries:\n- 美国国会 — 美联储(FOMC): neutral",
+   "headline": "2026-12: 4 decisions · 12 facts changed · 6 events · arbiter=applied · 12月FOMC如期加息25bp至4.125%中值，声明明朗但强调数据依赖；同月政府停摆实际发生（Kalshi 34%风险兑现），财政部被迫启动应急现金管理并加大票据发行。加息推高短端与实际收益率，但停摆带来的增长担忧部分抵消长端压力，10年期收益率小幅上行至5.02%，期限溢价…",
+   "narrative": "12月FOMC如期加息25bp至4.125%中值，声明明朗但强调数据依赖；同月政府停摆实际发生（Kalshi 34%风险兑现），财政部被迫启动应急现金管理并加大票据发行。加息推高短端与实际收益率，但停摆带来的增长担忧部分抵消长端压力，10年期收益率小幅上行至5.02%，期限溢价因停摆与供给担忧升至1.02%。BOJ同月加息至1.50%，JGB高点升至3.10%，美日利差收窄但境外官方持仓暂无明显变动。",
+   "period_label": "2026-12",
+   "round": 2,
+   "scenario_pressure": {
+    "再度上行": "up",
+    "回落走低": "down",
+    "极端突破": "flat",
+    "高位企稳": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "996165e7b6645b66f933ac8ed524c9f5190457d0d71f354065cc5d6561fbb0be",
+     "problems": [],
+     "source_hash": "79740c4c13c2a023420480d55a4212968bafc43a67f5693c29f437f5003b15e0",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 4,
+    "total": 4
+   },
+   "deterministic": {
+    "actions": [
+     "Contain the fallout of: 2026年12月政府停摆(Kalshi定价,转引) — a researched risk materialised",
+     "Advance your documented plan: 实现通胀目标与金融稳定",
+     "Deliver commitment [c2_2_2]: 在2027年1月底前依据12月PCE与通胀预期数据评估政策是否已具充分限制性，若通胀未现回落迹象，不排除进一步收紧。",
+     "Accommodate or publicly answer 美国国会's move → 美国国会"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [
+     "美国国会: 在12月11日CR到期前推动拨款法案(或替代CR)完成至少一院院会表决"
+    ],
+    "effects_fired": [
+     "若停摆持续至1月，期限溢价再升5-10bp并加剧票据供给压力"
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [
+     "[2027-01-15] 下一批财政部再融资文件"
+    ],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": 0.3,
+      "source": "美联储(FOMC)",
+      "target": "美国财政部",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.01535,
+      "id": "10年期国债收益率",
+      "name": "10年期国债收益率",
+      "to": 5.04085,
+      "unit": "%"
+     },
+     {
+      "from": 5.0789,
+      "id": "10年期国债收益率月均",
+      "name": "10年期国债收益率月均",
+      "to": 5.0619,
+      "unit": "%"
+     },
+     {
+      "from": 2.6907,
+      "id": "10年期tips实际收益率",
+      "name": "10年期TIPS实际收益率",
+      "to": 2.6567000000000003,
+      "unit": "%"
+     },
+     {
+      "from": 1.0110000000000001,
+      "id": "期限溢价",
+      "name": "期限溢价",
+      "to": 1.0407075000000001,
+      "unit": "%"
+     },
+     {
+      "from": 2.3246499999999997,
+      "id": "10年期盈亏平衡通胀率",
+      "name": "10年期盈亏平衡通胀率",
+      "to": 2.31615,
+      "unit": "%"
+     },
+     {
+      "from": 0.2887,
+      "id": "2s10s利差",
+      "name": "2s10s利差",
+      "to": 0.3312,
+      "unit": "%"
+     },
+     {
+      "from": 0.8483999999999999,
+      "id": "3m10y利差",
+      "name": "3M10Y利差",
+      "to": 0.8824,
+      "unit": "%"
+     }
+    ]
+   },
+   "digest": "1月美联储如期维持利率4.125%并完成充分限制性评估，声明略偏鸽但强调不预设3月路径；政府停摆持续，财政部按日历发行再融资文件、维持附息券规模不变，缓解了供给冲击预期但停摆本身继续推升期限溢价5-10bp。日银维持1.5%不变，日债利率高位企稳。10年期收益率月内高位震荡，月末收于约5.05%，月均较前月小幅回落至5.04%。\nMoves:\n- 美国财政部: Contain the fallout of: 2026年12月政府停摆(Kalshi定价,转引) — a researched risk materialised: \"财政部于1月15日按既定日历发布季度再融资文件。在政府资金缺口期间，财政部维持国债拍卖日历不变，并通过TGA与既有非常规措施保障本金利息足额偿付及市场正常运转。财政部重申：未来至少几个季度维持名义附息券与FRN拍卖规模不变，票据仍为过渡性融资工具，后续借款估计与再融资指引将依程序于2027年2月初更新发布。\"\n- 日本银行(BOJ): Advance your documented plan: 实现通胀目标与金融稳定: \"日本银行于2027年1月21-22日召开货币政策会议，决定维持无担保隔夜拆借利率1.50%不变，并发布《经济与物价展望（2027年1月号）》。委员会判断，12月加息的效果尚在向物价与金融体系传导，将继续耐心推进货币政策正常化，以本国物价与金融稳定为依归，并关注汇率及海外长端利率变动对物价的影响。针对超长期国债收益率的过度波动，我行将通过常规购债操作灵活应对。下次会议定于2027年3月17-18日召开。\"\n- 鲍威尔及FOMC投票委员: Deliver commitment [c2_2_2]: 在2027年1月底前依据12月PCE与通胀预期数据评估政策是否已具充分限制性，若通胀未现回落迹象，不排除进一步收紧。: \"委员会已依承诺完成对12月PCE与通胀预期数据的逐会评估:密歇根一年期通胀预期自4.6%小幅回落至4.51%,盈亏平衡通胀率亦降至2.32%,但核心通胀向2%回落的可持续进展尚未确立。12月加息后政策利率升至4.125%,委员会判断当前立场已更接近充分限制性,1月26-27日会议预计维持利率不变,以观察紧缩的累积效应。政府停摆对经济数据的干扰已纳入评估,我们不预设3月路径。\"\n- 美联储(FOMC): Accommodate or publicly answer 美国国会's move (→ 美国国会): \"委员会知悉部分国会议员对政策时点的关切。货币政策决策依据双重使命与逐会评估的劳动力市场、通胀及通胀预期数据作出，不对财政拨款进程或政治日历置评。注意到政府停摆导致部分经济数据发布中断，委员会将通过可得数据与调查信息持续监测经济前景，包括货币市场回购利率的温和摩擦；常备回购便利(SRF)运作正常，将继续维持银行体系充足的储备水平。下一次例行会议及2027年3月16–17日带SEP会议的评估以届时可得信息为准。\"\nFacts that changed:\n- 10年期国债收益率: 5.02% → 5.04%\n- 10年期国债收益率月均: 5.08% → 5.06%\n- 10年期TIPS实际收益率: 2.69% → 2.66%\n- 期限溢价: 1.01% → 1.04%\n- 10年期盈亏平衡通胀率: 2.32% → 2.32%\n- 2s10s利差: 0.29% → 0.33%\n- 3M10Y利差: 0.85% → 0.88%\nEvents and consequences:\n- [2027-01-15] 下一批财政部再融资文件\n- 美国国会's commitment lapsed: 在12月11日CR到期前推动拨款法案(或替代CR)完成至少一院院会表决\n- 若停摆持续至1月，期限溢价再升5-10bp并加剧票据供给压力\n- 1月26-27日FOMC维持利率4.125%不变，鲍威尔称通胀预期边际回落但核心通胀进展未确立，市场解读为观望偏鸽，前端利率小幅下行\n- 财政部停摆期间按日历完成1月15日再融资发行，附息券规模不变口径获交易商欢迎，尾部指标温和\n- 日银1月会议维持利率1.50%不变，暗示3月再评估，10年JGB收益率高位企稳，日本机构投资者对美债长端需求边际改善\n- 停摆进入第二个月，经济数据发布持续中断，回购利率月末温和摩擦，SRF使用量小幅上升\n- 鲍威尔及FOMC投票委员 fulfilled commitment [c2_2_2]: 在2027年1月底前依据12月PCE与通胀预期数据评估政策是否已具充分限制性，若通胀未现回落迹象，不排除进一步收紧。\nAlliances and rivalries:\n- 美联储(FOMC) — 美国财政部: allied (closer)",
+   "headline": "2027-01: 4 decisions · 7 facts changed · 5 events · arbiter=applied · 1月美联储如期维持利率4.125%并完成充分限制性评估，声明略偏鸽但强调不预设3月路径；政府停摆持续，财政部按日历发行再融资文件、维持附息券规模不变，缓解了供给冲击预期但停摆本身继续推升期限溢价5-10bp。日银维持1.5%不变，日债利率高位企稳。10年期收益率月内高位震荡，月…",
+   "narrative": "1月美联储如期维持利率4.125%并完成充分限制性评估，声明略偏鸽但强调不预设3月路径；政府停摆持续，财政部按日历发行再融资文件、维持附息券规模不变，缓解了供给冲击预期但停摆本身继续推升期限溢价5-10bp。日银维持1.5%不变，日债利率高位企稳。10年期收益率月内高位震荡，月末收于约5.05%，月均较前月小幅回落至5.04%。",
+   "period_label": "2027-01",
+   "round": 3,
+   "scenario_pressure": {
+    "再度上行": "flat",
+    "回落走低": "down",
+    "极端突破": "flat",
+    "高位企稳": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "fcdbf543eacad6e3039e0559d5c37faa1f0bc2cabc87f2dac86c618c2f667336",
+     "problems": [],
+     "source_hash": "301644673495382a2cd513938e9672e07c83d83f3da34954ae6bab7b14f64b43",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 1,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 4,
+    "total": 4
+   },
+   "deterministic": {
+    "actions": [
+     "Deliver commitment [c1_3_1]: 财政部将于2027年2月初如期发布更新后的借款估计与季度再融资指引，并依届时现金与债务管理状况说明非常规措施使用情况。",
+     "Advance your documented plan: 实现通胀目标与金融稳定",
+     "Deliver commitment [c0_3_2]: 在2027年1月底FOMC例会上依据届时可得的通胀与劳动力市场数据（含因停摆而部分缺失数据的替代信息）评估政策立场是否具充分限制性，会后发布声明并于3月16–17日会议更新SEP与点阵图",
+     "鲍威尔及FOMC投票委员 holds position"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [
+     "鲍威尔及FOMC投票委员: 12月9日FOMC会议前逐会评估通胀与预期数据，若通胀与密歇根预期未见改善，委员会将考虑进一步加息。"
+    ],
+    "effects_fired": [
+     "BOJ加息后日本投资者减持美债的滞后效应",
+     "若停摆延续至2月后，期限溢价再升5-10bp并推高票据供给压力",
+     "2月初财政部再融资指引若因停摆延后，市场或再度定价供给不确定性，10年期收益率上试5.1%"
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.6,
+      "source": "美联储(FOMC)",
+      "target": "美国财政部",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.04085,
+      "id": "10年期国债收益率",
+      "name": "10年期国债收益率",
+      "to": 5.0521975,
+      "unit": "%"
+     },
+     {
+      "from": 5.0619,
+      "id": "10年期国债收益率月均",
+      "name": "10年期国债收益率月均",
+      "to": 5.0704,
+      "unit": "%"
+     },
+     {
+      "from": 2.6567000000000003,
+      "id": "10年期tips实际收益率",
+      "name": "10年期TIPS实际收益率",
+      "to": 2.6397,
+      "unit": "%"
+     },
+     {
+      "from": 1.0407075000000001,
+      "id": "期限溢价",
+      "name": "期限溢价",
+      "to": 1.00181691875,
+      "unit": "%"
+     },
+     {
+      "from": 1068.3,
+      "id": "日本美债持仓",
+      "name": "日本美债持仓",
+      "to": 1052.3625,
+      "unit": "十亿美元"
+     },
+     {
+      "from": 3.08575,
+      "id": "10年期jgb收益率盘中高点",
+      "name": "10年期JGB收益率盘中高点",
+      "to": 3.04325,
+      "unit": "%"
+     }
+    ]
+   },
+   "digest": "财政部如期发布再融资指引、维持附息券发行规模不变，消除了此前市场定价的部分供给不确定性；美联储1月会议维持利率4.125%不变并确认3月更新SEP，市场在停摆延续的背景下获得短暂的确定性窗口。10年期收益率在5.08%高位小幅回落至5.06%附近，期限溢价微降；BOJ计划外购买超长期JGB使10年期JGB盘中高点回落至3.05%左右，日本投资者对美债的减持压力延续但放缓。停摆未解，票据供给与非常规措施消耗仍是悬置风险。\nMoves:\n- 美国财政部: Deliver commitment [c1_3_1]: 财政部将于2027年2月初如期发布更新后的借款估计与季度再融资指引，并依届时现金与债务管理状况说明非常规措施使用情况。: \"财政部于2月初如期发布季度借款估计与再融资声明：未来几个季度维持名义附息券与FRN拍卖规模不变，票据仍为过渡性融资工具。政府资金缺口期间，财政部已动用既定非常规措施，并配合TGA现金管理保障到期债务本息足额偿付；财政部正监测非常规措施剩余空间与票据市场需求，将视现金状况依程序更新债务发行日历。\"\n- 日本银行(BOJ): Advance your documented plan: 实现通胀目标与金融稳定: \"日本银行今日实施常规国债购买操作，并针对超长期品种增加计划外购买额度，以应对10年期JGB盘中升至3.09%、超长期收益率处于高位区间带来的过度波动。政策利率维持1.50%不变，下次货币政策会议定于2027年3月17-18日召开，届时将依据物价、汇率与金融体系数据评估政策。我行不对其他央行的政策决定及海外政府财政事项置评。\"\n- 美联储(FOMC): Deliver commitment [c0_3_2]: 在2027年1月底FOMC例会上依据届时可得的通胀与劳动力市场数据（含因停摆而部分缺失数据的替代信息）评估政策立场是否具充分限制性，会后发布声明并于3月16–17日会议更新SEP与点阵图: \"联邦公开市场委员会于2027年1月26–27日会议评估后决定，将联邦基金利率目标区间维持在4.125%。委员会依据双重使命逐会评估可得数据，注意到密歇根一年期通胀预期自4.6%回落至4.51%、盈亏平衡通胀率降至2.32%，但核心通胀向2%回落的可持续进展尚未确立，通胀仍处于高位。政府停摆导致部分经济数据发布中断，委员会通过调查信息、金融市场状况及货币市场回购利率等替代信息持续监测经济前景；常备回购便利(SRF)运作正常，缩表结束后将继续维持银行体系充足的储备水平。委员会将持续监测后续信息对经济前景的影响，并将于2027年3月16–17日会议发布更新的经济预测摘要(SEP)与点阵图。\"\nHeld position: 鲍威尔及FOMC投票委员\nFacts that changed:\n- 10年期国债收益率: 5.04% → 5.05%\n- 10年期国债收益率月均: 5.06% → 5.07%\n- 10年期TIPS实际收益率: 2.66% → 2.64%\n- 期限溢价: 1.04% → 1%\n- 日本美债持仓: 1068.3 十亿美元 → 1052.36 十亿美元\n- 10年期JGB收益率盘中高点: 3.09% → 3.04%\nEvents and consequences:\n- 鲍威尔及FOMC投票委员's commitment lapsed: 12月9日FOMC会议前逐会评估通胀与预期数据，若通胀与密歇根预期未见改善，委员会将考虑进一步加息。\n- BOJ加息后日本投资者减持美债的滞后效应\n- 若停摆延续至2月后，期限溢价再升5-10bp并推高票据供给压力\n- 2月初财政部再融资指引若因停摆延后，市场或再度定价供给不确定性，10年期收益率上试5.1%\n- 财政部2月初如期发布借款估计与再融资声明，名义附息券与FRN拍卖规模维持不变，市场供给不确定性溢价收窄，10年期收益率自5.08%回落至5.06%附近\n- FOMC 1月会议维持利率4.125%，强调数据缺口下以替代信息评估，市场解读为偏鹰的观望，长端反应有限\n- BOJ实施计划外超长期JGB购买以压制3.09%高位的过度波动，JGB收益率回落，日美利差压力略缓，对美债边际支撑\n- 政府停摆延续，财政部持续动用非常规措施，票据发行维持高强度过渡融资，货币市场对停摆拖延的担忧仍压制风险偏好\nAlliances and rivalries:\n- 美联储(FOMC) — 美国财政部: allied (closer)",
+   "headline": "2027-02: 4 decisions · 6 facts changed · 7 events · arbiter=applied · 财政部如期发布再融资指引、维持附息券发行规模不变，消除了此前市场定价的部分供给不确定性；美联储1月会议维持利率4.125%不变并确认3月更新SEP，市场在停摆延续的背景下获得短暂的确定性窗口。10年期收益率在5.08%高位小幅回落至5.06%附近，期限溢价微降；BOJ计划外购买…",
+   "narrative": "财政部如期发布再融资指引、维持附息券发行规模不变，消除了此前市场定价的部分供给不确定性；美联储1月会议维持利率4.125%不变并确认3月更新SEP，市场在停摆延续的背景下获得短暂的确定性窗口。10年期收益率在5.08%高位小幅回落至5.06%附近，期限溢价微降；BOJ计划外购买超长期JGB使10年期JGB盘中高点回落至3.05%左右，日本投资者对美债的减持压力延续但放缓。停摆未解，票据供给与非常规措施消耗仍是悬置风险。",
+   "period_label": "2027-02",
+   "round": 4,
+   "scenario_pressure": {
+    "再度上行": "flat",
+    "回落走低": "flat",
+    "极端突破": "down",
+    "高位企稳": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "bd3758103e51b9d7c50ae1fadb21d1e565ec23ffcb3363d543cd9421217bab44",
+     "problems": [],
+     "source_hash": "b7ea7e114ed4702cc533e622a584ee722ca9080de7208293b682175e849b8426",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 4,
+    "total": 4
+   },
+   "deterministic": {
+    "actions": [
+     "Deliver commitment [c2_4_3]: 在2027年3月16–17日带SEP会议上,依据届时可得通胀、劳动力市场与预期数据更新SEP与点阵图,并据此决定政策利率路径;若通胀回落进展停滞或预期再上行,将考虑进一步加息。",
+     "Issue a public statement or warning",
+     "Change the policy rate or guidance",
+     "Issue a public statement or warning"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Did not materialise: 紧缩累积效应下2027年衰退概率逐步上行",
+     "Did not materialise: 日银3月17-18日会议可能再加息至1.75%，推高日债利率并抑制日本对美债需求",
+     "Did not materialise: 停摆若延续至3月后，期限溢价再升5-10bp，10年期收益率或重新上试5.1%以上",
+     "Did not materialise: 3月FOMC会议SEP与点阵图更新，若密歇根通胀预期维持4.5%附近，委员会或暗示进一步加息"
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [
+     "[2027-03-16] FOMC带SEP会议（3月16–17日）"
+    ],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "from": null,
+      "polarity": 0.15,
+      "source": "鲍威尔及FOMC投票委员",
+      "target": "美联储(FOMC)",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.0521975,
+      "id": "10年期国债收益率",
+      "name": "10年期国债收益率",
+      "to": 5.093717874999999,
+      "unit": "%"
+     },
+     {
+      "from": 5.0704,
+      "id": "10年期国债收益率月均",
+      "name": "10年期国债收益率月均",
+      "to": 5.0959,
+      "unit": "%"
+     },
+     {
+      "from": 1.00181691875,
+      "id": "期限溢价",
+      "name": "期限溢价",
+      "to": 1.028,
+      "unit": "%"
+     },
+     {
+      "from": 0.3312,
+      "id": "2s10s利差",
+      "name": "2s10s利差",
+      "to": 0.3567,
+      "unit": "%"
+     },
+     {
+      "from": 3.04325,
+      "id": "10年期jgb收益率盘中高点",
+      "name": "10年期JGB收益率盘中高点",
+      "to": 3.10275,
+      "unit": "%"
+     },
+     {
+      "from": 1.5,
+      "id": "日本政策利率",
+      "name": "日本政策利率",
+      "to": 1.75,
+      "unit": "%"
+     }
+    ]
+   },
+   "digest": "FOMC在3月16–17日会议维持4.125%不变，SEP显示通胀缓慢回落但密歇根预期高企，点阵图保留年内加息选项，市场解读偏鹰。同日日银加息至1.75%，推高JGB收益率并强化日资减持美债预期，叠加政府停摆延续，10年期收益率月末小幅上探至约5.1%，期限溢价回升，实际收益率基本持平。财政部表态维持拍卖日历不变，暂时稳住供给端担忧。\nMoves:\n- 鲍威尔及FOMC投票委员: Deliver commitment [c2_4_3]: 在2027年3月16–17日带SEP会议上,依据届时可得通胀、劳动力市场与预期数据更新SEP与点阵图,并据此决定政策利率路径;若通胀回落进展停滞或预期再上行,将考虑进一步加息。: \"联邦公开市场委员会于2027年3月16–17日会议完成SEP与点阵图更新,并以多数票决定将联邦基金利率目标区间维持在4.125%。SEP显示核心PCE通胀沿自2026年3.4%向2027年2.5%的路径温和回落,但密歇根一年期预期仍处4.51%高位,预期锚定尚未确立,通胀仍高于2%目标。点阵图中值隐含年内仍有一次加息的选项:若通胀回落进展停滞或预期调查再度上行,委员会将进一步收紧;若实际数据确认回落进展可持续,当前立场已接近充分限制性。委员会将继续逐会评估,不预设路径。\"\n- 美国财政部: Issue a public statement or warning: \"财政部现金与债务管理操作继续正常运行：非常规措施使用情况与TGA余额按周更新，国债拍卖日历不变，未来几个季度维持名义附息券与FRN拍卖规模指引不变，票据仍为过渡性融资工具。财政部正监测非常规措施剩余空间，并依据停摆持续期间与3月17-18日境外央行会议后的市场需求状况，按程序评估4月底至5月初季度再融资文件的借款估计口径，具体指引以届时正式发布为准。\"\n- 日本银行(BOJ): Change the policy rate or guidance: \"日本银行于2027年3月17-18日货币政策会议决定将政策利率自1.50%上调至0.25个百分点至1.75%，以伴随工资增长的物价动能与日元过度走弱对物价的推升压力为依据。声明重申将关注汇率变动对物价的影响，耐心宽松的立场不变，同时继续通过常规购债操作及必要时针对超长期品种的计划外购买，平抑国债收益率的过度波动。下次货币政策会议定于2027年4月27-28日召开。我行不对其他央行政策决定及海外政府财政事项置评。\"\n- 美联储(FOMC): Issue a public statement or warning: \"联邦公开市场委员会于2027年3月16–17日会议决定，将联邦基金利率目标区间维持在4.125%。委员会注意到密歇根一年期通胀预期仍处4.51%高位、盈亏平衡通胀率2.32%，核心通胀向2%回落的可持续进展尚未确立，通胀仍处于高位。更新的经济预测摘要将2027年PCE通胀中值维持于2.4%、核心PCE 2.5%，失业率预测4.1%；点阵图显示多数参与者预计2027年底目标区间维持在4.125%–4.375%。政府停摆期间部分数据中断，委员会继续以调查信息、金融市场指标及替代数据交叉验证经济前景；缩表结束后将继续维持银行体系充足的储备水平。委员会将持续监测后续信息对经济前景的影响，不预设政策路径。\"\nFacts that changed:\n- 10年期国债收益率: 5.05% → 5.09%\n- 10年期国债收益率月均: 5.07% → 5.1%\n- 期限溢价: 1% → 1.03%\n- 2s10s利差: 0.33% → 0.36%\n- 10年期JGB收益率盘中高点: 3.04% → 3.1%\n- 日本政策利率: 1.5% → 1.75%\nEvents and consequences:\n- [2027-03-16] FOMC带SEP会议（3月16–17日）\n- Did not materialise: 紧缩累积效应下2027年衰退概率逐步上行\n- Did not materialise: 日银3月17-18日会议可能再加息至1.75%，推高日债利率并抑制日本对美债需求\n- Did not materialise: 停摆若延续至3月后，期限溢价再升5-10bp，10年期收益率或重新上试5.1%以上\n- Did not materialise: 3月FOMC会议SEP与点阵图更新，若密歇根通胀预期维持4.5%附近，委员会或暗示进一步加息\n- FOMC维持利率并保留加息选项，掉期市场对年内再加息的定价概率升至约四成，短端利率持稳、长端承压\n- 日银加息25bp至1.75%，10年JGB盘中上探3.12%；市场预期日资机构再配置回国内债券，日本美债持仓面临二季度下行压力\n- 财政部确认拍卖日历与规模指引不变，一级交易商反应平稳，供给担忧暂缓\nAlliances and rivalries:\n- 鲍威尔及FOMC投票委员 — 美联储(FOMC): neutral",
+   "headline": "2027-03: 4 decisions · 6 facts changed · 4 events · arbiter=applied · FOMC在3月16–17日会议维持4.125%不变，SEP显示通胀缓慢回落但密歇根预期高企，点阵图保留年内加息选项，市场解读偏鹰。同日日银加息至1.75%，推高JGB收益率并强化日资减持美债预期，叠加政府停摆延续，10年期收益率月末小幅上探至约5.1%，期限溢价回升，实际收益率…",
+   "narrative": "FOMC在3月16–17日会议维持4.125%不变，SEP显示通胀缓慢回落但密歇根预期高企，点阵图保留年内加息选项，市场解读偏鹰。同日日银加息至1.75%，推高JGB收益率并强化日资减持美债预期，叠加政府停摆延续，10年期收益率月末小幅上探至约5.1%，期限溢价回升，实际收益率基本持平。财政部表态维持拍卖日历不变，暂时稳住供给端担忧。",
+   "period_label": "2027-03",
+   "round": 5,
+   "scenario_pressure": {
+    "再度上行": "up",
+    "回落走低": "down",
+    "极端突破": "flat",
+    "高位企稳": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "b805b9fc829d4c40b596bd33c2047688134907443f1ce7b9c86a1d707ce747e8",
+     "problems": [],
+     "source_hash": "a0c70b4b27e24f4ec4231353ca802099f44acd299d229daa56191904f19b0f57",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 4,
+    "total": 4
+   },
+   "deterministic": {
+    "actions": [
+     "Deliver commitment [c3_5_3]: 2027年4月27-28日货币政策会议将依据届时物价、汇率与金融体系数据评估政策，继续通过购债操作应对国债收益率过度波动。",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [
+     "日本银行(BOJ): 2027年3月17-18日货币政策会议将依据届时物价、汇率与金融体系数据，评估是否进一步调整政策利率，并继续通过购债操作应对国债收益率过度波动。"
+    ],
+    "effects_fired": [
+     "Did not materialise: BOJ 3月17-18日会议若加息至1.75%，日本投资者减持美债的滞后压力将在二季度显现",
+     "Did not materialise: 日银加息后日资减持美债压力在二季度数据中显现",
+     "Did not materialise: 停摆延续至4月后，期限溢价再升、10年期或上试5.15%以上"
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.093717874999999,
+      "id": "10年期国债收益率",
+      "name": "10年期国债收益率",
+      "to": 5.10035,
+      "unit": "%"
+     },
+     {
+      "from": 5.0959,
+      "id": "10年期国债收益率月均",
+      "name": "10年期国债收益率月均",
+      "to": 5.1129,
+      "unit": "%"
+     },
+     {
+      "from": 1.028,
+      "id": "期限溢价",
+      "name": "期限溢价",
+      "to": 1.045,
+      "unit": "%"
+     },
+     {
+      "from": 2.31615,
+      "id": "10年期盈亏平衡通胀率",
+      "name": "10年期盈亏平衡通胀率",
+      "to": 2.34165,
+      "unit": "%"
+     },
+     {
+      "from": 0.3567,
+      "id": "2s10s利差",
+      "name": "2s10s利差",
+      "to": 0.37370000000000003,
+      "unit": "%"
+     }
+    ]
+   },
+   "digest": "4月整体为‘高位胶着’：FOMC纪要与鲍威尔讲话偏鹰，强调通胀预期锚定未确立并保留加息选项，叠加政府停摆延续，期限溢价与盈亏平衡通胀小幅走高，10年期收益率月末升至5.10%附近。日本央行如期维持1.75%并继续购债平抑JGB波动，但日债收益率高位对日资美债需求的边际压力仍在积累。财政部程序性确认5月再融资日程，市场静待5月3日声明。\nMoves:\n- 日本银行(BOJ): Deliver commitment [c3_5_3]: 2027年4月27-28日货币政策会议将依据届时物价、汇率与金融体系数据评估政策，继续通过购债操作应对国债收益率过度波动。: \"日本银行于2027年4月27-28日货币政策会议审议了最新经济、物价、汇率与金融体系数据，决定将政策利率维持在1.75%。鉴于3月加息效果尚在传导、10年期国债收益率近期上探3.1%高位，本行继续通过常规购债操作平抑收益率过度波动，并保留在必要时对超长期品种实施计划外购买的选项。下次货币政策会议定于2027年6月10-11日召开，本行不对海外央行政策及他国财政事项置评。\"\n- 美联储(FOMC): Issue a public statement or warning: \"联邦公开市场委员会今日公布2027年3月16–17日会议纪要。纪要显示，与会者认为当前目标区间4.125%已具充分限制性，但多数参与者强调密歇根一年期通胀预期仍处4.51%高位，核心通胀向2%回落的可持续进展尚未确立；若停摆后补发的通胀数据表明进展停滞或预期再度上行，委员会将准备进一步收紧政策。委员会将继续以调查与金融市场指标交叉验证经济前景，维持银行体系充足的储备，下次例会为2027年5月，6月8–9日会议将更新SEP与点阵图。\"\n- 美国财政部: Issue a public statement or warning: \"财政部确认拍卖日历正常运行，非常规措施使用情况与TGA余额继续按周披露，名义附息券与FRN拍卖规模指引维持不变，票据仍为过渡性融资工具。2027年5月3日季度借款估计与再融资声明将如期发布，届时将依现金状况与市场需求（含近期境外收益率变动对投标行为的影响）说明发行结构。财政部正监测债务发行空间与市场需求状况。\"\n- 鲍威尔及FOMC投票委员: Issue a public statement or warning: \"在4月28日华盛顿经济俱乐部讲话中我重申：当前4.125%的目标区间已具充分限制性，但通胀向2%回落的可持续进展尚未确立。停摆导致的数据中断期内，委员会以私人薪资调查与高频价格指标交叉验证核心通胀动能；密歇根一年期预期虽自高位小幅回落至4.51%，锚定仍未确立。我们不对市场定价置评，点阵图已说明委员会的倾向：逐会评估，不预设路径，6月8–9日会议将依据届时恢复发布的通胀与就业数据更新SEP与点阵图。\"\nFacts that changed:\n- 10年期国债收益率: 5.09% → 5.1%\n- 10年期国债收益率月均: 5.1% → 5.11%\n- 期限溢价: 1.03% → 1.04%\n- 10年期盈亏平衡通胀率: 2.32% → 2.34%\n- 2s10s利差: 0.36% → 0.37%\nEvents and consequences:\n- 日本银行(BOJ)'s commitment lapsed: 2027年3月17-18日货币政策会议将依据届时物价、汇率与金融体系数据，评估是否进一步调整政策利率，并继续通过购债操作应对国债收益率过度波动。\n- Did not materialise: BOJ 3月17-18日会议若加息至1.75%，日本投资者减持美债的滞后压力将在二季度显现\n- Did not materialise: 日银加息后日资减持美债压力在二季度数据中显现\n- Did not materialise: 停摆延续至4月后，期限溢价再升、10年期或上试5.15%以上\n- 3月会议纪要显示多数参与者对通胀预期4.51%高位不满，市场对6月前加息的定价小幅上升，2年期收益率坚挺\n- 鲍威尔经济俱乐部讲话与纪要口径一致，债市反应温和，日内10年期上行数bp后企稳\n- 财政部确认拍卖日历与5月3日再融资声明如期，市场供给担忧暂缓，期限溢价升幅有限\n- 日银维持1.75%并继续购债，JGB波动受控但10年期盘中仍触及3.1%上方，日资对美债再投资意愿边际转弱",
+   "headline": "2027-04: 4 decisions · 5 facts changed · 6 events · arbiter=applied · 4月整体为‘高位胶着’：FOMC纪要与鲍威尔讲话偏鹰，强调通胀预期锚定未确立并保留加息选项，叠加政府停摆延续，期限溢价与盈亏平衡通胀小幅走高，10年期收益率月末升至5.10%附近。日本央行如期维持1.75%并继续购债平抑JGB波动，但日债收益率高位对日资美债需求的边际压力仍在积…",
+   "narrative": "4月整体为‘高位胶着’：FOMC纪要与鲍威尔讲话偏鹰，强调通胀预期锚定未确立并保留加息选项，叠加政府停摆延续，期限溢价与盈亏平衡通胀小幅走高，10年期收益率月末升至5.10%附近。日本央行如期维持1.75%并继续购债平抑JGB波动，但日债收益率高位对日资美债需求的边际压力仍在积累。财政部程序性确认5月再融资日程，市场静待5月3日声明。",
+   "period_label": "2027-04",
+   "round": 6,
+   "scenario_pressure": {
+    "再度上行": "up",
+    "回落走低": "down",
+    "极端突破": "flat",
+    "高位企稳": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "87b303d359dffa9ddf1dcda494d912e1731a69a97fa32f0d130176d9f5663ff3",
+     "problems": [
+      "$.events[0].targets[0]: value outside current contract",
+      "$.events[0].targets[1]: value outside current contract",
+      "$.events[1].targets[0]: value outside current contract",
+      "$.events[1].targets[1]: value outside current contract",
+      "$.events[2].targets[0]: value outside current contract",
+      "$.events[2].targets[1]: value outside current contract",
+      "$.events[3].targets[0]: value outside current contract",
+      "$.events[4].targets[0]: value outside current contract",
+      "$.events[4].targets[1]: value outside current contract"
+     ],
+     "source_hash": "ec45cf6d8eaaad665ec828e0afb9d7b52c6f05dfaa924a884a40dc50a4562e84",
+     "status": "invalid"
+    },
+    {
+     "attempt": 2,
+     "candidate_hash": "9966c10b83b06ccfc7e18a5793d3a2d9e1db5a1d5b12387f4cc3a603739d4905",
+     "problems": [],
+     "source_hash": "ec45cf6d8eaaad665ec828e0afb9d7b52c6f05dfaa924a884a40dc50a4562e84",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 1,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 6,
+    "total": 6
+   },
+   "deterministic": {
+    "actions": [
+     "Deliver commitment [c1_5_2]: 财政部将于2027年5月初如期发布季度借款估计与再融资声明，依届时现金状况与市场需求说明附息券与票据发行结构及非常规措施使用情况。",
+     "Issue a public statement or warning",
+     "日本银行(BOJ) holds position",
+     "Issue a public statement or warning",
+     "Deliver commitment [c0_5_3]: 于2027年5月FOMC例会依据届时可得的通胀（含停摆后补发数据）与劳动力市场信息评估政策立场是否具充分限制性，并在6月8–9日带SEP会议更新预测与点阵图。",
+     "Open or join negotiations with another actor → 美国财政部"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "5月再融资若上调附息券规模，期限溢价进一步上行",
+     "5月3日季度再融资若因需求疲弱增加附息券供给，期限溢价再升"
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [
+     "美国国会 made an offer to 美国财政部 [i7_1]: 国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。 (answer due by 2027-07)"
+    ],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [
+     {
+      "from": null,
+      "id": "i7_1",
+      "kind": "proposal",
+      "proposer": "美国国会",
+      "recipient": "美国财政部",
+      "terms": "国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。",
+      "to": "open"
+     }
+    ],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": 0.366,
+      "source": "美国国会",
+      "target": "美国财政部",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.10035,
+      "id": "10年期国债收益率",
+      "name": "10年期国债收益率",
+      "to": 5.100647499999999,
+      "unit": "%"
+     },
+     {
+      "from": 5.1129,
+      "id": "10年期国债收益率月均",
+      "name": "10年期国债收益率月均",
+      "to": 5.140865,
+      "unit": "%"
+     },
+     {
+      "from": 1.045,
+      "id": "期限溢价",
+      "name": "期限溢价",
+      "to": 1.0803068749999998,
+      "unit": "%"
+     },
+     {
+      "from": 0.37370000000000003,
+      "id": "2s10s利差",
+      "name": "2s10s利差",
+      "to": 0.37684500000000004,
+      "unit": "%"
+     },
+     {
+      "from": 1052.3625,
+      "id": "日本美债持仓",
+      "name": "日本美债持仓",
+      "to": 1047.953125,
+      "unit": "十亿美元"
+     }
+    ]
+   },
+   "digest": "5月FOMC维持利率在4.125%不变，鲍威尔强调对通胀上行意外的容忍度降低，市场定价6月SEP前政策路径不确定；财政部如期发布再融资声明，附息券规模不变缓解了供给担忧，但票据主导的净融资与停摆延续仍支撑期限溢价高位。国会启动停摆结束磋商但track record差，市场反应有限。10年期收益率月末微升至5.12%，曲线略陡。中国外管局表态中性，未改变持仓路径。\nMoves:\n- 美国财政部: Deliver commitment [c1_5_2]: 财政部将于2027年5月初如期发布季度借款估计与再融资声明，依届时现金状况与市场需求说明附息券与票据发行结构及非常规措施使用情况。: \"财政部于2027年5月3日如期发布季度借款估计与再融资声明：维持名义附息券与FRN拍卖规模不变，票据继续作为过渡性融资工具承担净融资增量，TGA目标区间与非常规措施使用情况按周披露。借款估计已纳入境外需求变化（含日本持仓回落至10523.6亿美元的最新TIC数据）与停摆期间现金管理的最新评估。财政部正监测票据市场需求强度，若货币基金吸纳能力出现边际弱化，将依既定程序评估发行结构调整。\"\n- 中国国家外汇管理局: Issue a public statement or warning: \"国家外汇管理局公布2027年4月末外汇储备规模数据。2027年4月末,我国外汇储备规模总体保持稳定,跨境资金流动均衡有序。储备经营管理始终坚持安全性、流动性、收益性原则,根据市场情况动态优化资产配置。对境外市场个别期限收益率波动及个别机构关于官方持仓的猜测性报道,我局不作评论。\"\n- 鲍威尔及FOMC投票委员: Issue a public statement or warning: \"在5月例会上，委员会一致决定将联邦基金利率目标区间维持在4.125%–4.375%不变。停摆后补发的通胀数据初步显示核心通胀动能仍顽固，密歇根一年期预期4.51%尚未确立锚定；在6月8–9日带SEP会议全面评估补发数据与点阵图之前，委员会维持充分限制性立场，逐会评估，不预设路径，但对通胀上行意外的容忍度低于去年。\"\n- 美联储(FOMC): Deliver commitment [c0_5_3]: 于2027年5月FOMC例会依据届时可得的通胀（含停摆后补发数据）与劳动力市场信息评估政策立场是否具充分限制性，并在6月8–9日带SEP会议更新预测与点阵图。: \"联邦公开市场委员会于2027年5月例会评估了可得信息。鉴于政府停摆后补发的通胀与劳动力市场数据尚未完整，委员会决定将联邦基金利率目标区间维持在4.125%。委员会认为当前立场已具充分限制性，但密歇根一年期通胀预期4.51%显示通胀预期锚定尚未确立，核心通胀向2%回落的可持续进展有待确认。委员会将持续监测后续信息对经济前景的影响，维持银行体系充足的储备，并于6月8–9日会议更新经济预测摘要与点阵图。\"\n- 美国国会: Open or join negotiations with another actor (→ 美国财政部): \"两院领导层已就结束当前停摆恢复磋商,拨款委员会正与财政部对接现金与非常规措施使用情况,以便同步推进全财年拨款与债务上限立法框架。本院目标是在本工作期内就至少一项可签署的拨款协议达成两院一致文本。\"\nHeld position: 日本银行(BOJ)\nFacts that changed:\n- 10年期国债收益率: 5.1% → 5.1%\n- 10年期国债收益率月均: 5.11% → 5.14%\n- 期限溢价: 1.04% → 1.08%\n- 2s10s利差: 0.37% → 0.38%\n- 日本美债持仓: 1052.36 十亿美元 → 1047.95 十亿美元\nEvents and consequences:\n- 5月再融资若上调附息券规模，期限溢价进一步上行\n- 5月3日季度再融资若因需求疲弱增加附息券供给，期限溢价再升\n- 5月FOMC一致维持利率4.125%不变，声明强调通胀预期锚定未确立；市场减少对6月降息的定价，短端利率持稳、长端微升\n- 财政部5月3日再融资声明维持附息券与FRN规模不变，票据继续承担净融资增量；国债拍卖尾部利差温和，供给担忧暂缓但未消散\n- 国会两院领导层与财政部就结束停摆启动磋商，但因国会过往履约记录差，市场与财政部均持谨慎态度，磋商仅产生有限的乐观定价\n- 中国外管局中性表态，不评论官方持仓猜测；市场解读为延续渐进多元化，中国持仓路径未变\n- 日本10年期JGB盘中触及3.1%高位，日本投资者对美债需求继续边际走弱，TIC数据印证持仓回落\n- 美联储(FOMC) fulfilled commitment [c0_5_3]: 于2027年5月FOMC例会依据届时可得的通胀（含停摆后补发数据）与劳动力市场信息评估政策立场是否具充分限制性，并在6月8–9日带SEP会议更新预测与点阵图。\nOffers and agreements:\n- 美国国会 made an offer to 美国财政部 [i7_1]: 国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。 (answer due by 2027-07)\nAlliances and rivalries:\n- 美国国会 — 美国财政部: allied (closer)",
+   "headline": "2027-05: 6 decisions · 5 facts changed · 7 events · arbiter=applied · 5月FOMC维持利率在4.125%不变，鲍威尔强调对通胀上行意外的容忍度降低，市场定价6月SEP前政策路径不确定；财政部如期发布再融资声明，附息券规模不变缓解了供给担忧，但票据主导的净融资与停摆延续仍支撑期限溢价高位。国会启动停摆结束磋商但track record差，市场反应有…",
+   "narrative": "5月FOMC维持利率在4.125%不变，鲍威尔强调对通胀上行意外的容忍度降低，市场定价6月SEP前政策路径不确定；财政部如期发布再融资声明，附息券规模不变缓解了供给担忧，但票据主导的净融资与停摆延续仍支撑期限溢价高位。国会启动停摆结束磋商但track record差，市场反应有限。10年期收益率月末微升至5.12%，曲线略陡。中国外管局表态中性，未改变持仓路径。",
+   "period_label": "2027-05",
+   "round": 7,
+   "scenario_pressure": {
+    "再度上行": "flat",
+    "回落走低": "down",
+    "极端突破": "flat",
+    "高位企稳": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "82e16aa587a1c0fe08c5a3b6344773fd001a93646f3176d23d77a432bd7cffc5",
+     "problems": [],
+     "source_hash": "f6eff95c4955944598f73a2bf2c434a04b2d83dcfaaefe7fc7f8997b3824e4af",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 5,
+    "total": 5
+   },
+   "deterministic": {
+    "actions": [
+     "Deliver commitment [c3_7_4]: 2027年6月10-11日货币政策会议将依据届时物价、汇率与金融体系数据（含美日利差与跨境资金流动）评估政策利率，并继续通过购债操作应对国债收益率过度波动。",
+     "Issue a public statement or warning",
+     "Accept 美国国会's offer [i7_1] on exactly these terms: 国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。 — binds both sides → 美国国会",
+     "Deliver commitment [c2_6_4]: 在2027年6月8–9日带SEP会议上，依据停摆后补发的通胀与劳动力市场数据及通胀预期调查更新SEP与点阵图，并决定政策利率路径；若通胀回落进展停滞或密歇根预期再度上行，委员会将考虑进一步加息。",
+     "Issue a public statement or warning"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "停摆后补发通胀数据若显示进展停滞，FOMC或在6月加息25bp",
+     "Did not materialise: 日资减持美债的滞后压力可能在二季度末持仓数据中显现",
+     "6月8–9日SEP会议若点阵图显示更高更久路径，10年期收益率再升"
+    ],
+    "offers_answered": [
+     "Agreement [i7_1]: 美国财政部 accepted 美国国会's offer — 国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。 (both sides' obligations due 2027-07)"
+    ],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [
+     "[2027-06-08] FOMC带SEP会议（6月8–9日）"
+    ],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [
+     {
+      "from": "open",
+      "id": "i7_1",
+      "kind": "proposal",
+      "proposer": "美国国会",
+      "recipient": "美国财政部",
+      "terms": "国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。",
+      "to": "accepted"
+     }
+    ],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.716,
+      "source": "美国国会",
+      "target": "美国财政部",
+      "to": "allied"
+     },
+     {
+      "from": null,
+      "polarity": -0.15,
+      "source": "鲍威尔及FOMC投票委员",
+      "target": "美国国会",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "财政部_国会拨款协同框架生效",
+      "name": "财政部-国会拨款协同框架生效",
+      "unit": "",
+      "value": true
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 5.100647499999999,
+      "id": "10年期国债收益率",
+      "name": "10年期国债收益率",
+      "to": 5.18535,
+      "unit": "%"
+     },
+     {
+      "from": 5.140865,
+      "id": "10年期国债收益率月均",
+      "name": "10年期国债收益率月均",
+      "to": 5.1724,
+      "unit": "%"
+     },
+     {
+      "from": 4.125,
+      "id": "央行政策利率",
+      "name": "央行政策利率",
+      "to": 4.19375,
+      "unit": "% 年率"
+     },
+     {
+      "from": 2.6397,
+      "id": "10年期tips实际收益率",
+      "name": "10年期TIPS实际收益率",
+      "to": 2.6737,
+      "unit": "%"
+     },
+     {
+      "from": 1.0803068749999998,
+      "id": "期限溢价",
+      "name": "期限溢价",
+      "to": 1.0875000000000001,
+      "unit": "%"
+     },
+     {
+      "from": 2.34165,
+      "id": "10年期盈亏平衡通胀率",
+      "name": "10年期盈亏平衡通胀率",
+      "to": 2.33315,
+      "unit": "%"
+     },
+     {
+      "from": 0.37684500000000004,
+      "id": "2s10s利差",
+      "name": "2s10s利差",
+      "to": 0.3482,
+      "unit": "%"
+     },
+     {
+      "from": 1047.953125,
+      "id": "日本美债持仓",
+      "name": "日本美债持仓",
+      "to": 1048.07,
+      "unit": "十亿美元"
+     }
+    ]
+   },
+   "digest": "6月8-9日FOMC带SEP会议以核心通胀回落停滞、密歇根一年期预期4.51%为由加息25bp并上修点阵图，官方声明口径将目标区间定为4.125%-4.375%（中值4.25%）；鲍威尔口径(4.25%-4.50%)与官方声明略有出入，市场以官方声明为准但解读为'更高更久'。长端收益率小幅上行，10年期月末升至约5.22%，期限溢价继续走阔；财政部与国会达成拨款协同框架部分缓释了尾部风险，遏制了更大幅度的上行。BOJ按承诺维持1.75%并继续购债平抑JGB波动；外管局声明延续渐进多元化口径，持仓路径未变。\nMoves:\n- 日本银行(BOJ): Deliver commitment [c3_7_4]: 2027年6月10-11日货币政策会议将依据届时物价、汇率与金融体系数据（含美日利差与跨境资金流动）评估政策利率，并继续通过购债操作应对国债收益率过度波动。: \"日本银行于2027年6月10-11日召开货币政策会议。会议综合评估物价、汇率与金融体系数据（含美日利差与跨境资金流动）后，决定将政策利率维持在1.75%不变，无底阁决定继续以渐进步伐推进货币宽松正常化。鉴于10年期JGB收益率在3%上方、超长期端处于高位，本行将继续通过常规购债操作平抑过度波动，并保留对特定品种实施计划外购买的选项。下次会议定于2027年7月21-22日召开。\"\n- 中国国家外汇管理局: Issue a public statement or warning: \"国家外汇管理局公布2027年5月末外汇储备规模数据。2027年5月末，我国外汇储备规模稳中有升，总体保持充裕，跨境资金流动均衡有序。储备经营管理始终坚持安全性、流动性、收益性原则，根据市场情况动态优化资产配置。注意到境外主要经济体货币政策会议密集召开、长端收益率处于高位区间，我局对个别机构的猜测性报道不作评论，请以我局官方发布为准。\"\n- 美国财政部: Accept 美国国会's offer [i7_1] on exactly these terms: 国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。 — binds both sides (→ 美国国会): \"财政部接受与国会的协同框架:自即日起按周向拨款委员会通报TGA现金余额与非常规措施使用数据,为债务上限立法时间窗提供依据;期待两院在可签署的拨款一致文本上加速推进。财政部重申,及时完成拨款与债务上限立法是维持最低成本、可预期融资操作的前提,非常规措施空间有限,BPC估计的触限时点正在临近。\"\n- 鲍威尔及FOMC投票委员: Deliver commitment [c2_6_4]: 在2027年6月8–9日带SEP会议上，依据停摆后补发的通胀与劳动力市场数据及通胀预期调查更新SEP与点阵图，并决定政策利率路径；若通胀回落进展停滞或密歇根预期再度上行，委员会将考虑进一步加息。: \"在6月8–9日带SEP会议上，委员会依据停摆后补发的通胀与劳动力市场数据完成全面评估：核心通胀回落进展停滞，密歇根一年期预期4.51%仍高于可接受区间，委员会以多数票决定将联邦基金利率目标区间上调25个基点至4.25%–4.50%。SEP更新显示2027年PCE通胀预测上修，点阵图中位数反映更高的限制性路径。委员会将逐会评估，充分限制性立场将持续至通胀向2%目标的回落得到可持续确认。\"\n- 美联储(FOMC): Issue a public statement or warning: \"联邦公开市场委员会于6月8–9日会议评估了停摆后补发的通胀与就业数据。鉴于核心通胀仍未显示向2%回落的可持续进展、密歇根一年期通胀预期处于4.51%高位，委员会决定将联邦基金利率目标区间上调25个基点至4.125%–4.375%。更新后的SEP显示PCE通胀中值2027年为3.0%、2028年为2.4%，点阵图多数参与者预计年底前政策利率维持在当前区间或更高。委员会将持续监测后续信息对经济前景的影响，并维持银行体系充足的储备。\"\nFacts that changed:\n- 10年期国债收益率: 5.1% → 5.19%\n- 10年期国债收益率月均: 5.14% → 5.17%\n- 央行政策利率: 4.12 % 年率 → 4.19 % 年率\n- 10年期TIPS实际收益率: 2.64% → 2.67%\n- 期限溢价: 1.08% → 1.09%\n- 10年期盈亏平衡通胀率: 2.34% → 2.33%\n- 2s10s利差: 0.38% → 0.35%\n- 日本美债持仓: 1047.95 十亿美元 → 1048.07 十亿美元\n- New: 财政部-国会拨款协同框架生效 = yes\nEvents and consequences:\n- [2027-06-08] FOMC带SEP会议（6月8–9日）\n- 停摆后补发通胀数据若显示进展停滞，FOMC或在6月加息25bp\n- Did not materialise: 日资减持美债的滞后压力可能在二季度末持仓数据中显现\n- 6月8–9日SEP会议若点阵图显示更高更久路径，10年期收益率再升\n- FOMC加息25bp并上修SEP通胀与点阵图，声明强调限制性立场持续；市场注意到鲍威尔口径与官方声明区间存在小幅出入\n- 长端收益率会后上行至5.2%上方，期限溢价走阔；财政部-国会框架的消息限制了违约尾部风险溢价\n- BOJ维持1.75%并承诺继续购债平抑JGB过度波动，10年JGB盘中高点守在3.1%附近\n- 部分国会议员批评加息加重赤字融资成本；财政部按周披露TGA启动，市场关注7月债务上限立法窗口\nOffers and agreements:\n- Agreement [i7_1]: 美国财政部 accepted 美国国会's offer — 国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。 (both sides' obligations due 2027-07)\nAlliances and rivalries:\n- 美国国会 — 美国财政部: allied (closer)\n- 鲍威尔及FOMC投票委员 — 美国国会: neutral",
+   "headline": "2027-06: 5 decisions · 8 facts changed · 6 events · arbiter=applied · 6月8-9日FOMC带SEP会议以核心通胀回落停滞、密歇根一年期预期4.51%为由加息25bp并上修点阵图，官方声明口径将目标区间定为4.125%-4.375%（中值4.25%）；鲍威尔口径(4.25%-4.50%)与官方声明略有出入，市场以官方声明为准但解读为'更高更久'。长…",
+   "narrative": "6月8-9日FOMC带SEP会议以核心通胀回落停滞、密歇根一年期预期4.51%为由加息25bp并上修点阵图，官方声明口径将目标区间定为4.125%-4.375%（中值4.25%）；鲍威尔口径(4.25%-4.50%)与官方声明略有出入，市场以官方声明为准但解读为'更高更久'。长端收益率小幅上行，10年期月末升至约5.22%，期限溢价继续走阔；财政部与国会达成拨款协同框架部分缓释了尾部风险，遏制了更大幅度的上行。BOJ按承诺维持1.75%并继续购债平抑JGB波动；外管局声明延续渐进多元化口径，持仓路径未变。",
+   "period_label": "2027-06",
+   "round": 8,
+   "scenario_pressure": {
+    "再度上行": "up",
+    "回落走低": "down",
+    "极端突破": "flat",
+    "高位企稳": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "fc5fe7c4329d6fe3544b4948571e10c03d36c3a4895d36958a099a757cb69fbd",
+     "problems": [],
+     "source_hash": "7db67829748d6c8a1ed6a35aa94550e433d71a22a843805fc2e97b6c2b95fc9b",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 6,
+    "total": 6
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "Deliver commitment [c0_8_4]: 于2027年7月FOMC例会依据6月SEP后公布的通胀与就业数据评估政策立场的限制性程度，并在会前发布7月会议日程与实施说明。",
+     "Deliver commitment [c1_8_3]: Honour the agreement with 美国国会: 国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。 → 美国国会",
+     "Issue a public statement or warning",
+     "Deliver commitment [c4_8_3]: Honour the agreement with 美国财政部: 国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。 → 美国财政部",
+     "7月货币政策会议:渐进加息25bp至2.0%并维持购债操作"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [
+     "美国国会: 在6月FOMC会议前,推动结束停摆的拨款协议或替代性持续决议完成至少一院程序性表决"
+    ],
+    "effects_fired": [
+     "Did not materialise: 停摆磋商若达成可签署拨款协议，期限溢价小幅回落",
+     "Did not materialise: 票据吸纳能力若边际弱化，财政部或被迫转向附息券供给，期限溢价上行",
+     "若7月国会未能如期表决拨款与债务上限文本，停摆延续、触限风险重估推升期限溢价",
+     "Did not materialise: 7月再融资声明或调整票据/附息券结构以应对更高短期融资成本"
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [
+     "[2027-07-21] BOJ会议（7月21–22日），路透指其安排在两名鹰派委员任期届满之前"
+    ],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "farther",
+      "from": "neutral",
+      "polarity": -0.3,
+      "source": "美国国会",
+      "target": "美联储(FOMC)",
+      "to": "adversarial"
+     },
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": 0.3,
+      "source": "鲍威尔及FOMC投票委员",
+      "target": "美联储(FOMC)",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.1724,
+      "id": "10年期国债收益率月均",
+      "name": "10年期国债收益率月均",
+      "to": 5.180899999999999,
+      "unit": "%"
+     },
+     {
+      "from": 2.6737,
+      "id": "10年期tips实际收益率",
+      "name": "10年期TIPS实际收益率",
+      "to": 2.6822,
+      "unit": "%"
+     },
+     {
+      "from": 1.0875000000000001,
+      "id": "期限溢价",
+      "name": "期限溢价",
+      "to": 1.113,
+      "unit": "%"
+     },
+     {
+      "from": 0.3482,
+      "id": "2s10s利差",
+      "name": "2s10s利差",
+      "to": 0.3312,
+      "unit": "%"
+     },
+     {
+      "from": 1048.07,
+      "id": "日本美债持仓",
+      "name": "日本美债持仓",
+      "to": 1047.22,
+      "unit": "十亿美元"
+     },
+     {
+      "from": 1.75,
+      "id": "日本政策利率",
+      "name": "日本政策利率",
+      "to": 2.0,
+      "unit": "%"
+     }
+    ]
+   },
+   "digest": "7月主线是'按兵不动'与立法拖延的并存：美联储如期开会并维持利率不变，鲍威尔会前鹰派表态压低了近期宽松预期；国会拨款一致文本仅完成委员会审议、众院程序性表决推迟至月底后，停摆延续，触限风险重估使期限溢价继续高位徘徊。日本银行加息25bp至2.0%，日元套息边际收紧，日本官方美债持仓微降。整体10年期收益率月末小幅上行至约5.22%，月均约5.18%。\nMoves:\n- 中国国家外汇管理局: Issue a public statement or warning: \"国家外汇管理局公布2027年6月末外汇储备规模数据。6月末，我国外汇储备规模总体保持充裕，跨境资金流动均衡有序。储备经营管理始终坚持安全性、流动性、收益性原则，根据市场情况动态优化资产配置。注意到近期境外主要经济体货币政策与财政融资安排密集调整、长端收益率与期限溢价处于高位，我局将继续审慎评估市场环境变化对储备资产管理的影响，相关猜测性报道不作评论，请以我局官方发布为准。\"\n- 美联储(FOMC): Deliver commitment [c0_8_4]: 于2027年7月FOMC例会依据6月SEP后公布的通胀与就业数据评估政策立场的限制性程度，并在会前发布7月会议日程与实施说明。: \"联邦公开市场委员会已按程序发布7月27–28日例会日程与实施说明。委员会在本次会议评估了6月SEP后公布的通胀与就业数据：政策利率处于4.125%–4.375%区间，限制性立场的传导仍需时间显现，委员会决定维持该目标区间不变，并继续以到期回笼再投资维持银行体系充足的储备。委员会将持续监测后续信息对经济前景的影响，通胀仍处高位，重返2%目标前不会预设政策路径。\"\n- 美国财政部: Deliver commitment [c1_8_3]: Honour the agreement with 美国国会: 国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。 (→ 美国国会): \"财政部履行与国会协同框架项下义务：自6月起已连续按周向拨款委员会通报TGA现金余额与非常规措施使用数据，相关通报将继续至拨款与债务上限立法完成。财政部提示，非常规措施空间有限，BPC估计的触限时点正在临近，敦促两院在7月立法窗口内推进可签署的一致文本。发行指引方面，8月季度再融资声明的附息券与FRN规模指引维持不变，票据仍为主要融资工具。\"\n- 鲍威尔及FOMC投票委员: Issue a public statement or warning: \"在7月28–29日会议前，我重申委员会的评估框架：核心通胀向2%回落的可持续进展仍是政策路径的前提，密歇根一年期预期4.51%处于不可接受区间，10年期盈亏平衡通胀2.33%则显示市场端锚定尚未失守。6月加息的效果仍在传导中，委员会将逐会评估数据，不预设路径；若7月会议前公布的通胀与预期调查数据显示进展停滞或逆转，委员会将毫不犹豫进一步收紧。\"\n- 美国国会: Deliver commitment [c4_8_3]: Honour the agreement with 美国财政部: 国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。 (→ 美国财政部): \"本院宣布：两院拨款委员会已根据与财政部的协同框架，于7月完成全财年拨款一致文本的委员会审议，并就债务上限立法时间窗依据财政部每周披露的TGA与非常规措施数据形成可表决框架。众议院将在本月晚些时候就一致文本安排程序性表决，参议院方面正在协商议程安排。\"\n- 日本银行(BOJ): 7月货币政策会议:渐进加息25bp至2.0%并维持购债操作: \"日本银行于2027年7月21-22日召开货币政策会议。会议综合评估物价、汇率（含日元过度走弱对物价的影响）、金融体系与跨境资金流动数据后，决定将政策利率上调25个基点至2.0%，继续以渐进步伐推进货币宽松正常化。鉴于超长期JGB收益率处于高位，本行将延续常规购债操作以平抑过度波动，并保留对特定品种实施计划外购买的选项。下次会议定于2027年9月召开。\"\nFacts that changed:\n- 10年期国债收益率月均: 5.17% → 5.18%\n- 10年期TIPS实际收益率: 2.67% → 2.68%\n- 期限溢价: 1.09% → 1.11%\n- 2s10s利差: 0.35% → 0.33%\n- 日本美债持仓: 1048.07 十亿美元 → 1047.22 十亿美元\n- 日本政策利率: 1.75% → 2%\nEvents and consequences:\n- [2027-07-21] BOJ会议（7月21–22日），路透指其安排在两名鹰派委员任期届满之前\n- 美国国会's commitment lapsed: 在6月FOMC会议前,推动结束停摆的拨款协议或替代性持续决议完成至少一院程序性表决\n- Did not materialise: 停摆磋商若达成可签署拨款协议，期限溢价小幅回落\n- Did not materialise: 票据吸纳能力若边际弱化，财政部或被迫转向附息券供给，期限溢价上行\n- 若7月国会未能如期表决拨款与债务上限文本，停摆延续、触限风险重估推升期限溢价\n- Did not materialise: 7月再融资声明或调整票据/附息券结构以应对更高短期融资成本\n- FOMC 7月27-28日会议维持4.125%-4.375%区间不变，声明强调通胀仍处高位、不预设路径，市场对年内降息的定价进一步回撤\n- 国会拨款一致文本仅完成委员会审议，众院程序性表决推迟，参议院议程未定；停摆延续，财政部警告非常规措施空间有限\nAlliances and rivalries:\n- 美国国会 — 美联储(FOMC): adversarial (farther)\n- 鲍威尔及FOMC投票委员 — 美联储(FOMC): allied (closer)",
+   "headline": "2027-07: 6 decisions · 6 facts changed · 7 events · arbiter=applied · 7月主线是'按兵不动'与立法拖延的并存：美联储如期开会并维持利率不变，鲍威尔会前鹰派表态压低了近期宽松预期；国会拨款一致文本仅完成委员会审议、众院程序性表决推迟至月底后，停摆延续，触限风险重估使期限溢价继续高位徘徊。日本银行加息25bp至2.0%，日元套息边际收紧，日本官方美债…",
+   "narrative": "7月主线是'按兵不动'与立法拖延的并存：美联储如期开会并维持利率不变，鲍威尔会前鹰派表态压低了近期宽松预期；国会拨款一致文本仅完成委员会审议、众院程序性表决推迟至月底后，停摆延续，触限风险重估使期限溢价继续高位徘徊。日本银行加息25bp至2.0%，日元套息边际收紧，日本官方美债持仓微降。整体10年期收益率月末小幅上行至约5.22%，月均约5.18%。",
+   "period_label": "2027-07",
+   "round": 9,
+   "scenario_pressure": {
+    "再度上行": "up",
+    "回落走低": "down",
+    "极端突破": "flat",
+    "高位企稳": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "baf8949ed41e70b905f791a797151789b31816a7a9f9d15ea4bf3ae6da1b7df8",
+     "problems": [
+      "$.events[3].targets[0]: value outside current contract"
+     ],
+     "source_hash": "fbaf7d91780b5304d0d5c67457e08225e25dbc72efce80fb95d5377e53c5cc53",
+     "status": "invalid"
+    },
+    {
+     "attempt": 2,
+     "candidate_hash": "d07c72d4b4d7dc86f9bdc2bbd9cc20e241fada2a45c253f59b44810bfcb1368c",
+     "problems": [],
+     "source_hash": "fbaf7d91780b5304d0d5c67457e08225e25dbc72efce80fb95d5377e53c5cc53",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 5,
+    "total": 5
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Advance your documented plan: 实现通胀目标与金融稳定",
+     "Deliver commitment [c2_9_5]: 在2027年7月28–29日FOMC会议上，依据届时公布的通胀、就业数据与通胀预期调查决定政策利率；若通胀回落进展停滞或密歇根一年期预期再度上行，委员会将考虑进一步加息。",
+     "发布8月季度再融资声明，维持附息券与FRN规模不变"
+    ],
+    "breaches": [
+     "Breach [i7_1]: 美国国会 broke its agreement with 美国财政部 — its obligation lapsed: Honour the agreement with 美国财政部: 国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。"
+    ],
+    "commitments_lapsed": [
+     "美国国会: Honour the agreement with 美国财政部: 国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。"
+    ],
+    "effects_fired": [
+     "Did not materialise: 更高政策利率路径下，日本资金回流压力或在三季度持仓数据中进一步显现",
+     "若8月众院完成程序性表决并推进债务上限立法，停摆结束、期限溢价小幅回落",
+     "Did not materialise: 若8月表决再度推迟且触限时点临近，避险与供给担忧推升10年期收益率"
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [
+     {
+      "from": "accepted",
+      "id": "i7_1",
+      "kind": "proposal",
+      "proposer": "美国国会",
+      "recipient": "美国财政部",
+      "terms": "国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。",
+      "to": "breached"
+     }
+    ],
+    "relationships_changed": [
+     {
+      "direction": "farther",
+      "from": "allied",
+      "polarity": 0.506,
+      "source": "美国国会",
+      "target": "美国财政部",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.45,
+      "source": "鲍威尔及FOMC投票委员",
+      "target": "美联储(FOMC)",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "非常规措施剩余空间",
+      "name": "非常规措施剩余空间",
+      "unit": "",
+      "value": "低于1000亿美元、触限时点临近"
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 5.18535,
+      "id": "10年期国债收益率",
+      "name": "10年期国债收益率",
+      "to": 5.1813975,
+      "unit": "%"
+     },
+     {
+      "from": 5.180899999999999,
+      "id": "10年期国债收益率月均",
+      "name": "10年期国债收益率月均",
+      "to": 5.1979,
+      "unit": "%"
+     },
+     {
+      "from": 1.113,
+      "id": "期限溢价",
+      "name": "期限溢价",
+      "to": 1.0514175,
+      "unit": "%"
+     },
+     {
+      "from": 0.3312,
+      "id": "2s10s利差",
+      "name": "2s10s利差",
+      "to": 0.35772,
+      "unit": "%"
+     }
+    ]
+   },
+   "digest": "8月，财政部再融资声明维持附息券规模不变，供给端指引稳定；FOMC重申独立性并维持利率不变，市场解读偏鹰派观望。国会仅完成程序性表决且立法推迟至9月，触限风险未消，叠加停摆持续，期限溢价小幅回升，10年期收益率月末维持在5.2%附近高位。BOJ常规购债稳定JGB市场，日本持仓变化不大。\nMoves:\n- 美国国会: Issue a public statement or warning: \"本院宣布：众议院已于8月上旬以程序性表决通过全财年拨款一致文本，参议院多数党领导层已同意将拨款文本与债务上限立法打包，于9月院会安排限期表决。两院协商仍在进行中，本院将继续依据财政部每周披露的TGA与非常规措施数据确定立法时间窗，力争在X日前完成可签署文本。\"\n- 美联储(FOMC): Issue a public statement or warning: \"联邦公开市场委员会确认下一次例会定于2027年9月14–15日举行，会议后将发布经济预测摘要(SEP)与更新后的点阵图。委员会知悉外界对货币政策与财政融资成本关系的讨论，特此重申：委员会依据国会授权履行最大就业与物价稳定的双重使命，政策决定仅基于经济数据与双重使命评估，不因财政融资成本或政治考量调整政策路径。委员会将持续监测后续信息对经济前景的影响，不预设政策路径。\"\n- 日本银行(BOJ): Advance your documented plan: 实现通胀目标与金融稳定: \"日本银行公告:2027年9月货币政策会议日程及会后展望报告发布安排已由广报局公布,会议将综合评估物价、汇率(含日元对物价的影响)与金融体系数据。鉴于超长期JGB收益率仍处高位,本行本月继续按计划执行常规购债操作,以平抑国债收益率的过度波动;如出现过度上行,将不排除实施计划外购买。本行对具体政策路径不作预判。\"\n- 鲍威尔及FOMC投票委员: Deliver commitment [c2_9_5]: 在2027年7月28–29日FOMC会议上，依据届时公布的通胀、就业数据与通胀预期调查决定政策利率；若通胀回落进展停滞或密歇根一年期预期再度上行，委员会将考虑进一步加息。: \"我确认履行此前承诺：7月27–28日会议上，委员会依据6月SEP后公布的通胀、就业数据与通胀预期调查进行了完整评估。数据显示核心通胀回落进展有限、密歇根一年期预期仍达4.51%，但政策利率4.125%–4.375%区间的限制性传导仍在进行中，委员会以多数票决定维持区间不变，同时明确：若后续数据显示通胀回落进展停滞或预期调查再度上行，进一步加息仍在选项之内。委员会将逐会评估，不预设路径。\"\n- 美国财政部: 发布8月季度再融资声明，维持附息券与FRN规模不变: \"财政部发布2027年8月季度再融资声明：名义附息券与FRN拍卖规模维持不变，票据仍为主要融资工具，TGA目标区间维持既定指引。财政部再次提示，非常规措施空间有限，触限时点正在临近，敦促国会于9月立法窗口完成拨款与债务上限可签署文本，以免融资条件进一步收紧。\"\nFacts that changed:\n- 10年期国债收益率: 5.19% → 5.18%\n- 10年期国债收益率月均: 5.18% → 5.2%\n- 期限溢价: 1.11% → 1.05%\n- 2s10s利差: 0.33% → 0.36%\n- New: 非常规措施剩余空间 = 低于1000亿美元、触限时点临近\nEvents and consequences:\n- 美国国会's commitment lapsed: Honour the agreement with 美国财政部: 国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。\n- Did not materialise: 更高政策利率路径下，日本资金回流压力或在三季度持仓数据中进一步显现\n- 若8月众院完成程序性表决并推进债务上限立法，停摆结束、期限溢价小幅回落\n- Did not materialise: 若8月表决再度推迟且触限时点临近，避险与供给担忧推升10年期收益率\n- 财政部8月再融资声明维持附息券与FRN规模不变，市场供给预期稳定，长端拍卖反应平稳\n- FOMC维持利率不变并重申独立性，声明可信度高（4/4履约），市场对9月SEP点阵图高度关注\n- 国会程序性表决通过但可签署文本推迟至9月，市场对触限时点担忧升温，月末国债拍卖尾部略走弱\n- BOJ按计划常规购债并暗示必要时计划外购买，10年期JGB盘中高点3.10%后回落企稳\nOffers and agreements:\n- Breach [i7_1]: 美国国会 broke its agreement with 美国财政部 — its obligation lapsed: Honour the agreement with 美国财政部: 国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。\nAlliances and rivalries:\n- 美国国会 — 美国财政部: allied (farther)\n- 鲍威尔及FOMC投票委员 — 美联储(FOMC): allied (closer)",
+   "headline": "2027-08: 5 decisions · 4 facts changed · 6 events · arbiter=applied · 8月，财政部再融资声明维持附息券规模不变，供给端指引稳定；FOMC重申独立性并维持利率不变，市场解读偏鹰派观望。国会仅完成程序性表决且立法推迟至9月，触限风险未消，叠加停摆持续，期限溢价小幅回升，10年期收益率月末维持在5.2%附近高位。BOJ常规购债稳定JGB市场，日本持仓变…",
+   "narrative": "8月，财政部再融资声明维持附息券规模不变，供给端指引稳定；FOMC重申独立性并维持利率不变，市场解读偏鹰派观望。国会仅完成程序性表决且立法推迟至9月，触限风险未消，叠加停摆持续，期限溢价小幅回升，10年期收益率月末维持在5.2%附近高位。BOJ常规购债稳定JGB市场，日本持仓变化不大。",
+   "period_label": "2027-08",
+   "round": 10,
+   "scenario_pressure": {
+    "再度上行": "flat",
+    "回落走低": "down",
+    "极端突破": "flat",
+    "高位企稳": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "da954d803f7fa07d8f3f3138ffc2bf60efdc5dbdd9cbe2b42ac1d374c2e96abf",
+     "problems": [],
+     "source_hash": "d38dbe7c358315527e10b2d5e18a7e7928bd72bade73ddffe9f8a71868138ab2",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 5,
+    "total": 5
+   },
+   "deterministic": {
+    "actions": [
+     "Deliver commitment [c1_10_4]: 按8月再融资声明执行拍卖日历，并于11月季度再融资声明前发布10月借款估计与市场吸纳评估。",
+     "Deliver commitment [c4_10_4]: 在9月底前推动拨款与债务上限打包文本在参议院完成至少一次程序性表决，并与财政部协调可签署文本时间表",
+     "Issue a public statement or warning",
+     "Deliver commitment [c3_9_5]: 2027年9月货币政策会议将依据届时物价、汇率与金融体系数据评估政策利率，并继续通过购债操作应对国债收益率过度波动。",
+     "Change the policy rate or guidance"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "日本资金回流趋势延续，9月BOJ会后日本美债持仓继续温和下降",
+     "Did not materialise: 若9月国会完成债务上限立法并结束停摆，期限溢价或回落15–25bp",
+     "Did not materialise: 若9月立法再度推迟且触及X日，避险与供给担忧或推升10年期收益率至5.4%以上",
+     "Did not materialise: 9月FOMC SEP与点阵图：若密歇根一年期预期再上行，加息概率上升"
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.5625,
+      "source": "鲍威尔及FOMC投票委员",
+      "target": "美联储(FOMC)",
+      "to": "allied"
+     },
+     {
+      "direction": "farther",
+      "from": "neutral",
+      "polarity": -0.3,
+      "source": "鲍威尔及FOMC投票委员",
+      "target": "美国国会",
+      "to": "adversarial"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.1813975,
+      "id": "10年期国债收益率",
+      "name": "10年期国债收益率",
+      "to": 5.17685,
+      "unit": "%"
+     },
+     {
+      "from": 5.1979,
+      "id": "10年期国债收益率月均",
+      "name": "10年期国债收益率月均",
+      "to": 5.2064,
+      "unit": "%"
+     },
+     {
+      "from": 4.19375,
+      "id": "央行政策利率",
+      "name": "央行政策利率",
+      "to": 4.353125,
+      "unit": "% 年率"
+     },
+     {
+      "from": 2.6822,
+      "id": "10年期tips实际收益率",
+      "name": "10年期TIPS实际收益率",
+      "to": 2.7162,
+      "unit": "%"
+     },
+     {
+      "from": 0.35772,
+      "id": "2s10s利差",
+      "name": "2s10s利差",
+      "to": 0.30569999999999997,
+      "unit": "%"
+     },
+     {
+      "from": 1047.22,
+      "id": "日本美债持仓",
+      "name": "日本美债持仓",
+      "to": 1048.58,
+      "unit": "十亿美元"
+     },
+     {
+      "from": "低于1000亿美元、触限时点临近",
+      "id": "非常规措施剩余空间",
+      "name": "非常规措施剩余空间",
+      "to": "接近耗尽，X日预计落在10月中下旬",
+      "unit": ""
+     }
+    ]
+   },
+   "digest": "9月核心事件为美联储加息25bp至4.375%–4.5%，因密歇根一年期通胀预期高位与核心PCE回落放缓，市场此前已部分定价，10年期收益率小幅上行至5.21%附近；实际利率抬升、曲线趋平。参议院就拨款与债务上限打包文本完成cloture，停摆尚未结束但立法前景边际改善，期限溢价大体持稳。BOJ维持2%不变并继续购债，日本美债持仓温和回落。\nMoves:\n- 美国财政部: Deliver commitment [c1_10_4]: 按8月再融资声明执行拍卖日历，并于11月季度再融资声明前发布10月借款估计与市场吸纳评估。: \"财政部确认已按8月季度再融资声明完成本季度拍卖日历执行，附息券与FRN拍卖均按既定规模顺利进行。财政部今日提前发布市场吸纳评估框架，并预告10月借款估计将于10月最后一个工作日前发布，为11月季度再融资声明提供依据。财政部注意到月末部分拍卖尾部略有走弱，正持续监测投标倍数与间接投标占比，发行指引维持不变。\"\n- 美国国会: Deliver commitment [c4_10_4]: 在9月底前推动拨款与债务上限打包文本在参议院完成至少一次程序性表决，并与财政部协调可签署文本时间表: \"本院通报：参议院已于9月院会就拨款与债务上限打包文本完成程序性表决（cloture），两院协商委员会将据此敲定可签署文本，并与财政部协调的时间表已提交拨款委员会备案。两院协商仍在进行中，本院将继续依据财政部每周披露的TGA与非常规措施数据确定最终表决时窗。\"\n- 美联储(FOMC): Issue a public statement or warning: \"联邦公开市场委员会于9月14–15日举行例会，会议后将发布经济预测摘要(SEP)与更新后的点阵图。委员会重申：政策决定仅基于经济数据与最大就业、物价稳定双重使命的评估，不预设政策路径，不对任何特定收益率水平或财政立法进程发表评论。委员会将持续监测后续信息对经济前景的影响，并维持银行体系充足的储备。\"\n- 日本银行(BOJ): Deliver commitment [c3_9_5]: 2027年9月货币政策会议将依据届时物价、汇率与金融体系数据评估政策利率，并继续通过购债操作应对国债收益率过度波动。: \"日本银行于2027年9月20–21日召开货币政策决定会议。会议综合评估物价、汇率(含日元对物价的影响)与金融体系数据后,决定将政策利率维持在2.0%不变,并以多数票通过。鉴于超长期JGB收益率仍处高位,本行确认本月已按计划执行常规购债操作,并将在必要时实施计划外购买以平抑国债收益率的过度波动。展望报告与会议纪要将按既定日程由广报局公布,本行对今后政策路径不作预判。\"\n- 鲍威尔及FOMC投票委员: Change the policy rate or guidance: \"在9月14–15日会议上，委员会依据最新SEP与点阵图评估后决定加息25个基点，将联邦基金目标区间上调至4.375%–4.5%。SEP显示核心PCE回落进展慢于6月预期、密歇根一年期通胀预期维持高位，委员会对通胀上行意外的容忍度下降。政策路径仍逐会决定，充分限制性立场将维持至通胀向2%目标可持续回落。\"\nFacts that changed:\n- 10年期国债收益率: 5.18% → 5.18%\n- 10年期国债收益率月均: 5.2% → 5.21%\n- 央行政策利率: 4.19 % 年率 → 4.35 % 年率\n- 10年期TIPS实际收益率: 2.68% → 2.72%\n- 2s10s利差: 0.36% → 0.31%\n- 日本美债持仓: 1047.22 十亿美元 → 1048.58 十亿美元\n- 非常规措施剩余空间: 低于1000亿美元、触限时点临近 → 接近耗尽，X日预计落在10月中下旬\nEvents and consequences:\n- 日本资金回流趋势延续，9月BOJ会后日本美债持仓继续温和下降\n- Did not materialise: 若9月国会完成债务上限立法并结束停摆，期限溢价或回落15–25bp\n- Did not materialise: 若9月立法再度推迟且触及X日，避险与供给担忧或推升10年期收益率至5.4%以上\n- Did not materialise: 9月FOMC SEP与点阵图：若密歇根一年期预期再上行，加息概率上升\n- 9月FOMC加息25bp，SEP显示核心PCE回落慢于预期，点阵图暗示限制性立场将维持更久\n- 参议院完成打包文本cloture程序性表决，但两院协商未完成，政府停摆延续，财政部非常规措施临近触限\n- BOJ维持政策利率2.0%不变，确认常规购债执行，超长期JGB收益率盘中高点升至3.12%\n- 财政部按8月声明完成拍卖日历，月末部分拍卖尾部略弱，间接投标占比受关注\nAlliances and rivalries:\n- 鲍威尔及FOMC投票委员 — 美联储(FOMC): allied (closer)\n- 鲍威尔及FOMC投票委员 — 美国国会: adversarial (farther)",
+   "headline": "2027-09: 5 decisions · 7 facts changed · 6 events · arbiter=applied · 9月核心事件为美联储加息25bp至4.375%–4.5%，因密歇根一年期通胀预期高位与核心PCE回落放缓，市场此前已部分定价，10年期收益率小幅上行至5.21%附近；实际利率抬升、曲线趋平。参议院就拨款与债务上限打包文本完成cloture，停摆尚未结束但立法前景边际改善，期限溢…",
+   "narrative": "9月核心事件为美联储加息25bp至4.375%–4.5%，因密歇根一年期通胀预期高位与核心PCE回落放缓，市场此前已部分定价，10年期收益率小幅上行至5.21%附近；实际利率抬升、曲线趋平。参议院就拨款与债务上限打包文本完成cloture，停摆尚未结束但立法前景边际改善，期限溢价大体持稳。BOJ维持2%不变并继续购债，日本美债持仓温和回落。",
+   "period_label": "2027-09",
+   "round": 11,
+   "scenario_pressure": {
+    "再度上行": "up",
+    "回落走低": "flat",
+    "极端突破": "flat",
+    "高位企稳": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "daf8441133605aa1fde36352cbd4fffcd6318b0ce2bd5b1c83849b7c53e9e61b",
+     "problems": [],
+     "source_hash": "a2bf2312d313d79274e8ae2cb6232e694a3ba887a7c34fcafa10096692f14325",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 5,
+    "total": 5
+   },
+   "deterministic": {
+    "actions": [
+     "Deliver commitment [c0_11_5]: 在2027年9月14–15日FOMC会议上依据届时通胀、就业与通胀预期数据决定政策利率，并于会后发布SEP与点阵图；若通胀回落进展停滞或密歇根一年期预期再度上行，委员会将考虑进一步加息。",
+     "Deliver commitment [c3_10_6]: 2027年9月货币政策会议(依承诺c3_9_5)将依据届时物价、汇率与金融体系数据评估政策利率,并继续通过购债操作应对国债收益率过度波动。",
+     "Deliver commitment [c2_11_6]: 在2027年10月26–27日FOMC会议上依据9月SEP后公布的通胀、就业与预期调查数据逐会评估政策；若通胀与预期显示持续回落，委员会将讨论维持区间不变；若再加速，进一步收紧仍在选项内。",
+     "Deliver commitment [c1_10_4]: 按8月再融资声明执行拍卖日历，并于11月季度再融资声明前发布10月借款估计与市场吸纳评估。",
+     "Introduce or advance a bill"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "若10月两院完成立法并签署、结束停摆，期限溢价回落、10年期收益率下行",
+     "Did not materialise: 若立法再度推迟且触及X日，供给与避险担忧推升10年期收益率",
+     "Did not materialise: 10月借款估计与11月季度再融资声明落地，发行指引若维持不变则影响中性"
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.7948,
+      "source": "美国国会",
+      "target": "美国财政部",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.7125,
+      "source": "鲍威尔及FOMC投票委员",
+      "target": "美联储(FOMC)",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "债务上限立法签署生效",
+      "name": "债务上限立法签署生效",
+      "unit": "",
+      "value": true
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 5.17685,
+      "id": "10年期国债收益率",
+      "name": "10年期国债收益率",
+      "to": 5.04085,
+      "unit": "%"
+     },
+     {
+      "from": 5.2064,
+      "id": "10年期国债收益率月均",
+      "name": "10年期国债收益率月均",
+      "to": 5.1639,
+      "unit": "%"
+     },
+     {
+      "from": 2.7162,
+      "id": "10年期tips实际收益率",
+      "name": "10年期TIPS实际收益率",
+      "to": 2.7247000000000003,
+      "unit": "%"
+     },
+     {
+      "from": 1.0514175,
+      "id": "期限溢价",
+      "name": "期限溢价",
+      "to": 0.892,
+      "unit": "%"
+     },
+     {
+      "from": 0.30569999999999997,
+      "id": "2s10s利差",
+      "name": "2s10s利差",
+      "to": 0.29719999999999996,
+      "unit": "%"
+     },
+     {
+      "from": true,
+      "id": "联邦政府停摆状态",
+      "name": "联邦政府停摆状态",
+      "to": false,
+      "unit": ""
+     },
+     {
+      "from": "接近耗尽，X日预计落在10月中下旬",
+      "id": "非常规措施剩余空间",
+      "name": "非常规措施剩余空间",
+      "to": "已解除：债务上限上调5万亿美元并签署生效，常规发行恢复",
+      "unit": ""
+     }
+    ]
+   },
+   "digest": "10月上中旬，两院协商委员会的拨款与债务上限打包文本在众参两院过关并由总统签署，债务上限上调5万亿美元，持续多周的联邦停摆结束；财政部随后恢复常规发行安排，非常规措施空间问题解除。美联储9月加息25bp至4.375%-4.50%后，10月26-27日会议按数据依赖维持利率不变；日银维持2%并继续购债操作。停摆结束与供给不确定性消除令期限溢价回落，10年期收益率月末小幅下行至约5.05%附近，但高政策利率与2.7%以上的实际收益率限制下行幅度。\nMoves:\n- 美联储(FOMC): Deliver commitment [c0_11_5]: 在2027年9月14–15日FOMC会议上依据届时通胀、就业与通胀预期数据决定政策利率，并于会后发布SEP与点阵图；若通胀回落进展停滞或密歇根一年期预期再度上行，委员会将考虑进一步加息。: \"委员会确认已履行其承诺：2027年9月14–15日会议依据届时通胀、就业与通胀预期数据决定政策利率，以12–0投票加息25个基点至4.375%–4.50%区间，并于会后发布经济预测摘要(SEP)与更新后的点阵图。鉴于核心PCE回落进展慢于6月预期、密歇根一年期通胀预期维持高位，委员会声明已明确表示，若通胀回落进展停滞或通胀预期再度上行，将考虑进一步加息。会议纪要将于既定日程公布，委员会将持续监测后续信息对经济前景的影响，并维持银行体系充足的储备。\"\n- 日本银行(BOJ): Deliver commitment [c3_10_6]: 2027年9月货币政策会议(依承诺c3_9_5)将依据届时物价、汇率与金融体系数据评估政策利率,并继续通过购债操作应对国债收益率过度波动。: \"日本银行确认:2027年9月20–21日货币政策决定会议已依承诺召开,政策利率维持2.0%不变,展望报告与会议纪要已由广报局按既定日程公布(纪要将于10月下旬发布)。鉴于超长期JGB收益率盘中一度升至3.12%,本行10月已按计划执行常规购债操作,并保持必要时实施计划外购买以平抑收益率过度波动的姿态。本行对今后政策路径不作预判,下次会议日程以官方公布为准。\"\n- 鲍威尔及FOMC投票委员: Deliver commitment [c2_11_6]: 在2027年10月26–27日FOMC会议上依据9月SEP后公布的通胀、就业与预期调查数据逐会评估政策；若通胀与预期显示持续回落，委员会将讨论维持区间不变；若再加速，进一步收紧仍在选项内。: \"在10月26–27日会议上，委员会依据9月SEP后公布的通胀、就业与预期调查数据逐会评估，决定维持联邦基金目标区间于4.375%–4.5%不变。声明指出：近月核心PCE环比走弱、盈亏平衡通胀稳定于约2.3%，但密歇根一年期预期仍处高位，委员会对通胀上行意外的容忍度维持低位。政策路径逐会决定，充分限制性立场将维持至通胀向2%目标可持续回落；委员会同时重申不对任何特定收益率水平或财政立法进程发表评论。\"\n- 美国财政部: Deliver commitment [c1_10_4]: 按8月再融资声明执行拍卖日历，并于11月季度再融资声明前发布10月借款估计与市场吸纳评估。: \"财政部今日发布10月借款估计与市场吸纳评估：预计10–12月季度净借款规模依据TGA目标与非常规措施剩余空间测算，票据仍为主要融资工具，附息券与FRN拍卖规模指引维持不变，11月季度再融资声明将按日历于11月第一个周三发布。财政部提醒，非常规措施可用空间已接近耗尽，X日预计落在10月中下旬，发行与拍卖日历的确定性依赖国会及时完成债务上限立法。财政部将继续每周披露TGA余额，并持续监测投标倍数、尾差与间接投标占比。\"\n- 美国国会: Introduce or advance a bill: \"本院通报:两院协商委员会已就拨款与债务上限打包文本达成一致,众议院将于10月第二周、参议院随后进行全体表决,目标在财政部披露的X日窗口前完成可签署文本并送交总统。本院确认文本已纳入财政部协调的发行时间表条款,以保留新债发行与拍卖安排的操作空间。\"\nFacts that changed:\n- 10年期国债收益率: 5.18% → 5.04%\n- 10年期国债收益率月均: 5.21% → 5.16%\n- 10年期TIPS实际收益率: 2.72% → 2.72%\n- 期限溢价: 1.05% → 0.89%\n- 2s10s利差: 0.31% → 0.3%\n- 联邦政府停摆状态: yes → no\n- 非常规措施剩余空间: 接近耗尽，X日预计落在10月中下旬 → 已解除：债务上限上调5万亿美元并签署生效，常规发行恢复\n- New: 债务上限立法签署生效 = yes\nEvents and consequences:\n- 若10月两院完成立法并签署、结束停摆，期限溢价回落、10年期收益率下行\n- Did not materialise: 若立法再度推迟且触及X日，供给与避险担忧推升10年期收益率\n- Did not materialise: 10月借款估计与11月季度再融资声明落地，发行指引若维持不变则影响中性\n- 众议院10月第二周、参议院随后通过打包文本，总统在财政部X日窗口前签署，结束停摆\n- 市场对供给不确定性的定价回吐，期限溢价回落，长端收益率月末降至5.05%附近\n- 10月FOMC维持利率不变，强调对通胀上行意外容忍度低，声明获委员会一致口径呼应\n- 日银10月执行常规购债并保留计划外购买姿态，10年期JGB盘中高点守在3.10%上方一线\n- 美联储(FOMC) fulfilled commitment [c0_11_5]: 在2027年9月14–15日FOMC会议上依据届时通胀、就业与通胀预期数据决定政策利率，并于会后发布SEP与点阵图；若通胀回落进展停滞或密歇根一年期预期再度上行，委员会将考虑进一步加息。\nAlliances and rivalries:\n- 美国国会 — 美国财政部: allied (closer)\n- 鲍威尔及FOMC投票委员 — 美联储(FOMC): allied (closer)",
+   "headline": "2027-10: 5 decisions · 7 facts changed · 8 events · arbiter=applied · 10月上中旬，两院协商委员会的拨款与债务上限打包文本在众参两院过关并由总统签署，债务上限上调5万亿美元，持续多周的联邦停摆结束；财政部随后恢复常规发行安排，非常规措施空间问题解除。美联储9月加息25bp至4.375%-4.50%后，10月26-27日会议按数据依赖维持利率不变；…",
+   "narrative": "10月上中旬，两院协商委员会的拨款与债务上限打包文本在众参两院过关并由总统签署，债务上限上调5万亿美元，持续多周的联邦停摆结束；财政部随后恢复常规发行安排，非常规措施空间问题解除。美联储9月加息25bp至4.375%-4.50%后，10月26-27日会议按数据依赖维持利率不变；日银维持2%并继续购债操作。停摆结束与供给不确定性消除令期限溢价回落，10年期收益率月末小幅下行至约5.05%附近，但高政策利率与2.7%以上的实际收益率限制下行幅度。",
+   "period_label": "2027-10",
+   "round": 12,
+   "scenario_pressure": {
+    "再度上行": "down",
+    "回落走低": "up",
+    "极端突破": "down",
+    "高位企稳": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "d54090bf0f2238498eb3023aff35fb1e302d45f5197e5d58c9aa1c09fc5fdeb1",
+     "problems": [],
+     "source_hash": "eec9461538f354584c55af7d1294c43ec50f7cbd4aac53856059a864ab781353",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 1,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 4,
+    "total": 4
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "日本银行(BOJ) holds position",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "11月季度再融资声明若维持附息券指引不变，供给端影响中性；若上调规模则期限溢价再度承压"
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "farther",
+      "from": "allied",
+      "polarity": 0.7948,
+      "source": "美国国会",
+      "target": "美国财政部",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.8625,
+      "source": "鲍威尔及FOMC投票委员",
+      "target": "美联储(FOMC)",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.04085,
+      "id": "10年期国债收益率",
+      "name": "10年期国债收益率",
+      "to": 5.01535,
+      "unit": "%"
+     },
+     {
+      "from": 5.1639,
+      "id": "10年期国债收益率月均",
+      "name": "10年期国债收益率月均",
+      "to": 5.1044,
+      "unit": "%"
+     },
+     {
+      "from": 2.7247000000000003,
+      "id": "10年期tips实际收益率",
+      "name": "10年期TIPS实际收益率",
+      "to": 2.6907,
+      "unit": "%"
+     },
+     {
+      "from": 0.892,
+      "id": "期限溢价",
+      "name": "期限溢价",
+      "to": 0.9175,
+      "unit": "%"
+     }
+    ]
+   },
+   "digest": "11月无重大事件落地：财政部再融资声明维持附息券规模不变，供给端影响中性，市场反应平静；FOMC纪要与鲍威尔口径一致，重申数据依赖与限制性立场，12月降息预期略微降温。10年期收益率在5.0%附近高位窄幅震荡，期限溢价小幅回落，实际收益率微降，月均较上月略低。\nMoves:\n- 美国财政部: Issue a public statement or warning: \"财政部今日按既定日历发布11月季度再融资声明：名义附息券与FRN拍卖规模维持不变，本季度计划发行3年期、10年期与30年期国债合计1250亿美元；债务上限上调已生效，常规发行恢复，票据仍为主要融资工具，TGA目标维持既定区间。财政部将继续每周披露TGA余额，并持续监测投标倍数、尾差与间接投标占比，2028年2月借款估计与再融资声明将按日历发布。\"\n- 美联储(FOMC): Issue a public statement or warning: \"联邦公开市场委员会公布2027年10月26–27日会议纪要：与会者普遍认为近期核心PCE环比走弱与盈亏平衡通胀稳定于约2.3%是积极进展，但密歇根一年期通胀预期仍处高位，多数与会者强调在通胀持续向2%回落取得更大信心之前维持限制性政策立场是适当的。委员会维持联邦基金目标区间于4.375%–4.500%，缩表已于2025年12月结束，总资产企稳，将继续维持银行体系充足的储备。下一次会议定于2027年12月14–15日举行，届时将依据数据逐会评估；委员会将持续监测后续信息对经济前景的影响。\"\n- 鲍威尔及FOMC投票委员: Issue a public statement or warning: \"委员会将在12月14–15日会议前依据10–11月的核心PCE、就业与密歇根一年期预期数据逐会评估政策路径。近月核心PCE环比走弱与盈亏平衡通胀稳定于约2.3%是积极信号，但密歇根一年期预期仍处4.6%高位，委员会对通胀上行意外的容忍度维持低位。充分限制性立场将维持至通胀向2%目标可持续回落，进一步收紧与维持区间不变均在选项内。\"\nHeld position: 日本银行(BOJ)\nFacts that changed:\n- 10年期国债收益率: 5.04% → 5.02%\n- 10年期国债收益率月均: 5.16% → 5.1%\n- 10年期TIPS实际收益率: 2.72% → 2.69%\n- 期限溢价: 0.89% → 0.92%\nEvents and consequences:\n- 11月季度再融资声明若维持附息券指引不变，供给端影响中性；若上调规模则期限溢价再度承压\n- 11月季度再融资声明发布后，长债拍卖投标倍数与间接投标占比正常，市场平稳消化1250亿美元供给\n- FOMC纪要与鲍威尔讲话口径一致，市场对12月会议维持利率不变的预期小幅上升，短端利率略稳\n- 10年期收益率在5.0%附近窄幅波动，成交区间约4.98%–5.12%，未突破前期高点\nAlliances and rivalries:\n- 美国国会 — 美国财政部: allied (farther)\n- 鲍威尔及FOMC投票委员 — 美联储(FOMC): allied (closer)",
+   "headline": "2027-11: 4 decisions · 4 facts changed · 3 events · arbiter=applied · 11月无重大事件落地：财政部再融资声明维持附息券规模不变，供给端影响中性，市场反应平静；FOMC纪要与鲍威尔口径一致，重申数据依赖与限制性立场，12月降息预期略微降温。10年期收益率在5.0%附近高位窄幅震荡，期限溢价小幅回落，实际收益率微降，月均较上月略低。",
+   "narrative": "11月无重大事件落地：财政部再融资声明维持附息券规模不变，供给端影响中性，市场反应平静；FOMC纪要与鲍威尔口径一致，重申数据依赖与限制性立场，12月降息预期略微降温。10年期收益率在5.0%附近高位窄幅震荡，期限溢价小幅回落，实际收益率微降，月均较上月略低。",
+   "period_label": "2027-11",
+   "round": 13,
+   "scenario_pressure": {
+    "再度上行": "down",
+    "回落走低": "flat",
+    "极端突破": "down",
+    "高位企稳": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "094a193424b622c995690e789a93ff48dbef1f26906a040d909b79c2029c4e80",
+     "problems": [
+      "$.events[0].actors[1]: value outside current contract"
+     ],
+     "source_hash": "00c27b06e22d4994ba72e079b02fc7f44d97894c1c309cd069449812dcb034bf",
+     "status": "invalid"
+    },
+    {
+     "attempt": 2,
+     "candidate_hash": "974361aaaa0c20d53fece50ba8358ccbfec2203c6d3183a14dd36f5dc0f819de",
+     "problems": [],
+     "source_hash": "00c27b06e22d4994ba72e079b02fc7f44d97894c1c309cd069449812dcb034bf",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 5,
+    "total": 5
+   },
+   "deterministic": {
+    "actions": [
+     "Deliver commitment [c1_13_5]: 按11月季度再融资声明执行拍卖日历与发行规模，并于2028年2月发布季度借款估计与再融资声明",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Deliver commitment [c2_13_7]: 在2027年12月14–15日FOMC会议上依据届时的核心PCE、就业与通胀预期数据逐会评估并决定政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变；若密歇根一年期预期再度上行或通胀再加速，进一步收紧仍在选项内。",
+     "Deliver commitment [c0_13_6]: 在2027年12月14–15日FOMC会议上依据届时通胀、就业与通胀预期数据评估政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变，若通胀或预期再度上行，进一步收紧仍在选项内。"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [
+     "美国国会: 10月底前完成拨款与债务上限打包文本的两院全体表决,并送交总统签署"
+    ],
+    "effects_fired": [
+     "若核心PCE回落停滞或密歇根预期再度上行，12月FOMC或再加息25bp",
+     "Did not materialise: 12月14–15日FOMC会议：若10–11月核心PCE继续走弱且密歇根预期回落，可能讨论降息，短端与长端收益率温和下行"
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [
+     "[2027-12-31] 预测结算日：按DGS10日频官方收盘值结算"
+    ],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.8923,
+      "source": "美国国会",
+      "target": "美国财政部",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 1.0,
+      "source": "鲍威尔及FOMC投票委员",
+      "target": "美联储(FOMC)",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.01535,
+      "id": "10年期国债收益率",
+      "name": "10年期国债收益率",
+      "to": 5.00685,
+      "unit": "%"
+     },
+     {
+      "from": 4.353125,
+      "id": "央行政策利率",
+      "name": "央行政策利率",
+      "to": 4.565625,
+      "unit": "% 年率"
+     },
+     {
+      "from": 0.9175,
+      "id": "期限溢价",
+      "name": "期限溢价",
+      "to": 0.909,
+      "unit": "%"
+     }
+    ]
+   },
+   "digest": "12月FOMC维持利率不变，声明与市场预期一致，长端在月末结算前于5.0%附近窄幅整理；财政部再融资拍卖平稳消化，期限溢价小幅回落。日银维持2%利率并表态防范超长端过度波动，美日利差预期稳定，境外需求未现异动。国会年终通报无新增财政信息，对收益率影响中性。结算日DGS10收于约5.01%。\nMoves:\n- 美国财政部: Deliver commitment [c1_13_5]: 按11月季度再融资声明执行拍卖日历与发行规模，并于2028年2月发布季度借款估计与再融资声明: \"财政部确认：11月季度再融资声明所载拍卖日历已按计划执行完毕，本季度3年期、10年期与30年期国债合计1250亿美元发行顺利完成，历次拍卖投标倍数、尾差与间接投标占比均处正常区间，常规发行在债务上限上调生效后平稳运行。TGA余额维持既定目标区间并继续每周披露。财政部将于2028年2月按日历发布季度借款估计与再融资声明，届时评估附息券与FRN规模指引及票据融资结构。\"\n- 日本银行(BOJ): Issue a public statement or warning: \"日本银行货币政策会议(2027年12月)决定:维持政策利率于2.0%不变。委员会评估物价走势与金融体系状况后认为,当前金融条件与实现2%物价稳定目标的路径基本一致;鉴于超长期收益率此前触及高位,本行将继续灵活实施购债操作,防范国债收益率过度波动。本行重申,政策调整以本国物价与金融稳定为唯一依归,关注汇率对物价的影响,对未来政策路径不作预判。\"\n- 美国国会: Issue a public statement or warning: \"本院年终通报:拨款与债务上限打包立法已于年内完成并经总统签署生效,联邦资金安排恢复常态,FY2028十二项拨款法案已列入两院明年1月起的正式审议日程,各委员会组织工作将于新国会会期首月完成。本院对国债收益率水平与市场走势不作任何官方评论,财政相关数据以国会预算办公室基线与财政部正式文件为准。\"\n- 鲍威尔及FOMC投票委员: Deliver commitment [c2_13_7]: 在2027年12月14–15日FOMC会议上依据届时的核心PCE、就业与通胀预期数据逐会评估并决定政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变；若密歇根一年期预期再度上行或通胀再加速，进一步收紧仍在选项内。: \"联邦公开市场委员会于12月14–15日会议完成对政策利率的逐会评估：鉴于近期核心PCE环比继续走弱、盈亏平衡通胀稳定于约2.3%，委员会以一致投票决定维持联邦基金目标区间于4.375%–4.500%。密歇根一年期通胀预期仍处高位，委员会对通胀上行意外的容忍度维持低位；充分限制性立场将保持至通胀向2%目标可持续回落，若预期或通胀再度上行，进一步收紧仍在选项内。政策路径逐会决定。\"\n- 美联储(FOMC): Deliver commitment [c0_13_6]: 在2027年12月14–15日FOMC会议上依据届时通胀、就业与通胀预期数据评估政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变，若通胀或预期再度上行，进一步收紧仍在选项内。: \"联邦公开市场委员会于2027年12月14–15日会议评估最新数据后，决定维持联邦基金目标区间于4.375%–4.500%。委员会注意到核心PCE环比继续走弱、10年期盈亏平衡通胀稳定于约2.3%的积极进展，但密歇根一年期通胀预期仍处高位，委员会认为在通胀持续向2%目标回落取得更大信心之前，维持限制性政策立场是适当的。缩表已于2025年12月结束，总资产约6.75万亿美元，将继续维持银行体系充足的储备。委员会将持续监测后续信息对经济前景的影响，政策路径逐会决定。\"\nFacts that changed:\n- 10年期国债收益率: 5.02% → 5.01%\n- 央行政策利率: 4.35 % 年率 → 4.57 % 年率\n- 期限溢价: 0.92% → 0.91%\nEvents and consequences:\n- [2027-12-31] 预测结算日：按DGS10日频官方收盘值结算\n- 美国国会's commitment lapsed: 10月底前完成拨款与债务上限打包文本的两院全体表决,并送交总统签署\n- 若核心PCE回落停滞或密歇根预期再度上行，12月FOMC或再加息25bp\n- Did not materialise: 12月14–15日FOMC会议：若10–11月核心PCE继续走弱且密歇根预期回落，可能讨论降息，短端与长端收益率温和下行\n- 12月14–15日FOMC一致维持4.375%–4.50%区间，声明强调限制性立场延续，市场反应温和，短端持稳、长端小幅下行\n- 财政部11月声明的1250亿美元中长期国债拍卖顺利完成，投标倍数与间接占比正常，年末供给压力未推高期限溢价\n- 日银维持利率2.0%并承诺灵活购债防范超长端波动，JGB高位企稳，美日利差预期稳定，日本投资者美债需求未变\n- 国会年终通报确认FY2028拨款按正常日程推进，未对收益率发表评论，市场视其为中性\nAlliances and rivalries:\n- 美国国会 — 美国财政部: allied (closer)\n- 鲍威尔及FOMC投票委员 — 美联储(FOMC): allied (closer)",
+   "headline": "2027-12: 5 decisions · 3 facts changed · 7 events · arbiter=applied · 12月FOMC维持利率不变，声明与市场预期一致，长端在月末结算前于5.0%附近窄幅整理；财政部再融资拍卖平稳消化，期限溢价小幅回落。日银维持2%利率并表态防范超长端过度波动，美日利差预期稳定，境外需求未现异动。国会年终通报无新增财政信息，对收益率影响中性。结算日DGS10收于约…",
+   "narrative": "12月FOMC维持利率不变，声明与市场预期一致，长端在月末结算前于5.0%附近窄幅整理；财政部再融资拍卖平稳消化，期限溢价小幅回落。日银维持2%利率并表态防范超长端过度波动，美日利差预期稳定，境外需求未现异动。国会年终通报无新增财政信息，对收益率影响中性。结算日DGS10收于约5.01%。",
+   "period_label": "2027-12",
+   "round": 14,
+   "scenario_pressure": {
+    "再度上行": "down",
+    "回落走低": "flat",
+    "极端突破": "down",
+    "高位企稳": "up"
+   }
+  }
+ ],
+ "horizon_date": "2027-12-31",
+ "interactions": [
+  {
+   "expires_round": 9,
+   "id": "i7_1",
+   "kind": "proposal",
+   "obligations": 2,
+   "opened_round": 7,
+   "proposer": "美国国会",
+   "recipient": "美国财政部",
+   "resolved_round": 10,
+   "response": "财政部接受与国会的协同框架:自即日起按周向拨款委员会通报TGA现金余额与非常规措施使用数据,为债务上限立法时间窗提供依据;期待两院在可签署的拨款一致文本上加速推进。财政部重申,及时完成拨款与债务上限立法是维持最低成本、可预期融资操作的前提,非常规措施空间有限,BPC估计的触限时点正在临近。",
+   "status": "breached",
+   "terms": "国会加速推进全财年拨款一致文本;财政部持续按周披露TGA与非常规措施数据,为债务上限立法时间窗提供依据;双方在6月8-9日FOMC前形成可表决框架。"
+  }
+ ],
+ "pending_effects": [
+  {
+   "actor_id": null,
+   "created_round": 14,
+   "description": "2028年2月季度再融资声明若上调附息券规模，期限溢价或再度回升",
+   "due_round": 16,
+   "id": "fx14_36",
+   "op": "add",
+   "probability": 0.4,
+   "source": "arbiter",
+   "targets": [],
+   "value": 0.05,
+   "variable_id": "期限溢价"
+  }
+ ],
+ "period": {
+  "label": "2027-12",
+  "period_end": "2027-12-31",
+  "period_start": "2027-12-01",
+  "round": 13
+ },
+ "question": "预测截至 2027 年 12 月 31 日的美国 10 年期国债收益率。 设定基准:2026 年 10 月下旬的当前收益率、收益率曲线形态,以及 2024–2026 年的波动区间。 研究并权衡核心驱动因素:美联储政策路径与缩表(QT)/ 资产负债表政策;通胀预期与期限溢价估算;美债发行结构与财政赤字前景;境外官方需求(日本、中国);衰退概率;同等幅度收益率变动对应的历史基准水平。",
+ "recent_events": [
+  {
+   "action_kind": "operational",
+   "actors": [
+    "美联储(FOMC)"
+   ],
+   "description": "Deliver commitment [c0_11_5]: 在2027年9月14–15日FOMC会议上依据届时通胀、就业与通胀预期数据决定政策利率，并于会后发布SEP与点阵图；若通胀回落进展停滞或密歇根一年期预期再度上行，委员会将考虑进一步加息。",
+   "kind": "action",
+   "option_id": "fulfill:c0_11_5",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "decision",
+   "statement": "委员会确认已履行其承诺：2027年9月14–15日会议依据届时通胀、就业与通胀预期数据决定政策利率，以12–0投票加息25个基点至4.375%–4.50%区间，并于会后发布经济预测摘要(SEP)与更新后的点阵图。鉴于核心PCE回落进展慢于6月预期、密歇根一年期通胀预期维持高位，委员会声明已明确表示，若通胀回落进展停滞或通胀预期再度上行，将考虑进一步加息。会议纪要将于既定日程公布，委员会将持续监测后续信息对经济前景的影响，并维持银行体系充足的储备。",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "operational",
+   "actors": [
+    "日本银行(BOJ)"
+   ],
+   "description": "Deliver commitment [c3_10_6]: 2027年9月货币政策会议(依承诺c3_9_5)将依据届时物价、汇率与金融体系数据评估政策利率,并继续通过购债操作应对国债收益率过度波动。",
+   "kind": "action",
+   "option_id": "fulfill:c3_10_6",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "decision",
+   "statement": "日本银行确认:2027年9月20–21日货币政策决定会议已依承诺召开,政策利率维持2.0%不变,展望报告与会议纪要已由广报局按既定日程公布(纪要将于10月下旬发布)。鉴于超长期JGB收益率盘中一度升至3.12%,本行10月已按计划执行常规购债操作,并保持必要时实施计划外购买以平抑收益率过度波动的姿态。本行对今后政策路径不作预判,下次会议日程以官方公布为准。",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "operational",
+   "actors": [
+    "鲍威尔及FOMC投票委员"
+   ],
+   "description": "Deliver commitment [c2_11_6]: 在2027年10月26–27日FOMC会议上依据9月SEP后公布的通胀、就业与预期调查数据逐会评估政策；若通胀与预期显示持续回落，委员会将讨论维持区间不变；若再加速，进一步收紧仍在选项内。",
+   "kind": "action",
+   "option_id": "fulfill:c2_11_6",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "decision",
+   "statement": "在10月26–27日会议上，委员会依据9月SEP后公布的通胀、就业与预期调查数据逐会评估，决定维持联邦基金目标区间于4.375%–4.5%不变。声明指出：近月核心PCE环比走弱、盈亏平衡通胀稳定于约2.3%，但密歇根一年期预期仍处高位，委员会对通胀上行意外的容忍度维持低位。政策路径逐会决定，充分限制性立场将维持至通胀向2%目标可持续回落；委员会同时重申不对任何特定收益率水平或财政立法进程发表评论。",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "operational",
+   "actors": [
+    "美国财政部"
+   ],
+   "description": "Deliver commitment [c1_10_4]: 按8月再融资声明执行拍卖日历，并于11月季度再融资声明前发布10月借款估计与市场吸纳评估。",
+   "kind": "action",
+   "option_id": "fulfill:c1_10_4",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "decision",
+   "statement": "财政部今日发布10月借款估计与市场吸纳评估：预计10–12月季度净借款规模依据TGA目标与非常规措施剩余空间测算，票据仍为主要融资工具，附息券与FRN拍卖规模指引维持不变，11月季度再融资声明将按日历于11月第一个周三发布。财政部提醒，非常规措施可用空间已接近耗尽，X日预计落在10月中下旬，发行与拍卖日历的确定性依赖国会及时完成债务上限立法。财政部将继续每周披露TGA余额，并持续监测投标倍数、尾差与间接投标占比。",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "policy",
+   "actors": [
+    "美国国会"
+   ],
+   "description": "Introduce or advance a bill",
+   "kind": "action",
+   "option_id": "introduce_bill",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "decision",
+   "statement": "本院通报:两院协商委员会已就拨款与债务上限打包文本达成一致,众议院将于10月第二周、参议院随后进行全体表决,目标在财政部披露的X日窗口前完成可签署文本并送交总统。本院确认文本已纳入财政部协调的发行时间表条款,以保留新债发行与拍卖安排的操作空间。",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "若10月两院完成立法并签署、结束停摆，期限溢价回落、10年期收益率下行",
+   "kind": "consequence",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "期限溢价"
+   ]
+  },
+  {
+   "actors": [],
+   "description": "Did not materialise: 若立法再度推迟且触及X日，供给与避险担忧推升10年期收益率",
+   "kind": "consequence",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "Did not materialise: 10月借款估计与11月季度再融资声明落地，发行指引若维持不变则影响中性",
+   "kind": "consequence",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "美国国会",
+    "美国财政部"
+   ],
+   "description": "众议院10月第二周、参议院随后通过打包文本，总统在财政部X日窗口前签署，结束停摆",
+   "kind": "resolution",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [
+    "美联储(FOMC)"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "美国财政部"
+   ],
+   "description": "市场对供给不确定性的定价回吐，期限溢价回落，长端收益率月末降至5.05%附近",
+   "kind": "consequence",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "期限溢价",
+    "10年期国债收益率"
+   ]
+  },
+  {
+   "actors": [
+    "鲍威尔及FOMC投票委员",
+    "美联储(FOMC)"
+   ],
+   "description": "10月FOMC维持利率不变，强调对通胀上行意外容忍度低，声明获委员会一致口径呼应",
+   "kind": "resolution",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "日本银行(BOJ)"
+   ],
+   "description": "日银10月执行常规购债并保留计划外购买姿态，10年期JGB盘中高点守在3.10%上方一线",
+   "kind": "consequence",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "10年期jgb收益率盘中高点"
+   ]
+  },
+  {
+   "actors": [
+    "美联储(FOMC)"
+   ],
+   "description": "美联储(FOMC) fulfilled commitment [c0_11_5]: 在2027年9月14–15日FOMC会议上依据届时通胀、就业与通胀预期数据决定政策利率，并于会后发布SEP与点阵图；若通胀回落进展停滞或密歇根一年期预期再度上行，委员会将考虑进一步加息。",
+   "kind": "resolution",
+   "option_id": "fulfill:c0_11_5",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "美国财政部"
+   ],
+   "description": "美国财政部 fulfilled commitment [c1_10_4]: 按8月再融资声明执行拍卖日历，并于11月季度再融资声明前发布10月借款估计与市场吸纳评估。",
+   "kind": "resolution",
+   "option_id": "fulfill:c1_10_4",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "鲍威尔及FOMC投票委员"
+   ],
+   "description": "鲍威尔及FOMC投票委员 fulfilled commitment [c2_11_6]: 在2027年10月26–27日FOMC会议上依据9月SEP后公布的通胀、就业与预期调查数据逐会评估政策；若通胀与预期显示持续回落，委员会将讨论维持区间不变；若再加速，进一步收紧仍在选项内。",
+   "kind": "resolution",
+   "option_id": "fulfill:c2_11_6",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "日本银行(BOJ)"
+   ],
+   "description": "日本银行(BOJ) fulfilled commitment [c3_10_6]: 2027年9月货币政策会议(依承诺c3_9_5)将依据届时物价、汇率与金融体系数据评估政策利率,并继续通过购债操作应对国债收益率过度波动。",
+   "kind": "resolution",
+   "option_id": "fulfill:c3_10_6",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "美国财政部"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "decision",
+   "statement": "财政部今日按既定日历发布11月季度再融资声明：名义附息券与FRN拍卖规模维持不变，本季度计划发行3年期、10年期与30年期国债合计1250亿美元；债务上限上调已生效，常规发行恢复，票据仍为主要融资工具，TGA目标维持既定区间。财政部将继续每周披露TGA余额，并持续监测投标倍数、尾差与间接投标占比，2028年2月借款估计与再融资声明将按日历发布。",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "wait",
+   "actors": [
+    "日本银行(BOJ)"
+   ],
+   "description": "日本银行(BOJ) holds position",
+   "kind": "action",
+   "option_id": "hold_position",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "decision",
+   "statement": "日本银行公布10月27–28日货币政策会议纪要:委员会一致认为维持政策利率2.0%不变适宜,多数委员指出需警惕超长期收益率上行对金融体系的影响,并确认将继续以购债操作应对国债收益率的过度波动。本行重申,政策调整将以实现2%物价稳定目标与金融体系稳定为唯一依归,关注汇率变动对物价的影响,对未来政策路径不作预判,12月会议日程以官网发布为准。",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "美联储(FOMC)"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "decision",
+   "statement": "联邦公开市场委员会公布2027年10月26–27日会议纪要：与会者普遍认为近期核心PCE环比走弱与盈亏平衡通胀稳定于约2.3%是积极进展，但密歇根一年期通胀预期仍处高位，多数与会者强调在通胀持续向2%回落取得更大信心之前维持限制性政策立场是适当的。委员会维持联邦基金目标区间于4.375%–4.500%，缩表已于2025年12月结束，总资产企稳，将继续维持银行体系充足的储备。下一次会议定于2027年12月14–15日举行，届时将依据数据逐会评估；委员会将持续监测后续信息对经济前景的影响。",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "鲍威尔及FOMC投票委员"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "decision",
+   "statement": "委员会将在12月14–15日会议前依据10–11月的核心PCE、就业与密歇根一年期预期数据逐会评估政策路径。近月核心PCE环比走弱与盈亏平衡通胀稳定于约2.3%是积极信号，但密歇根一年期预期仍处4.6%高位，委员会对通胀上行意外的容忍度维持低位。充分限制性立场将维持至通胀向2%目标可持续回落，进一步收紧与维持区间不变均在选项内。",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "11月季度再融资声明若维持附息券指引不变，供给端影响中性；若上调规模则期限溢价再度承压",
+   "kind": "consequence",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "期限溢价"
+   ]
+  },
+  {
+   "actors": [
+    "美国财政部"
+   ],
+   "description": "11月季度再融资声明发布后，长债拍卖投标倍数与间接投标占比正常，市场平稳消化1250亿美元供给",
+   "kind": "consequence",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [
+    "美联储(FOMC)"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "美联储(FOMC)",
+    "鲍威尔及FOMC投票委员"
+   ],
+   "description": "FOMC纪要与鲍威尔讲话口径一致，市场对12月会议维持利率不变的预期小幅上升，短端利率略稳",
+   "kind": "consequence",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "10年期收益率在5.0%附近窄幅波动，成交区间约4.98%–5.12%，未突破前期高点",
+   "kind": "emergent",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "美联储（FOMC）"
+   ],
+   "description": "[2027-12-31] 预测结算日：按DGS10日频官方收盘值结算",
+   "kind": "scheduled",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "research_timeline",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "美国国会"
+   ],
+   "description": "美国国会's commitment lapsed: 10月底前完成拨款与债务上限打包文本的两院全体表决,并送交总统签署",
+   "kind": "consequence",
+   "round": 14,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "operational",
+   "actors": [
+    "美国财政部"
+   ],
+   "description": "Deliver commitment [c1_13_5]: 按11月季度再融资声明执行拍卖日历与发行规模，并于2028年2月发布季度借款估计与再融资声明",
+   "kind": "action",
+   "option_id": "fulfill:c1_13_5",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "decision",
+   "statement": "财政部确认：11月季度再融资声明所载拍卖日历已按计划执行完毕，本季度3年期、10年期与30年期国债合计1250亿美元发行顺利完成，历次拍卖投标倍数、尾差与间接投标占比均处正常区间，常规发行在债务上限上调生效后平稳运行。TGA余额维持既定目标区间并继续每周披露。财政部将于2028年2月按日历发布季度借款估计与再融资声明，届时评估附息券与FRN规模指引及票据融资结构。",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "日本银行(BOJ)"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "decision",
+   "statement": "日本银行货币政策会议(2027年12月)决定:维持政策利率于2.0%不变。委员会评估物价走势与金融体系状况后认为,当前金融条件与实现2%物价稳定目标的路径基本一致;鉴于超长期收益率此前触及高位,本行将继续灵活实施购债操作,防范国债收益率过度波动。本行重申,政策调整以本国物价与金融稳定为唯一依归,关注汇率对物价的影响,对未来政策路径不作预判。",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "美国国会"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "decision",
+   "statement": "本院年终通报:拨款与债务上限打包立法已于年内完成并经总统签署生效,联邦资金安排恢复常态,FY2028十二项拨款法案已列入两院明年1月起的正式审议日程,各委员会组织工作将于新国会会期首月完成。本院对国债收益率水平与市场走势不作任何官方评论,财政相关数据以国会预算办公室基线与财政部正式文件为准。",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "operational",
+   "actors": [
+    "鲍威尔及FOMC投票委员"
+   ],
+   "description": "Deliver commitment [c2_13_7]: 在2027年12月14–15日FOMC会议上依据届时的核心PCE、就业与通胀预期数据逐会评估并决定政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变；若密歇根一年期预期再度上行或通胀再加速，进一步收紧仍在选项内。",
+   "kind": "action",
+   "option_id": "fulfill:c2_13_7",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "decision",
+   "statement": "联邦公开市场委员会于12月14–15日会议完成对政策利率的逐会评估：鉴于近期核心PCE环比继续走弱、盈亏平衡通胀稳定于约2.3%，委员会以一致投票决定维持联邦基金目标区间于4.375%–4.500%。密歇根一年期通胀预期仍处高位，委员会对通胀上行意外的容忍度维持低位；充分限制性立场将保持至通胀向2%目标可持续回落，若预期或通胀再度上行，进一步收紧仍在选项内。政策路径逐会决定。",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "operational",
+   "actors": [
+    "美联储(FOMC)"
+   ],
+   "description": "Deliver commitment [c0_13_6]: 在2027年12月14–15日FOMC会议上依据届时通胀、就业与通胀预期数据评估政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变，若通胀或预期再度上行，进一步收紧仍在选项内。",
+   "kind": "action",
+   "option_id": "fulfill:c0_13_6",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "decision",
+   "statement": "联邦公开市场委员会于2027年12月14–15日会议评估最新数据后，决定维持联邦基金目标区间于4.375%–4.500%。委员会注意到核心PCE环比继续走弱、10年期盈亏平衡通胀稳定于约2.3%的积极进展，但密歇根一年期通胀预期仍处高位，委员会认为在通胀持续向2%目标回落取得更大信心之前，维持限制性政策立场是适当的。缩表已于2025年12月结束，总资产约6.75万亿美元，将继续维持银行体系充足的储备。委员会将持续监测后续信息对经济前景的影响，政策路径逐会决定。",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "若核心PCE回落停滞或密歇根预期再度上行，12月FOMC或再加息25bp",
+   "kind": "consequence",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "央行政策利率"
+   ]
+  },
+  {
+   "actors": [],
+   "description": "Did not materialise: 12月14–15日FOMC会议：若10–11月核心PCE继续走弱且密歇根预期回落，可能讨论降息，短端与长端收益率温和下行",
+   "kind": "consequence",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "美联储(FOMC)",
+    "鲍威尔及FOMC投票委员"
+   ],
+   "description": "12月14–15日FOMC一致维持4.375%–4.50%区间，声明强调限制性立场延续，市场反应温和，短端持稳、长端小幅下行",
+   "kind": "consequence",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "央行政策利率",
+    "10年期国债收益率"
+   ]
+  },
+  {
+   "actors": [
+    "美国财政部"
+   ],
+   "description": "财政部11月声明的1250亿美元中长期国债拍卖顺利完成，投标倍数与间接占比正常，年末供给压力未推高期限溢价",
+   "kind": "resolution",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "期限溢价"
+   ]
+  },
+  {
+   "actors": [
+    "日本银行(BOJ)"
+   ],
+   "description": "日银维持利率2.0%并承诺灵活购债防范超长端波动，JGB高位企稳，美日利差预期稳定，日本投资者美债需求未变",
+   "kind": "consequence",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "日本政策利率",
+    "10年期jgb收益率盘中高点"
+   ]
+  },
+  {
+   "actors": [
+    "美国国会"
+   ],
+   "description": "国会年终通报确认FY2028拨款按正常日程推进，未对收益率发表评论，市场视其为中性",
+   "kind": "resolution",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "美联储(FOMC)"
+   ],
+   "description": "美联储(FOMC) fulfilled commitment [c0_13_6]: 在2027年12月14–15日FOMC会议上依据届时通胀、就业与通胀预期数据评估政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变，若通胀或预期再度上行，进一步收紧仍在选项内。",
+   "kind": "resolution",
+   "option_id": "fulfill:c0_13_6",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "美国财政部"
+   ],
+   "description": "美国财政部 fulfilled commitment [c1_13_5]: 按11月季度再融资声明执行拍卖日历与发行规模，并于2028年2月发布季度借款估计与再融资声明",
+   "kind": "resolution",
+   "option_id": "fulfill:c1_13_5",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "鲍威尔及FOMC投票委员"
+   ],
+   "description": "鲍威尔及FOMC投票委员 fulfilled commitment [c2_13_7]: 在2027年12月14–15日FOMC会议上依据届时的核心PCE、就业与通胀预期数据逐会评估并决定政策利率；若通胀回落进展得以确认，委员会将讨论维持区间不变；若密歇根一年期预期再度上行或通胀再加速，进一步收紧仍在选项内。",
+   "kind": "resolution",
+   "option_id": "fulfill:c2_13_7",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  }
+ ],
+ "relationships": [
+  {
+   "kind": "INFLUENCES",
+   "last_changed_round": 6,
+   "polarity": 0.6,
+   "source": 0,
+   "strength": 0.7214,
+   "target": 1,
+   "valence": "allied"
+  },
+  {
+   "kind": "COMPETES_WITH",
+   "last_changed_round": 6,
+   "polarity": -0.4,
+   "source": 3,
+   "strength": 0.7,
+   "target": 0,
+   "valence": "adversarial"
+  },
+  {
+   "kind": "CUSTOMER_OF",
+   "last_changed_round": 0,
+   "polarity": -0.3,
+   "source": 5,
+   "strength": 0.6,
+   "target": 1,
+   "valence": "transactional"
+  },
+  {
+   "kind": "REGULATES",
+   "last_changed_round": 14,
+   "polarity": 0.8923,
+   "source": 4,
+   "strength": 0.9339,
+   "target": 1,
+   "valence": "allied"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 9,
+   "polarity": -0.3,
+   "source": 4,
+   "strength": 0.4215,
+   "target": 0,
+   "valence": "adversarial"
+  },
+  {
+   "kind": "ALLY_OF",
+   "last_changed_round": 14,
+   "polarity": 1.0,
+   "source": 2,
+   "strength": 0.8743,
+   "target": 0,
+   "valence": "allied"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 11,
+   "polarity": -0.3,
+   "source": 2,
+   "strength": 0.4215,
+   "target": 4,
+   "valence": "adversarial"
+  }
+ ],
+ "seed_gaps": [
+  {
+   "kind": "shock_without_window",
+   "note": "the window of its probability (per day ... year, a stretch of the calendar, or the forecast horizon) is not stated; not modelled as a shock",
+   "subject": "美国经济衰退"
+  },
+  {
+   "kind": "shock_without_window",
+   "note": "the window of its probability (per day ... year, a stretch of the calendar, or the forecast horizon) is not stated; not modelled as a shock",
+   "subject": "美国经济衰退(高盛下调后的评估)"
+  },
+  {
+   "kind": "shock_without_window",
+   "note": "the window of its probability (per day ... year, a stretch of the calendar, or the forecast horizon) is not stated; not modelled as a shock",
+   "subject": "2026年底前美国衰退(预测市场)"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "美联储(FOMC)"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "美国财政部"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "美国国会"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "中国国家外汇管理局"
+  }
+ ],
+ "simulation_id": "sim_1014ad0ba541",
+ "summary": {
+  "actors": 6,
+  "arbiter_enabled": true,
+  "arbiter_failed_rounds": 0,
+  "behaviour": {
+   "expectations_checked": 156,
+   "expectations_reacted": 131,
+   "moves": 58,
+   "offers_answered": 1,
+   "responsive_moves": 28,
+   "responsive_share": 0.483,
+   "rounds_scored": 13
+  },
+  "decision_actors_max": 24,
+  "events": 203,
+  "offers": {
+   "accepted": 0,
+   "breached": 1,
+   "countered": 0,
+   "lapsed": 0,
+   "open": 0,
+   "opened": 1,
+   "rejected": 0
+  },
+  "pending_effects": 1,
+  "relationships": 7,
+  "rounds_committed": 14,
+  "schema_version": "world-model-summary/v1",
+  "seed_gaps": 7,
+  "variables": 29
+ },
+ "variables": [
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "2月初财政部再融资指引若因停摆延后，市场或再度定价供给不确定性，10年期收益率上试5.1% [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "effect",
+     "value": 5.083349999999999
+    },
+    {
+     "cause": "再融资指引如期发布消除供给不确定性，FOMC按兵不动，收益率自5.08%小幅回落 [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "arbiter",
+     "value": 5.0521975
+    },
+    {
+     "cause": "鹰派点阵图+日银加息抑制日资需求+停摆延续，小幅上探 [damped: 回归锚点κ=0.15]",
+     "round": 5,
+     "source": "arbiter",
+     "value": 5.093717874999999
+    },
+    {
+     "cause": "纪要偏鹰+停摆延续小幅推升期限溢价，月末收益率微升 [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "arbiter",
+     "value": 5.10035
+    },
+    {
+     "cause": "FOMC鹰派按兵不动+期限溢价高位，收益率小幅上行至5.12%附近 [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "arbiter",
+     "value": 5.100647499999999
+    },
+    {
+     "cause": "6月8–9日SEP会议若点阵图显示更高更久路径，10年期收益率再升 [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "effect",
+     "value": 5.126400374999999
+    },
+    {
+     "cause": "加息+点阵图更高更久推升实际收益率与期限溢价，但财政协同框架限制涨幅，月末小幅上行 [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 5.18535
+    },
+    {
+     "cause": "供给担忧与触限临近小幅推升期限溢价，月末收益率高位徘徊 [damped: 回归锚点κ=0.15]",
+     "round": 10,
+     "source": "arbiter",
+     "value": 5.1813975
+    },
+    {
+     "cause": "加息已部分定价，实际利率抬升被cloture进展部分抵消，小幅上行 [damped: 回归锚点κ=0.15]",
+     "round": 11,
+     "source": "arbiter",
+     "value": 5.17685
+    },
+    {
+     "cause": "期限溢价回落带动长端小幅下行，高实际收益率构成支撑 [damped: 回归锚点κ=0.15]",
+     "round": 12,
+     "source": "arbiter",
+     "value": 5.04085
+    },
+    {
+     "cause": "供给中性叠加美联储维持限制性立场，收益率在5.0%上方窄幅震荡，小幅回落 [damped: 回归锚点κ=0.15]",
+     "round": 13,
+     "source": "arbiter",
+     "value": 5.01535
+    },
+    {
+     "cause": "FOMC按预期维持利率，拍卖平稳，收益率窄幅整理，月内自5.02%微降1bp至5.01% [damped: 回归锚点κ=0.15]",
+     "round": 14,
+     "source": "arbiter",
+     "value": 5.00685
+    }
+   ],
+   "id": "10年期国债收益率",
+   "kind": "numeric",
+   "name": "10年期国债收益率",
+   "provenance": "arbiter",
+   "unit": "%",
+   "value": 5.00685
+  },
+  {
+   "as_of": "2026-10-26",
+   "history": [
+    {
+     "cause": "12月均值受加息与停摆扰动小幅抬升但月末回落 [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 5.0789
+    },
+    {
+     "cause": "1月收益率较12月高位略有回落，月均自5.08%降至5.04% [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "arbiter",
+     "value": 5.0619
+    },
+    {
+     "cause": "月内高位小幅回落，月均降至约5.05% [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "arbiter",
+     "value": 5.0704
+    },
+    {
+     "cause": "月内围绕5.0-5.1%波动，均值微升 [damped: 回归锚点κ=0.15]",
+     "round": 5,
+     "source": "arbiter",
+     "value": 5.0959
+    },
+    {
+     "cause": "全月高位窄幅波动，月均与上月基本持平 [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "arbiter",
+     "value": 5.1129
+    },
+    {
+     "cause": "月内高位震荡，月均微升 [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "arbiter",
+     "value": 5.140865
+    },
+    {
+     "cause": "月初低位、会后上行，月均温和抬升 [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 5.1724
+    },
+    {
+     "cause": "月内先扬后稳，FOMC按兵不动限制上行幅度，月均略升 [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "arbiter",
+     "value": 5.180899999999999
+    },
+    {
+     "cause": "8月全月在5.15–5.25区间波动，均值微升 [damped: 回归锚点κ=0.15]",
+     "round": 10,
+     "source": "arbiter",
+     "value": 5.1979
+    },
+    {
+     "cause": "本月均值随加息后水平微升 [damped: 回归锚点κ=0.15]",
+     "round": 11,
+     "source": "arbiter",
+     "value": 5.2064
+    },
+    {
+     "cause": "10月均值略降，月末低于月中高位 [damped: 回归锚点κ=0.15]",
+     "round": 12,
+     "source": "arbiter",
+     "value": 5.1639
+    },
+    {
+     "cause": "11月均值略低于上月，反映再融资平稳与纪要偏鹰但无新信息 [damped: 回归锚点κ=0.15]",
+     "round": 13,
+     "source": "arbiter",
+     "value": 5.1044
+    }
+   ],
+   "id": "10年期国债收益率月均",
+   "kind": "numeric",
+   "name": "10年期国债收益率月均",
+   "provenance": "arbiter",
+   "unit": "%",
+   "value": 5.1044
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 3.875
+    },
+    {
+     "cause": "美联储(FOMC) announced it: 12月9日FOMC宣布加息25bp至4.000%-4.25%，区间中值4.125%，声明直接设定",
+     "round": 2,
+     "source": "action",
+     "value": 4.125
+    },
+    {
+     "cause": "停摆后补发通胀数据若显示进展停滞，FOMC或在6月加息25bp [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "effect",
+     "value": 4.3
+    },
+    {
+     "cause": "FOMC官方声明加息25bp至4.125%-4.375%区间，中值4.25%；鲍威尔口径略高但以官方声明为准 [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 4.19375
+    },
+    {
+     "cause": "9月会议加息25bp至4.375%–4.5%，取中值 [damped: 回归锚点κ=0.15]",
+     "round": 11,
+     "source": "arbiter",
+     "value": 4.353125
+    },
+    {
+     "cause": "若核心PCE回落停滞或密歇根预期再度上行，12月FOMC或再加息25bp [damped: 回归锚点κ=0.15]",
+     "round": 14,
+     "source": "effect",
+     "value": 4.565625
+    }
+   ],
+   "id": "央行政策利率",
+   "kind": "numeric",
+   "name": "央行政策利率",
+   "provenance": "effect",
+   "unit": "% 年率",
+   "value": 4.565625
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 2.638
+    },
+    {
+     "cause": "加息收紧金融条件，实际收益率上行约6bp [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 2.6907
+    },
+    {
+     "cause": "暂停加息与不预设3月路径使实际收益率小幅回落3bp [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "arbiter",
+     "value": 2.6567000000000003
+    },
+    {
+     "cause": "名义收益率小幅回落，盈亏平衡大体持平，实际收益率微降 [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "arbiter",
+     "value": 2.6397
+    },
+    {
+     "cause": "加息与点阵图上修推升实际收益率 [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 2.6737
+    },
+    {
+     "cause": "鲍威尔鹰派表态与按兵不动维持高限制性立场，实际收益率小幅上行 [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "arbiter",
+     "value": 2.6822
+    },
+    {
+     "cause": "加息推升短端实际利率传导至长端TIPS [damped: 回归锚点κ=0.15]",
+     "round": 11,
+     "source": "arbiter",
+     "value": 2.7162
+    },
+    {
+     "cause": "限制性政策立场延续，实际收益率高位微升 [damped: 回归锚点κ=0.15]",
+     "round": 12,
+     "source": "arbiter",
+     "value": 2.7247000000000003
+    },
+    {
+     "cause": "实际收益率高位微降，反映限制性立场延续下增长预期温和 [damped: 回归锚点κ=0.15]",
+     "round": 13,
+     "source": "arbiter",
+     "value": 2.6907
+    }
+   ],
+   "id": "10年期tips实际收益率",
+   "kind": "numeric",
+   "name": "10年期TIPS实际收益率",
+   "provenance": "arbiter",
+   "unit": "%",
+   "value": 2.6907
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "5月3日季度再融资若因需求疲弱增加附息券供给，期限溢价再升 [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "effect",
+     "value": 1.0915374999999998
+    },
+    {
+     "cause": "票据供给持续累积与财政不确定性的边际压力，但附息券规模未上调部分对冲 [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "arbiter",
+     "value": 1.0803068749999998
+    },
+    {
+     "cause": "更高利率路径加重赤字融资成本担忧，期限溢价继续温和走阔 [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 1.0875000000000001
+    },
+    {
+     "cause": "若7月国会未能如期表决拨款与债务上限文本，停摆延续、触限风险重估推升期限溢价 [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "effect",
+     "value": 1.1193750000000002
+    },
+    {
+     "cause": "停摆延续、债务上限触限时点临近，触限风险重估小幅推升期限溢价 [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "arbiter",
+     "value": 1.113
+    },
+    {
+     "cause": "若8月众院完成程序性表决并推进债务上限立法，停摆结束、期限溢价小幅回落 [damped: 回归锚点κ=0.15]",
+     "round": 10,
+     "source": "effect",
+     "value": 1.04755
+    },
+    {
+     "cause": "债务上限立法推迟至9月，触限时点临近，供给与政治不确定性小幅推升溢价 [damped: 回归锚点κ=0.15]",
+     "round": 10,
+     "source": "arbiter",
+     "value": 1.0514175
+    },
+    {
+     "cause": "若10月两院完成立法并签署、结束停摆，期限溢价回落、10年期收益率下行 [damped: 回归锚点κ=0.15]",
+     "round": 12,
+     "source": "effect",
+     "value": 0.9357048749999999
+    },
+    {
+     "cause": "债务上限与停摆不确定性消除，供给风险溢价温和回落 [damped: 回归锚点κ=0.15]",
+     "round": 12,
+     "source": "arbiter",
+     "value": 0.892
+    },
+    {
+     "cause": "11月季度再融资声明若维持附息券指引不变，供给端影响中性；若上调规模则期限溢价再度承压 [damped: 回归锚点κ=0.15]",
+     "round": 13,
+     "source": "effect",
+     "value": 0.9447000000000001
+    },
+    {
+     "cause": "再融资规模维持不变，供给担忧暂缓，期限溢价小幅回落 [damped: 回归锚点κ=0.15]",
+     "round": 13,
+     "source": "arbiter",
+     "value": 0.9175
+    },
+    {
+     "cause": "供给平稳、FOMC落定，期限溢价自0.92%小幅回落至0.90% [damped: 回归锚点κ=0.15]",
+     "round": 14,
+     "source": "arbiter",
+     "value": 0.909
+    }
+   ],
+   "id": "期限溢价",
+   "kind": "numeric",
+   "name": "期限溢价",
+   "provenance": "arbiter",
+   "unit": "%",
+   "value": 0.909
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 2.351
+    },
+    {
+     "cause": "紧缩表态小幅压低盈亏平衡通胀 [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 2.3246499999999997
+    },
+    {
+     "cause": "密歇根预期回落与油价平稳使盈亏平衡微降 [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "arbiter",
+     "value": 2.31615
+    },
+    {
+     "cause": "通胀预期锚定担忧令盈亏平衡小幅走高 [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "arbiter",
+     "value": 2.34165
+    },
+    {
+     "cause": "限制性立场边际压低盈亏平衡通胀，远期预期保持锚定 [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 2.33315
+    }
+   ],
+   "id": "10年期盈亏平衡通胀率",
+   "kind": "numeric",
+   "name": "10年期盈亏平衡通胀率",
+   "provenance": "arbiter",
+   "unit": "%",
+   "value": 2.33315
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 2.34
+    }
+   ],
+   "id": "5年后5年远期通胀预期",
+   "kind": "numeric",
+   "name": "5年后5年远期通胀预期",
+   "provenance": "research",
+   "unit": "%",
+   "value": 2.34
+  },
+  {
+   "as_of": "2025-12-31",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": -5.769
+    }
+   ],
+   "id": "联邦财政盈余或赤字占gdp比率",
+   "kind": "numeric",
+   "name": "联邦财政盈余或赤字占GDP比率",
+   "provenance": "research",
+   "unit": "% 占GDP",
+   "value": -5.769
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 40171825101340.31
+    }
+   ],
+   "id": "联邦公共债务总额",
+   "kind": "numeric",
+   "name": "联邦公共债务总额",
+   "provenance": "research",
+   "unit": "美元",
+   "value": 40171825101340.31
+  },
+  {
+   "as_of": "2026-08-31",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 0.62
+    },
+    {
+     "cause": "停摆叠加紧缩，衰退概率小幅上升但仍处低位 [damped: step≤50%/轮; 回归锚点κ=0.15; 累计漂移≤35%]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 0.8370000000000001
+    }
+   ],
+   "id": "平滑衰退概率",
+   "kind": "numeric",
+   "name": "平滑衰退概率",
+   "provenance": "arbiter",
+   "unit": "%",
+   "value": 0.8370000000000001
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 0.338
+    },
+    {
+     "cause": "加息使2年期上行多于10年期，曲线趋平 [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 0.2887
+    },
+    {
+     "cause": "2年期对暂停加息反应更明显，曲线温和陡峭化 [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "arbiter",
+     "value": 0.3312
+    },
+    {
+     "cause": "长端小幅上行而短端持稳，曲线略陡 [damped: 回归锚点κ=0.15]",
+     "round": 5,
+     "source": "arbiter",
+     "value": 0.3567
+    },
+    {
+     "cause": "长端略强于短端，曲线小幅趋陡 [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "arbiter",
+     "value": 0.37370000000000003
+    },
+    {
+     "cause": "政策利率持稳而长端小幅上行，曲线略陡 [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "arbiter",
+     "value": 0.37684500000000004
+    },
+    {
+     "cause": "2年期对加息反应更敏感，曲线略趋平 [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 0.3482
+    },
+    {
+     "cause": "鹰派表态推升短端预期，长端受期限溢价支撑，利差小幅收窄 [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "arbiter",
+     "value": 0.3312
+    },
+    {
+     "cause": "长端随期限溢价上升，曲线略趋陡 [damped: 回归锚点κ=0.15]",
+     "round": 10,
+     "source": "arbiter",
+     "value": 0.35772
+    },
+    {
+     "cause": "2年期对加息反应更敏感，曲线趋平 [damped: 回归锚点κ=0.15]",
+     "round": 11,
+     "source": "arbiter",
+     "value": 0.30569999999999997
+    },
+    {
+     "cause": "短端随加息小幅上行，长端回落，利差略收窄 [damped: 回归锚点κ=0.15]",
+     "round": 12,
+     "source": "arbiter",
+     "value": 0.29719999999999996
+    }
+   ],
+   "id": "2s10s利差",
+   "kind": "numeric",
+   "name": "2s10s利差",
+   "provenance": "arbiter",
+   "unit": "%",
+   "value": 0.29719999999999996
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 0.896
+    },
+    {
+     "cause": "短端随政策利率上行，利差收窄 [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 0.8483999999999999
+    },
+    {
+     "cause": "长端略升而短端受月末回购摩擦支撑，利差微扩 [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "arbiter",
+     "value": 0.8824
+    }
+   ],
+   "id": "3m10y利差",
+   "kind": "numeric",
+   "name": "3M10Y利差",
+   "provenance": "arbiter",
+   "unit": "%",
+   "value": 0.8824
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 4.6
+    },
+    {
+     "cause": "加息表态与油价平稳略降短端通胀预期，但绝对水平仍高 [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 4.515
+    }
+   ],
+   "id": "密歇根一年期通胀预期",
+   "kind": "numeric",
+   "name": "密歇根一年期通胀预期",
+   "provenance": "arbiter",
+   "unit": "%",
+   "value": 4.515
+  },
+  {
+   "as_of": "2026-10-21",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 6753604.0
+    }
+   ],
+   "id": "美联储资产负债表总资产",
+   "kind": "numeric",
+   "name": "美联储资产负债表总资产",
+   "provenance": "research",
+   "unit": "百万美元",
+   "value": 6753604.0
+  },
+  {
+   "as_of": "2026-06-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 9.299
+    }
+   ],
+   "id": "外资持有美国国债总量",
+   "kind": "numeric",
+   "name": "外资持有美国国债总量",
+   "provenance": "research",
+   "unit": "万亿美元",
+   "value": 9.299
+  },
+  {
+   "as_of": "2026-08-31",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 590.7
+    }
+   ],
+   "id": "中国大陆美债持仓",
+   "kind": "numeric",
+   "name": "中国大陆美债持仓",
+   "provenance": "research",
+   "unit": "十亿美元",
+   "value": 590.7
+  },
+  {
+   "as_of": "2026-08-31",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 1068.3
+    },
+    {
+     "cause": "BOJ加息后日本投资者减持美债的滞后效应 [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "effect",
+     "value": 1055.55
+    },
+    {
+     "cause": "BOJ加息后日本投资者减持美债的滞后效应延续，但高收益率吸引部分买盘，降幅放缓 [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "arbiter",
+     "value": 1052.3625
+    },
+    {
+     "cause": "日美利差与JGB 3.1%高位下日本投资者继续温和减持，趋势延续 [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "arbiter",
+     "value": 1047.953125
+    },
+    {
+     "cause": "美日利差仍宽但日资续降幅度温和，JGB高位下部分资金回流日本 [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 1048.07
+    },
+    {
+     "cause": "BOJ加息与JGB高收益率强化国内债券相对吸引力，日本资金回流，持仓续降 [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "arbiter",
+     "value": 1047.22
+    },
+    {
+     "cause": "日本资金回流趋势延续，9月BOJ会后日本美债持仓继续温和下降 [damped: 回归锚点κ=0.15]",
+     "round": 11,
+     "source": "effect",
+     "value": 1046.132
+    },
+    {
+     "cause": "资金回流趋势延续，温和下降约1十亿美元 [damped: 回归锚点κ=0.15]",
+     "round": 11,
+     "source": "arbiter",
+     "value": 1048.58
+    }
+   ],
+   "id": "日本美债持仓",
+   "kind": "numeric",
+   "name": "日本美债持仓",
+   "provenance": "arbiter",
+   "unit": "十亿美元",
+   "value": 1048.58
+  },
+  {
+   "as_of": "2026-09-01",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 3.005
+    },
+    {
+     "cause": "BOJ加息25bp至1.25%，正常化推进推高JGB长端 [damped: 回归锚点κ=0.15]",
+     "round": 1,
+     "source": "arbiter",
+     "value": 3.0475
+    },
+    {
+     "cause": "BOJ加息至1.50%后JGB收益率盘中高点上探3.10% [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 3.08575
+    },
+    {
+     "cause": "计划外购买超长期品种抑制波动，盘中高点自3.09%回落 [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "arbiter",
+     "value": 3.04325
+    },
+    {
+     "cause": "加息叠加通胀动能，10年JGB盘中高点续升 [damped: 回归锚点κ=0.15]",
+     "round": 5,
+     "source": "arbiter",
+     "value": 3.10275
+    }
+   ],
+   "id": "10年期jgb收益率盘中高点",
+   "kind": "numeric",
+   "name": "10年期JGB收益率盘中高点",
+   "provenance": "arbiter",
+   "unit": "%",
+   "value": 3.10275
+  },
+  {
+   "as_of": "2026-08-05",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 1250.0
+    }
+   ],
+   "id": "季度再融资发行规模",
+   "kind": "numeric",
+   "name": "季度再融资发行规模",
+   "provenance": "research",
+   "unit": "亿美元",
+   "value": 1250.0
+  },
+  {
+   "as_of": "2026-10-26",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 8270.0
+    },
+    {
+     "cause": "停摆应急现金管理依赖票据发行，净供给上调约300亿美元 [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 8525.0
+    }
+   ],
+   "id": "2026年票据净供给估计",
+   "kind": "numeric",
+   "name": "2026年票据净供给估计",
+   "provenance": "arbiter",
+   "unit": "亿美元",
+   "value": 8525.0
+  },
+  {
+   "as_of": "2025-07-31",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 5.0
+    }
+   ],
+   "id": "债务上限上调幅度",
+   "kind": "numeric",
+   "name": "债务上限上调幅度",
+   "provenance": "research",
+   "unit": "万亿美元",
+   "value": 5.0
+  },
+  {
+   "as_of": "2026-10-26",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 10.0
+    }
+   ],
+   "id": "12个月变动_δ_50bp频率",
+   "kind": "numeric",
+   "name": "12个月变动|Δ|>50bp频率",
+   "provenance": "research",
+   "unit": "≈53%",
+   "value": 10.0
+  },
+  {
+   "as_of": "2026-10-26",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 3.0
+    }
+   ],
+   "id": "12个月变动_δ_100bp频率",
+   "kind": "numeric",
+   "name": "12个月变动|Δ|>100bp频率",
+   "provenance": "research",
+   "unit": "≈16%",
+   "value": 3.0
+  },
+  {
+   "as_of": "2026-10-26",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": -2.6
+    }
+   ],
+   "id": "12个月变动均值_标准差",
+   "kind": "numeric",
+   "name": "12个月变动均值/标准差",
+   "provenance": "research",
+   "unit": "基点",
+   "value": -2.6
+  },
+  {
+   "as_of": "2026-12-31",
+   "history": [
+    {
+     "cause": "12月11日CR到期后拨款未完成，政府停摆实际发生",
+     "round": 2,
+     "source": "arbiter",
+     "value": true
+    },
+    {
+     "cause": "拨款与债务上限打包立法两院通过并签署，停摆结束",
+     "round": 12,
+     "source": "arbiter",
+     "value": false
+    }
+   ],
+   "id": "联邦政府停摆状态",
+   "kind": "boolean",
+   "name": "联邦政府停摆状态",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": false
+  },
+  {
+   "as_of": "2026-12-31",
+   "history": [
+    {
+     "cause": "BOJ 12月17日加息25bp至1.50%，需跟踪以评估美日利差",
+     "round": 2,
+     "source": "arbiter",
+     "value": 1.5
+    },
+    {
+     "cause": "日本银行(BOJ) announced it: 日银3月17-18日会议宣布加息至1.75%",
+     "round": 5,
+     "source": "action",
+     "value": 1.75
+    },
+    {
+     "cause": "日本银行(BOJ) announced it: BOJ 7月会议明确宣布加息25bp至2.0%，声明的政策利率全额生效",
+     "round": 9,
+     "source": "action",
+     "value": 2.0
+    }
+   ],
+   "id": "日本政策利率",
+   "kind": "numeric",
+   "name": "日本政策利率",
+   "provenance": "action",
+   "unit": "%",
+   "value": 2.0
+  },
+  {
+   "as_of": "2027-06-30",
+   "history": [
+    {
+     "cause": "财政部接受i7_1框架，按周披露TGA数据，7月为履约期限",
+     "round": 8,
+     "source": "arbiter",
+     "value": true
+    }
+   ],
+   "id": "财政部_国会拨款协同框架生效",
+   "kind": "boolean",
+   "name": "财政部-国会拨款协同框架生效",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": true
+  },
+  {
+   "as_of": "2027-08-31",
+   "history": [
+    {
+     "cause": "财政部声明提示非常规措施空间有限，成为9月关键风险变量",
+     "round": 10,
+     "source": "arbiter",
+     "value": "低于1000亿美元、触限时点临近"
+    },
+    {
+     "cause": "停摆持续消耗非常规措施，参议院表决通过但两院协商未完成",
+     "round": 11,
+     "source": "arbiter",
+     "value": "接近耗尽，X日预计落在10月中下旬"
+    },
+    {
+     "cause": "立法生效后非常规措施不再必要",
+     "round": 12,
+     "source": "arbiter",
+     "value": "已解除：债务上限上调5万亿美元并签署生效，常规发行恢复"
+    }
+   ],
+   "id": "非常规措施剩余空间",
+   "kind": "categorical",
+   "name": "非常规措施剩余空间",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "已解除：债务上限上调5万亿美元并签署生效，常规发行恢复"
+  },
+  {
+   "as_of": "2027-10-31",
+   "history": [
+    {
+     "cause": "打包文本于X日窗口前签署，含发行时间表条款",
+     "round": 12,
+     "source": "arbiter",
+     "value": true
+    }
+   ],
+   "id": "债务上限立法签署生效",
+   "kind": "boolean",
+   "name": "债务上限立法签署生效",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": true
+  }
+ ]
+}

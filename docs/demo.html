@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="site.css?v=20260930a">
+<link rel="stylesheet" href="site.css?v=20261027b">
 </head>
 <body>
 
@@ -37,8 +37,9 @@
     <button data-tab="dossier" data-i18n="tab.dossier" type="button">② Research dossier</button>
     <button data-tab="ontology" data-i18n="tab.ontology" type="button">③ Ontology</button>
     <button data-tab="graph" data-i18n="tab.graph" type="button">④ Knowledge graph</button>
-    <button data-tab="forum" data-i18n="tab.forum" type="button">⑤ Scenario simulation (raw feed)</button>
-    <button data-tab="report" class="active" data-i18n="tab.report" type="button">⑥ Forecast report</button>
+    <button data-tab="world" data-i18n="tab.world" type="button">⑤ Reflexive world model</button>
+    <button data-tab="forum" data-i18n="tab.forum" type="button">⑥ Scenario simulation (raw feed)</button>
+    <button data-tab="report" class="active" data-i18n="tab.report" type="button">⑦ Forecast report</button>
   </div>
 
   <p id="stage-intro" class="stage-intro"></p>
@@ -390,11 +391,331 @@
     });
   }
 
+  // ——— Reflexive world model (static port of the dashboard's WorldStatePanel) ———
+  // world_state.json is the /world-state projection snapshotted at export time:
+  // the latest committed world (variables, actors, offers, events) plus one row
+  // per committed round. The view model below mirrors frontend/src/utils/worldState.js.
+  var WS_CURRENCIES = { usd: 1, eur: 1, gbp: 1, cny: 1, rmb: 1, jpy: 1, hkd: 1, aud: 1, cad: 1, '美元': 1, '人民币': 1, '元': 1 };
+  var WS_KIND_UNITS = { numeric: 1, categorical: 1, boolean: 1, text: 1, number: 1, num: 1, int: 1, integer: 1, float: 1, decimal: 1, bool: 1, flag: 1, string: 1, str: 1, category: 1, enum: 1, date: 1, datetime: 1, timestamp: 1 };
+  function wsFmtNumber(v) {
+    var av = Math.abs(v);
+    if (av >= 1e12) return (v / 1e12).toFixed(2) + ' trillion';
+    if (av >= 1e9) return (v / 1e9).toFixed(2) + ' billion';
+    if (av >= 1e6) return (v / 1e6).toFixed(2) + ' million';
+    if (av >= 1e4) return Math.round(v).toLocaleString('en-US');
+    if (isFinite(v) && v === Math.round(v)) return String(v);
+    return String(Number(v.toFixed(2)));
+  }
+  function wsFormatValue(value, unit) {
+    var s;
+    if (typeof value === 'boolean') s = value ? 'yes' : 'no';
+    else if (typeof value === 'number' && isFinite(value)) s = wsFmtNumber(value);
+    else if (value === null || value === undefined) s = '—';
+    else s = String(value).trim().slice(0, 120);
+    var u = String(unit || '').trim();
+    if (!u || WS_KIND_UNITS[u.toLowerCase()]) return s;
+    if (u === '%') return s + '%';
+    if (/[$€£¥￥]/.test(u) || WS_CURRENCIES[u.toLowerCase()]) return u + s;
+    return s + ' ' + u;
+  }
+  function wsRows(x) { return Array.isArray(x) ? x.filter(function (r) { return r && typeof r === 'object'; }) : []; }
+  function wsRound(r) { var n = Number(r && r.round); return isFinite(n) ? n : null; }
+  function wsLatestRow(rows) {
+    if (!rows.length) return null;
+    return rows.reduce(function (best, r) { return best === null || Number(r.round || 0) >= Number(best.round || 0) ? r : best; }, null);
+  }
+  function wsDelta(v) {
+    var hist = wsRows(v && v.history);
+    if (hist.length < 2) return null;
+    var prev = hist[hist.length - 2], last = hist[hist.length - 1];
+    var a = prev.value, b = last.value, dir = 'flat';
+    if (typeof a === 'number' && typeof b === 'number') dir = b > a ? 'up' : b < a ? 'down' : 'flat';
+    else if (a !== b) dir = 'changed';
+    return { from: a, to: b, direction: dir };
+  }
+  function wsHeadlineSummary(h) {
+    var parts = String(h || '').split(' · ');
+    for (var i = 0; i < parts.length; i++) if (/^arbiter=/.test(parts[i].trim())) return parts.slice(0, i + 1).join(' · ').trim();
+    return parts.join(' · ').trim();
+  }
+  function wsCount(v) {
+    var n = Number(v);
+    return v !== null && v !== undefined && typeof v !== 'boolean' && isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  }
+  function wsTextItems(list, max) {
+    if (!Array.isArray(list)) return [];
+    return list.slice(0, max || 12).map(function (x) {
+      return String((x && typeof x === 'object') ? (x.description || x.label || x.name || '') : x).trim();
+    }).filter(Boolean);
+  }
+  function wsSummarize(d, selectedRound) {
+    var rows = wsRows(d.history).slice().sort(function (a, b) { return Number(a.round || 0) - Number(b.round || 0); });
+    var latestRow = wsLatestRow(rows);
+    var latestRound = latestRow ? wsRound(latestRow) : Number(d.committed_round || 0) || null;
+    var wanted = selectedRound === null || selectedRound === undefined ? null : Number(selectedRound);
+    var shown = (wanted !== null && isFinite(wanted) && rows.some(function (r) { return wsRound(r) === wanted; })) ? wanted : latestRound;
+    var isPast = shown !== null && latestRound !== null && shown !== latestRound;
+    var row = null;
+    for (var i = 0; i < rows.length; i++) if (wsRound(rows[i]) === shown) row = rows[i];
+    if (!row && !isPast) row = latestRow;
+    var focusRound = shown === null ? Number(d.committed_round || 0) : shown;
+    var variables = wsRows(d.variables).map(function (v) {
+      var delta = wsDelta(v);
+      return { id: v.id, name: v.name || v.id || '', display: wsFormatValue(v.value, v.unit), provenance: v.provenance || '', delta: delta,
+        deltaDisplay: delta && delta.direction !== 'flat' ? wsFormatValue(delta.from, v.unit) + ' → ' + wsFormatValue(delta.to, v.unit) : '' };
+    }).sort(function (a, b) {
+      return Number(!!(b.delta && b.delta.direction !== 'flat')) - Number(!!(a.delta && a.delta.direction !== 'flat'));
+    });
+    var events = wsRows(d.recent_events);
+    var evRounds = events.map(function (e) { return Number(e.round); }).filter(function (n) { return isFinite(n); });
+    var eventsInWindow = evRounds.length > 0 && focusRound >= Math.min.apply(null, evRounds);
+    var det = row && row.deterministic && typeof row.deterministic === 'object' ? row.deterministic : {};
+    var moves = events.filter(function (e) { return e.kind === 'action' && Number(e.round) === focusRound && !/holds position|no recorded move/.test(String(e.description || '')); })
+      .map(function (e) { return { actor: (Array.isArray(e.actors) && e.actors.length) ? e.actors[0] : '', description: String(e.description || ''), statement: String(e.statement || '') }; });
+    var consequences = events.filter(function (e) { return e.kind !== 'action' && Number(e.round) === focusRound; })
+      .map(function (e) { return { kind: e.kind || 'event', description: String(e.description || '') }; });
+    if (isPast && !eventsInWindow) {
+      moves = wsTextItems(det.actions).filter(function (a) { return !/holds position|no recorded move/.test(a); })
+        .map(function (a) { return { actor: '', description: a, statement: '' }; });
+      var crossed = Array.isArray(row && row.red_lines_crossed) ? row.red_lines_crossed : [];
+      consequences = crossed.filter(function (x) { return x && x.actor && x.by && x.red_line; })
+        .map(function (x) { return { kind: 'red_line', description: x.by + " crossed " + x.actor + "'s red line: " + x.red_line }; });
+      consequences = consequences.concat(
+        wsTextItems(det.effects_fired).map(function (x) { return { kind: 'effect', description: x }; }),
+        wsTextItems(det.scheduled_events).map(function (x) { return { kind: 'scheduled', description: x }; }),
+        wsTextItems(det.commitments_lapsed).map(function (x) { return { kind: 'lapsed', description: x }; }));
+    }
+    consequences = consequences.filter(function (c) { return c.kind === 'red_line'; }).concat(consequences.filter(function (c) { return c.kind !== 'red_line'; }));
+    var diff = row && row.diff && typeof row.diff === 'object' ? row.diff : {};
+    var relChanges = wsRows(diff.relationships_changed).map(function (rc) {
+      return { source: rc.source, target: rc.target, to: rc.to || '', direction: rc.direction || '' };
+    });
+    var varsChanged = wsRows(diff.variables_changed).map(function (ch) {
+      var direction = 'changed';
+      if (typeof ch.from === 'number' && typeof ch.to === 'number') direction = ch.to > ch.from ? 'up' : ch.to < ch.from ? 'down' : 'flat';
+      return { id: ch.id, name: ch.name || ch.id || '', direction: direction, display: wsFormatValue(ch.from, ch.unit) + ' → ' + wsFormatValue(ch.to, ch.unit) };
+    });
+    var varsAdded = wsRows(diff.variables_added).map(function (nv) {
+      return { id: nv.id, name: nv.name || nv.id || '', display: wsFormatValue(nv.value, nv.unit) };
+    });
+    var pending = [];
+    wsRows(d.actors).forEach(function (a) {
+      wsRows(a.pending_commitments).forEach(function (c) {
+        pending.push({ actor: a.name || a.agent_id, description: c.description || '', dueRound: c.due_round === undefined ? null : c.due_round });
+      });
+    });
+    wsRows(d.pending_effects).forEach(function (fx) {
+      if (fx.description) pending.push({ actor: drfT('world.expected'), description: fx.description, dueRound: fx.due_round === undefined ? null : fx.due_round });
+    });
+    var offers = isPast
+      ? wsRows(diff.interactions_changed).map(function (it) {
+          return { status: String(it.to || ''), proposer: it.proposer || '', recipient: it.recipient || '', terms: it.terms || '' };
+        })
+      : wsRows(d.interactions).map(function (it) {
+          return { status: String(it.status || ''), proposer: it.proposer || '', recipient: it.recipient || '', terms: it.terms || '' };
+        });
+    var summary = d.summary && typeof d.summary === 'object' ? d.summary : {};
+    var gaps = wsRows(d.seed_gaps).map(function (g) {
+      return { kind: String(g.kind || ''), subject: String(g.subject || ''), note: String(g.note || '') };
+    });
+    var beh = summary.behaviour && typeof summary.behaviour === 'object' ? summary.behaviour : {};
+    var behaviour = beh.responsive_share !== null && beh.responsive_share !== undefined
+      ? { moves: Number(beh.moves || 0), responsiveMoves: Number(beh.responsive_moves || 0), responsiveShare: Number(beh.responsive_share) } : null;
+    var expChecked = wsCount(beh.expectations_checked);
+    var expectations = expChecked ? { checked: expChecked, reacted: Math.min(expChecked, wsCount(beh.expectations_reacted)) } : null;
+    // track records: one row per actor with any resolved/open commitment or move outcome
+    var trackRecords = [];
+    wsRows(d.actors).forEach(function (a) {
+      var rec = a.track_record && typeof a.track_record === 'object' && !Array.isArray(a.track_record) ? a.track_record : null;
+      if (!rec) return;
+      var kept = wsCount(rec.kept), lapsed = wsCount(rec.lapsed), broken = wsCount(rec.broken), released = wsCount(rec.released), open = wsCount(rec.open);
+      var resolved = kept + lapsed + broken;
+      var outcomes = rec.outcomes && typeof rec.outcomes === 'object'
+        ? [['success', drfT('world.succeeded')], ['partial', drfT('world.partial')], ['blocked', drfT('world.blocked')], ['failed', drfT('world.failed')]]
+            .map(function (p) { return { label: p[1], count: wsCount(rec.outcomes[p[0]]) }; }).filter(function (o) { return o.count > 0; }) : [];
+      if (!resolved && !released && !open && !outcomes.length) return;
+      var reliability = resolved ? (kept / resolved) : null;
+      trackRecords.push({ actor: String(a.name || a.agent_id), kept: kept, lapsed: lapsed, broken: broken, released: released, open: open, resolved: resolved, reliability: reliability, outcomes: outcomes });
+    });
+    trackRecords.sort(function (x, y) {
+      return (y.broken + y.lapsed) - (x.broken + x.lapsed) || y.broken - x.broken || y.resolved - x.resolved || (x.actor < y.actor ? -1 : x.actor > y.actor ? 1 : 0);
+    });
+    var problems = wsTextItems(row && row.arbiter_problems, 12);
+    if (row && row.error) problems.push(String(row.error));
+    var headline = isPast ? String((row && row.headline) || '') : String(d.headline || (row && row.headline) || '');
+    return {
+      committedRound: Number(d.committed_round || 0), latestRound: latestRound, selectedRound: shown, isPast: isPast,
+      periodLabel: isPast ? String((row && row.period_label) || ('#' + shown)) : ((d.period && d.period.label) || (row && row.period_label) || ''),
+      headlineSummary: wsHeadlineSummary(headline),
+      narrative: row ? String(row.narrative || '') : String(d.digest || ''),
+      digest: String((row && row.digest) || (!isPast ? d.digest || '' : '')),
+      arbiterStatus: (row && row.arbiter_status) || '',
+      arbiterProblems: problems,
+      arbiterFailedRounds: Number(summary.arbiter_failed_rounds || 0),
+      decisions: row && row.decisions && typeof row.decisions === 'object' ? row.decisions : null,
+      variables: variables, variablesChanged: varsChanged, variablesAdded: varsAdded,
+      moves: moves, consequences: consequences, relationshipChanges: relChanges,
+      pending: pending, offers: offers, offerCounts: summary.offers && typeof summary.offers === 'object' ? summary.offers : null,
+      seedGaps: gaps, behaviour: behaviour, expectations: expectations, trackRecords: trackRecords,
+      history: rows.map(function (r) {
+        return { round: r.round, label: String(r.period_label || ('#' + r.round)), headline: String(r.headline || ''), arbiterStatus: r.arbiter_status || '',
+          factsChanged: Array.isArray(r.diff && r.diff.variables_changed) ? r.diff.variables_changed.length : 0,
+          isCurrent: wsRound(r) === latestRound, isSelected: wsRound(r) === shown };
+      })
+    };
+  }
+  function wsRoundLabel(n) { return drfT('world.roundFmt').replace('{n}', String(n)); }
+  function wsDecisionsLine(dec) {
+    if (!dec || dec.total === null || dec.total === undefined || !isFinite(Number(dec.total))) return '';
+    var parts = [Number(dec.total) + ' ' + drfT('world.decisions')];
+    if (dec.ok !== null && dec.ok !== undefined && isFinite(Number(dec.ok))) parts.push(Number(dec.ok) + ' ' + drfT('world.ok'));
+    ['held', 'failed', 'invalid'].forEach(function (k) {
+      var n = Number(dec[k]);
+      if (dec[k] !== null && dec[k] !== undefined && isFinite(n) && n > 0) parts.push(n + ' ' + drfT('world.' + k));
+    });
+    return parts.join(' · ');
+  }
+  function wsTrackLine(r) {
+    var parts = [];
+    if (r.resolved > 0) {
+      var pct = r.reliability !== null ? ' (' + Math.round(r.reliability * 100) + '%)' : '';
+      parts.push(drfT('world.kept').replace('{k}', r.kept).replace('{n}', r.resolved) + pct);
+    }
+    [['broken', 'world.broken'], ['lapsed', 'world.lapsed'], ['released', 'world.released'], ['open', 'world.open']].forEach(function (p) {
+      if (r[p[0]] > 0) parts.push(r[p[0]] + ' ' + drfT(p[1]));
+    });
+    if (r.outcomes.length) parts.push(drfT('world.movesWord') + ': ' + r.outcomes.map(function (o) { return o.count + ' ' + o.label; }).join(', '));
+    return parts.join(' · ');
+  }
+  function renderWorld() {
+    return fetchJSON('world_state.json').then(function (d) {
+      var vm = wsSummarize(d, renderWorld._round === undefined ? null : renderWorld._round);
+      var h = '<div class="ws-panel">';
+      h += '<div class="ws-head"><div class="ws-title"><span class="diamond sm">◇</span><span>' + esc(drfT('world.title')) + '</span>';
+      if (vm.periodLabel) h += '<span class="ws-period mono">' + esc(vm.periodLabel) + '</span>';
+      if (vm.isPast) h += '<span class="ws-past mono">' + esc(drfT('world.pastPeriod')) + ' · ' + esc(wsRoundLabel(vm.selectedRound)) + ' / ' + vm.latestRound + '</span>' +
+        '<button type="button" class="ws-back mono" data-ws-back="1">↩ ' + esc(drfT('world.backLatest')) + '</button>';
+      else if (vm.committedRound) h += '<span class="ws-round mono">' + esc(drfT('world.committed')) + ' ' + vm.committedRound + '</span>';
+      h += '</div><div class="ws-badges">';
+      if (vm.arbiterStatus) h += '<span class="ws-badge st-' + esc(vm.arbiterStatus) + '">' + esc(drfT('world.arbiter')) + ': ' + esc(vm.arbiterStatus) + '</span>';
+      if (vm.arbiterFailedRounds) h += '<span class="ws-badge st-failed">' + vm.arbiterFailedRounds + ' ' + esc(drfT('world.mechRounds')) + '</span>';
+      if (vm.seedGaps.length) h += '<span class="ws-badge st-gaps" title="' + esc(vm.seedGaps.map(function (g) { return g.kind + ': ' + g.subject + ' — ' + g.note; }).join('\n')) + '">' + vm.seedGaps.length + ' ' + esc(drfT('world.gaps')) + '</span>';
+      if (vm.behaviour) h += '<span class="ws-badge st-behaviour">' + esc(drfT('world.responsive')) + ' ' + Math.round(vm.behaviour.responsiveShare * 100) + '%</span>';
+      if (vm.expectations) h += '<span class="ws-badge st-behaviour">' + esc(drfT('world.expectedFollowed')) + ' ' + vm.expectations.reacted + '/' + vm.expectations.checked + '</span>';
+      h += '<span class="ws-badge st-note">' + esc(drfT('world.note')) + '</span></div></div>';
+      if (vm.headlineSummary) h += '<div class="ws-headline mono">' + esc(vm.headlineSummary) + '</div>';
+      if (vm.narrative) h += '<p class="ws-narrative">' + esc(vm.narrative) + '</p>';
+      else h += '<p class="ws-narrative empty">' + esc(drfT('world.noNarrative')) + '</p>';
+      if (vm.arbiterProblems.length) {
+        h += '<ul class="ws-problems">';
+        vm.arbiterProblems.forEach(function (p) { h += '<li><span class="warn-dot">▲</span><span>' + esc(drfT('world.arbiterProblem')) + ': ' + esc(p) + '</span></li>'; });
+        h += '</ul>';
+      }
+      var dl = wsDecisionsLine(vm.decisions);
+      if (dl) h += '<div class="ws-decisions mono">' + esc(dl) + '</div>';
+      h += '<div class="ws-grid">';
+      if (!vm.isPast) {
+        h += '<div class="ws-card"><div class="ws-card-head">' + esc(drfT('world.keyFacts')) + ' (' + vm.variables.length + ')</div><ul class="ws-list">';
+        vm.variables.slice(0, 12).forEach(function (v) {
+          h += '<li class="ws-var"><span class="ws-var-name">' + esc(v.name) + '</span><span class="ws-var-value mono">' + esc(v.display) + '</span>';
+          if (v.deltaDisplay) h += '<span class="ws-var-delta mono dir-' + v.delta.direction + '">' + esc(v.deltaDisplay) + '</span>';
+          if (v.provenance) h += '<span class="ws-var-prov">' + esc(v.provenance) + '</span>';
+          h += '</li>';
+        });
+        if (!vm.variables.length) h += '<li class="ws-empty">' + esc(drfT('world.noVars')) + '</li>';
+        h += '</ul></div>';
+      } else {
+        h += '<div class="ws-card"><div class="ws-card-head">' + esc(drfT('world.factsChanged')) + ' (' + (vm.variablesChanged.length + vm.variablesAdded.length) + ')</div><ul class="ws-list">';
+        vm.variablesChanged.slice(0, 12).forEach(function (v) {
+          h += '<li class="ws-var"><span class="ws-var-name">' + esc(v.name) + '</span><span class="ws-var-delta mono dir-' + v.direction + '">' + esc(v.display) + '</span></li>';
+        });
+        vm.variablesAdded.slice(0, 8).forEach(function (v) {
+          h += '<li class="ws-var"><span class="ws-kind mono">' + esc(drfT('world.added')) + '</span><span class="ws-var-name">' + esc(v.name) + '</span><span class="ws-var-value mono">' + esc(v.display) + '</span></li>';
+        });
+        if (!vm.variablesChanged.length && !vm.variablesAdded.length) h += '<li class="ws-empty">' + esc(drfT('world.noChanges')) + '</li>';
+        h += '</ul></div>';
+      }
+      h += '<div class="ws-card"><div class="ws-card-head">' + esc(drfT('world.moves')) + ' (' + vm.moves.length + ')</div><ul class="ws-list">';
+      vm.moves.slice(0, 10).forEach(function (m) {
+        h += '<li class="ws-move">' + (m.actor ? '<span class="ws-actor">' + esc(m.actor) + '</span>' : '') + '<span>' + esc(m.description) + '</span>';
+        if (m.statement) h += '<q class="ws-stmt">' + esc(m.statement) + '</q>';
+        h += '</li>';
+      });
+      if (!vm.moves.length) h += '<li class="ws-empty">' + esc(drfT('world.noMoves')) + '</li>';
+      h += '</ul></div>';
+      h += '<div class="ws-card"><div class="ws-card-head">' + esc(drfT('world.consequences')) + ' (' + (vm.consequences.length + vm.relationshipChanges.length) + ')</div><ul class="ws-list">';
+      vm.consequences.slice(0, 10).forEach(function (c) {
+        h += '<li class="ws-event' + (c.kind === 'red_line' ? ' ev-red-line' : '') + '"><span class="ws-kind mono">' + esc(c.kind === 'red_line' ? drfT('world.redline') : c.kind) + '</span><span>' + esc(c.description) + '</span></li>';
+      });
+      vm.relationshipChanges.slice(0, 6).forEach(function (r) {
+        h += '<li class="ws-event"><span class="ws-kind mono">' + esc(drfT('world.relation')) + '</span><span>' + esc(r.source) + ' — ' + esc(r.target) + ': ' + esc(r.to) + (r.direction ? ' (' + esc(r.direction) + ')' : '') + '</span></li>';
+      });
+      if (!vm.consequences.length && !vm.relationshipChanges.length) h += '<li class="ws-empty">' + esc(drfT('world.noEvents')) + '</li>';
+      h += '</ul></div>';
+      if (!vm.isPast) {
+        h += '<div class="ws-card"><div class="ws-card-head">' + esc(drfT('world.pending')) + ' (' + vm.pending.length + ')</div><ul class="ws-list">';
+        vm.pending.slice(0, 10).forEach(function (p) {
+          h += '<li class="ws-pending"><span class="ws-actor">' + esc(p.actor) + '</span><span>' + esc(p.description) + '</span>';
+          if (p.dueRound !== null && p.dueRound !== undefined) h += '<span class="ws-due mono">' + esc(wsRoundLabel(p.dueRound)) + '</span>';
+          h += '</li>';
+        });
+        if (!vm.pending.length) h += '<li class="ws-empty">' + esc(drfT('world.noPending')) + '</li>';
+        h += '</ul></div>';
+        if (vm.trackRecords.length) {
+          h += '<div class="ws-card"><div class="ws-card-head">' + esc(drfT('world.trackRecords')) + ' (' + vm.trackRecords.length + ')</div><ul class="ws-list">';
+          vm.trackRecords.slice(0, 8).forEach(function (r) {
+            h += '<li class="ws-record' + (r.broken > 0 ? ' tr-broken' : (!r.broken && r.lapsed > 0 ? ' tr-lapsed' : '')) + '"><span class="ws-actor">' + esc(r.actor) + '</span><span class="ws-record-text mono">' + esc(wsTrackLine(r)) + '</span></li>';
+          });
+          h += '</ul></div>';
+        }
+      }
+      if (vm.offers.length || vm.offerCounts) {
+        h += '<div class="ws-card"><div class="ws-card-head">' + esc(vm.isPast ? drfT('world.offersPeriod') : drfT('world.offers')) + ' (' + vm.offers.length + ')</div><ul class="ws-list">';
+        vm.offers.slice(0, 8).forEach(function (it) {
+          h += '<li class="ws-offer"><span class="ws-badge mono offer-' + esc(it.status) + '">' + esc(it.status) + '</span><span class="ws-actor">' + esc(it.proposer) + ' → ' + esc(it.recipient) + '</span><span>' + esc(it.terms) + '</span></li>';
+        });
+        if (!vm.offers.length) h += '<li class="ws-empty">' + esc(drfT('world.noOffers')) + '</li>';
+        h += '</ul>';
+        if (vm.offerCounts && !vm.isPast) {
+          h += '<div class="ws-decisions mono">' + esc(drfT('world.total')) + ' ' + (vm.offerCounts.opened || 0) + ' · ' + esc(drfT('world.accepted')) + ' ' + (vm.offerCounts.accepted || 0) +
+            ' · ' + esc(drfT('world.rejected')) + ' ' + (vm.offerCounts.rejected || 0) + ' · ' + esc(drfT('world.lapsed')) + ' ' + (vm.offerCounts.lapsed || 0) +
+            ' · ' + esc(drfT('world.breached')) + ' ' + (vm.offerCounts.breached || 0) + '</div>';
+        }
+        h += '</div>';
+      }
+      h += '</div>'; // ws-grid
+      if (vm.digest) h += '<details class="ws-digest"><summary>' + esc(drfT('world.digest')) + '</summary><pre class="ws-digest-text">' + esc(vm.digest) + '</pre></details>';
+      if (vm.history.length > 1) {
+        h += '<div class="ws-timeline">';
+        vm.history.forEach(function (r) {
+          h += '<button type="button" class="ws-tick mono st-' + esc(r.arbiterStatus || 'none') + (r.isCurrent ? ' current' : '') + (r.isSelected ? ' selected' : '') +
+            '" data-ws-round="' + r.round + '" title="' + esc(r.headline) + '">' + esc(r.label) + (r.factsChanged ? ' · ' + r.factsChanged + 'Δ' : '') + '</button>';
+        });
+        h += '</div>';
+      }
+      h += '</div>';
+      return h;
+    });
+  }
+  function bindWorld() {
+    var back = body.querySelector('[data-ws-back]');
+    if (back) back.addEventListener('click', function () { renderWorld._round = null; delete rendered.world; show('world'); });
+    var ticks = body.querySelectorAll('.ws-tick');
+    for (var i = 0; i < ticks.length; i++) {
+      ticks[i].addEventListener('click', function () {
+        renderWorld._round = Number(this.getAttribute('data-ws-round'));
+        delete rendered.world;
+        show('world');
+      });
+    }
+  }
+
   var STAGES = {
     log:      { intro: 'log.intro',     render: renderLog },
     dossier:  { intro: 'dossier.brief', render: renderDossier, after: bindDocLang },
     ontology: { intro: 'onto.intro',    render: renderOntology },
     graph:    { intro: 'graph.intro',   render: renderGraphTab, after: mountGraph },
+    world:    { intro: 'world.intro',   render: renderWorld, after: bindWorld },
     forum:    { intro: 'forum.intro',   render: renderForum, after: bindForumSwitch },
     report:   { intro: 'report.intro',  render: renderReport, after: bindDocLang }
   };
@@ -435,6 +756,14 @@
     for (var i = 0; i < btns.length; i++) {
       btns[i].addEventListener('click', function () { show(this.getAttribute('data-tab')); });
     }
+    // the world-model tab exists only for runs exported with a reflexive world
+    // snapshot (world_state.json); hide the button when the bundle has none
+    fetch(BASE + 'world_state.json', { method: 'HEAD' }).then(function (r) {
+      if (!r.ok) {
+        var b = document.querySelector('.stage-tabs button[data-tab="world"]');
+        if (b) b.style.display = 'none';
+      }
+    }).catch(function () {});
     show('report');
   });
 

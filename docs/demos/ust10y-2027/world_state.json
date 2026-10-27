@@ -1,0 +1,3451 @@
+{
+ "actors": [
+  {
+   "agency_class": "central_bank",
+   "agent_id": 0,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "wait",
+    "label": "Hold position: wait, observe, keep current course",
+    "magnitude": 0.0,
+    "option_id": "hold_position",
+    "resolution": null,
+    "reversibility": "reversible",
+    "round": 14,
+    "statement": "",
+    "status": "failed",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "Federal Reserve / FOMC",
+   "pending_commitments": [],
+   "reputation": 0.74,
+   "track_record": {
+    "broken": 0,
+    "kept": 1,
+    "lapsed": 1,
+    "open": 0,
+    "outcomes": {
+     "success": 12
+    },
+    "released": 0,
+    "reliability": 0.5,
+    "reputation": 0.74,
+    "resolved": 2
+   }
+  },
+  {
+   "agency_class": "sovereign_government",
+   "agent_id": 1,
+   "archetype": "actor",
+   "capacity_per_round": 3,
+   "last_action": {
+    "kind": "wait",
+    "label": "Hold position: wait, observe, keep current course",
+    "magnitude": 0.0,
+    "option_id": "hold_position",
+    "resolution": null,
+    "reversibility": "reversible",
+    "round": 14,
+    "statement": "",
+    "status": "failed",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "US Department of the Treasury",
+   "pending_commitments": [],
+   "reputation": 0.74,
+   "track_record": {
+    "broken": 0,
+    "kept": 4,
+    "lapsed": 1,
+    "open": 0,
+    "outcomes": {
+     "success": 12
+    },
+    "released": 0,
+    "reliability": 0.8,
+    "reputation": 0.74,
+    "resolved": 5
+   }
+  },
+  {
+   "agency_class": "central_bank",
+   "agent_id": 2,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "wait",
+    "label": "Hold position: wait, observe, keep current course",
+    "magnitude": 0.0,
+    "option_id": "hold_position",
+    "resolution": null,
+    "reversibility": "reversible",
+    "round": 14,
+    "statement": "",
+    "status": "failed",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "Jerome Powell (or successor Chair)",
+   "pending_commitments": [],
+   "reputation": 0.74,
+   "track_record": {
+    "broken": 0,
+    "kept": 4,
+    "lapsed": 0,
+    "open": 0,
+    "outcomes": {
+     "success": 12
+    },
+    "released": 0,
+    "reliability": 1.0,
+    "reputation": 0.74,
+    "resolved": 4
+   }
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 3,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "wait",
+    "label": "Hold position: wait, observe, keep current course",
+    "magnitude": 0.0,
+    "option_id": "hold_position",
+    "resolution": null,
+    "reversibility": "reversible",
+    "round": 14,
+    "statement": "",
+    "status": "failed",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "Congressional Budget Office",
+   "pending_commitments": [],
+   "reputation": 0.74,
+   "track_record": {
+    "broken": 0,
+    "kept": 2,
+    "lapsed": 1,
+    "open": 0,
+    "outcomes": {
+     "success": 12
+    },
+    "released": 0,
+    "reliability": 0.667,
+    "reputation": 0.74,
+    "resolved": 3
+   }
+  },
+  {
+   "agency_class": "central_bank",
+   "agent_id": 4,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "policy",
+    "label": "Advance your documented plan: Consistent execution of announced reserve-management policy",
+    "magnitude": 0.4,
+    "option_id": "plan_1",
+    "resolution": "success",
+    "resolution_rationale": "Reserve-management purchases continued at announced pace in line with the December 2025 directive.",
+    "reversibility": "sticky",
+    "round": 12,
+    "statement": "The Desk continued reserve-management purchases of shorter-term Treasury coupon securities in October 2027 at a pace matching trend growth in Federal Reserve liabilities plus seasonal fluctuations, in line with the December 2025 FOMC directive; total assets stood near $6.66 trillion as of end-September. The October pr…",
+    "status": "ok",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "New York Fed Markets Desk",
+   "pending_commitments": [],
+   "reputation": 0.54,
+   "track_record": {
+    "broken": 0,
+    "kept": 0,
+    "lapsed": 2,
+    "open": 0,
+    "outcomes": {
+     "success": 2
+    },
+    "released": 0,
+    "reliability": 0.0,
+    "reputation": 0.54,
+    "resolved": 2
+   }
+  },
+  {
+   "agency_class": "legislature",
+   "agent_id": 5,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "wait",
+    "label": "Hold position: wait, observe, keep current course",
+    "magnitude": 0.0,
+    "option_id": "hold_position",
+    "resolution": null,
+    "reversibility": "reversible",
+    "round": 5,
+    "statement": "",
+    "status": "language_mismatch",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "US Congress",
+   "pending_commitments": [],
+   "reputation": 0.5,
+   "track_record": {
+    "broken": 0,
+    "kept": 0,
+    "lapsed": 0,
+    "open": 0,
+    "outcomes": {},
+    "released": 0,
+    "reliability": null,
+    "reputation": 0.5,
+    "resolved": 0
+   }
+  },
+  {
+   "agency_class": "sovereign_government",
+   "agent_id": 6,
+   "archetype": "actor",
+   "capacity_per_round": 3,
+   "last_action": {
+    "commitment_description": "Publish a post-refunding desk read with bid-to-cover, tails and dealer capacity commentary within one period of the November refunding statement",
+    "commitment_id": "c6_12_2",
+    "commitment_target_ids": [],
+    "kind": "operational",
+    "label": "Deliver commitment [c6_12_2]: Publish a post-refunding desk read with bid-to-cover, tails and dealer capacity commentary within one period of the November refunding statement",
+    "magnitude": 0.6,
+    "option_id": "fulfill:c6_12_2",
+    "resolution": "pending",
+    "reversibility": "reversible",
+    "round": 13,
+    "statement": "Post-refunding desk read (per our pre-refunding note): November refunding confirms coupon sizes frozen a fifth consecutive cycle with bills absorbing the $628bn Q4 margin. Bid-to-cover across the refunding complexes printed within recent norms and tails were modest; indirect takes held up. With term premium near 0.96%…",
+    "status": "ok",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "Primary dealers and Treasury market hedge funds",
+   "pending_commitments": [],
+   "reputation": 0.62,
+   "track_record": {
+    "broken": 0,
+    "kept": 0,
+    "lapsed": 2,
+    "open": 0,
+    "outcomes": {
+     "success": 6
+    },
+    "released": 0,
+    "reliability": 0.0,
+    "reputation": 0.62,
+    "resolved": 2
+   }
+  }
+ ],
+ "as_of_date": "2026-10-23",
+ "brief": "# WORLD STATE — as of 2027-12-31 (after 2027-12)\n## Key facts\n- 10-year Treasury constant maturity yield: 4.89 percent\n- Term premium on 10-year zero-coupon bond, monthly mean: 0.99 percent\n- Fed securities holdings reduction under QT: 2.28 trillion U.S. dollars\n- Fed total assets: 6.66 million millions of U.S. dollars\n- Term premium, daily: 0.96 percent\n- 10-year Treasury constant maturity yield, monthly mean: 5.02 percent\n- 2s10s spread, daily: 0.28 percent\n- Fed funds futures, November 2027 contract: 95.45 index points\n- 10-year TIPS yield, monthly mean: 2.66 percent\n- 10-year Treasury constant maturity yield, partial-month mean: 5.01 percent\n- 2s10s spread, monthly mean: 0.31 percent\n- 10-year breakeven inflation rate, monthly mean: 2.34 percent\n- Fed funds futures, February 2027 contract: 95.8 index points\n- 3M10Y spread, daily: 0.78 percent (as of 2026-10-23)\n## Moves last period\n- Federal Reserve / FOMC: Federal Reserve / FOMC makes no recorded move (failed)\n- US Department of the Treasury: US Department of the Treasury makes no recorded move (failed)\n- Jerome Powell (or successor Chair): Jerome Powell (or successor Chair) makes no recorded move (failed)\n- Congressional Budget Office: Congressional Budget Office makes no recorded move (failed)\n## Consequences and events\n- Federal Reserve / FOMC's commitment lapsed: Publish the October 26-27, 2027 FOMC statement following the meeting, communicating the Committee's decision on the target range.\n- US Department of the Treasury's commitment lapsed: Publish the November 2027 quarterly refunding statement on the regular early-November schedule, announcing auction sizes consistent with the regular-and-predictable framework.\n- Congressional Budget Office's commitment lapsed: Publish the next Monthly Budget Review (for September 2027 fiscal-year-to-date data, and the FY2027 year-end summary) in early November 2027.\n- New York Fed Markets Desk's commitment lapsed: Publish the October 2027 prob_rec recession-probability model estimate by mid-November 2027, with the standard non-forecast disclaimer.\n- Primary dealers and Treasury market hedge funds's commitment lapsed: Publish a post-refunding desk read with bid-to-cover, tails and dealer capacity commentary within one period of the November refunding statement\n- If core PCE prints soften as September SEP projected, December FOMC could open door to early-2028 cut, pulling 2s10s steeper.\n## Track records\n- New York Fed Markets Desk: kept 0 of 2 commitments (2 lapsed); moves 2 succeeded\n- Primary dealers and Treasury market hedge funds: kept 0 of 2 commitments (2 lapsed); moves 6 succeeded\n- US Department of the Treasury: kept 4 of 5 commitments (1 lapsed); moves 12 succeeded\n- Congressional Budget Office: kept 2 of 3 commitments (1 lapsed); moves 12 succeeded\n- Federal Reserve / FOMC: kept 1 of 2 commitments (1 lapsed); moves 12 succeeded\n- Jerome Powell (or successor Chair): kept 4 of 4 commitments; moves 12 succeeded",
+ "committed_round": 14,
+ "digest": "Events and consequences:\n- Federal Reserve / FOMC's commitment lapsed: Publish the October 26-27, 2027 FOMC statement following the meeting, communicating the Committee's decision on the target range.\n- US Department of the Treasury's commitment lapsed: Publish the November 2027 quarterly refunding statement on the regular early-November schedule, announcing auction sizes consistent with the regular-and-predictable framework.\n- Congressional Budget Office's commitment lapsed: Publish the next Monthly Budget Review (for September 2027 fiscal-year-to-date data, and the FY2027 year-end summary) in early November 2027.\n- New York Fed Markets Desk's commitment lapsed: Publish the October 2027 prob_rec recession-probability model estimate by mid-November 2027, with the standard non-forecast disclaimer.\n- Primary dealers and Treasury market hedge funds's commitment lapsed: Publish a post-refunding desk read with bid-to-cover, tails and dealer capacity commentary within one period of the November refunding statement\n- If core PCE prints soften as September SEP projected, December FOMC could open door to early-2028 cut, pulling 2s10s steeper.",
+ "headline": "",
+ "history": [
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "a54e9798552d069269a9902039beb9746b67946ffd6fcd2e7d01d9fe5debd10c",
+     "problems": [],
+     "source_hash": "aaa56740a5b3b321ad067cda0415af4db682f6a6066d2c3fe2d8ca99d36714b7",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 4,
+    "total": 4
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → Federal Reserve / FOMC, US Department of the Treasury, Primary dealers and Treasury market hedge funds",
+     "Issue a public statement or warning → Primary dealers and Treasury market hedge funds"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [
+     "[2026-11-04] Next quarterly refunding statement expected (date unconfirmed)"
+    ],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "transactional",
+      "polarity": 0.15,
+      "source": "US Department of the Treasury",
+      "target": "Primary dealers and Treasury market hedge funds",
+      "to": "transactional"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.705,
+      "source": "New York Fed Markets Desk",
+      "target": "Federal Reserve / FOMC",
+      "to": "allied"
+     },
+     {
+      "from": null,
+      "polarity": -0.15,
+      "source": "US Congress",
+      "target": "Jerome Powell (or successor Chair)",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.13,
+      "id": "10_year_treasury_constant_maturity_yield",
+      "name": "10-year Treasury constant maturity yield",
+      "to": 5.0875,
+      "unit": "percent"
+     },
+     {
+      "from": 0.31,
+      "id": "2s10s_spread_daily",
+      "name": "2s10s spread, daily",
+      "to": 0.327,
+      "unit": "percent"
+     },
+     {
+      "from": 95.82,
+      "id": "fed_funds_futures_february_2027_contract",
+      "name": "Fed funds futures, February 2027 contract",
+      "to": 95.76899999999999,
+      "unit": "index points"
+     },
+     {
+      "from": 0.986,
+      "id": "term_premium_daily",
+      "name": "Term premium, daily",
+      "to": 0.9604999999999999,
+      "unit": "percent"
+     }
+    ]
+   },
+   "digest": "The Fed's hold at 3.75-4% with SEP dots at 4.25% through 2027 confirmed a higher-for-longer plateau, prompting dealers to trim near-term cut bets toward the dots. Treasury's November 4 refunding statement kept coupon sizes unchanged, capping duration supply and letting intermediate steepeners partially unwind; the 10-year eased a few basis points from its partial-month highs. The CBO's deficit reminder and Powell's framing of term-premium-driven long yields kept fiscal-supply pressure alive, limiting any rally. Net: a slightly flatter, marginally lower long end with term premium still near 1%.\nMoves:\n- Congressional Budget Office: Issue a public statement or warning: \"CBO reminds market participants that its February 2026 baseline incorporates the 2025 reconciliation act (+$4.7 trillion in deficits over 2026-2035), tariffs (-$3.0 trillion), and immigration actions (+$0.5 trillion), projecting a FY2026 deficit of $1.9 trillion (5.8% of GDP) and debt rising to 120% of GDP by 2036. Under current law, CBO's baseline assumes the 10-year Treasury yield rises gradually through 2027 and remains relatively stable thereafter; CBO does not forecast or comment on market yields, term premiums, or market fluctuations. Full details: cbo.gov/publication/62105.\"\n- Federal Reserve / FOMC: Issue a public statement or warning: \"Following the September 16 decision to raise the federal funds target range to 3-3/4 to 4 percent, the Committee is maintaining that range. SEP medians hold the funds rate at 4.25 percent at end-2026 and end-2027 while core PCE inflation of 3.4 percent this year remains well above our 2 percent objective; policy will stay sufficiently restrictive, and any adjustment will depend on incoming data on inflation and labor market conditions. The Desk will continue reserve-management purchases of shorter-term Treasuries to maintain ample reserves.\"\n- Jerome Powell (or successor Chair): Issue a public statement or warning (→ Federal Reserve / FOMC, US Department of the Treasury, Primary dealers and Treasury market hedge funds): \"Inflation expectations remain well anchored near 2-1/4 to 2-1/2 percent, and the recent rise in longer-term yields reflects higher real yields and term premium rather than a loss of confidence in our framework. With core inflation still elevated, we will maintain a restrictive policy stance and continue to make decisions meeting by meeting, dependent on the data.\"\n- US Department of the Treasury: Issue a public statement or warning (→ Primary dealers and Treasury market hedge funds): \"Treasury announces its quarterly refunding decisions: nominal coupon and FRN auction sizes will remain unchanged, consistent with the August 2026 statement, with marginal financing needs continued to be met by bills issuance. Treasury intends to maintain these auction sizes for at least the next several quarters and believes it remains well positioned to address changes in the fiscal outlook as well as potential changes to the size and composition of the SOMA portfolio.\"\nFacts that changed:\n- 10-year Treasury constant maturity yield: 5.13 percent → 5.09 percent\n- 2s10s spread, daily: 0.31 percent → 0.33 percent\n- Fed funds futures, February 2027 contract: 95.82 index points → 95.77 index points\n- Term premium, daily: 0.99 percent → 0.96 percent\nEvents and consequences:\n- [2026-11-04] Next quarterly refunding statement expected (date unconfirmed)\n- November 4 quarterly refunding: coupon auction sizes unchanged, bills absorb marginal needs; dealers unwind intermediate steepeners, 10-year outperforms modestly.\n- FOMC hold and Powell commentary pull front-end pricing toward the dots; Feb-2027 futures price lower as near-term cut bets fade.\n- CBO deficit reminder circulates among dealers, sustaining term-premium floors despite refunding relief.\nAlliances and rivalries:\n- US Department of the Treasury — Primary dealers and Treasury market hedge funds: transactional (closer)\n- New York Fed Markets Desk — Federal Reserve / FOMC: allied (closer)\n- US Congress — Jerome Powell (or successor Chair): neutral",
+   "headline": "2026-10: 4 decisions · 4 facts changed · 3 events · arbiter=applied · The Fed's hold at 3.75-4% with SEP dots at 4.25% through 2027 confirmed a higher-for-longer plateau, prompting dealers to trim near-term cu…",
+   "narrative": "The Fed's hold at 3.75-4% with SEP dots at 4.25% through 2027 confirmed a higher-for-longer plateau, prompting dealers to trim near-term cut bets toward the dots. Treasury's November 4 refunding statement kept coupon sizes unchanged, capping duration supply and letting intermediate steepeners partially unwind; the 10-year eased a few basis points from its partial-month highs. The CBO's deficit reminder and Powell's framing of term-premium-driven long yields kept fiscal-supply pressure alive, limiting any rally. Net: a slightly flatter, marginally lower long end with term premium still near 1%.",
+   "period_label": "2026-10",
+   "round": 1,
+   "scenario_pressure": {
+    "Bond bear steepening": "down",
+    "Disinflation glide": "flat",
+    "Higher-for-longer plateau": "up",
+    "Recession flight to quality": "flat"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "b4b263296d17f87e19e2eb590341dea47b8729b90a3e16eee20ff4c6bc6c9c28",
+     "problems": [],
+     "source_hash": "f6829d87b27f4b5779736ddaed295ec5127e1ca50c5e0e58517cc37687802c34",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 4,
+    "total": 4
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "Deliver commitment [c1_1_1]: Publish the November 2026 quarterly refunding statement maintaining current nominal coupon and FRN auction sizes, with marginal borrowing met by bills",
+     "Issue a public statement or warning",
+     "Advance your documented plan: Deliver 2% inflation without a recession → Federal Reserve / FOMC, Primary dealers and Treasury market hedge funds, US Department of the Treasury"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "transactional",
+      "polarity": 0.3,
+      "source": "US Department of the Treasury",
+      "target": "Primary dealers and Treasury market hedge funds",
+      "to": "allied"
+     },
+     {
+      "direction": "farther",
+      "from": "directional",
+      "polarity": 0.25,
+      "source": "US Congress",
+      "target": "US Department of the Treasury",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.0875,
+      "id": "10_year_treasury_constant_maturity_yield",
+      "name": "10-year Treasury constant maturity yield",
+      "to": 5.036499999999999,
+      "unit": "percent"
+     },
+     {
+      "from": 4.989,
+      "id": "10_year_treasury_constant_maturity_yield_monthly_mean",
+      "name": "10-year Treasury constant maturity yield, monthly mean",
+      "to": 5.06635,
+      "unit": "percent"
+     },
+     {
+      "from": 0.327,
+      "id": "2s10s_spread_daily",
+      "name": "2s10s spread, daily",
+      "to": 0.3015,
+      "unit": "percent"
+     },
+     {
+      "from": 95.76899999999999,
+      "id": "fed_funds_futures_february_2027_contract",
+      "name": "Fed funds futures, February 2027 contract",
+      "to": 95.803,
+      "unit": "index points"
+     },
+     {
+      "from": 95.44,
+      "id": "fed_funds_futures_november_2027_contract",
+      "name": "Fed funds futures, November 2027 contract",
+      "to": 95.474,
+      "unit": "index points"
+     },
+     {
+      "from": 6753604.0,
+      "id": "fed_total_assets",
+      "name": "Fed total assets",
+      "to": 6723854.0,
+      "unit": "millions of U.S. dollars"
+     },
+     {
+      "from": 2.2,
+      "id": "fed_securities_holdings_reduction_under_qt",
+      "name": "Fed securities holdings reduction under QT",
+      "to": 2.234,
+      "unit": "trillion U.S. dollars"
+     },
+     {
+      "from": 0.9604999999999999,
+      "id": "term_premium_daily",
+      "name": "Term premium, daily",
+      "to": 0.9384,
+      "unit": "percent"
+     }
+    ]
+   },
+   "digest": "The FOMC held the funds rate at 3.75-4.0% with an SEP signaling only gradual disinflation toward 2.5% core PCE, keeping a higher-for-longer plateau priced at the front end. Treasury's November refunding statement froze coupon sizes as promised, and the CBO confirmed deficits tracking ~$2.4T, leaving term premium elevated near 1%. Markets took modest comfort from the issuance freeze: the 10-year drifted down to ~5.02% by month-end, with the curve slightly flatter at the long end.\nMoves:\n- Federal Reserve / FOMC: Issue a public statement or warning: \"At its December 15-16 meeting, the FOMC voted to maintain the federal funds target range at 3-3/4 to 4 percent. Recent data are consistent with SEP medians of core PCE inflation moderating from 3.4 percent in 2026 toward 2.5 percent in 2027; the Committee will remain data-dependent, with no preset path, and will continue reserve-management purchases of shorter-term Treasuries to maintain ample reserves.\"\n- US Department of the Treasury: Deliver commitment [c1_1_1]: Publish the November 2026 quarterly refunding statement maintaining current nominal coupon and FRN auction sizes, with marginal borrowing met by bills: \"Treasury's quarterly refunding statement (November 2026): nominal coupon and FRN auction sizes remain unchanged, consistent with our August 2026 guidance, with marginal financing needs met through bills issuance. Treasury intends to maintain these auction sizes for at least the next several quarters and continues to believe it is well positioned to address changes in the fiscal outlook as well as potential changes to the size and composition of the SOMA portfolio. Issuance remains regular and predictable.\"\n- Congressional Budget Office: Issue a public statement or warning: \"CBO has released its Monthly Budget Review for November 2026: through the first two months of FY2027, the federal budget deficit is tracking consistent with the February 2026 baseline, which projects deficits averaging $2.4 trillion per year over 2027-2036 under current law, with net interest costs the fastest-growing component. CBO does not comment on market yields or term premiums; the baseline's embedded 10-year Treasury yield assumption (rates rising gradually through 2027, then relatively stable) remains unchanged. cbo.gov/budget\"\n- Jerome Powell (or successor Chair): Advance your documented plan: Deliver 2% inflation without a recession (→ Federal Reserve / FOMC, Primary dealers and Treasury market hedge funds, US Department of the Treasury): \"At the December FOMC meeting, the Committee voted to maintain the federal funds target range at 3-3/4 to 4 percent. The updated SEP keeps the median at 4-1/4 percent for end-2026 and end-2027, with core PCE medians of 3.4 percent this year and 2.5 percent next. Inflation expectations remain anchored, and the elevated level of longer-term yields reflects term premium rather than a loss of policy credibility; we will continue to make decisions meeting by meeting, dependent on the data.\"\nFacts that changed:\n- 10-year Treasury constant maturity yield: 5.09 percent → 5.04 percent\n- 10-year Treasury constant maturity yield, monthly mean: 4.99 percent → 5.07 percent\n- 2s10s spread, daily: 0.33 percent → 0.3 percent\n- Fed funds futures, February 2027 contract: 95.77 index points → 95.8 index points\n- Fed funds futures, November 2027 contract: 95.44 index points → 95.47 index points\n- Fed total assets: 6.75 million millions of U.S. dollars → 6.72 million millions of U.S. dollars\n- Fed securities holdings reduction under QT: 2.2 trillion U.S. dollars → 2.23 trillion U.S. dollars\n- Term premium, daily: 0.96 percent → 0.94 percent\nEvents and consequences:\n- Primary dealers noted modest relief at the coupon auction freeze but flagged bills-share growth and persistent intermediary capacity strain in post-refunding surveys.\n- Front-end pricing firmed toward the post-meeting dots; steepener positions were trimmed as the 2s10s flattened to ~30bp.\n- Treasury delivered the November refunding statement on schedule, maintaining coupon and FRN auction sizes with bills meeting marginal needs.\n- Congressional staff floated renewed testimony requests on issuance composition and debt-service projections for FY2027 following CBO's on-baseline deficit tracking.\n- US Department of the Treasury fulfilled commitment [c1_1_1]: Publish the November 2026 quarterly refunding statement maintaining current nominal coupon and FRN auction sizes, with marginal borrowing met by bills\nAlliances and rivalries:\n- US Department of the Treasury — Primary dealers and Treasury market hedge funds: allied (closer)\n- US Congress — US Department of the Treasury: allied (farther)",
+   "headline": "2026-12: 4 decisions · 8 facts changed · 5 events · arbiter=applied · The FOMC held the funds rate at 3.75-4.0% with an SEP signaling only gradual disinflation toward 2.5% core PCE, keeping a higher-for-longer…",
+   "narrative": "The FOMC held the funds rate at 3.75-4.0% with an SEP signaling only gradual disinflation toward 2.5% core PCE, keeping a higher-for-longer plateau priced at the front end. Treasury's November refunding statement froze coupon sizes as promised, and the CBO confirmed deficits tracking ~$2.4T, leaving term premium elevated near 1%. Markets took modest comfort from the issuance freeze: the 10-year drifted down to ~5.02% by month-end, with the curve slightly flatter at the long end.",
+   "period_label": "2026-12",
+   "round": 2,
+   "scenario_pressure": {
+    "Bond bear steepening": "down",
+    "Disinflation glide": "flat",
+    "Higher-for-longer plateau": "up",
+    "Recession flight to quality": "down"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "9ed078a72e4f62496d6450e0a9420a821e504849045e3bdb41b1242e2acc701a",
+     "problems": [],
+     "source_hash": "3188482778c12299ff0b940c3efa17756af9be2984fa21e741a1590ee9736969",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 5,
+    "total": 5
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning → Primary dealers and Treasury market hedge funds, US Congress",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → Primary dealers and Treasury market hedge funds, US Congress",
+     "Accommodate or publicly answer Jerome Powell (or successor Chair)'s move → Jerome Powell (or successor Chair)"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "If data soften, markets reprice cuts against the dots, pulling the 10-year lower by early 2027."
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.5625,
+      "source": "US Department of the Treasury",
+      "target": "Primary dealers and Treasury market hedge funds",
+      "to": "allied"
+     },
+     {
+      "from": null,
+      "polarity": 0.15,
+      "source": "Primary dealers and Treasury market hedge funds",
+      "target": "Jerome Powell (or successor Chair)",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.036499999999999,
+      "id": "10_year_treasury_constant_maturity_yield",
+      "name": "10-year Treasury constant maturity yield",
+      "to": 4.9174999999999995,
+      "unit": "percent"
+     },
+     {
+      "from": 5.06635,
+      "id": "10_year_treasury_constant_maturity_yield_monthly_mean",
+      "name": "10-year Treasury constant maturity yield, monthly mean",
+      "to": 4.94735,
+      "unit": "percent"
+     },
+     {
+      "from": 5.202,
+      "id": "10_year_treasury_constant_maturity_yield_partial_month_mean",
+      "name": "10-year Treasury constant maturity yield, partial-month mean",
+      "to": 4.9198,
+      "unit": "percent"
+     },
+     {
+      "from": 0.3015,
+      "id": "2s10s_spread_daily",
+      "name": "2s10s spread, daily",
+      "to": 0.276,
+      "unit": "percent"
+     },
+     {
+      "from": 95.474,
+      "id": "fed_funds_futures_november_2027_contract",
+      "name": "Fed funds futures, November 2027 contract",
+      "to": 95.4485,
+      "unit": "index points"
+     },
+     {
+      "from": 6723854.0,
+      "id": "fed_total_assets",
+      "name": "Fed total assets",
+      "to": 6703790.6,
+      "unit": "millions of U.S. dollars"
+     },
+     {
+      "from": 2.234,
+      "id": "fed_securities_holdings_reduction_under_qt",
+      "name": "Fed securities holdings reduction under QT",
+      "to": 2.251,
+      "unit": "trillion U.S. dollars"
+     },
+     {
+      "from": 0.96,
+      "id": "term_premium_on_10_year_zero_coupon_bond_monthly_mean",
+      "name": "Term premium on 10-year zero-coupon bond, monthly mean",
+      "to": 0.926,
+      "unit": "percent"
+     },
+     {
+      "from": 0.9384,
+      "id": "term_premium_daily",
+      "name": "Term premium, daily",
+      "to": 0.9129,
+      "unit": "percent"
+     }
+    ]
+   },
+   "digest": "The January window was dominated by confirmation rather than surprise: FOMC minutes reinforced a higher-for-longer plateau at 3.75–4% with core PCE at 3.4%, while Powell's testimony kept the data-dependent framing. Treasury's calendar statement was read by dealers as a signal that February coupon sizes will again be frozen, easing bear-steepening pressure; term premium drifted down and the 10-year consolidated below 5%, ending near 4.88%. QT continued on autopilot. CBO's review confirming a ~$2.4 trillion deficit path limited any rally.\nMoves:\n- US Department of the Treasury: Issue a public statement or warning (→ Primary dealers and Treasury market hedge funds, US Congress): \"Treasury announces it will publish its quarterly refunding materials on the regular calendar in early February 2027, beginning with the net marketable borrowing estimate on February 1 and the refunding statement on February 3. Consistent with the August and November 2026 statements, current nominal coupon and FRN auction sizes leave Treasury well positioned to address changes in the fiscal outlook and potential changes to the size and composition of the SOMA portfolio. Issuance remains regular and predictable.\"\n- Federal Reserve / FOMC: Issue a public statement or warning: \"The Federal Reserve today released minutes of the December 15-16 FOMC meeting. Participants judged that maintaining the target range at 3-3/4 to 4 percent remains appropriate while core PCE inflation, at 3.4 percent, remains well above the 2 percent objective; several participants emphasized that the projected moderation to 2.5 percent in 2027 is conditional on continued tightness in labor markets near 4.1 percent unemployment. The Desk will continue reserve-management purchases of shorter-term Treasuries to maintain ample reserves.\"\n- Congressional Budget Office: Issue a public statement or warning: \"CBO has released its Monthly Budget Review for December 2026: through the first quarter of FY2027, the federal budget deficit remains consistent with the February 2026 baseline, which under current law projects deficits averaging $2.4 trillion per year over 2027-2036, with debt held by the public rising to 120 percent of GDP by 2036. Net interest outlays continue to be the fastest-growing component of spending. CBO reiterates that it does not comment on market yields, term premiums, or monetary policy; the baseline's embedded interest-rate assumptions are unchanged. cbo.gov/budget\"\n- Jerome Powell (or successor Chair): Issue a public statement or warning (→ Primary dealers and Treasury market hedge funds, US Congress): \"In testimony this month I will reiterate that the Committee's decisions remain data-dependent and meeting by meeting. With core PCE still well above 2 percent and inflation expectations anchored, we see no need to respond to movements in longer-term yields that reflect term premium rather than monetary conditions; the stance remains restrictive and we retain full optionality for the March meeting and beyond.\"\n- Primary dealers and Treasury market hedge funds: Accommodate or publicly answer Jerome Powell (or successor Chair)'s move (→ Jerome Powell (or successor Chair)): \"Dealers note the Chair's read of term premium as a supply-and-capacity signal; we agree breakevens (2.35%, 5y5y 2.34%) show this is not an inflation story. With coupon sizes frozen since August and marginal borrowing in bills, intermediation capacity is holding: recent coupon auctions have covered smoothly, term premium at 0.94% and DGS10 at 5.04% mean compensation for warehousing duration is the best in years. Our message is unchanged: we will keep absorbing the bill-heavy mix at current sizes, but capacity at refundings is finite — sustained bill-share growth keeps balance-sheet strain on our radar.\"\nFacts that changed:\n- 10-year Treasury constant maturity yield: 5.04 percent → 4.92 percent\n- 10-year Treasury constant maturity yield, monthly mean: 5.07 percent → 4.95 percent\n- 10-year Treasury constant maturity yield, partial-month mean: 5.2 percent → 4.92 percent\n- 2s10s spread, daily: 0.3 percent → 0.28 percent\n- Fed funds futures, November 2027 contract: 95.47 index points → 95.45 index points\n- Fed total assets: 6.72 million millions of U.S. dollars → 6.70 million millions of U.S. dollars\n- Fed securities holdings reduction under QT: 2.23 trillion U.S. dollars → 2.25 trillion U.S. dollars\n- Term premium on 10-year zero-coupon bond, monthly mean: 0.96 percent → 0.93 percent\nEvents and consequences:\n- If data soften, markets reprice cuts against the dots, pulling the 10-year lower by early 2027.\n- FOMC minutes read as confirming a plateau; front-end pricing stays near the dots with Feb contract unchanged near 95.80.\n- Treasury's refunding calendar statement interpreted as a coupon-size freeze signal; dealers reduce bear-steepener positioning, term premium eases.\n- CBO's December review keeps $2.4tn deficit baseline in focus, capping the rally in Treasuries.\n- Powell testimony: rate moves not pre-announced, no response to long-end moves; dealers publicly accommodate his term-premium read.\nAlliances and rivalries:\n- US Department of the Treasury — Primary dealers and Treasury market hedge funds: allied (closer)\n- Primary dealers and Treasury market hedge funds — Jerome Powell (or successor Chair): neutral",
+   "headline": "2027-01: 5 decisions · 9 facts changed · 4 events · arbiter=applied · The January window was dominated by confirmation rather than surprise: FOMC minutes reinforced a higher-for-longer plateau at 3.75–4% with…",
+   "narrative": "The January window was dominated by confirmation rather than surprise: FOMC minutes reinforced a higher-for-longer plateau at 3.75–4% with core PCE at 3.4%, while Powell's testimony kept the data-dependent framing. Treasury's calendar statement was read by dealers as a signal that February coupon sizes will again be frozen, easing bear-steepening pressure; term premium drifted down and the 10-year consolidated below 5%, ending near 4.88%. QT continued on autopilot. CBO's review confirming a ~$2.4 trillion deficit path limited any rally.",
+   "period_label": "2027-01",
+   "round": 3,
+   "scenario_pressure": {
+    "Bond bear steepening": "down",
+    "Disinflation glide": "flat",
+    "Higher-for-longer plateau": "up",
+    "Recession flight to quality": "flat"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "79506cf82fd496f9aaef3a93073013d7eda32e5c0bff6889264e896747dc2633",
+     "problems": [],
+     "source_hash": "9da03fc77d5dde36adccd7a394112f33276ce2b7bb4ec1dc9eeb47090343eb1d",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 5,
+    "total": 5
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning → Primary dealers and Treasury market hedge funds, US Congress",
+     "Advance your documented plan: Consistent execution of announced reserve-management policy",
+     "Accommodate or publicly answer Primary dealers and Treasury market hedge funds's move → Primary dealers and Treasury market hedge funds",
+     "Issue a public statement or warning → US Congress, Primary dealers and Treasury market hedge funds",
+     "Issue a public statement or warning → Primary dealers and Treasury market hedge funds, US Congress"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "QT continues shrinking the balance sheet; further runoff keeps term premium under upward pressure into 2027.",
+     "If Q1 2027 refunding extends the coupon freeze while deficits track $2.4T, bills share rises toward norms, adding modest term premium pressure",
+     "Congress may hold testimony on issuance composition and debt-service projections",
+     "February refunding statement (Feb 3) confirms coupon sizes frozen; further modest term-premium compression."
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "transactional",
+      "polarity": 0.35,
+      "source": "Federal Reserve / FOMC",
+      "target": "US Department of the Treasury",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.7125,
+      "source": "US Department of the Treasury",
+      "target": "Primary dealers and Treasury market hedge funds",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 4.94735,
+      "id": "10_year_treasury_constant_maturity_yield_monthly_mean",
+      "name": "10-year Treasury constant maturity yield, monthly mean",
+      "to": 4.91335,
+      "unit": "percent"
+     },
+     {
+      "from": 0.276,
+      "id": "2s10s_spread_daily",
+      "name": "2s10s spread, daily",
+      "to": 0.2675,
+      "unit": "percent"
+     },
+     {
+      "from": 95.4485,
+      "id": "fed_funds_futures_november_2027_contract",
+      "name": "Fed funds futures, November 2027 contract",
+      "to": 95.457,
+      "unit": "index points"
+     },
+     {
+      "from": 6703790.6,
+      "id": "fed_total_assets",
+      "name": "Fed total assets",
+      "to": 6687462.609999999,
+      "unit": "millions of U.S. dollars"
+     },
+     {
+      "from": 2.251,
+      "id": "fed_securities_holdings_reduction_under_qt",
+      "name": "Fed securities holdings reduction under QT",
+      "to": 2.26375,
+      "unit": "trillion U.S. dollars"
+     },
+     {
+      "from": 0.926,
+      "id": "term_premium_on_10_year_zero_coupon_bond_monthly_mean",
+      "name": "Term premium on 10-year zero-coupon bond, monthly mean",
+      "to": 0.943,
+      "unit": "percent"
+     },
+     {
+      "from": 0.9129,
+      "id": "term_premium_daily",
+      "name": "Term premium, daily",
+      "to": 0.8874,
+      "unit": "percent"
+     }
+    ]
+   },
+   "digest": "A quiet, status-quo February: Treasury's refunding statement froze coupon sizes, the FOMC held at 3.75-4%, and the Desk's reserve-management purchases proceeded as documented. Dealers took the freeze as expected relief; term premium eased slightly and the 10-year drifted toward 4.88-4.90%. With the Fed on a plateau and deficits tracking baseline, the move was consolidation rather than repricing.\nMoves:\n- US Department of the Treasury: Issue a public statement or warning (→ Primary dealers and Treasury market hedge funds, US Congress): \"Treasury's February 2027 quarterly refunding statement, issued February 3, announces that nominal coupon and FRN auction sizes will remain unchanged, with marginal financing needs continuing to be met by bills issuance. Current auction sizes leave Treasury well positioned to address changes in the fiscal outlook and potential changes to the size and composition of the SOMA portfolio for at least the next several quarters. Issuance remains regular and predictable.\"\n- New York Fed Markets Desk: Advance your documented plan: Consistent execution of announced reserve-management policy: \"The Desk continued reserve-management purchases of shorter-term Treasury coupon securities in February 2027 at a pace matching trend growth in Federal Reserve liabilities plus seasonal fluctuations, in line with the December 2025 FOMC directive. Total assets stood near $6.70 trillion as of end-January. The January prob_rec model update, based on the 10-year–3-month Treasury spread with a twelve-month forward window, is scheduled for release within the first two weeks of February; as always, this estimate is not an official forecast.\"\n- Jerome Powell (or successor Chair): Accommodate or publicly answer Primary dealers and Treasury market hedge funds's move (→ Primary dealers and Treasury market hedge funds): \"We have noted market participants' feedback on intermediation capacity and the absorption of bill-heavy issuance. Our reserve-management purchases in shorter-term Treasuries remain purely technical — supporting ample reserves and market functioning, not a change in the stance of policy. With the target range at 3-3/4 to 4 percent, decisions will continue to be made meeting by meeting, on the data.\"\n- Congressional Budget Office: Issue a public statement or warning (→ US Congress, Primary dealers and Treasury market hedge funds): \"CBO has released its Monthly Budget Review for January 2027: through the first four months of FY2027, the federal budget deficit remains on a path consistent with the February 2026 baseline, which under current law projects deficits averaging $2.4 trillion per year over 2027-2036 and debt held by the public reaching 120 percent of GDP by 2036. Net interest outlays continue to rise as the fastest-growing component of primary spending. CBO does not comment on market yields, term premiums, or refunding decisions; the baseline's embedded interest-rate assumptions are unchanged.\"\n- Federal Reserve / FOMC: Issue a public statement or warning (→ Primary dealers and Treasury market hedge funds, US Congress): \"At its January 26-27 meeting, the FOMC voted to maintain the target range for the federal funds rate at 3-3/4 to 4 percent. The Committee judged that inflation remains somewhat elevated relative to the 2 percent objective and that the policy stance is well positioned to support the projected disinflation toward the 2.5 percent 2027 SEP median while the labor market remains near 4.1 percent unemployment. The Desk will continue reserve-management purchases of shorter-term Treasuries to maintain ample reserves.\"\nFacts that changed:\n- 10-year Treasury constant maturity yield, monthly mean: 4.95 percent → 4.91 percent\n- 2s10s spread, daily: 0.28 percent → 0.27 percent\n- Fed funds futures, November 2027 contract: 95.45 index points → 95.46 index points\n- Fed total assets: 6.70 million millions of U.S. dollars → 6.69 million millions of U.S. dollars\n- Fed securities holdings reduction under QT: 2.25 trillion U.S. dollars → 2.26 trillion U.S. dollars\n- Term premium on 10-year zero-coupon bond, monthly mean: 0.93 percent → 0.94 percent\n- Term premium, daily: 0.91 percent → 0.89 percent\nEvents and consequences:\n- QT continues shrinking the balance sheet; further runoff keeps term premium under upward pressure into 2027.\n- If Q1 2027 refunding extends the coupon freeze while deficits track $2.4T, bills share rises toward norms, adding modest term premium pressure\n- Congress may hold testimony on issuance composition and debt-service projections\n- February refunding statement (Feb 3) confirms coupon sizes frozen; further modest term-premium compression.\n- Dealers absorbed the Feb 3 refunding smoothly; relief at the coupon freeze kept repo and futures basis conditions orderly, with intermediation capacity flagged as the constraint on any future size increase\n- FOMC hold and Powell's technical-purchases framing reinforced the higher-for-longer plateau read; front-end pricing firmed toward the dots while long yields eased on term-premium compression\n- CBO's January review confirming deficits on the $2.4T baseline path drew only muted market reaction; bill-heavy financing continues to raise bills share toward norms\n- Desk's reserve-management purchases proceeded without market-functioning incidents; reserves remain ample\nAlliances and rivalries:\n- Federal Reserve / FOMC — US Department of the Treasury: allied (closer)\n- US Department of the Treasury — Primary dealers and Treasury market hedge funds: allied (closer)",
+   "headline": "2027-02: 5 decisions · 7 facts changed · 4 events · arbiter=applied · A quiet, status-quo February: Treasury's refunding statement froze coupon sizes, the FOMC held at 3.75-4%, and the Desk's reserve-managemen…",
+   "narrative": "A quiet, status-quo February: Treasury's refunding statement froze coupon sizes, the FOMC held at 3.75-4%, and the Desk's reserve-management purchases proceeded as documented. Dealers took the freeze as expected relief; term premium eased slightly and the 10-year drifted toward 4.88-4.90%. With the Fed on a plateau and deficits tracking baseline, the move was consolidation rather than repricing.",
+   "period_label": "2027-02",
+   "round": 4,
+   "scenario_pressure": {
+    "Bond bear steepening": "down",
+    "Disinflation glide": "flat",
+    "Higher-for-longer plateau": "up",
+    "Recession flight to quality": "flat"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "6ad3011cbaca0faff4630acd4102c548aed42dbe5c7a52ad0235a018445bcb71",
+     "problems": [],
+     "source_hash": "2f67e419d7f24f91b8a06cc6063a65d2a15abc344931f93e5d1692fe3cde2ffe",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 1,
+    "invalid": 0,
+    "language_mismatch": 1,
+    "ok": 5,
+    "total": 6
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning → US Congress, Primary dealers and Treasury market hedge funds",
+     "Deliver commitment [c1_4_2]: Publish the February 2027 refunding statement on February 3 maintaining unchanged nominal coupon and FRN auction sizes",
+     "Advance your documented plan: Deliver 2% inflation without a recession → Federal Reserve / FOMC, Primary dealers and Treasury market hedge funds",
+     "Accommodate or publicly answer US Department of the Treasury's move → US Department of the Treasury",
+     "Issue a public statement or warning → Primary dealers and Treasury market hedge funds, US Congress",
+     "US Congress makes no recorded move (language_mismatch)"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Did not materialise: Congressional testimony requests on debt-service costs and balance-sheet policy materialize, keeping fiscal-premium pressure alive."
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.9675,
+      "source": "US Department of the Treasury",
+      "target": "Primary dealers and Treasury market hedge funds",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.82,
+      "source": "Jerome Powell (or successor Chair)",
+      "target": "Federal Reserve / FOMC",
+      "to": "allied"
+     },
+     {
+      "direction": "farther",
+      "from": "neutral",
+      "polarity": -0.3,
+      "source": "US Congress",
+      "target": "Jerome Powell (or successor Chair)",
+      "to": "adversarial"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 4.9174999999999995,
+      "id": "10_year_treasury_constant_maturity_yield",
+      "name": "10-year Treasury constant maturity yield",
+      "to": 4.968500000000001,
+      "unit": "percent"
+     },
+     {
+      "from": 4.91335,
+      "id": "10_year_treasury_constant_maturity_yield_monthly_mean",
+      "name": "10-year Treasury constant maturity yield, monthly mean",
+      "to": 4.9388499999999995,
+      "unit": "percent"
+     },
+     {
+      "from": 95.457,
+      "id": "fed_funds_futures_november_2027_contract",
+      "name": "Fed funds futures, November 2027 contract",
+      "to": 95.4485,
+      "unit": "index points"
+     },
+     {
+      "from": 6687462.609999999,
+      "id": "fed_total_assets",
+      "name": "Fed total assets",
+      "to": 6673190.6,
+      "unit": "millions of U.S. dollars"
+     },
+     {
+      "from": 2.26375,
+      "id": "fed_securities_holdings_reduction_under_qt",
+      "name": "Fed securities holdings reduction under QT",
+      "to": 2.2765,
+      "unit": "trillion U.S. dollars"
+     },
+     {
+      "from": 0.943,
+      "id": "term_premium_on_10_year_zero_coupon_bond_monthly_mean",
+      "name": "Term premium on 10-year zero-coupon bond, monthly mean",
+      "to": 0.9515,
+      "unit": "percent"
+     },
+     {
+      "from": 0.8874,
+      "id": "term_premium_daily",
+      "name": "Term premium, daily",
+      "to": 0.9214,
+      "unit": "percent"
+     }
+    ]
+   },
+   "digest": "The Fed held the funds rate at 3.75-4% and reiterated a data-dependent stance, keeping cut expectations well contained; QT continued on trend. Treasury delivered the February refunding statement as promised, preserving the coupon freeze, and dealers reported orderly auctions. The CBO's confirmation that deficits still track a ~$2.4 trillion baseline kept fiscal-supply pressure on the term premium, leaving the 10-year drifting slightly higher within its recent range as higher-for-longer pricing firmed.\nMoves:\n- Congressional Budget Office: Issue a public statement or warning (→ US Congress, Primary dealers and Treasury market hedge funds): \"CBO has released its Monthly Budget Review for February 2027: through the first five months of FY2027, the federal budget deficit continues to track the February 2026 baseline, which under current law projects deficits averaging $2.4 trillion per year over 2027-2036, with debt held by the public reaching 120 percent of GDP by 2036. Net interest outlays remain the fastest-growing component of primary spending. CBO's next full Budget and Economic Outlook update is scheduled for spring 2027; interest-rate and economic assumptions in the current baseline are unchanged pending that update.\"\n- US Department of the Treasury: Deliver commitment [c1_4_2]: Publish the February 2027 refunding statement on February 3 maintaining unchanged nominal coupon and FRN auction sizes: \"Treasury confirms delivery of the February 2027 quarterly refunding statement, issued February 3: nominal coupon and FRN auction sizes remain unchanged, with marginal financing needs continuing to be met by bills issuance. Treasury continues to believe it is well positioned to address changes in the fiscal outlook and potential changes to the size and composition of the SOMA portfolio for at least the next several quarters. Issuance remains regular and predictable; the next quarterly refunding announcement is scheduled for early May 2027.\"\n- Jerome Powell (or successor Chair): Advance your documented plan: Deliver 2% inflation without a recession (→ Federal Reserve / FOMC, Primary dealers and Treasury market hedge funds): \"At the March meeting the Committee held the federal funds target range at 3-3/4 to 4 percent. Inflation has moved down but remains above 2 percent; we will need convincing evidence before adjusting policy. Decisions will continue to be made meeting by meeting, on the data, and reserve-management operations remain technical, supporting ample reserves and market functioning.\"\n- Primary dealers and Treasury market hedge funds: Accommodate or publicly answer US Department of the Treasury's move (→ US Department of the Treasury): \"Dealers take note of the February refunding statement: coupon and FRN sizes unchanged with marginal borrowing in bills, and bill share near its TBAC-cited historical average of ~23%. Recent coupon auctions have covered smoothly with tailing spreads contained, and DGS10 easing to 4.91% with term premium at 0.94% confirms our read: compensation for warehousing duration remains adequate at current sizes. We will continue absorbing the bill-heavy mix within existing balance-sheet limits, while flagging — as data, not opposition — that capacity at future refundings is finite if the deficit path pushes bill share persistently higher.\"\n- Federal Reserve / FOMC: Issue a public statement or warning (→ Primary dealers and Treasury market hedge funds, US Congress): \"At its March 16-17 meeting, the FOMC voted to maintain the target range for the federal funds rate at 3-3/4 to 4 percent. The Committee judged that the policy stance remains appropriately positioned to support continued disinflation toward the 2.5 percent 2027 SEP median while sustaining labor market conditions near 4.1 percent unemployment. The Desk will continue reserve-management purchases of shorter-term Treasury coupon securities and bills to maintain ample reserves, and the Standing Repo Facility remains available as a backstop.\"\nFacts that changed:\n- 10-year Treasury constant maturity yield: 4.92 percent → 4.97 percent\n- 10-year Treasury constant maturity yield, monthly mean: 4.91 percent → 4.94 percent\n- Fed funds futures, November 2027 contract: 95.46 index points → 95.45 index points\n- Fed total assets: 6.69 million millions of U.S. dollars → 6.67 million millions of U.S. dollars\n- Fed securities holdings reduction under QT: 2.26 trillion U.S. dollars → 2.28 trillion U.S. dollars\n- Term premium on 10-year zero-coupon bond, monthly mean: 0.94 percent → 0.95 percent\n- Term premium, daily: 0.89 percent → 0.92 percent\nEvents and consequences:\n- Did not materialise: Congressional testimony requests on debt-service costs and balance-sheet policy materialize, keeping fiscal-premium pressure alive.\n- FOMC holds at 3.75-4%; dealers read it as a higher-for-longer plateau, modest front-end repricing with fewer 2027 cuts priced.\n- Treasury publishes Feb 3 refunding statement with unchanged coupon/FRN sizes; dealers accommodate, auctions cover smoothly.\n- CBO monthly review shows FY2027 deficit tracking ~$2.4T baseline, sustaining fiscal-premium pressure in long-end pricing.\n- US Department of the Treasury fulfilled commitment [c1_4_2]: Publish the February 2027 refunding statement on February 3 maintaining unchanged nominal coupon and FRN auction sizes\nAlliances and rivalries:\n- US Department of the Treasury — Primary dealers and Treasury market hedge funds: allied (closer)\n- Jerome Powell (or successor Chair) — Federal Reserve / FOMC: allied (closer)\n- US Congress — Jerome Powell (or successor Chair): adversarial (farther)",
+   "headline": "2027-03: 6 decisions · 7 facts changed · 4 events · arbiter=applied · The Fed held the funds rate at 3.75-4% and reiterated a data-dependent stance, keeping cut expectations well contained; QT continued on tre…",
+   "narrative": "The Fed held the funds rate at 3.75-4% and reiterated a data-dependent stance, keeping cut expectations well contained; QT continued on trend. Treasury delivered the February refunding statement as promised, preserving the coupon freeze, and dealers reported orderly auctions. The CBO's confirmation that deficits still track a ~$2.4 trillion baseline kept fiscal-supply pressure on the term premium, leaving the 10-year drifting slightly higher within its recent range as higher-for-longer pricing firmed.",
+   "period_label": "2027-03",
+   "round": 5,
+   "scenario_pressure": {
+    "Bond bear steepening": "flat",
+    "Disinflation glide": "flat",
+    "Higher-for-longer plateau": "up",
+    "Recession flight to quality": "down"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "4db7c06e07b455465a04692eed3f14617d8f063e030ac05ae2f403749011ab7e",
+     "problems": [],
+     "source_hash": "eaf65c7d51e04bb99b7803dfc863312660915c9ff1980f3e94d823c2bf243e93",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 1,
+    "invalid": 1,
+    "language_mismatch": 0,
+    "ok": 5,
+    "total": 6
+   },
+   "deterministic": {
+    "actions": [
+     "New York Fed Markets Desk makes no recorded move (invalid)",
+     "Issue a public statement or warning → US Congress, Primary dealers and Treasury market hedge funds",
+     "Issue a public statement or warning → US Congress, Primary dealers and Treasury market hedge funds",
+     "Deliver commitment [c2_5_1]: Deliver the March 2027 FOMC statement and Chair framing holding the target range at 3-3/4 to 4 percent with data-dependent guidance",
+     "Issue a public statement or warning → US Congress, Primary dealers and Treasury market hedge funds",
+     "Accommodate or publicly answer Congressional Budget Office's move → Congressional Budget Office"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [
+     "New York Fed Markets Desk: Publish the January 2027 prob_rec recession-probability model estimate by mid-February 2027, with standard non-forecast disclaimer."
+    ],
+    "effects_fired": [
+     "Did not materialise: Congress may request Treasury testimony on debt-service projections"
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 1.0,
+      "source": "US Department of the Treasury",
+      "target": "Primary dealers and Treasury market hedge funds",
+      "to": "allied"
+     },
+     {
+      "from": null,
+      "polarity": 0.0,
+      "source": "US Congress",
+      "target": "Federal Reserve / FOMC",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 4.968500000000001,
+      "id": "10_year_treasury_constant_maturity_yield",
+      "name": "10-year Treasury constant maturity yield",
+      "to": 4.977,
+      "unit": "percent"
+     },
+     {
+      "from": 6673190.6,
+      "id": "fed_total_assets",
+      "name": "Fed total assets",
+      "to": 6669952.609999999,
+      "unit": "millions of U.S. dollars"
+     },
+     {
+      "from": 2.2765,
+      "id": "fed_securities_holdings_reduction_under_qt",
+      "name": "Fed securities holdings reduction under QT",
+      "to": 2.2849999999999997,
+      "unit": "trillion U.S. dollars"
+     },
+     {
+      "from": 0.9515,
+      "id": "term_premium_on_10_year_zero_coupon_bond_monthly_mean",
+      "name": "Term premium on 10-year zero-coupon bond, monthly mean",
+      "to": 0.943,
+      "unit": "percent"
+     },
+     {
+      "from": 0.9214,
+      "id": "term_premium_daily",
+      "name": "Term premium, daily",
+      "to": 0.9384,
+      "unit": "percent"
+     },
+     {
+      "from": 2.351,
+      "id": "10_year_breakeven_inflation_rate_monthly_mean",
+      "name": "10-year breakeven inflation rate, monthly mean",
+      "to": 2.34165,
+      "unit": "percent"
+     }
+    ]
+   },
+   "digest": "A communication-heavy round: Treasury reaffirmed frozen coupon issuance, the Fed held and framed higher-for-longer, and CBO's net-interest tables shifted congressional questioning toward debt-service costs. Credible statements from high-track-record actors stabilized term premium rather than repricing it, so the 10-year hovered near 4.95% with a modestly flatter 2s10s. No policy rates changed; QT proceeded mechanically.\nMoves:\n- US Department of the Treasury: Issue a public statement or warning (→ US Congress, Primary dealers and Treasury market hedge funds): \"In testimony before the April congressional hearings, Treasury reaffirms its commitment to regular and predictable issuance: nominal coupon and FRN auction sizes remain unchanged, with marginal financing needs met by bills, and bills outstanding remain near the historical average share of roughly 23%. Treasury believes current auction sizes leave it well positioned to address changes in the fiscal outlook and potential changes to the SOMA portfolio for at least the next several quarters. Debt-management decisions are made on cost, risk, and market-functioning considerations, and we do not comment on monetary policy or yield levels.\"\n- Congressional Budget Office: Issue a public statement or warning (→ US Congress, Primary dealers and Treasury market hedge funds): \"CBO has delivered to the requesting Committees supplemental tables decomposing projected net interest outlays by maturity bucket under the February 2026 baseline, together with reestimates incorporating the current auction calendar. CBO also confirms that the spring 2027 Budget and Economic Outlook update will be published in May, with interest-rate and economic assumptions reassessed at that time; all estimates reflect current law only.\"\n- Jerome Powell (or successor Chair): Deliver commitment [c2_5_1]: Deliver the March 2027 FOMC statement and Chair framing holding the target range at 3-3/4 to 4 percent with data-dependent guidance: \"At its March 16-17 meeting, the Federal Reserve held the federal funds target range at 3-3/4 to 4 percent. Inflation has moved down but remains above our 2 percent objective, and we will need convincing evidence before adjusting policy. We will continue to decide meeting by meeting, on the data; reserve-management purchases remain purely technical, calibrated to maintain ample reserves and smooth market functioning.\"\n- Federal Reserve / FOMC: Issue a public statement or warning (→ US Congress, Primary dealers and Treasury market hedge funds): \"Ahead of the April congressional hearings, the Federal Reserve reiterates that monetary policy decisions are made solely in pursuit of the dual mandate. The Committee notes that the rise in long-term yields reflects term premium rather than de-anchored inflation expectations, with the 10-year breakeven at 2.35 percent. Reserve-management purchases of shorter-term Treasury coupon securities and bills continue solely to maintain ample reserves and are without implication for the appropriate path of the federal funds rate, which the September 2026 SEP median placed at 4.25 percent at end-2027.\"\n- Primary dealers and Treasury market hedge funds: Accommodate or publicly answer Congressional Budget Office's move (→ Congressional Budget Office): \"Dealers stand ready to provide the April JEC/House Budget/Senate Finance hearings with market-side data: at frozen coupon sizes and bill share near 23%, recent auctions have covered smoothly, but Kim-Wright term premium has climbed from 0.601% in January 2026 to 0.95% monthly (daily 0.92%) — that is the observable price of warehousing duration on constrained balance sheets. We offer these figures as data on intermediation capacity and costs, not as advocacy for any issuance decision; we note frankly that no reliable estimate exists for how many basis points each additional $100 billion of coupon supply would add.\"\nFacts that changed:\n- 10-year Treasury constant maturity yield: 4.97 percent → 4.98 percent\n- Fed total assets: 6.67 million millions of U.S. dollars → 6.67 million millions of U.S. dollars\n- Fed securities holdings reduction under QT: 2.28 trillion U.S. dollars → 2.28 trillion U.S. dollars\n- Term premium on 10-year zero-coupon bond, monthly mean: 0.95 percent → 0.94 percent\n- Term premium, daily: 0.92 percent → 0.94 percent\n- 10-year breakeven inflation rate, monthly mean: 2.35 percent → 2.34 percent\nEvents and consequences:\n- New York Fed Markets Desk's commitment lapsed: Publish the January 2027 prob_rec recession-probability model estimate by mid-February 2027, with standard non-forecast disclaimer.\n- Did not materialise: Congress may request Treasury testimony on debt-service projections\n- April congressional hearings focused questions on net-interest costs; CBO maturity-bucket tables were accepted as the analytical baseline, avoiding immediate pressure for balance-sheet financing of deficits.\n- Dealers told hearings auctions continue to cover smoothly at frozen coupon sizes but flagged dealer intermediary capacity as the binding constraint, keeping a floor under term premium.\n- Market read the Fed's term-premium framing and the 12-0 hold as confirming a higher-for-longer plateau; November 2027 futures unchanged at 95.45.\n- Jerome Powell (or successor Chair) fulfilled commitment [c2_5_1]: Deliver the March 2027 FOMC statement and Chair framing holding the target range at 3-3/4 to 4 percent with data-dependent guidance\nAlliances and rivalries:\n- US Department of the Treasury — Primary dealers and Treasury market hedge funds: allied (closer)\n- US Congress — Federal Reserve / FOMC: neutral",
+   "headline": "2027-04: 6 decisions · 6 facts changed · 4 events · arbiter=applied · A communication-heavy round: Treasury reaffirmed frozen coupon issuance, the Fed held and framed higher-for-longer, and CBO's net-interest…",
+   "narrative": "A communication-heavy round: Treasury reaffirmed frozen coupon issuance, the Fed held and framed higher-for-longer, and CBO's net-interest tables shifted congressional questioning toward debt-service costs. Credible statements from high-track-record actors stabilized term premium rather than repricing it, so the 10-year hovered near 4.95% with a modestly flatter 2s10s. No policy rates changed; QT proceeded mechanically.",
+   "period_label": "2027-04",
+   "round": 6,
+   "scenario_pressure": {
+    "Bond bear steepening": "flat",
+    "Disinflation glide": "flat",
+    "Higher-for-longer plateau": "up",
+    "Recession flight to quality": "flat"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "c1438fa508bbe85fcd20e3cd73f5d4a874720e4384a119e95f02bbf4e2247fa0",
+     "problems": [],
+     "source_hash": "0c05557edfa74637335dc8fa0402caa9618f3647768e11f19e9ab5e742c3d795",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 4,
+    "total": 4
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning → US Congress, Primary dealers and Treasury market hedge funds, US Department of the Treasury",
+     "Deliver commitment [c3_6_1]: Publish the spring 2027 Budget and Economic Outlook update with reassessed interest-rate and economic assumptions in May 2027.",
+     "Deliver commitment [c1_6_3]: Publish the May 2027 quarterly refunding statement in early May, maintaining unchanged nominal coupon and FRN auction sizes.",
+     "Advance your documented plan: Deliver 2% inflation without a recession"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Rising bills share with sustained deficits adds modest term-premium pressure once coupon freeze convenience fades"
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 4.977,
+      "id": "10_year_treasury_constant_maturity_yield",
+      "name": "10-year Treasury constant maturity yield",
+      "to": 5.011,
+      "unit": "percent"
+     },
+     {
+      "from": 4.9388499999999995,
+      "id": "10_year_treasury_constant_maturity_yield_monthly_mean",
+      "name": "10-year Treasury constant maturity yield, monthly mean",
+      "to": 4.96435,
+      "unit": "percent"
+     },
+     {
+      "from": 0.338,
+      "id": "2s10s_spread_monthly_mean",
+      "name": "2s10s spread, monthly mean",
+      "to": 0.30569999999999997,
+      "unit": "percent"
+     },
+     {
+      "from": 6669952.609999999,
+      "id": "fed_total_assets",
+      "name": "Fed total assets",
+      "to": 6665500.318499999,
+      "unit": "millions of U.S. dollars"
+     },
+     {
+      "from": 0.943,
+      "id": "term_premium_on_10_year_zero_coupon_bond_monthly_mean",
+      "name": "Term premium on 10-year zero-coupon bond, monthly mean",
+      "to": 1.0025,
+      "unit": "percent"
+     },
+     {
+      "from": 0.9384,
+      "id": "term_premium_daily",
+      "name": "Term premium, daily",
+      "to": 0.9639,
+      "unit": "percent"
+     }
+    ]
+   },
+   "digest": "May 2027 delivered exactly what was signaled: the FOMC held at 3.75-4.00 percent with a patient disinflation message, Treasury kept coupon auction sizes unchanged, and the CBO's spring update reaffirmed a ~4.8-4.9 percent 10-year baseline. Markets read the combination as confirmation of a higher-for-longer plateau, with only modest term-premium pressure at the refunding keeping the 10-year hovering just below 5 percent; dealers noted smooth auction coverage despite intermediation capacity constraints.\nMoves:\n- Federal Reserve / FOMC: Issue a public statement or warning (→ US Congress, Primary dealers and Treasury market hedge funds, US Department of the Treasury): \"FOMC statement, May 2027: At its May 18-19 meeting, the Committee voted to maintain the federal funds target range at 3-3/4 to 4 percent. Core inflation has continued to move down but remains above 2 percent, and the labor market stays near maximum employment; with the 10-year breakeven at 2.34 percent and the Kim-Wright term premium at 0.94 percent, elevated long-term yields reflect term premium rather than de-anchored expectations. Reserve-management purchases of shorter-dated Treasury securities continue solely to maintain ample reserves, and the Committee reaffirms its meeting-by-meeting, data-dependent approach consistent with the March SEP median of 4.25 percent at end-2027.\"\n- Congressional Budget Office: Deliver commitment [c3_6_1]: Publish the spring 2027 Budget and Economic Outlook update with reassessed interest-rate and economic assumptions in May 2027.: \"CBO publishes the spring 2027 Budget and Economic Outlook update (May 2027) with reassessed economic and interest-rate assumptions. Under the updated baseline, the 10-year Treasury yield is projected to average 4.8 percent in 2027 and 4.9 percent in 2028, and net interest outlays remain the fastest-growing component of the budget, reaching approximately $1.0 trillion in 2027. All projections reflect current law only; CBO makes no assessment of market conditions or policy.\"\n- US Department of the Treasury: Deliver commitment [c1_6_3]: Publish the May 2027 quarterly refunding statement in early May, maintaining unchanged nominal coupon and FRN auction sizes.: \"Treasury is announcing its quarterly refunding decisions for May 2027. Nominal coupon and FRN auction sizes remain unchanged, with marginal financing needs continuing to be met by bills; bill share of marketable debt remains near its historical average of roughly 23%. Treasury believes current auction sizes leave it well positioned to address changes in the fiscal outlook and potential changes to the SOMA portfolio for at least the next several quarters. Issuance decisions continue to be guided by cost, risk, and market-functioning considerations; Treasury does not comment on monetary policy or yield levels.\"\n- Jerome Powell (or successor Chair): Advance your documented plan: Deliver 2% inflation without a recession: \"At its May meeting, the Federal Reserve held the federal funds target range at 3-3/4 to 4 percent. Inflation continues to move toward 2 percent but is not yet there, and we remain fully committed to that goal without a time frame. We will decide meeting by meeting, on the data; reserve-management purchases remain purely technical and do not represent a change in the stance of policy.\"\nFacts that changed:\n- 10-year Treasury constant maturity yield: 4.98 percent → 5.01 percent\n- 10-year Treasury constant maturity yield, monthly mean: 4.94 percent → 4.96 percent\n- 2s10s spread, monthly mean: 0.34 percent → 0.31 percent\n- Fed total assets: 6.67 million millions of U.S. dollars → 6.67 million millions of U.S. dollars\n- Term premium on 10-year zero-coupon bond, monthly mean: 0.94 percent → 1 percent\n- Term premium, daily: 0.94 percent → 0.96 percent\nEvents and consequences:\n- Rising bills share with sustained deficits adds modest term-premium pressure once coupon freeze convenience fades\n- May 18-19 FOMC held the funds rate; Chair's press conference reinforced data-dependent framing and cautioned against reading any projection as a preset path\n- Quarterly refunding kept coupon sizes unchanged; auctions covered smoothly though dealers flagged persistent intermediation capacity constraints\n- CBO spring outlook projected 10-year yield averaging 4.8% in 2027 and 4.9% in 2028, anchoring consensus expectations near current levels\n- Hill critics renewed calls for Fed testimony on debt-service costs but lacked leverage while inflation drifts down; hearings deferred\n- US Department of the Treasury fulfilled commitment [c1_6_3]: Publish the May 2027 quarterly refunding statement in early May, maintaining unchanged nominal coupon and FRN auction sizes.\n- Congressional Budget Office fulfilled commitment [c3_6_1]: Publish the spring 2027 Budget and Economic Outlook update with reassessed interest-rate and economic assumptions in May 2027.",
+   "headline": "2027-05: 4 decisions · 6 facts changed · 6 events · arbiter=applied · May 2027 delivered exactly what was signaled: the FOMC held at 3.75-4.00 percent with a patient disinflation message, Treasury kept coupon…",
+   "narrative": "May 2027 delivered exactly what was signaled: the FOMC held at 3.75-4.00 percent with a patient disinflation message, Treasury kept coupon auction sizes unchanged, and the CBO's spring update reaffirmed a ~4.8-4.9 percent 10-year baseline. Markets read the combination as confirmation of a higher-for-longer plateau, with only modest term-premium pressure at the refunding keeping the 10-year hovering just below 5 percent; dealers noted smooth auction coverage despite intermediation capacity constraints.",
+   "period_label": "2027-05",
+   "round": 7,
+   "scenario_pressure": {
+    "Bond bear steepening": "flat",
+    "Disinflation glide": "flat",
+    "Higher-for-longer plateau": "up",
+    "Recession flight to quality": "down"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "3badf28d64391c072fcfb600192f0e96d8a1dbd30350655c514fae09fedf51c9",
+     "problems": [],
+     "source_hash": "bb06853a4da158260a9c75580ca995ae2f070776a1fc3c5a376a99ed6762f306",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 4,
+    "total": 4
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → Primary dealers and Treasury market hedge funds, US Congress, US Department of the Treasury",
+     "Deliver commitment [c2_7_2]: Deliver the June 2027 FOMC statement and updated SEP framing, holding the meeting-by-meeting, data-dependent posture unless the data materially change",
+     "Issue a public statement or warning → Primary dealers and Treasury market hedge funds, US Congress"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [
+     "Primary dealers and Treasury market hedge funds: Deliver auction-coverage, tailing-spread and term-premium data tables to the April congressional hearings if requested by the committees."
+    ],
+    "effects_fired": [
+     "If inflation data stays elevated (Michigan 1-yr at 4.6%), FOMC hold extends, supporting yields near 5%",
+     "Did not materialise: Sustained fiscal-premium pressure could push 10-year toward the top of its range if issuance mix shifts to coupons later in 2027."
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "from": null,
+      "polarity": 0.15,
+      "source": "Primary dealers and Treasury market hedge funds",
+      "target": "Federal Reserve / FOMC",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.011,
+      "id": "10_year_treasury_constant_maturity_yield",
+      "name": "10-year Treasury constant maturity yield",
+      "to": 5.1502725,
+      "unit": "percent"
+     },
+     {
+      "from": 4.96435,
+      "id": "10_year_treasury_constant_maturity_yield_monthly_mean",
+      "name": "10-year Treasury constant maturity yield, monthly mean",
+      "to": 5.0275475,
+      "unit": "percent"
+     },
+     {
+      "from": 0.2675,
+      "id": "2s10s_spread_daily",
+      "name": "2s10s spread, daily",
+      "to": 0.29087500000000005,
+      "unit": "percent"
+     },
+     {
+      "from": 0.30569999999999997,
+      "id": "2s10s_spread_monthly_mean",
+      "name": "2s10s spread, monthly mean",
+      "to": 0.31904499999999997,
+      "unit": "percent"
+     },
+     {
+      "from": 95.4485,
+      "id": "fed_funds_futures_november_2027_contract",
+      "name": "Fed funds futures, November 2027 contract",
+      "to": 95.430225,
+      "unit": "index points"
+     },
+     {
+      "from": 1.0025,
+      "id": "term_premium_on_10_year_zero_coupon_bond_monthly_mean",
+      "name": "Term premium on 10-year zero-coupon bond, monthly mean",
+      "to": 1.021625,
+      "unit": "percent"
+     },
+     {
+      "from": 0.9639,
+      "id": "term_premium_daily",
+      "name": "Term premium, daily",
+      "to": 0.984215,
+      "unit": "percent"
+     }
+    ]
+   },
+   "digest": "The FOMC's unanimous hawkish hold at 3.75–4% and Powell's data-dependent SEP framing confirmed the higher-for-longer plateau, with front-end pricing (Nov-27 futures ~95.45) steady near the dots. The CBO's report of a $1.2 trillion eight-month deficit and Treasury's $700 billion Q3 borrowing estimate kept fiscal supply pressure alive, nudging the term premium and long end slightly higher, but dealers read both as consistent with an already-priced status quo rather than a repricing. The 10-year ended June around 5.15%, curve mildly steeper.\nMoves:\n- Congressional Budget Office: Issue a public statement or warning: \"CBO releases its Monthly Budget Review for May 2027. Through the first eight months of fiscal year 2027, the federal budget deficit totaled $1.2 trillion, $85 billion more than the same period last year; net interest on public debt continues to be the largest source of outlay growth. All figures reflect current law; CBO makes no assessment of market conditions or policy.\"\n- Federal Reserve / FOMC: Issue a public statement or warning (→ Primary dealers and Treasury market hedge funds, US Congress, US Department of the Treasury): \"FOMC statement, June 2027: At its June 15-16 meeting, the Committee voted 12-0 to maintain the federal funds target range at 3-3/4 to 4 percent. Core inflation continues to move toward the 2 percent objective while the labor market remains near maximum employment; with the 10-year breakeven at 2.34 percent, elevated long yields continue to reflect term premium rather than de-anchored expectations. Reserve-management purchases of shorter-dated Treasuries proceed solely to maintain ample reserves — they are not yield-curve policy — and the Committee reaffirms its meeting-by-meeting, data-dependent approach consistent with the March SEP median of 4.25 percent at end-2027.\"\n- Jerome Powell (or successor Chair): Deliver commitment [c2_7_2]: Deliver the June 2027 FOMC statement and updated SEP framing, holding the meeting-by-meeting, data-dependent posture unless the data materially change: \"At its June 15-16 meeting, the Federal Reserve maintained the target range for the federal funds rate at 3-3/4 to 4 percent. Inflation has moved closer to 2 percent but remains above it, and we are not on a preset path — we will continue to decide meeting by meeting, on the data. The updated SEP keeps the median funds rate consistent with our projection of core PCE inflation declining to 2.5 percent by end-2027; reserve-management purchases remain purely technical operations.\"\n- US Department of the Treasury: Issue a public statement or warning (→ Primary dealers and Treasury market hedge funds, US Congress): \"Treasury announces its borrowing estimates: privately-held net marketable borrowing of approximately $700 billion for the July-September 2027 quarter, assuming a quarter-end cash balance of $850 billion, with detailed financing estimates to be published with the August refunding statement. Consistent with the May 2027 quarterly refunding statement, nominal coupon and FRN auction sizes remain unchanged and marginal financing needs continue to be met by bills. Treasury remains well positioned to address changes in the fiscal outlook and potential changes to the SOMA portfolio for at least the next several quarters, and does not comment on monetary policy or market yield levels.\"\nFacts that changed:\n- 10-year Treasury constant maturity yield: 5.01 percent → 5.15 percent\n- 10-year Treasury constant maturity yield, monthly mean: 4.96 percent → 5.03 percent\n- 2s10s spread, daily: 0.27 percent → 0.29 percent\n- 2s10s spread, monthly mean: 0.31 percent → 0.32 percent\n- Fed funds futures, November 2027 contract: 95.45 index points → 95.43 index points\n- Term premium on 10-year zero-coupon bond, monthly mean: 1 percent → 1.02 percent\n- Term premium, daily: 0.96 percent → 0.98 percent\nEvents and consequences:\n- Primary dealers and Treasury market hedge funds's commitment lapsed: Deliver auction-coverage, tailing-spread and term-premium data tables to the April congressional hearings if requested by the committees.\n- If inflation data stays elevated (Michigan 1-yr at 4.6%), FOMC hold extends, supporting yields near 5%\n- Did not materialise: Sustained fiscal-premium pressure could push 10-year toward the top of its range if issuance mix shifts to coupons later in 2027.\n- Dealers absorbed the FOMC hold and SEP as confirming the plateau; front-end pricing stayed near the dots with no repricing of 2027 cuts.\n- Treasury's $700B Q3 borrowing estimate and CBO's widening deficit readout kept long-end supply pressure simmering; term premium ticked up but stabilized short of a breakout.\n- Dealers continued to flag balance-sheet intermediation capacity as the binding constraint for the autumn refunding, pressing for bill-heavy issuance.\n- Congressional hearing questions focused on debt-service costs; no procedural escalation.\n- Jerome Powell (or successor Chair) fulfilled commitment [c2_7_2]: Deliver the June 2027 FOMC statement and updated SEP framing, holding the meeting-by-meeting, data-dependent posture unless the data materially change\nAlliances and rivalries:\n- Primary dealers and Treasury market hedge funds — Federal Reserve / FOMC: neutral",
+   "headline": "2027-06: 4 decisions · 7 facts changed · 5 events · arbiter=applied · The FOMC's unanimous hawkish hold at 3.75–4% and Powell's data-dependent SEP framing confirmed the higher-for-longer plateau, with front-en…",
+   "narrative": "The FOMC's unanimous hawkish hold at 3.75–4% and Powell's data-dependent SEP framing confirmed the higher-for-longer plateau, with front-end pricing (Nov-27 futures ~95.45) steady near the dots. The CBO's report of a $1.2 trillion eight-month deficit and Treasury's $700 billion Q3 borrowing estimate kept fiscal supply pressure alive, nudging the term premium and long end slightly higher, but dealers read both as consistent with an already-priced status quo rather than a repricing. The 10-year ended June around 5.15%, curve mildly steeper.",
+   "period_label": "2027-06",
+   "round": 8,
+   "scenario_pressure": {
+    "Bond bear steepening": "up",
+    "Disinflation glide": "flat",
+    "Higher-for-longer plateau": "up",
+    "Recession flight to quality": "down"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "d0896a139de36f53f13e59d93d76f670982b275b6cd484974ad64be236c25f76",
+     "problems": [],
+     "source_hash": "a72e125401841c7c383959f58a7de49120c785f528789fda33e2a96c1927e277",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 4,
+    "total": 4
+   },
+   "deterministic": {
+    "actions": [
+     "Deliver commitment [c1_8_4]: Publish the August 2027 quarterly refunding statement in early August, maintaining unchanged nominal coupon and FRN auction sizes with bills absorbing marginal financing needs.",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → US Congress, Primary dealers and Treasury market hedge funds, US Department of the Treasury",
+     "Issue a public statement or warning → Primary dealers and Treasury market hedge funds, US Congress"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Did not materialise: If disinflation evidence accumulates, a mid-2027 cut could pull the 10-year back toward 4.6-4.7%.",
+     "Did not materialise: If dealer capacity constraints bind as bill share stays elevated, term premium grinds higher into year-end",
+     "If core inflation stalls above target into H2, November 2027 cut expectations fade further, nudging the 10-year up on front-end repricing"
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.5,
+      "source": "Federal Reserve / FOMC",
+      "target": "US Department of the Treasury",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.1502725,
+      "id": "10_year_treasury_constant_maturity_yield",
+      "name": "10-year Treasury constant maturity yield",
+      "to": 5.1045,
+      "unit": "percent"
+     },
+     {
+      "from": 5.0275475,
+      "id": "10_year_treasury_constant_maturity_yield_monthly_mean",
+      "name": "10-year Treasury constant maturity yield, monthly mean",
+      "to": 5.04935,
+      "unit": "percent"
+     },
+     {
+      "from": 0.29087500000000005,
+      "id": "2s10s_spread_daily",
+      "name": "2s10s spread, daily",
+      "to": 0.259,
+      "unit": "percent"
+     },
+     {
+      "from": 95.430225,
+      "id": "fed_funds_futures_november_2027_contract",
+      "name": "Fed funds futures, November 2027 contract",
+      "to": 95.44,
+      "unit": "index points"
+     },
+     {
+      "from": 6665500.318499999,
+      "id": "fed_total_assets",
+      "name": "Fed total assets",
+      "to": 6657040.6,
+      "unit": "millions of U.S. dollars"
+     },
+     {
+      "from": 1.021625,
+      "id": "term_premium_on_10_year_zero_coupon_bond_monthly_mean",
+      "name": "Term premium on 10-year zero-coupon bond, monthly mean",
+      "to": 1.0025,
+      "unit": "percent"
+     },
+     {
+      "from": 0.984215,
+      "id": "term_premium_daily",
+      "name": "Term premium, daily",
+      "to": 0.9639,
+      "unit": "percent"
+     },
+     {
+      "from": 2.638,
+      "id": "10_year_tips_yield_monthly_mean",
+      "name": "10-year TIPS yield, monthly mean",
+      "to": 2.6737,
+      "unit": "percent"
+     }
+    ]
+   },
+   "digest": "The FOMC held at 3.75-4% and Powell framed the long-end rise as term premium, not monetary policy; Treasury's August refunding statement (published as promised) kept coupon sizes unchanged with bills absorbing marginal needs. Dealers read the combination as status-quo confirmation: the 10-year eased back from late-July highs near 5.22% to end around 5.10%, while term premium settled near 1%. CBO's $1.4 trillion nine-month deficit figure kept fiscal-supply concerns simmering but prompted no escalation from Congress.\nMoves:\n- US Department of the Treasury: Deliver commitment [c1_8_4]: Publish the August 2027 quarterly refunding statement in early August, maintaining unchanged nominal coupon and FRN auction sizes with bills absorbing marginal financing needs.: \"Treasury publishes its quarterly refunding statement for August 2027: nominal coupon-bearing and FRN auction sizes remain unchanged, with bills continuing to absorb marginal financing needs, and Treasury expects to maintain these sizes for at least the next several quarters. Current auction sizes keep Treasury well positioned to respond to changes in the fiscal outlook and to potential changes in the size and composition of the SOMA portfolio. Treasury continues to adhere to a regular and predictable issuance program and does not comment on monetary policy or market yield levels.\"\n- Congressional Budget Office: Issue a public statement or warning: \"CBO releases its Monthly Budget Review for June 2027. Through the first nine months of fiscal year 2027, the federal budget deficit totaled $1.4 trillion under current law, and net interest on public debt remains the largest source of outlay growth, consistent with the February 2026 baseline projection of deficits averaging $2.4 trillion (6.1% of GDP) over 2027-2036. CBO makes no assessment of market conditions or monetary policy.\"\n- Federal Reserve / FOMC: Issue a public statement or warning (→ US Congress, Primary dealers and Treasury market hedge funds, US Department of the Treasury): \"FOMC statement, July 2027: At its July 27-28 meeting, the Committee voted to maintain the federal funds target range at 3-3/4 to 4 percent. Core PCE inflation continues to edge toward the 2 percent objective with longer-term breakevens anchored near 2.34 percent; elevated long yields remain predominantly a term-premium phenomenon reflecting fiscal supply, not monetary conditions. In response to Congressional questions on debt-service costs, the Committee reiterates that reserve-management purchases are conducted solely to maintain ample reserves per the September 2026 principles and will not be used to influence the yield curve or accommodate Treasury issuance.\"\n- Jerome Powell (or successor Chair): Issue a public statement or warning (→ Primary dealers and Treasury market hedge funds, US Congress): \"Ahead of the July 27-28 meeting, I will reiterate that we remain data-dependent and will decide meeting by meeting. With breakevens anchored near 2.34 percent, the rise in long-term yields reflects term premium from fiscal supply, not monetary policy — we will not react to it, nor to political pressure; reserve-management purchases remain purely technical, sized only to keep reserves ample.\"\nFacts that changed:\n- 10-year Treasury constant maturity yield: 5.15 percent → 5.1 percent\n- 10-year Treasury constant maturity yield, monthly mean: 5.03 percent → 5.05 percent\n- 2s10s spread, daily: 0.29 percent → 0.26 percent\n- Fed funds futures, November 2027 contract: 95.43 index points → 95.44 index points\n- Fed total assets: 6.67 million millions of U.S. dollars → 6.66 million millions of U.S. dollars\n- Term premium on 10-year zero-coupon bond, monthly mean: 1.02 percent → 1 percent\n- Term premium, daily: 0.98 percent → 0.96 percent\n- 10-year TIPS yield, monthly mean: 2.64 percent → 2.67 percent\nEvents and consequences:\n- Did not materialise: If disinflation evidence accumulates, a mid-2027 cut could pull the 10-year back toward 4.6-4.7%.\n- Did not materialise: If dealer capacity constraints bind as bill share stays elevated, term premium grinds higher into year-end\n- If core inflation stalls above target into H2, November 2027 cut expectations fade further, nudging the 10-year up on front-end repricing\n- FOMC held the funds rate at 3.75-4%; Powell attributed elevated long yields to fiscal term premium, not monetary policy, anchoring front-end expectations near the dots.\n- Treasury's August quarterly refunding statement kept coupon and FRN auction sizes unchanged with bills absorbing marginal needs; dealers noted confirmation of the freeze but flagged intermediation capacity into autumn auctions.\n- CBO reported a $1.4 trillion deficit through nine months of FY2027 with net interest the largest outlay, sustaining fiscal term-premium pressure; some lawmakers criticized holding near 4%.\n- US Department of the Treasury fulfilled commitment [c1_8_4]: Publish the August 2027 quarterly refunding statement in early August, maintaining unchanged nominal coupon and FRN auction sizes with bills absorbing marginal financing needs.\nAlliances and rivalries:\n- Federal Reserve / FOMC — US Department of the Treasury: allied (closer)",
+   "headline": "2027-07: 4 decisions · 8 facts changed · 4 events · arbiter=applied · The FOMC held at 3.75-4% and Powell framed the long-end rise as term premium, not monetary policy; Treasury's August refunding statement (p…",
+   "narrative": "The FOMC held at 3.75-4% and Powell framed the long-end rise as term premium, not monetary policy; Treasury's August refunding statement (published as promised) kept coupon sizes unchanged with bills absorbing marginal needs. Dealers read the combination as status-quo confirmation: the 10-year eased back from late-July highs near 5.22% to end around 5.10%, while term premium settled near 1%. CBO's $1.4 trillion nine-month deficit figure kept fiscal-supply concerns simmering but prompted no escalation from Congress.",
+   "period_label": "2027-07",
+   "round": 9,
+   "scenario_pressure": {
+    "Bond bear steepening": "flat",
+    "Disinflation glide": "flat",
+    "Higher-for-longer plateau": "up",
+    "Recession flight to quality": "flat"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "35da3cc04822ca0364ca792c215a43774780b663bc08bbc875daa639c7d1c5f8",
+     "problems": [],
+     "source_hash": "b5aec29f4fd573039d75866eef184697c4d9a230f041cd31b09ec9f968111f1d",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 5,
+    "total": 5
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "Deliver commitment [c2_9_3]: Deliver the July 2027 FOMC statement framing, maintaining the data-dependent, meeting-by-meeting posture unless data materially change",
+     "Accommodate or publicly answer Federal Reserve / FOMC's move → Federal Reserve / FOMC",
+     "Issue a public statement or warning → Primary dealers and Treasury market hedge funds, Federal Reserve / FOMC",
+     "Issue a public statement or warning → Primary dealers and Treasury market hedge funds, US Congress, US Department of the Treasury"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Did not materialise: Sustained Michigan 1-yr at 4.6% eventually lifts breakevens or delays Fed cuts, pressuring the 10y toward 5.1%",
+     "Did not materialise: If Q3 refunding shifts mix toward coupons, term premium and 10-year push toward top of 52-week range."
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.65,
+      "source": "Federal Reserve / FOMC",
+      "target": "US Department of the Treasury",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.81,
+      "source": "New York Fed Markets Desk",
+      "target": "Federal Reserve / FOMC",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": 0.3,
+      "source": "Primary dealers and Treasury market hedge funds",
+      "target": "Jerome Powell (or successor Chair)",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.1045,
+      "id": "10_year_treasury_constant_maturity_yield",
+      "name": "10-year Treasury constant maturity yield",
+      "to": 5.061999999999999,
+      "unit": "percent"
+     },
+     {
+      "from": 5.04935,
+      "id": "10_year_treasury_constant_maturity_yield_monthly_mean",
+      "name": "10-year Treasury constant maturity yield, monthly mean",
+      "to": 5.01535,
+      "unit": "percent"
+     },
+     {
+      "from": 4.9198,
+      "id": "10_year_treasury_constant_maturity_yield_partial_month_mean",
+      "name": "10-year Treasury constant maturity yield, partial-month mean",
+      "to": 5.0133,
+      "unit": "percent"
+     },
+     {
+      "from": 0.259,
+      "id": "2s10s_spread_daily",
+      "name": "2s10s spread, daily",
+      "to": 0.28450000000000003,
+      "unit": "percent"
+     },
+     {
+      "from": 0.31904499999999997,
+      "id": "2s10s_spread_monthly_mean",
+      "name": "2s10s spread, monthly mean",
+      "to": 0.30569999999999997,
+      "unit": "percent"
+     },
+     {
+      "from": 1.0025,
+      "id": "term_premium_on_10_year_zero_coupon_bond_monthly_mean",
+      "name": "Term premium on 10-year zero-coupon bond, monthly mean",
+      "to": 0.9855,
+      "unit": "percent"
+     },
+     {
+      "from": 0.9639,
+      "id": "term_premium_daily",
+      "name": "Term premium, daily",
+      "to": 0.9553999999999999,
+      "unit": "percent"
+     },
+     {
+      "from": 2.6737,
+      "id": "10_year_tips_yield_monthly_mean",
+      "name": "10-year TIPS yield, monthly mean",
+      "to": 2.6567000000000003,
+      "unit": "percent"
+     }
+    ]
+   },
+   "digest": "A quiet, confirmatory month. The FOMC held at 3.75-4%, minutes and the Chair's Jackson Hole remarks reiterated the data-dependent plateau, and Treasury's August refunding left coupon sizes unchanged with bills absorbing marginal needs — both fully expected by dealers. With breakevens anchored at 2.34% and term premium consolidating near 1%, the 10-year drifted back toward 5.0-5.05%, with no new information to push it toward the 5.31% range high.\nMoves:\n- Congressional Budget Office: Issue a public statement or warning: \"CBO releases its Monthly Budget Review for July 2027. Through the first ten months of fiscal year 2027, the federal budget deficit under current law remains broadly consistent with the February 2026 baseline projection of a deficit averaging $2.4 trillion annually (6.1% of GDP) over 2027-2036, with net interest outlays continuing to be the largest source of outlay growth. CBO makes no assessment of market conditions, interest rate levels, or monetary policy.\"\n- Jerome Powell (or successor Chair): Deliver commitment [c2_9_3]: Deliver the July 2027 FOMC statement framing, maintaining the data-dependent, meeting-by-meeting posture unless data materially change: \"At Jackson Hole I will reaffirm the July framing: we remain data-dependent and will decide meeting by meeting. With the funds rate at 3-3/4 to 4 percent, breakevens anchored near 2.34 percent, and core PCE still above 2 percent, policy is well positioned; elevated long yields reflect term premium from fiscal supply, not monetary policy, and reserve-management purchases remain purely technical operations to keep reserves ample.\"\n- Primary dealers and Treasury market hedge funds: Accommodate or publicly answer Federal Reserve / FOMC's move (→ Federal Reserve / FOMC): \"Desk read of the July hold: with breakevens at 2.34% and term premium near 1% (daily 0.96%), we agree the 5%+ 10-year is a fiscal-term-premium story, not a monetary one — the front end is priced near the dots and November futures barely moved. The August refunding confirmed frozen coupon sizes with bills carrying the margin; our balance sheets will absorb the autumn auctions at these spreads, but compensation for warehousing duration is now visibly set in the term premium, and we have no reliable basis-point estimate for additional coupon supply.\"\n- US Department of the Treasury: Issue a public statement or warning (→ Primary dealers and Treasury market hedge funds, Federal Reserve / FOMC): \"Following the August 2027 refunding statement, Treasury confirms nominal coupon-bearing and FRN auction sizes remain unchanged, with bills absorbing marginal financing needs, and expects to maintain these sizes for at least the next several quarters. Current auction sizes keep Treasury well positioned to respond to changes in the fiscal outlook and to potential changes in the size and composition of the SOMA portfolio. Treasury does not comment on monetary policy or market yield levels; the next quarterly borrowing estimate will be published on its regular schedule in late October.\"\n- Federal Reserve / FOMC: Issue a public statement or warning (→ Primary dealers and Treasury market hedge funds, US Congress, US Department of the Treasury): \"Minutes of the July 27-28, 2027 FOMC meeting: participants judged that maintaining the federal funds target range at 3-3/4 to 4 percent remains appropriate while core PCE inflation continues to edge toward 2 percent and the labor market stays near estimates of maximum employment. Participants reiterated that reserve-management purchases of shorter-term Treasuries are conducted solely to maintain ample reserves, will not be used to influence the yield curve or accommodate Treasury issuance, and remain subject to review as reserves decline. The Desk confirms ample reserves via orderly repo conditions and minimal standing repo facility usage.\"\nFacts that changed:\n- 10-year Treasury constant maturity yield: 5.1 percent → 5.06 percent\n- 10-year Treasury constant maturity yield, monthly mean: 5.05 percent → 5.02 percent\n- 10-year Treasury constant maturity yield, partial-month mean: 4.92 percent → 5.01 percent\n- 2s10s spread, daily: 0.26 percent → 0.28 percent\n- 2s10s spread, monthly mean: 0.32 percent → 0.31 percent\n- Term premium on 10-year zero-coupon bond, monthly mean: 1 percent → 0.99 percent\n- Term premium, daily: 0.96 percent → 0.96 percent\n- 10-year TIPS yield, monthly mean: 2.67 percent → 2.66 percent\nEvents and consequences:\n- Did not materialise: Sustained Michigan 1-yr at 4.6% eventually lifts breakevens or delays Fed cuts, pressuring the 10y toward 5.1%\n- Did not materialise: If Q3 refunding shifts mix toward coupons, term premium and 10-year push toward top of 52-week range.\n- Jackson Hole speech reaffirms meeting-by-meeting, data-dependent stance; front-end pricing barely moves, November futures hold near 95.44.\n- August refunding keeps coupon and FRN auction sizes unchanged, bills absorb marginal financing; dealers take it as expected and term premium stabilizes.\n- July FOMC minutes confirm the hold at 3.75-4%; desk read is that the 5%+ 10-year is a fiscal-term-premium story, not monetary.\n- CBO Monthly Budget Review shows FY2027 deficit tracking the February 2026 baseline; muted market reaction, no new fiscal shock.\n- 10-year retraces from 5.10 to near 5.05 as supply and policy uncertainty both fade; range high of 5.31 untested.\n- Jerome Powell (or successor Chair) fulfilled commitment [c2_9_3]: Deliver the July 2027 FOMC statement framing, maintaining the data-dependent, meeting-by-meeting posture unless data materially change\nAlliances and rivalries:\n- Federal Reserve / FOMC — US Department of the Treasury: allied (closer)\n- New York Fed Markets Desk — Federal Reserve / FOMC: allied (closer)\n- Primary dealers and Treasury market hedge funds — Jerome Powell (or successor Chair): allied (closer)",
+   "headline": "2027-08: 5 decisions · 8 facts changed · 6 events · arbiter=applied · A quiet, confirmatory month. The FOMC held at 3.75-4%, minutes and the Chair's Jackson Hole remarks reiterated the data-dependent plateau,…",
+   "narrative": "A quiet, confirmatory month. The FOMC held at 3.75-4%, minutes and the Chair's Jackson Hole remarks reiterated the data-dependent plateau, and Treasury's August refunding left coupon sizes unchanged with bills absorbing marginal needs — both fully expected by dealers. With breakevens anchored at 2.34% and term premium consolidating near 1%, the 10-year drifted back toward 5.0-5.05%, with no new information to push it toward the 5.31% range high.",
+   "period_label": "2027-08",
+   "round": 10,
+   "scenario_pressure": {
+    "Bond bear steepening": "flat",
+    "Disinflation glide": "flat",
+    "Higher-for-longer plateau": "up",
+    "Recession flight to quality": "flat"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "6b3676fd01d50ea5d363112fce1f79cd5207a11fddc83aa5056f1f6c51171a19",
+     "problems": [
+      "$.pending_effects[0].variable_id: expected null (numbers must be finite)"
+     ],
+     "source_hash": "e78c8b8dcbc7fdbc232255446b4040f8c92ebd0a012079a727fdad3627ec7045",
+     "status": "invalid"
+    },
+    {
+     "attempt": 2,
+     "candidate_hash": "db1c3c1a73699051251f846e598c19c4ddfab8aa8d87c25cbb365a9e58b7ad45",
+     "problems": [],
+     "source_hash": "e78c8b8dcbc7fdbc232255446b4040f8c92ebd0a012079a727fdad3627ec7045",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 5,
+    "total": 5
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning → Primary dealers and Treasury market hedge funds, Federal Reserve / FOMC",
+     "Deliver commitment [c3_10_2]: Publish the next Monthly Budget Review (for July 2027 fiscal-year-to-date data) in early September 2027.",
+     "Deliver commitment [c0_10_1]: Publish the September 2027 SEP and FOMC statement following the September 21-22, 2027 meeting, updating funds-rate and core PCE projections.",
+     "Accommodate or publicly answer Jerome Powell (or successor Chair)'s move → Jerome Powell (or successor Chair)",
+     "Advance your documented plan: Deliver 2% inflation without a recession"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Sustained Michigan 1-yr near 4.6% keeps FOMC on hold into H2 2027, anchoring front end near 4%.",
+     "Did not materialise: Autumn auction supply tests dealer capacity despite the size freeze; tailing auctions could push term premium back toward 1.1% and the 10-year toward 5.3%."
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.405,
+      "source": "Primary dealers and Treasury market hedge funds",
+      "target": "Jerome Powell (or successor Chair)",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.01535,
+      "id": "10_year_treasury_constant_maturity_yield_monthly_mean",
+      "name": "10-year Treasury constant maturity yield, monthly mean",
+      "to": 5.02385,
+      "unit": "percent"
+     },
+     {
+      "from": 0.28450000000000003,
+      "id": "2s10s_spread_daily",
+      "name": "2s10s spread, daily",
+      "to": 0.276,
+      "unit": "percent"
+     },
+     {
+      "from": 95.44,
+      "id": "fed_funds_futures_november_2027_contract",
+      "name": "Fed funds futures, November 2027 contract",
+      "to": 95.4485,
+      "unit": "index points"
+     },
+     {
+      "from": 6657040.6,
+      "id": "fed_total_assets",
+      "name": "Fed total assets",
+      "to": 6658775.109999999,
+      "unit": "millions of U.S. dollars"
+     },
+     {
+      "from": 2.2849999999999997,
+      "id": "fed_securities_holdings_reduction_under_qt",
+      "name": "Fed securities holdings reduction under QT",
+      "to": 2.28925,
+      "unit": "trillion U.S. dollars"
+     },
+     {
+      "from": 0.9855,
+      "id": "term_premium_on_10_year_zero_coupon_bond_monthly_mean",
+      "name": "Term premium on 10-year zero-coupon bond, monthly mean",
+      "to": 0.977,
+      "unit": "percent"
+     },
+     {
+      "from": 0.9553999999999999,
+      "id": "term_premium_daily",
+      "name": "Term premium, daily",
+      "to": 0.9723999999999999,
+      "unit": "percent"
+     }
+    ]
+   },
+   "digest": "September 2027 delivered the expected steady state: the FOMC held the funds rate at 3.75-4% and published its SEP with the end-2027 median at 4%, Powell reinforced meeting-by-meeting framing, and Treasury reaffirmed its size freeze with bills absorbing marginal needs. Dealers read the mix as a confirmed plateau: breakevens steady near 2.34%, term premium drifting just under 1%, and the 10-year ending the month around 5.06%. The CBO's July review confirmed deficits tracking the baseline, keeping term-premium floor intact without a supply shock.\nMoves:\n- US Department of the Treasury: Issue a public statement or warning (→ Primary dealers and Treasury market hedge funds, Federal Reserve / FOMC): \"Treasury confirms the regular issuance schedule for the remainder of the September 2027 quarterly cycle, with nominal coupon-bearing and FRN auction sizes unchanged and bills absorbing marginal financing needs. Treasury continues to judge current auction sizes as leaving it well positioned for at least the next several quarters, and the next quarterly borrowing estimate and refunding statement will be published on the regular schedule in late October and early November.\"\n- Congressional Budget Office: Deliver commitment [c3_10_2]: Publish the next Monthly Budget Review (for July 2027 fiscal-year-to-date data) in early September 2027.: \"CBO releases its Monthly Budget Review covering July 2027. Through the first ten months of fiscal year 2027, the cumulative deficit under current law remains on track with the February 2026 baseline trajectory of deficits averaging $2.4 trillion per year (6.1% of GDP) over 2027-2036, with net interest the fastest-growing component of outlays. CBO offers no assessment of market yields, term premiums, or monetary policy. Full tables: cbo.gov/publication series, Monthly Budget Review.\"\n- Federal Reserve / FOMC: Deliver commitment [c0_10_1]: Publish the September 2027 SEP and FOMC statement following the September 21-22, 2027 meeting, updating funds-rate and core PCE projections.: \"FOMC statement, September 21-22, 2027: the Committee voted to maintain the federal funds target range at 3-3/4 to 4 percent. The SEP shows the median funds rate at 4 percent at end-2027, with core PCE medians revised to 2.4 percent for 2027 and 2.1 percent for 2028, and unemployment near 4.1 percent through the projection horizon. Progress on disinflation has continued, and the Committee remains data-dependent, deciding meeting by meeting; balance-sheet policy continues as described, with reserve-management purchases conducted solely to maintain ample reserves.\"\n- Primary dealers and Treasury market hedge funds: Accommodate or publicly answer Jerome Powell (or successor Chair)'s move (→ Jerome Powell (or successor Chair)): \"Desk read into the September FOMC: with the funds rate at 3-3/4 to 4 percent, breakevens steady at 2.34% and term premium drifting down (Kim-Wright daily 0.96%, monthly mean 0.99%), the 10-year at 5.02% monthly is being carried by real yields and fiscal supply — consistent with the Chair's meeting-by-meeting framing. Autumn coupon auctions remain on a frozen calendar; our books stand ready to absorb at these spreads, with warehousing fees set by a term premium just under 1%.\"\n- Jerome Powell (or successor Chair): Advance your documented plan: Deliver 2% inflation without a recession: \"At the September 2027 FOMC meeting, the Committee will publish an updated Summary of Economic Projections alongside its decision on the target range. With core PCE still above 2 percent but tracking toward the 2.5 percent 2027 median, breakevens anchored near 2.34 percent, and long yields elevated on term premium rather than inflation expectations, we will remain data-dependent and decide meeting by meeting; reserve-management purchases continue as purely technical operations.\"\nFacts that changed:\n- 10-year Treasury constant maturity yield, monthly mean: 5.02 percent → 5.02 percent\n- 2s10s spread, daily: 0.28 percent → 0.28 percent\n- Fed funds futures, November 2027 contract: 95.44 index points → 95.45 index points\n- Fed total assets: 6.66 million millions of U.S. dollars → 6.66 million millions of U.S. dollars\n- Fed securities holdings reduction under QT: 2.28 trillion U.S. dollars → 2.29 trillion U.S. dollars\n- Term premium on 10-year zero-coupon bond, monthly mean: 0.99 percent → 0.98 percent\n- Term premium, daily: 0.96 percent → 0.97 percent\nEvents and consequences:\n- Sustained Michigan 1-yr near 4.6% keeps FOMC on hold into H2 2027, anchoring front end near 4%.\n- Did not materialise: Autumn auction supply tests dealer capacity despite the size freeze; tailing auctions could push term premium back toward 1.1% and the 10-year toward 5.3%.\n- FOMC holds at 3.75-4% and publishes SEP with end-2027 median at 4%; markets read it as plateau confirmation, front end firm and long end little changed\n- Treasury reiterates unchanged coupon auction sizes with bills absorbing marginal needs; dealers take the freeze at face value given the 4/4 track record\n- CBO September Monthly Budget Review shows FY2027 deficit tracking the $2.4T baseline; modest term-premium support, no escalation\n- Dealers' desk read attributes the 5% 10-year to real yields and sub-1% term premium, not inflation risk; consensus positioning stays neutral duration\n- Federal Reserve / FOMC fulfilled commitment [c0_10_1]: Publish the September 2027 SEP and FOMC statement following the September 21-22, 2027 meeting, updating funds-rate and core PCE projections.\n- Congressional Budget Office fulfilled commitment [c3_10_2]: Publish the next Monthly Budget Review (for July 2027 fiscal-year-to-date data) in early September 2027.\nAlliances and rivalries:\n- Primary dealers and Treasury market hedge funds — Jerome Powell (or successor Chair): allied (closer)",
+   "headline": "2027-09: 5 decisions · 7 facts changed · 6 events · arbiter=applied · September 2027 delivered the expected steady state: the FOMC held the funds rate at 3.75-4% and published its SEP with the end-2027 median…",
+   "narrative": "September 2027 delivered the expected steady state: the FOMC held the funds rate at 3.75-4% and published its SEP with the end-2027 median at 4%, Powell reinforced meeting-by-meeting framing, and Treasury reaffirmed its size freeze with bills absorbing marginal needs. Dealers read the mix as a confirmed plateau: breakevens steady near 2.34%, term premium drifting just under 1%, and the 10-year ending the month around 5.06%. The CBO's July review confirmed deficits tracking the baseline, keeping term-premium floor intact without a supply shock.",
+   "period_label": "2027-09",
+   "round": 11,
+   "scenario_pressure": {
+    "Bond bear steepening": "flat",
+    "Disinflation glide": "flat",
+    "Higher-for-longer plateau": "up",
+    "Recession flight to quality": "down"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "candidate_hash": "0ca2e396146c73c1449007ca93433184fd9c2ba80de944aa1054c62fb89f981d",
+     "problems": [],
+     "source_hash": "13ca0ae7b6dca2d0b53790d23b76d4e70e4599649117bda2a6086022923450a7",
+     "status": "valid"
+    }
+   ],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 6,
+    "total": 6
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "Accommodate or publicly answer US Department of the Treasury's move → US Department of the Treasury",
+     "Issue a public statement or warning → Primary dealers and Treasury market hedge funds, Federal Reserve / FOMC",
+     "Deliver commitment [c2_11_4]: Deliver the September 2027 FOMC statement and SEP framing: hold the target range at 3-3/4 to 4 percent, reaffirm data-dependence and the separation of reserve-management purchases from the rate path",
+     "Advance your documented plan: Consistent execution of announced reserve-management policy",
+     "Issue a public statement or warning"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Did not materialise: If bills share keeps rising at the margin into Q4 refunding, dealers may flag reduced bill appetite, nudging term premium toward 1.1%."
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 6658775.109999999,
+      "id": "fed_total_assets",
+      "name": "Fed total assets",
+      "to": 6664499.443499999,
+      "unit": "millions of U.S. dollars"
+     },
+     {
+      "from": 2.28925,
+      "id": "fed_securities_holdings_reduction_under_qt",
+      "name": "Fed securities holdings reduction under QT",
+      "to": 2.2849999999999997,
+      "unit": "trillion U.S. dollars"
+     },
+     {
+      "from": 0.977,
+      "id": "term_premium_on_10_year_zero_coupon_bond_monthly_mean",
+      "name": "Term premium on 10-year zero-coupon bond, monthly mean",
+      "to": 0.96,
+      "unit": "percent"
+     },
+     {
+      "from": 0.9723999999999999,
+      "id": "term_premium_daily",
+      "name": "Term premium, daily",
+      "to": 0.9553999999999999,
+      "unit": "percent"
+     }
+    ]
+   },
+   "digest": "October 2027 brought no surprises: the Fed held at 3.75-4%, minutes confirmed a patient stance, Treasury signalled another quarter of frozen coupon sizes with a bill-heavy margin, and dealers reported orderly auctions. With term premium drifting down a few basis points and the front end anchored, the 10-year ended the month essentially flat near 5.03-5.05%.\nMoves:\n- Congressional Budget Office: Issue a public statement or warning: \"CBO releases its Monthly Budget Review covering August 2027. Through the first eleven months of fiscal year 2027, the cumulative deficit under current law remains consistent with the February 2026 baseline trajectory of deficits averaging $2.4 trillion per year (6.1% of GDP) over 2027-2036, with net interest outlays continuing to rise as the fastest-growing component of federal spending. CBO offers no assessment of market yields, term premiums, or monetary policy. Full tables: cbo.gov, Monthly Budget Review series.\"\n- Primary dealers and Treasury market hedge funds: Accommodate or publicly answer US Department of the Treasury's move (→ US Department of the Treasury): \"Desk note ahead of the November refunding statement: with the $628bn Q4 borrowing estimate absorbed by bills and coupon sizes frozen a fourth straight cycle, bid-to-cover and tails across the October auctions stayed within recent norms. Our books enter the refunding with capacity intact at current term premium near 0.97% daily; warehousing duration at under 1% compensation leaves no room for size surprises, and we'd flag that any change to the freeze would need to clear materially higher spreads.\"\n- US Department of the Treasury: Issue a public statement or warning (→ Primary dealers and Treasury market hedge funds, Federal Reserve / FOMC): \"Treasury announces its quarterly financing estimates on the regular late-October schedule, followed by the quarterly refunding statement in early November. Issuance remains regular and predictable: nominal coupon-bearing and FRN auction sizes are unchanged, with bills absorbing marginal financing needs, and Treasury continues to judge current auction sizes as leaving it well positioned for at least the next several quarters.\"\n- Jerome Powell (or successor Chair): Deliver commitment [c2_11_4]: Deliver the September 2027 FOMC statement and SEP framing: hold the target range at 3-3/4 to 4 percent, reaffirm data-dependence and the separation of reserve-management purchases from the rate path: \"The Federal Reserve published the September 2027 FOMC statement and Summary of Economic Projections as scheduled: the target range was held at 3-3/4 to 4 percent, with SEP medians showing core PCE at 2.4 percent for 2027 and 2.1 percent for 2028. We remain data-dependent and will decide meeting by meeting; reserve-management purchases of shorter-term Treasuries are purely technical operations aimed at maintaining ample reserves and carry no signal about the rate path.\"\n- New York Fed Markets Desk: Advance your documented plan: Consistent execution of announced reserve-management policy: \"The Desk continued reserve-management purchases of shorter-term Treasury coupon securities in October 2027 at a pace matching trend growth in Federal Reserve liabilities plus seasonal fluctuations, in line with the December 2025 FOMC directive; total assets stood near $6.66 trillion as of end-September. The October prob_rec model update, based on the 10-year–3-month Treasury spread with a twelve-month forward window (3M10Y last printed 0.78 percent), is scheduled for release within the first two weeks of November. As always, this estimate is not an official forecast.\"\n- Federal Reserve / FOMC: Issue a public statement or warning: \"The Federal Reserve releases the minutes of the September 21-22, 2027 FOMC meeting on October 6, 2027. The minutes record that most participants judged that policy was well positioned pending further evidence that inflation is returning sustainably to 2 percent, and that reserve-management purchases by the New York Fed Desk continue to be conducted solely to keep reserves ample, with no change to the operating framework. The next FOMC meeting is scheduled for October 26-27, 2027.\"\nFacts that changed:\n- Fed total assets: 6.66 million millions of U.S. dollars → 6.66 million millions of U.S. dollars\n- Fed securities holdings reduction under QT: 2.29 trillion U.S. dollars → 2.28 trillion U.S. dollars\n- Term premium on 10-year zero-coupon bond, monthly mean: 0.98 percent → 0.96 percent\n- Term premium, daily: 0.97 percent → 0.96 percent\nEvents and consequences:\n- Did not materialise: If bills share keeps rising at the margin into Q4 refunding, dealers may flag reduced bill appetite, nudging term premium toward 1.1%.\n- FOMC minutes (Oct 6) reinforced the hold through year-end; fed funds futures barely moved, front end pinned near 4%.\n- October coupon auctions stopped through the market with normal bid-to-covers and tails after Treasury's regular-and-predictable financing estimates.\n- CBO's August Monthly Budget Review confirmed deficits on the February 2026 baseline; market reaction muted as this was expected.\n- Jerome Powell (or successor Chair) fulfilled commitment [c2_11_4]: Deliver the September 2027 FOMC statement and SEP framing: hold the target range at 3-3/4 to 4 percent, reaffirm data-dependence and the separation of reserve-management purchases from the rate path",
+   "headline": "2027-10: 6 decisions · 4 facts changed · 4 events · arbiter=applied · October 2027 brought no surprises: the Fed held at 3.75-4%, minutes confirmed a patient stance, Treasury signalled another quarter of froze…",
+   "narrative": "October 2027 brought no surprises: the Fed held at 3.75-4%, minutes confirmed a patient stance, Treasury signalled another quarter of frozen coupon sizes with a bill-heavy margin, and dealers reported orderly auctions. With term premium drifting down a few basis points and the front end anchored, the 10-year ended the month essentially flat near 5.03-5.05%.",
+   "period_label": "2027-10",
+   "round": 12,
+   "scenario_pressure": {
+    "Bond bear steepening": "flat",
+    "Disinflation glide": "flat",
+    "Higher-for-longer plateau": "up",
+    "Recession flight to quality": "down"
+   }
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "problems": [
+      "RuntimeError; quota/rate limit"
+     ],
+     "source_hash": "4ae77cca2f948caf642f1d96d0db4de2abaf0a6bee9334ebe378fe927cc8e1d2",
+     "status": "failed"
+    }
+   ],
+   "arbiter_problems": [
+    "llm error: RuntimeError; quota/rate limit"
+   ],
+   "arbiter_status": "failed",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 5,
+    "total": 5
+   },
+   "deterministic": {
+    "actions": [
+     "Deliver commitment [c3_12_3]: Publish the next Monthly Budget Review (for September 2027 fiscal-year-to-date data, and the FY2027 year-end summary) in early November 2027.",
+     "Deliver commitment [c1_12_5]: Publish the November 2027 quarterly refunding statement on the regular early-November schedule, announcing auction sizes consistent with the regular-and-predictable framework.",
+     "Deliver commitment [c0_12_2]: Publish the October 26-27, 2027 FOMC statement following the meeting, communicating the Committee's decision on the target range.",
+     "Deliver commitment [c6_12_2]: Publish a post-refunding desk read with bid-to-cover, tails and dealer capacity commentary within one period of the November refunding statement",
+     "Issue a public statement or warning"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "If core inflation keeps edging toward 2%, a late-2027 cut could pull the 10-year toward 4.8-4.9%.",
+     "Did not materialise: Persistent Michigan 1-yr at 4.6% could eventually lift breakevens, pressuring the 10y toward 5.15%.",
+     "Did not materialise: If Michigan 1-yr stays near 4.6%, the December 2027 SEP likely holds the dot at 4%, cementing the plateau through year-end",
+     "Did not materialise: October-November refunding auctions under the size freeze could still test dealer capacity, nudging the 10-year toward the high end of the range",
+     "Year-end bill share drift continues to absorb marginal financing; possible commentary on intermediation constraints at quarterly refunding",
+     "November refunding statement expected to confirm frozen coupon sizes; if instead bills share rises further, dealers may flag reduced bill appetite."
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 5.061999999999999,
+      "id": "10_year_treasury_constant_maturity_yield",
+      "name": "10-year Treasury constant maturity yield",
+      "to": 4.8919999999999995,
+      "unit": "percent"
+     },
+     {
+      "from": 0.96,
+      "id": "term_premium_on_10_year_zero_coupon_bond_monthly_mean",
+      "name": "Term premium on 10-year zero-coupon bond, monthly mean",
+      "to": 0.994,
+      "unit": "percent"
+     }
+    ]
+   },
+   "digest": "Moves:\n- Congressional Budget Office: Deliver commitment [c3_12_3]: Publish the next Monthly Budget Review (for September 2027 fiscal-year-to-date data, and the FY2027 year-end summary) in early November 2027.: \"CBO releases its Monthly Budget Review: Fiscal Year 2027 Final. CBO estimates the FY2027 budget deficit at approximately $2.0 trillion under current law, about 6.0 percent of GDP, consistent with the February 2026 baseline trajectory of deficits averaging $2.4 trillion per year over 2027-2036. Net interest outlays rose again in FY2027 and remain the fastest-growing component of federal spending. CBO offers no assessment of market yields, term premiums, or monetary policy. Full tables and methodology: cbo.gov/publication/MBR-FY2027.\"\n- US Department of the Treasury: Deliver commitment [c1_12_5]: Publish the November 2027 quarterly refunding statement on the regular early-November schedule, announcing auction sizes consistent with the regular-and-predictable framework.: \"Treasury publishes its quarterly refunding statement on November 2, 2027, on the regular schedule. Consistent with the regular-and-predictable framework, auction sizes for nominal coupon-bearing securities and FRNs are unchanged, with bills continuing to absorb marginal financing needs. Treasury judges that current auction sizes leave it well positioned for at least the next several quarters, including for potential changes in the SOMA portfolio's size and composition.\"\n- Federal Reserve / FOMC: Deliver commitment [c0_12_2]: Publish the October 26-27, 2027 FOMC statement following the meeting, communicating the Committee's decision on the target range.: \"The Federal Reserve publishes the FOMC statement from the October 26-27, 2027 meeting: the Committee voted to maintain the target range for the federal funds rate at 3-3/4 to 4 percent. The Committee judges that risks to achieving its employment and inflation goals remain roughly balanced, and that policy is well positioned pending further evidence that inflation is returning sustainably to the 2 percent objective. Reserve-management purchases of shorter-term Treasury securities continue solely to maintain ample reserves, separate from the rate path. The next meeting is scheduled for December 14-15, 2027.\"\n- Primary dealers and Treasury market hedge funds: Deliver commitment [c6_12_2]: Publish a post-refunding desk read with bid-to-cover, tails and dealer capacity commentary within one period of the November refunding statement: \"Post-refunding desk read (per our pre-refunding note): November refunding confirms coupon sizes frozen a fifth consecutive cycle with bills absorbing the $628bn Q4 margin. Bid-to-cover across the refunding complexes printed within recent norms and tails were modest; indirect takes held up. With term premium near 0.96% daily and 10-year around 5.06%, our capacity enters December intact — warehousing duration at under 1% compensation remains workable only while auctions stay regular and the freeze holds; any move to larger coupon sizes would need to clear materially wider spreads.\"\n- Jerome Powell (or successor Chair): Issue a public statement or warning: \"At the November 2-3 meeting, the Committee held the target range at 3-3/4 to 4 percent. Core PCE has continued to move toward 2 percent, though unevenly, and we will remain data-dependent, deciding meeting by meeting. I would repeat: reserve-management purchases are technical operations to keep reserves ample and carry no signal about the rate path; and with breakevens anchored near 2.35 percent, the rise in long yields reflects term premium and fiscal supply, not a de-anchoring of inflation expectations.\"\nFacts that changed:\n- 10-year Treasury constant maturity yield: 5.06 percent → 4.89 percent\n- Term premium on 10-year zero-coupon bond, monthly mean: 0.96 percent → 0.99 percent\nEvents and consequences:\n- If core inflation keeps edging toward 2%, a late-2027 cut could pull the 10-year toward 4.8-4.9%.\n- Did not materialise: Persistent Michigan 1-yr at 4.6% could eventually lift breakevens, pressuring the 10y toward 5.15%.\n- Did not materialise: If Michigan 1-yr stays near 4.6%, the December 2027 SEP likely holds the dot at 4%, cementing the plateau through year-end\n- Did not materialise: October-November refunding auctions under the size freeze could still test dealer capacity, nudging the 10-year toward the high end of the range\n- Year-end bill share drift continues to absorb marginal financing; possible commentary on intermediation constraints at quarterly refunding\n- November refunding statement expected to confirm frozen coupon sizes; if instead bills share rises further, dealers may flag reduced bill appetite.",
+   "headline": "2027-11: 5 decisions · 2 facts changed · 0 events · arbiter=failed",
+   "narrative": "",
+   "period_label": "2027-11",
+   "round": 13,
+   "scenario_pressure": {}
+  },
+  {
+   "arbiter_attempts": [
+    {
+     "attempt": 1,
+     "problems": [
+      "RuntimeError; quota/rate limit"
+     ],
+     "source_hash": "191a039666841f90081a85baec2b110c0dd61f9530e20e582c94c67f56907af0",
+     "status": "failed"
+    }
+   ],
+   "arbiter_problems": [
+    "llm error: RuntimeError; quota/rate limit"
+   ],
+   "arbiter_status": "failed",
+   "decisions": {
+    "failed": 4,
+    "held": 4,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 0,
+    "total": 4
+   },
+   "deterministic": {
+    "actions": [
+     "Federal Reserve / FOMC makes no recorded move (failed)",
+     "US Department of the Treasury makes no recorded move (failed)",
+     "Jerome Powell (or successor Chair) makes no recorded move (failed)",
+     "Congressional Budget Office makes no recorded move (failed)"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [
+     "Federal Reserve / FOMC: Publish the October 26-27, 2027 FOMC statement following the meeting, communicating the Committee's decision on the target range.",
+     "US Department of the Treasury: Publish the November 2027 quarterly refunding statement on the regular early-November schedule, announcing auction sizes consistent with the regular-and-predictable framework.",
+     "Congressional Budget Office: Publish the next Monthly Budget Review (for September 2027 fiscal-year-to-date data, and the FY2027 year-end summary) in early November 2027.",
+     "New York Fed Markets Desk: Publish the October 2027 prob_rec recession-probability model estimate by mid-November 2027, with the standard non-forecast disclaimer.",
+     "Primary dealers and Treasury market hedge funds: Publish a post-refunding desk read with bid-to-cover, tails and dealer capacity commentary within one period of the November refunding statement"
+    ],
+    "effects_fired": [
+     "If core PCE prints soften as September SEP projected, December FOMC could open door to early-2028 cut, pulling 2s10s steeper."
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [],
+    "shocks_fired": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [],
+    "variables_added": [],
+    "variables_changed": []
+   },
+   "digest": "Events and consequences:\n- Federal Reserve / FOMC's commitment lapsed: Publish the October 26-27, 2027 FOMC statement following the meeting, communicating the Committee's decision on the target range.\n- US Department of the Treasury's commitment lapsed: Publish the November 2027 quarterly refunding statement on the regular early-November schedule, announcing auction sizes consistent with the regular-and-predictable framework.\n- Congressional Budget Office's commitment lapsed: Publish the next Monthly Budget Review (for September 2027 fiscal-year-to-date data, and the FY2027 year-end summary) in early November 2027.\n- New York Fed Markets Desk's commitment lapsed: Publish the October 2027 prob_rec recession-probability model estimate by mid-November 2027, with the standard non-forecast disclaimer.\n- Primary dealers and Treasury market hedge funds's commitment lapsed: Publish a post-refunding desk read with bid-to-cover, tails and dealer capacity commentary within one period of the November refunding statement\n- If core PCE prints soften as September SEP projected, December FOMC could open door to early-2028 cut, pulling 2s10s steeper.",
+   "headline": "2027-12: 4 decisions · 0 facts changed · 0 events · arbiter=failed",
+   "narrative": "",
+   "period_label": "2027-12",
+   "round": 14,
+   "scenario_pressure": {}
+  }
+ ],
+ "horizon_date": "2027-12-31",
+ "interactions": [],
+ "pending_effects": [],
+ "period": {
+  "label": "2027-12",
+  "period_end": "2027-12-31",
+  "period_start": "2027-12-01",
+  "round": 13
+ },
+ "question": "Forecast the US 10-year Treasury yield (constant maturity, percent) as of December 31, 2027. Establish the baseline: the current yield as of late October 2026, the yield curve shape, and the 2024-2026 range. Research and weigh the principal drivers: Federal Reserve policy path and QT/balance-sheet policy; inflation expectations and term premium estimates; Treasury issuance mix and deficit outlook…",
+ "recent_events": [
+  {
+   "actors": [],
+   "description": "Sustained Michigan 1-yr near 4.6% keeps FOMC on hold into H2 2027, anchoring front end near 4%.",
+   "kind": "consequence",
+   "period_label": "2027-09",
+   "round": 11,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "Did not materialise: Autumn auction supply tests dealer capacity despite the size freeze; tailing auctions could push term premium back toward 1.1% and the 10-year toward 5.3%.",
+   "kind": "consequence",
+   "period_label": "2027-09",
+   "round": 11,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Federal Reserve / FOMC",
+    "Jerome Powell (or successor Chair)"
+   ],
+   "description": "FOMC holds at 3.75-4% and publishes SEP with end-2027 median at 4%; markets read it as plateau confirmation, front end firm and long end little changed",
+   "kind": "resolution",
+   "period_label": "2027-09",
+   "round": 11,
+   "source": "arbiter",
+   "targets": [
+    "Primary dealers and Treasury market hedge funds"
+   ],
+   "variable_ids": [
+    "fed_funds_futures_november_2027_contract",
+    "10_year_treasury_constant_maturity_yield"
+   ]
+  },
+  {
+   "actors": [
+    "US Department of the Treasury"
+   ],
+   "description": "Treasury reiterates unchanged coupon auction sizes with bills absorbing marginal needs; dealers take the freeze at face value given the 4/4 track record",
+   "kind": "resolution",
+   "period_label": "2027-09",
+   "round": 11,
+   "source": "arbiter",
+   "targets": [
+    "Primary dealers and Treasury market hedge funds"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Congressional Budget Office"
+   ],
+   "description": "CBO September Monthly Budget Review shows FY2027 deficit tracking the $2.4T baseline; modest term-premium support, no escalation",
+   "kind": "resolution",
+   "period_label": "2027-09",
+   "round": 11,
+   "source": "arbiter",
+   "targets": [
+    "US Congress"
+   ],
+   "variable_ids": [
+    "term_premium_daily"
+   ]
+  },
+  {
+   "actors": [
+    "Primary dealers and Treasury market hedge funds"
+   ],
+   "description": "Dealers' desk read attributes the 5% 10-year to real yields and sub-1% term premium, not inflation risk; consensus positioning stays neutral duration",
+   "kind": "consequence",
+   "period_label": "2027-09",
+   "round": 11,
+   "source": "arbiter",
+   "targets": [
+    "Jerome Powell (or successor Chair)"
+   ],
+   "variable_ids": [
+    "10_year_breakeven_inflation_rate_monthly_mean",
+    "term_premium_daily"
+   ]
+  },
+  {
+   "actors": [
+    "Federal Reserve / FOMC"
+   ],
+   "description": "Federal Reserve / FOMC fulfilled commitment [c0_10_1]: Publish the September 2027 SEP and FOMC statement following the September 21-22, 2027 meeting, updating funds-rate and core PCE projections.",
+   "kind": "resolution",
+   "option_id": "fulfill:c0_10_1",
+   "period_label": "2027-09",
+   "round": 11,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Congressional Budget Office"
+   ],
+   "description": "Congressional Budget Office fulfilled commitment [c3_10_2]: Publish the next Monthly Budget Review (for July 2027 fiscal-year-to-date data) in early September 2027.",
+   "kind": "resolution",
+   "option_id": "fulfill:c3_10_2",
+   "period_label": "2027-09",
+   "round": 11,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Congressional Budget Office"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "decision",
+   "statement": "CBO releases its Monthly Budget Review covering August 2027. Through the first eleven months of fiscal year 2027, the cumulative deficit under current law remains consistent with the February 2026 baseline trajectory of deficits averaging $2.4 trillion per year (6.1% of GDP) over 2027-2036, with net interest outlays c…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Primary dealers and Treasury market hedge funds"
+   ],
+   "description": "Accommodate or publicly answer US Department of the Treasury's move → US Department of the Treasury",
+   "kind": "action",
+   "option_id": "respond_3_accommodate",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "decision",
+   "statement": "Desk note ahead of the November refunding statement: with the $628bn Q4 borrowing estimate absorbed by bills and coupon sizes frozen a fourth straight cycle, bid-to-cover and tails across the October auctions stayed within recent norms. Our books enter the refunding with capacity intact at current term premium near 0.…",
+   "targets": [
+    "US Department of the Treasury"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "US Department of the Treasury"
+   ],
+   "description": "Issue a public statement or warning → Primary dealers and Treasury market hedge funds, Federal Reserve / FOMC",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "decision",
+   "statement": "Treasury announces its quarterly financing estimates on the regular late-October schedule, followed by the quarterly refunding statement in early November. Issuance remains regular and predictable: nominal coupon-bearing and FRN auction sizes are unchanged, with bills absorbing marginal financing needs, and Treasury c…",
+   "targets": [
+    "Primary dealers and Treasury market hedge funds",
+    "Federal Reserve / FOMC"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "operational",
+   "actors": [
+    "Jerome Powell (or successor Chair)"
+   ],
+   "description": "Deliver commitment [c2_11_4]: Deliver the September 2027 FOMC statement and SEP framing: hold the target range at 3-3/4 to 4 percent, reaffirm data-dependence and the separation of reserve-management purchases from the rate path",
+   "kind": "action",
+   "option_id": "fulfill:c2_11_4",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "decision",
+   "statement": "The Federal Reserve published the September 2027 FOMC statement and Summary of Economic Projections as scheduled: the target range was held at 3-3/4 to 4 percent, with SEP medians showing core PCE at 2.4 percent for 2027 and 2.1 percent for 2028. We remain data-dependent and will decide meeting by meeting; reserve-man…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "policy",
+   "actors": [
+    "New York Fed Markets Desk"
+   ],
+   "description": "Advance your documented plan: Consistent execution of announced reserve-management policy",
+   "kind": "action",
+   "option_id": "plan_1",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "decision",
+   "statement": "The Desk continued reserve-management purchases of shorter-term Treasury coupon securities in October 2027 at a pace matching trend growth in Federal Reserve liabilities plus seasonal fluctuations, in line with the December 2025 FOMC directive; total assets stood near $6.66 trillion as of end-September. The October pr…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Federal Reserve / FOMC"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "decision",
+   "statement": "The Federal Reserve releases the minutes of the September 21-22, 2027 FOMC meeting on October 6, 2027. The minutes record that most participants judged that policy was well positioned pending further evidence that inflation is returning sustainably to 2 percent, and that reserve-management purchases by the New York Fe…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "Did not materialise: If bills share keeps rising at the margin into Q4 refunding, dealers may flag reduced bill appetite, nudging term premium toward 1.1%.",
+   "kind": "consequence",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Federal Reserve / FOMC"
+   ],
+   "description": "FOMC minutes (Oct 6) reinforced the hold through year-end; fed funds futures barely moved, front end pinned near 4%.",
+   "kind": "consequence",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [
+    "Primary dealers and Treasury market hedge funds"
+   ],
+   "variable_ids": [
+    "fed_funds_futures_november_2027_contract"
+   ]
+  },
+  {
+   "actors": [
+    "US Department of the Treasury",
+    "Primary dealers and Treasury market hedge funds"
+   ],
+   "description": "October coupon auctions stopped through the market with normal bid-to-covers and tails after Treasury's regular-and-predictable financing estimates.",
+   "kind": "consequence",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "term_premium_daily"
+   ]
+  },
+  {
+   "actors": [
+    "Congressional Budget Office"
+   ],
+   "description": "CBO's August Monthly Budget Review confirmed deficits on the February 2026 baseline; market reaction muted as this was expected.",
+   "kind": "resolution",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [
+    "US Congress"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Jerome Powell (or successor Chair)"
+   ],
+   "description": "Jerome Powell (or successor Chair) fulfilled commitment [c2_11_4]: Deliver the September 2027 FOMC statement and SEP framing: hold the target range at 3-3/4 to 4 percent, reaffirm data-dependence and the separation of reserve-management purchases from the rate path",
+   "kind": "resolution",
+   "option_id": "fulfill:c2_11_4",
+   "period_label": "2027-10",
+   "round": 12,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "operational",
+   "actors": [
+    "Congressional Budget Office"
+   ],
+   "description": "Deliver commitment [c3_12_3]: Publish the next Monthly Budget Review (for September 2027 fiscal-year-to-date data, and the FY2027 year-end summary) in early November 2027.",
+   "kind": "action",
+   "option_id": "fulfill:c3_12_3",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "decision",
+   "statement": "CBO releases its Monthly Budget Review: Fiscal Year 2027 Final. CBO estimates the FY2027 budget deficit at approximately $2.0 trillion under current law, about 6.0 percent of GDP, consistent with the February 2026 baseline trajectory of deficits averaging $2.4 trillion per year over 2027-2036. Net interest outlays ros…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "operational",
+   "actors": [
+    "US Department of the Treasury"
+   ],
+   "description": "Deliver commitment [c1_12_5]: Publish the November 2027 quarterly refunding statement on the regular early-November schedule, announcing auction sizes consistent with the regular-and-predictable framework.",
+   "kind": "action",
+   "option_id": "fulfill:c1_12_5",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "decision",
+   "statement": "Treasury publishes its quarterly refunding statement on November 2, 2027, on the regular schedule. Consistent with the regular-and-predictable framework, auction sizes for nominal coupon-bearing securities and FRNs are unchanged, with bills continuing to absorb marginal financing needs. Treasury judges that current au…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "operational",
+   "actors": [
+    "Federal Reserve / FOMC"
+   ],
+   "description": "Deliver commitment [c0_12_2]: Publish the October 26-27, 2027 FOMC statement following the meeting, communicating the Committee's decision on the target range.",
+   "kind": "action",
+   "option_id": "fulfill:c0_12_2",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "decision",
+   "statement": "The Federal Reserve publishes the FOMC statement from the October 26-27, 2027 meeting: the Committee voted to maintain the target range for the federal funds rate at 3-3/4 to 4 percent. The Committee judges that risks to achieving its employment and inflation goals remain roughly balanced, and that policy is well posi…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "operational",
+   "actors": [
+    "Primary dealers and Treasury market hedge funds"
+   ],
+   "description": "Deliver commitment [c6_12_2]: Publish a post-refunding desk read with bid-to-cover, tails and dealer capacity commentary within one period of the November refunding statement",
+   "kind": "action",
+   "option_id": "fulfill:c6_12_2",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "decision",
+   "statement": "Post-refunding desk read (per our pre-refunding note): November refunding confirms coupon sizes frozen a fifth consecutive cycle with bills absorbing the $628bn Q4 margin. Bid-to-cover across the refunding complexes printed within recent norms and tails were modest; indirect takes held up. With term premium near 0.96%…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Jerome Powell (or successor Chair)"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "decision",
+   "statement": "At the November 2-3 meeting, the Committee held the target range at 3-3/4 to 4 percent. Core PCE has continued to move toward 2 percent, though unevenly, and we will remain data-dependent, deciding meeting by meeting. I would repeat: reserve-management purchases are technical operations to keep reserves ample and carr…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "If core inflation keeps edging toward 2%, a late-2027 cut could pull the 10-year toward 4.8-4.9%.",
+   "kind": "consequence",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "10_year_treasury_constant_maturity_yield"
+   ]
+  },
+  {
+   "actors": [],
+   "description": "Did not materialise: Persistent Michigan 1-yr at 4.6% could eventually lift breakevens, pressuring the 10y toward 5.15%.",
+   "kind": "consequence",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "Did not materialise: If Michigan 1-yr stays near 4.6%, the December 2027 SEP likely holds the dot at 4%, cementing the plateau through year-end",
+   "kind": "consequence",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [
+    "Federal Reserve / FOMC"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "Did not materialise: October-November refunding auctions under the size freeze could still test dealer capacity, nudging the 10-year toward the high end of the range",
+   "kind": "consequence",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [
+    "Primary dealers and Treasury market hedge funds",
+    "US Department of the Treasury"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "Year-end bill share drift continues to absorb marginal financing; possible commentary on intermediation constraints at quarterly refunding",
+   "kind": "consequence",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [
+    "US Department of the Treasury"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "November refunding statement expected to confirm frozen coupon sizes; if instead bills share rises further, dealers may flag reduced bill appetite.",
+   "kind": "consequence",
+   "period_label": "2027-11",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "term_premium_on_10_year_zero_coupon_bond_monthly_mean"
+   ]
+  },
+  {
+   "actors": [
+    "Federal Reserve / FOMC"
+   ],
+   "description": "Federal Reserve / FOMC's commitment lapsed: Publish the October 26-27, 2027 FOMC statement following the meeting, communicating the Committee's decision on the target range.",
+   "kind": "consequence",
+   "round": 14,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "US Department of the Treasury"
+   ],
+   "description": "US Department of the Treasury's commitment lapsed: Publish the November 2027 quarterly refunding statement on the regular early-November schedule, announcing auction sizes consistent with the regular-and-predictable framework.",
+   "kind": "consequence",
+   "round": 14,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Congressional Budget Office"
+   ],
+   "description": "Congressional Budget Office's commitment lapsed: Publish the next Monthly Budget Review (for September 2027 fiscal-year-to-date data, and the FY2027 year-end summary) in early November 2027.",
+   "kind": "consequence",
+   "round": 14,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "New York Fed Markets Desk"
+   ],
+   "description": "New York Fed Markets Desk's commitment lapsed: Publish the October 2027 prob_rec recession-probability model estimate by mid-November 2027, with the standard non-forecast disclaimer.",
+   "kind": "consequence",
+   "round": 14,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Primary dealers and Treasury market hedge funds"
+   ],
+   "description": "Primary dealers and Treasury market hedge funds's commitment lapsed: Publish a post-refunding desk read with bid-to-cover, tails and dealer capacity commentary within one period of the November refunding statement",
+   "kind": "consequence",
+   "round": 14,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "wait",
+   "actors": [
+    "Federal Reserve / FOMC"
+   ],
+   "description": "Federal Reserve / FOMC makes no recorded move (failed)",
+   "kind": "action",
+   "option_id": "hold_position",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "decision",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "wait",
+   "actors": [
+    "US Department of the Treasury"
+   ],
+   "description": "US Department of the Treasury makes no recorded move (failed)",
+   "kind": "action",
+   "option_id": "hold_position",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "decision",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "wait",
+   "actors": [
+    "Jerome Powell (or successor Chair)"
+   ],
+   "description": "Jerome Powell (or successor Chair) makes no recorded move (failed)",
+   "kind": "action",
+   "option_id": "hold_position",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "decision",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "wait",
+   "actors": [
+    "Congressional Budget Office"
+   ],
+   "description": "Congressional Budget Office makes no recorded move (failed)",
+   "kind": "action",
+   "option_id": "hold_position",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "decision",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "If core PCE prints soften as September SEP projected, December FOMC could open door to early-2028 cut, pulling 2s10s steeper.",
+   "kind": "consequence",
+   "period_label": "2027-12",
+   "round": 14,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  }
+ ],
+ "relationships": [
+  {
+   "kind": "INFLUENCES",
+   "last_changed_round": 12,
+   "polarity": 0.65,
+   "source": 0,
+   "strength": 0.789,
+   "target": 1,
+   "valence": "allied"
+  },
+  {
+   "kind": "CUSTOMER_OF",
+   "last_changed_round": 12,
+   "polarity": 1.0,
+   "source": 1,
+   "strength": 0.9924,
+   "target": 6,
+   "valence": "allied"
+  },
+  {
+   "kind": "INFLUENCES",
+   "last_changed_round": 0,
+   "polarity": 0.0,
+   "source": 3,
+   "strength": 0.3,
+   "target": 5,
+   "valence": "neutral"
+  },
+  {
+   "kind": "INFLUENCES",
+   "last_changed_round": 6,
+   "polarity": 0.25,
+   "source": 5,
+   "strength": 0.6235,
+   "target": 1,
+   "valence": "allied"
+  },
+  {
+   "kind": "PARTNERS_WITH",
+   "last_changed_round": 5,
+   "polarity": 0.82,
+   "source": 2,
+   "strength": 1.0,
+   "target": 0,
+   "valence": "allied"
+  },
+  {
+   "kind": "DEPENDS_ON",
+   "last_changed_round": 10,
+   "polarity": 0.81,
+   "source": 4,
+   "strength": 0.951,
+   "target": 0,
+   "valence": "allied"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 5,
+   "polarity": -0.3,
+   "source": 5,
+   "strength": 0.4215,
+   "target": 2,
+   "valence": "adversarial"
+  },
+  {
+   "kind": "ALLY_OF",
+   "last_changed_round": 11,
+   "polarity": 0.405,
+   "source": 6,
+   "strength": 0.5065,
+   "target": 2,
+   "valence": "allied"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 9,
+   "polarity": 0.0,
+   "source": 5,
+   "strength": 0.3,
+   "target": 0,
+   "valence": "neutral"
+  },
+  {
+   "kind": "ALLY_OF",
+   "last_changed_round": 11,
+   "polarity": 0.15,
+   "source": 6,
+   "strength": 0.3765,
+   "target": 0,
+   "valence": "neutral"
+  }
+ ],
+ "seed_gaps": [
+  {
+   "kind": "shock_window_elapsed",
+   "note": "its window (2026-09-01 to 2026-09-30) ended before the as-of date; not modelled as a shock",
+   "subject": "US recession within one year (Cleveland Fed yield-curve model)"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Federal Reserve / FOMC"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Congressional Budget Office"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "US Congress"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Primary dealers and Treasury market hedge funds"
+  }
+ ],
+ "simulation_id": "sim_fd5df2b41536",
+ "summary": {
+  "actors": 7,
+  "arbiter_enabled": true,
+  "arbiter_failed_rounds": 2,
+  "behaviour": {
+   "expectations_checked": 167,
+   "expectations_reacted": 96,
+   "moves": 57,
+   "offers_answered": 0,
+   "responsive_moves": 0,
+   "responsive_share": 0.0,
+   "rounds_scored": 12
+  },
+  "decision_actors_max": 24,
+  "events": 155,
+  "offers": {
+   "accepted": 0,
+   "breached": 0,
+   "countered": 0,
+   "lapsed": 0,
+   "open": 0,
+   "opened": 0,
+   "rejected": 0
+  },
+  "pending_effects": 0,
+  "relationships": 10,
+  "rounds_committed": 14,
+  "schema_version": "world-model-summary/v1",
+  "seed_gaps": 5,
+  "variables": 24
+ },
+ "variables": [
+  {
+   "as_of": "2026-10-21",
+   "history": [
+    {
+     "cause": "Modest month-end rally on refunding freeze and FOMC hold; yield drifts down from 5.09 [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 5.036499999999999
+    },
+    {
+     "cause": "If data soften, markets reprice cuts against the dots, pulling the 10-year lower by early 2027. [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "effect",
+     "value": 4.923024999999999
+    },
+    {
+     "cause": "Supply relief expectations from Treasury's refunding calendar plus firm-but-unchanged Fed messaging; modest consolidation below 5%. [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "arbiter",
+     "value": 4.9174999999999995
+    },
+    {
+     "cause": "Higher-for-longer hold plus persistent deficit headlines offset orderly supply; modest rise within range. [damped: 回归锚点κ=0.15]",
+     "round": 5,
+     "source": "arbiter",
+     "value": 4.968500000000001
+    },
+    {
+     "cause": "Steadying communications offset fiscal-premium concerns; yield roughly flat [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "arbiter",
+     "value": 4.977
+    },
+    {
+     "cause": "Month-end level ticks up marginally on refunding-week term premium pressure [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "arbiter",
+     "value": 5.011
+    },
+    {
+     "cause": "If inflation data stays elevated (Michigan 1-yr at 4.6%), FOMC hold extends, supporting yields near 5% [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "effect",
+     "value": 5.113849999999999
+    },
+    {
+     "cause": "Fiscal supply news (CBO deficit, $700B Q3 borrowing estimate) plus hawkish hold lifted the long end modestly; largely priced. [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 5.1502725
+    },
+    {
+     "cause": "If core inflation stalls above target into H2, November 2027 cut expectations fade further, nudging the 10-year up on front-end repricing [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "effect",
+     "value": 5.2152316249999995
+    },
+    {
+     "cause": "Hold + refunding freeze removed supply surprise; modest rally off 5.22% late-July peak, still elevated. [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "arbiter",
+     "value": 5.1045
+    },
+    {
+     "cause": "Unchanged refunding sizes and reaffirmed Fed plateau let the 10-year retrace from 5.10 toward the monthly mean; term premium stable. [damped: 回归锚点κ=0.15]",
+     "round": 10,
+     "source": "arbiter",
+     "value": 5.061999999999999
+    },
+    {
+     "cause": "If core inflation keeps edging toward 2%, a late-2027 cut could pull the 10-year toward 4.8-4.9%. [damped: 回归锚点κ=0.15]",
+     "round": 13,
+     "source": "effect",
+     "value": 4.8919999999999995
+    }
+   ],
+   "id": "10_year_treasury_constant_maturity_yield",
+   "kind": "numeric",
+   "name": "10-year Treasury constant maturity yield",
+   "provenance": "effect",
+   "unit": "percent",
+   "value": 4.8919999999999995
+  },
+  {
+   "as_of": "2026-09",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 4.989
+    },
+    {
+     "cause": "December mean reflects early-month 5.13-5.20 area easing to ~5.00-5.05 after refunding and FOMC [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 5.06635
+    },
+    {
+     "cause": "January mean reflects drift lower from December's 5.07 as bear-steepening positions unwind. [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "arbiter",
+     "value": 4.94735
+    },
+    {
+     "cause": "Monthly mean reflects steady grind lower through February [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "arbiter",
+     "value": 4.91335
+    },
+    {
+     "cause": "March mean slightly above February's 4.91 as cut bets receded. [damped: 回归锚点κ=0.15]",
+     "round": 5,
+     "source": "arbiter",
+     "value": 4.9388499999999995
+    },
+    {
+     "cause": "Hold plus unchanged issuance kept yields anchored; slight term-premium drift offsets disinflation optimism [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "arbiter",
+     "value": 4.96435
+    },
+    {
+     "cause": "June mean rose from 4.96 as yields drifted up on issuance guidance and plateau confirmation. [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 5.0275475
+    },
+    {
+     "cause": "July mean slightly above June's 5.03 given early-month strength before post-FOMC easing. [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "arbiter",
+     "value": 5.04935
+    },
+    {
+     "cause": "August mean sits between July's 5.05 and the late-month drift lower. [damped: 回归锚点κ=0.15]",
+     "round": 10,
+     "source": "arbiter",
+     "value": 5.01535
+    },
+    {
+     "cause": "Monthly mean ticks up slightly on mid-month SEP-driven firming before fade [damped: 回归锚点κ=0.15]",
+     "round": 11,
+     "source": "arbiter",
+     "value": 5.02385
+    }
+   ],
+   "id": "10_year_treasury_constant_maturity_yield_monthly_mean",
+   "kind": "numeric",
+   "name": "10-year Treasury constant maturity yield, monthly mean",
+   "provenance": "arbiter",
+   "unit": "percent",
+   "value": 5.02385
+  },
+  {
+   "as_of": "2026-10",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 5.202
+    },
+    {
+     "cause": "Late-January partial mean slightly below month average as term premium compresses. [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "arbiter",
+     "value": 4.9198
+    },
+    {
+     "cause": "Early-September partial mean reflects carry-over of late-August rally on stable term premium. [damped: 回归锚点κ=0.15]",
+     "round": 10,
+     "source": "arbiter",
+     "value": 5.0133
+    }
+   ],
+   "id": "10_year_treasury_constant_maturity_yield_partial_month_mean",
+   "kind": "numeric",
+   "name": "10-year Treasury constant maturity yield, partial-month mean",
+   "provenance": "arbiter",
+   "unit": "percent",
+   "value": 5.0133
+  },
+  {
+   "as_of": "2025-10-22",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 3.97
+    }
+   ],
+   "id": "dgs10_52_week_range_low",
+   "kind": "numeric",
+   "name": "DGS10 52-week range low",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 3.97
+  },
+  {
+   "as_of": "2026-10-05",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 5.31
+    }
+   ],
+   "id": "dgs10_52_week_range_high",
+   "kind": "numeric",
+   "name": "DGS10 52-week range high",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 5.31
+  },
+  {
+   "as_of": "2024-12",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 4.391
+    }
+   ],
+   "id": "dgs10_december_monthly_mean_2024",
+   "kind": "numeric",
+   "name": "DGS10 December monthly mean 2024",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 4.391
+  },
+  {
+   "as_of": "2025-12",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 4.143
+    }
+   ],
+   "id": "dgs10_december_monthly_mean_2025",
+   "kind": "numeric",
+   "name": "DGS10 December monthly mean 2025",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 4.143
+  },
+  {
+   "as_of": "2026-10-23",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 0.31
+    },
+    {
+     "cause": "Front-end cut bets faded toward dots while long end rallied slightly on refunding relief. [damped: 回归锚点κ=0.15]",
+     "round": 1,
+     "source": "arbiter",
+     "value": 0.327
+    },
+    {
+     "cause": "Front end pinned by hold and dots; long end rallies slightly more, flattening 2s10s [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 0.3015
+    },
+    {
+     "cause": "Front end anchored by higher-for-longer pricing while long end rallies slightly; modest flattening as Powell expected. [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "arbiter",
+     "value": 0.276
+    },
+    {
+     "cause": "Slight bull flattening as long end outperforms on refunding relief [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "arbiter",
+     "value": 0.2675
+    },
+    {
+     "cause": "Modest bear steepening: long end rose a touch more than the anchored front end. [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 0.29087500000000005
+    },
+    {
+     "cause": "Long end rallied more than 2-year after hold; curve flattens slightly. [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "arbiter",
+     "value": 0.259
+    },
+    {
+     "cause": "10y drift lower with 2y pinned near the dots; modest curve movement. [damped: 回归锚点κ=0.15]",
+     "round": 10,
+     "source": "arbiter",
+     "value": 0.28450000000000003
+    },
+    {
+     "cause": "Front end pinned near 4%, long end stable; spread a bp tighter [damped: 回归锚点κ=0.15]",
+     "round": 11,
+     "source": "arbiter",
+     "value": 0.276
+    }
+   ],
+   "id": "2s10s_spread_daily",
+   "kind": "numeric",
+   "name": "2s10s spread, daily",
+   "provenance": "arbiter",
+   "unit": "percent",
+   "value": 0.276
+  },
+  {
+   "as_of": "2026-09",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 0.338
+    },
+    {
+     "cause": "Long end slightly firmer than front end after refunding [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "arbiter",
+     "value": 0.30569999999999997
+    },
+    {
+     "cause": "Monthly 2s10s widened slightly on fiscal supply. [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 0.31904499999999997
+    },
+    {
+     "cause": "Monthly mean edges down with the 10y retrace. [damped: 回归锚点κ=0.15]",
+     "round": 10,
+     "source": "arbiter",
+     "value": 0.30569999999999997
+    }
+   ],
+   "id": "2s10s_spread_monthly_mean",
+   "kind": "numeric",
+   "name": "2s10s spread, monthly mean",
+   "provenance": "arbiter",
+   "unit": "percent",
+   "value": 0.30569999999999997
+  },
+  {
+   "as_of": "2026-10-23",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 0.78
+    }
+   ],
+   "id": "3m10y_spread_daily",
+   "kind": "numeric",
+   "name": "3M10Y spread, daily",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 0.78
+  },
+  {
+   "as_of": "2026-09",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 0.896
+    }
+   ],
+   "id": "3m10y_spread_monthly_mean",
+   "kind": "numeric",
+   "name": "3M10Y spread, monthly mean",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 0.896
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 3.875
+    }
+   ],
+   "id": "us_central_bank_policy_rate_end_of_period",
+   "kind": "numeric",
+   "name": "US central bank policy rate, end of period",
+   "provenance": "research",
+   "unit": "percent per year",
+   "value": 3.875
+  },
+  {
+   "as_of": "2026-09-16",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 4.0
+    }
+   ],
+   "id": "federal_funds_target_range_upper_bound",
+   "kind": "numeric",
+   "name": "Federal funds target range upper bound",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 4.0
+  },
+  {
+   "as_of": "2026-10-23",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 95.82
+    },
+    {
+     "cause": "Powell's remarks retraced some near-term cut expectations toward the SEP plateau (lower price = higher implied rate). [damped: 回归锚点κ=0.15]",
+     "round": 1,
+     "source": "arbiter",
+     "value": 95.76899999999999
+    },
+    {
+     "cause": "Hold confirmed, near-term cut odds fade slightly; implied yield eases to ~4.20% [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 95.803
+    }
+   ],
+   "id": "fed_funds_futures_february_2027_contract",
+   "kind": "numeric",
+   "name": "Fed funds futures, February 2027 contract",
+   "provenance": "arbiter",
+   "unit": "index points",
+   "value": 95.803
+  },
+  {
+   "as_of": "2026-10-23",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 95.44
+    },
+    {
+     "cause": "SEP holding 2027 median at 4.25% removes some 2027 easing priced [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 95.474
+    },
+    {
+     "cause": "Minutes reduce odds of late-2027 cuts slightly; contract ticks down. [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "arbiter",
+     "value": 95.4485
+    },
+    {
+     "cause": "Hold confirms plateau; late-2027 pricing firms marginally toward no further cuts [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "arbiter",
+     "value": 95.457
+    },
+    {
+     "cause": "Dovish cut hopes for late 2027 trimmed marginally after hawkish-leaning hold. [damped: 回归锚点κ=0.15]",
+     "round": 5,
+     "source": "arbiter",
+     "value": 95.4485
+    },
+    {
+     "cause": "Hawkish hold SEP nudged implied Nov-27 rate fractionally higher (index slightly lower). [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 95.430225
+    },
+    {
+     "cause": "Data-dependent hold kept November cut pricing essentially unchanged, slightly higher probability after Powell's disinflation remarks.",
+     "round": 9,
+     "source": "arbiter",
+     "value": 95.44
+    },
+    {
+     "cause": "November pricing firms 1bp as hold at 4% median is confirmed [damped: 回归锚点κ=0.15]",
+     "round": 11,
+     "source": "arbiter",
+     "value": 95.4485
+    }
+   ],
+   "id": "fed_funds_futures_november_2027_contract",
+   "kind": "numeric",
+   "name": "Fed funds futures, November 2027 contract",
+   "provenance": "arbiter",
+   "unit": "index points",
+   "value": 95.4485
+  },
+  {
+   "as_of": "2026-10-21",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 6753604.0
+    },
+    {
+     "cause": "Continued QT runoff (~$35B/month) [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 6723854.0
+    },
+    {
+     "cause": "Balance sheet continues shrinking passively. [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "arbiter",
+     "value": 6703790.6
+    },
+    {
+     "cause": "Net runoff plus reserve-management purchases; balance sheet continues gradual decline [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "arbiter",
+     "value": 6687462.609999999
+    },
+    {
+     "cause": "Balance sheet shrinks with runoff plus SOMA purchases offsetting liability growth. [damped: 回归锚点κ=0.15]",
+     "round": 5,
+     "source": "arbiter",
+     "value": 6673190.6
+    },
+    {
+     "cause": "QT runoff continues at calibrated pace [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "arbiter",
+     "value": 6669952.609999999
+    },
+    {
+     "cause": "Ongoing QT runoff of ~$20bn/month in securities holdings [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "arbiter",
+     "value": 6665500.318499999
+    },
+    {
+     "cause": "Continued passive runoff consistent with ongoing QT. [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "arbiter",
+     "value": 6657040.6
+    },
+    {
+     "cause": "Continued QT runoff at current monthly pace [damped: 回归锚点κ=0.15]",
+     "round": 11,
+     "source": "arbiter",
+     "value": 6658775.109999999
+    },
+    {
+     "cause": "Continued reserve-management rebalancing and runoff; modest decline consistent with trend. [damped: 回归锚点κ=0.15]",
+     "round": 12,
+     "source": "arbiter",
+     "value": 6664499.443499999
+    }
+   ],
+   "id": "fed_total_assets",
+   "kind": "numeric",
+   "name": "Fed total assets",
+   "provenance": "arbiter",
+   "unit": "millions of U.S. dollars",
+   "value": 6664499.443499999
+  },
+  {
+   "as_of": "2025-10-31",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 2.2
+    },
+    {
+     "cause": "Cumulative QT reduction ticks up with continued runoff [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 2.234
+    },
+    {
+     "cause": "QT runoff continues at established pace, ~$30bn/month. [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "arbiter",
+     "value": 2.251
+    },
+    {
+     "cause": "Continued runoff at announced pace [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "arbiter",
+     "value": 2.26375
+    },
+    {
+     "cause": "QT runoff continues at trend (~$30bn/month). [damped: 回归锚点κ=0.15]",
+     "round": 5,
+     "source": "arbiter",
+     "value": 2.2765
+    },
+    {
+     "cause": "Ongoing monthly runoff [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "arbiter",
+     "value": 2.2849999999999997
+    },
+    {
+     "cause": "Cumulative QT reduction continues at steady pace [damped: 回归锚点κ=0.15]",
+     "round": 11,
+     "source": "arbiter",
+     "value": 2.28925
+    },
+    {
+     "cause": "Cumulative QT reduction creeps up slightly. [damped: 回归锚点κ=0.15]",
+     "round": 12,
+     "source": "arbiter",
+     "value": 2.2849999999999997
+    }
+   ],
+   "id": "fed_securities_holdings_reduction_under_qt",
+   "kind": "numeric",
+   "name": "Fed securities holdings reduction under QT",
+   "provenance": "arbiter",
+   "unit": "trillion U.S. dollars",
+   "value": 2.2849999999999997
+  },
+  {
+   "as_of": "2026-09",
+   "history": [
+    {
+     "cause": "QT continues shrinking the balance sheet; further runoff keeps term premium under upward pressure into 2027. [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "effect",
+     "value": 0.9736
+    },
+    {
+     "cause": "Coupon freeze and Fed communication modestly compress term premium despite QT runoff [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "arbiter",
+     "value": 0.943
+    },
+    {
+     "cause": "CBO deficit tracking reinforces fiscal supply premium; small uptick. [damped: 回归锚点κ=0.15]",
+     "round": 5,
+     "source": "arbiter",
+     "value": 0.9515
+    },
+    {
+     "cause": "Fed framing and predictable issuance stabilized rather than reduced term premium [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "arbiter",
+     "value": 0.943
+    },
+    {
+     "cause": "Rising bills share with sustained deficits adds modest term-premium pressure once coupon freeze convenience fades [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "effect",
+     "value": 0.9965499999999999
+    },
+    {
+     "cause": "Sustained bills share and QT continue modest premium pressure [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "arbiter",
+     "value": 1.0025
+    },
+    {
+     "cause": "Larger deficit and coupon-heavy borrowing outlook added a few bp to term premium, short of the sharp repricing dealers feared. [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 1.021625
+    },
+    {
+     "cause": "July monthly mean ticks down slightly; fiscal deficit news offsets part of the FOMC relief. [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "arbiter",
+     "value": 1.0025
+    },
+    {
+     "cause": "Monthly mean consolidates just under 1%. [damped: 回归锚点κ=0.15]",
+     "round": 10,
+     "source": "arbiter",
+     "value": 0.9855
+    },
+    {
+     "cause": "Monthly mean essentially unchanged, drifting under 1% [damped: 回归锚点κ=0.15]",
+     "round": 11,
+     "source": "arbiter",
+     "value": 0.977
+    },
+    {
+     "cause": "Fourth consecutive cycle of frozen coupon sizes and smooth auctions trimmed supply-risk premium slightly.",
+     "round": 12,
+     "source": "arbiter",
+     "value": 0.96
+    },
+    {
+     "cause": "November refunding statement expected to confirm frozen coupon sizes; if instead bills share rises further, dealers may flag reduced bill appetite. [damped: 回归锚点κ=0.15]",
+     "round": 13,
+     "source": "effect",
+     "value": 0.994
+    }
+   ],
+   "id": "term_premium_on_10_year_zero_coupon_bond_monthly_mean",
+   "kind": "numeric",
+   "name": "Term premium on 10-year zero-coupon bond, monthly mean",
+   "provenance": "effect",
+   "unit": "percent",
+   "value": 0.994
+  },
+  {
+   "as_of": "2026-10-16",
+   "history": [
+    {
+     "cause": "Coupon auction freeze trims supply-risk premium marginally [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 0.9384
+    },
+    {
+     "cause": "Dealers read Treasury signal as freezing coupon sizes; supply-driven premium eases modestly. [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "arbiter",
+     "value": 0.9129
+    },
+    {
+     "cause": "If Q1 2027 refunding extends the coupon freeze while deficits track $2.4T, bills share rises toward norms, adding modest term premium pressure [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "effect",
+     "value": 0.966365
+    },
+    {
+     "cause": "February refunding statement (Feb 3) confirms coupon sizes frozen; further modest term-premium compression. [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "effect",
+     "value": 0.8874
+    },
+    {
+     "cause": "Daily premium ticks up on deficit headlines after prior easing. [damped: 回归锚点κ=0.15]",
+     "round": 5,
+     "source": "arbiter",
+     "value": 0.9214
+    },
+    {
+     "cause": "Modest daily decline on issuance-reaffirmation relief [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "arbiter",
+     "value": 0.9384
+    },
+    {
+     "cause": "Refunding-week intermediation constraints nudge premium up slightly [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "arbiter",
+     "value": 0.9639
+    },
+    {
+     "cause": "End-June term premium edged up after Treasury borrowing estimates. [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 0.984215
+    },
+    {
+     "cause": "Powell's term-premium framing and no-issuing-surprise refunding trimmed premium slightly from 0.98. [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "arbiter",
+     "value": 0.9639
+    },
+    {
+     "cause": "Treasury's unchanged coupon sizes and bills-at-the-margin capped term premium; no fiscal repricing. [damped: 回归锚点κ=0.15]",
+     "round": 10,
+     "source": "arbiter",
+     "value": 0.9553999999999999
+    },
+    {
+     "cause": "Slight uptick on CBO deficit confirmation and month-end supply, offset by Treasury freeze [damped: 回归锚点κ=0.15]",
+     "round": 11,
+     "source": "arbiter",
+     "value": 0.9723999999999999
+    },
+    {
+     "cause": "Desk note on normal bid-to-cover lowered duration-risk pricing marginally. [damped: 回归锚点κ=0.15]",
+     "round": 12,
+     "source": "arbiter",
+     "value": 0.9553999999999999
+    }
+   ],
+   "id": "term_premium_daily",
+   "kind": "numeric",
+   "name": "Term premium, daily",
+   "provenance": "arbiter",
+   "unit": "percent",
+   "value": 0.9553999999999999
+  },
+  {
+   "as_of": "2026-09",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 5.003
+    }
+   ],
+   "id": "fitted_10_year_zero_coupon_yield_monthly_mean",
+   "kind": "numeric",
+   "name": "Fitted 10-year zero-coupon yield, monthly mean",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 5.003
+  },
+  {
+   "as_of": "2026-09",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 2.351
+    },
+    {
+     "cause": "Anchored; high Michigan 1-yr does not spill into long-run breakevens [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "arbiter",
+     "value": 2.34165
+    }
+   ],
+   "id": "10_year_breakeven_inflation_rate_monthly_mean",
+   "kind": "numeric",
+   "name": "10-year breakeven inflation rate, monthly mean",
+   "provenance": "arbiter",
+   "unit": "percent",
+   "value": 2.34165
+  },
+  {
+   "as_of": "2026-09",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 2.34
+    }
+   ],
+   "id": "5y5y_forward_inflation_expectation_monthly_mean",
+   "kind": "numeric",
+   "name": "5y5y forward inflation expectation, monthly mean",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 2.34
+  },
+  {
+   "as_of": "2026-09",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 2.638
+    },
+    {
+     "cause": "Real yields drift with elevated nominal yields; slight rise vs June. [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "arbiter",
+     "value": 2.6737
+    },
+    {
+     "cause": "Real yields eased a basis point with the post-Jackson Hole risk backdrop stable. [damped: 回归锚点κ=0.15]",
+     "round": 10,
+     "source": "arbiter",
+     "value": 2.6567000000000003
+    }
+   ],
+   "id": "10_year_tips_yield_monthly_mean",
+   "kind": "numeric",
+   "name": "10-year TIPS yield, monthly mean",
+   "provenance": "arbiter",
+   "unit": "percent",
+   "value": 2.6567000000000003
+  },
+  {
+   "as_of": "2026-09",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 4.6
+    }
+   ],
+   "id": "michigan_1_year_inflation_expectation",
+   "kind": "numeric",
+   "name": "Michigan 1-year inflation expectation",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 4.6
+  }
+ ]
+}

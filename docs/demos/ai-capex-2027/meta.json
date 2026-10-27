@@ -50,6 +50,7 @@
   "ontology.json": "cf5bd9c18a5680441a0d1d7ad1e8e31831b2e930fd54de6bbc2bb11513d005c1",
   "graph.json": "c7724b4681e0195532838d64e6e49ac090cf6fa11ccdab5eaa9a66546570c43f",
   "forum.json": "5e08a9139410319b2a15e4ca4883cd08d602e3f19e27651bbad57cd95f606333",
+  "world_state.json": "e98174be01d9c0b49f27f0fbf34b905fbacc8a07a6011e204acc488a3cedaa8d",
   "report.md": "64e59b7956b969150a6d0946c6b0be1a4aa84f466932a60a2418119337a6e0cb",
   "report.zh.md": "e1800c548ac2620877f1b1e0655ddcffd0e111e2f6161b8c1e5adcad75c70753",
   "research-charts/data_fred_dpcerl1q225sbea_c25f95a72f99834b.png": "f16c59cb977d2f4450efad61ebe9de713b25cbc4aad5ec7a537a432bb23922ee",

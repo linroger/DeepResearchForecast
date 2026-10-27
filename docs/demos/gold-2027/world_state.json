@@ -1,0 +1,2987 @@
+{
+ "actors": [
+  {
+   "agency_class": "central_bank",
+   "agent_id": 0,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "wait",
+    "label": "Hold position: wait, observe, keep current course",
+    "magnitude": 0.0,
+    "option_id": "hold_position",
+    "resolution": null,
+    "reversibility": "reversible",
+    "round": 9,
+    "statement": "Federal Reserve Board — The Committee enters the November 3-4 FOMC meeting blackout period effective Saturday, October 31. No further commentary on the economic outlook or policy will be provided until after the meeting. The weekly H.4.1 release and FRED data updates, including the 10-year TIPS series (2.77% daily pri…",
+    "status": "ok",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "Federal Reserve (FOMC)",
+   "pending_commitments": [],
+   "reputation": 0.54,
+   "track_record": {
+    "broken": 0,
+    "kept": 0,
+    "lapsed": 2,
+    "open": 0,
+    "outcomes": {
+     "success": 2
+    },
+    "released": 0,
+    "reliability": 0.0,
+    "reputation": 0.54,
+    "resolved": 2
+   }
+  },
+  {
+   "agency_class": "other_actor",
+   "agent_id": 1,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.3,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "Routine weekend/week transparency note; auctions to resume normally, benchmark tracking spot.",
+    "reversibility": "reversible",
+    "round": 5,
+    "statement": "LBMA Gold Price, 26 October 2026: no auctions conducted (weekend); most recent p.m. auction settled with the benchmark tracking spot in a narrow band. We note ongoing market commentary: the LBMA Gold Price is produced via transparent electronic auction with published participant volumes; small differences versus COMEX…",
+    "status": "ok",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "LBMA Gold Price auction",
+   "pending_commitments": [],
+   "reputation": 0.52,
+   "track_record": {
+    "broken": 0,
+    "kept": 0,
+    "lapsed": 0,
+    "open": 0,
+    "outcomes": {
+     "success": 1
+    },
+    "released": 0,
+    "reliability": null,
+    "reputation": 0.52,
+    "resolved": 0
+   }
+  },
+  {
+   "agency_class": "central_bank",
+   "agent_id": 2,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "wait",
+    "label": "Hold position: wait, observe, keep current course",
+    "magnitude": 0.0,
+    "option_id": "hold_position",
+    "resolution": null,
+    "reversibility": "reversible",
+    "round": 8,
+    "statement": "",
+    "status": "invalid",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "World Gold Council",
+   "pending_commitments": [],
+   "reputation": 0.58,
+   "track_record": {
+    "broken": 0,
+    "kept": 1,
+    "lapsed": 2,
+    "open": 0,
+    "outcomes": {
+     "success": 4
+    },
+    "released": 0,
+    "reliability": 0.333,
+    "reputation": 0.58,
+    "resolved": 3
+   }
+  },
+  {
+   "agency_class": "central_bank",
+   "agent_id": 3,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "commitment_description": "Continue scheduled monthly disclosure of official reserve asset data, including gold reserves, on or around November 7, 2026, in accordance with IMF SDDS formats.",
+    "commitment_id": "c3_8_2",
+    "commitment_reviewed": true,
+    "commitment_target_ids": [],
+    "kind": "operational",
+    "label": "Deliver commitment [c3_8_2]: Continue scheduled monthly disclosure of official reserve asset data, including gold reserves, on or around November 7, 2026, in accordance with IMF SDDS formats.",
+    "magnitude": 0.3,
+    "option_id": "fulfill:c3_8_2",
+    "resolution": "pending",
+    "resolution_rationale": "Commitment is to publish reserve data on/around November 7, 2026 — announcement made this period confirming schedule; delivery occurs at publication date, not yet.",
+    "reversibility": "reversible",
+    "round": 9,
+    "statement": "The People's Bank of China confirms that official reserve asset data as of end-October 2026, including gold reserves, will be published on the official website on 7 November 2026, in accordance with IMF SDDS formats. Reserve management proceeds solely on the objectives of safety, liquidity and return; this Bank does n…",
+    "status": "ok",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "People's Bank of China",
+   "pending_commitments": [
+    {
+     "description": "Continue scheduled monthly disclosure of official reserve asset data, including gold reserves, on or around November 7, 2026, in accordance with IMF SDDS formats.",
+     "due_round": 9,
+     "id": "c3_8_2",
+     "last_fulfillment_attempt": {
+      "agent_id": 3,
+      "commitment_id": "c3_8_2",
+      "option_id": "fulfill:c3_8_2",
+      "outcome": "pending",
+      "rationale": "Commitment is to publish reserve data on/around November 7, 2026 — announcement made this period confirming schedule; delivery occurs at publication date, not yet.",
+      "round": 9
+     },
+     "made_round": 8,
+     "source": "decision",
+     "status": "due"
+    }
+   ],
+   "reputation": 0.62,
+   "track_record": {
+    "broken": 0,
+    "kept": 1,
+    "lapsed": 0,
+    "open": 1,
+    "outcomes": {
+     "success": 6
+    },
+    "released": 0,
+    "reliability": 1.0,
+    "reputation": 0.62,
+    "resolved": 1
+   }
+  },
+  {
+   "agency_class": "financial_institution",
+   "agent_id": 4,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "wait",
+    "label": "Hold position: wait, observe, keep current course",
+    "magnitude": 0.0,
+    "option_id": "hold_position",
+    "resolution": null,
+    "reversibility": "reversible",
+    "round": 9,
+    "statement": "",
+    "status": "invalid",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "National Bank of Poland",
+   "pending_commitments": [],
+   "reputation": 0.6,
+   "track_record": {
+    "broken": 0,
+    "kept": 1,
+    "lapsed": 1,
+    "open": 0,
+    "outcomes": {
+     "success": 5
+    },
+    "released": 0,
+    "reliability": 0.5,
+    "reputation": 0.6,
+    "resolved": 2
+   }
+  },
+  {
+   "agency_class": "central_bank",
+   "agent_id": 5,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Accommodate or publicly answer COMEX's move",
+    "magnitude": 0.7,
+    "option_id": "respond_1_accommodate",
+    "resolution": "partial",
+    "resolution_rationale": "Formal data check delivered as pre-announced, but the anchor dispute with COMEX remains unresolved; floor thesis maintained without settling divergence.",
+    "reversibility": "reversible",
+    "round": 9,
+    "statement": "Goldman Sachs GIR formal data check, as pre-announced on 26 October: (i) WGC Q3 shows official-sector buying running at 289t in Q2 — above our 40t/month trigger — so our ~600t/yr 2026 assumption and the $5,400–5,600/oz 2027 range floor stand; (ii) FOMC held and the SEP median (4.25% through 2028) is more restrictive t…",
+    "status": "ok",
+    "targets": [
+     "COMEX",
+     "J.P. Morgan Research"
+    ],
+    "terms": ""
+   },
+   "name": "Goldman Sachs",
+   "pending_commitments": [],
+   "reputation": 0.52,
+   "track_record": {
+    "broken": 0,
+    "kept": 1,
+    "lapsed": 1,
+    "open": 0,
+    "outcomes": {
+     "partial": 4,
+     "success": 1
+    },
+    "released": 0,
+    "reliability": 0.5,
+    "reputation": 0.52,
+    "resolved": 2
+   }
+  },
+  {
+   "agency_class": "research_institution",
+   "agent_id": 6,
+   "archetype": "actor",
+   "capacity_per_round": 1,
+   "last_action": {
+    "kind": "communication",
+    "label": "Accommodate or publicly answer COMEX's move",
+    "magnitude": 0.4,
+    "option_id": "respond_1_accommodate",
+    "resolution": "success",
+    "resolution_rationale": "Publicly answered COMEX's note with a clear, data-anchored definition of its review trigger and current odds.",
+    "reversibility": "reversible",
+    "round": 9,
+    "statement": "J.P. Morgan Research, further to COMEX's note: our review trigger is defined on sustained prints, not a single day. Dec-2026 hike odds stand at ~81% (below 85%), and 10y TIPS was 2.64% as of the September monthly mean (2.77% daily on Oct 20 was one session, not a sustained break). Conditions for a formal target review…",
+    "status": "ok",
+    "targets": [
+     "COMEX"
+    ],
+    "terms": ""
+   },
+   "name": "J.P. Morgan Research",
+   "pending_commitments": [
+    {
+     "description": "Publish a formal target review within 48 hours if Dec-2026 hike odds exceed 85% or 10-year TIPS sustains above 2.70%.",
+     "due_round": 9,
+     "id": "c6_8_3",
+     "made_round": 8,
+     "source": "decision",
+     "status": "due"
+    }
+   ],
+   "reputation": 0.56,
+   "track_record": {
+    "broken": 0,
+    "kept": 1,
+    "lapsed": 1,
+    "open": 1,
+    "outcomes": {
+     "partial": 2,
+     "success": 3
+    },
+    "released": 0,
+    "reliability": 0.5,
+    "reputation": 0.56,
+    "resolved": 2
+   }
+  },
+  {
+   "agency_class": "central_bank",
+   "agent_id": 7,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "wait",
+    "label": "Hold position: wait, observe, keep current course",
+    "magnitude": 0.0,
+    "option_id": "hold_position",
+    "resolution": null,
+    "reversibility": "reversible",
+    "round": 9,
+    "statement": "",
+    "status": "invalid",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "US President and administration",
+   "pending_commitments": [
+    {
+     "description": "Escalate pressure on another actor (campaign, threat, retaliation) (announced)",
+     "due_round": 9,
+     "id": "c7_8_1",
+     "made_round": 8,
+     "source": "option_lag",
+     "status": "due"
+    }
+   ],
+   "reputation": 0.45,
+   "track_record": {
+    "broken": 0,
+    "kept": 0,
+    "lapsed": 0,
+    "open": 1,
+    "outcomes": {
+     "failed": 1,
+     "partial": 7
+    },
+    "released": 0,
+    "reliability": null,
+    "reputation": 0.45,
+    "resolved": 0
+   }
+  },
+  {
+   "agency_class": "central_bank",
+   "agent_id": 8,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.4,
+    "option_id": "public_statement",
+    "resolution": "partial",
+    "resolution_rationale": "Statement communicated resumed purchases but did not commit to future volumes.",
+    "reversibility": "reversible",
+    "round": 7,
+    "statement": "CBRT reserve management update: following the resumption of modest net gold purchases in August 2026 (+3 tonnes), the Bank continues to assess reserve composition within its established diversification framework. Gold sales conducted in the second quarter were a routine mobilization of crisis liquidity in line with ou…",
+    "status": "ok",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "Central Bank of Turkey",
+   "pending_commitments": [],
+   "reputation": 0.5,
+   "track_record": {
+    "broken": 0,
+    "kept": 0,
+    "lapsed": 0,
+    "open": 0,
+    "outcomes": {
+     "partial": 1
+    },
+    "released": 0,
+    "reliability": null,
+    "reputation": 0.5,
+    "resolved": 0
+   }
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 9,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.3,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "Daily holdings update published accurately; no creation/redemption activity.",
+    "reversibility": "reversible",
+    "round": 6,
+    "statement": "GLD Daily Holdings Update: As of 27 October 2026, SPDR Gold Shares holdings stand at 1,053.91 tonnes, unchanged — no creation/redemption activity observed around the FOMC decision. Observed price data: spot gold $4,045.48/oz, front-month futures settled $4,050.89. We report tonnage and price as observed data only, wit…",
+    "status": "ok",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "SPDR Gold Shares (GLD)",
+   "pending_commitments": [],
+   "reputation": 0.56,
+   "track_record": {
+    "broken": 0,
+    "kept": 1,
+    "lapsed": 1,
+    "open": 0,
+    "outcomes": {
+     "success": 3
+    },
+    "released": 0,
+    "reliability": 0.5,
+    "reputation": 0.56,
+    "resolved": 2
+   }
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 10,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.6,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "Friday positioning tape issued accurately and acknowledged by JPM; communication objective achieved.",
+    "reversibility": "reversible",
+    "round": 8,
+    "statement": "Friday positioning tape, 30 Oct: managed-money net long 93,375 contracts, down 1,785 w/w and a fifth straight decline — from 107,089 on 10/13 to 93,375, that's 13,700 contracts cut in three weeks while Dec-26 hike odds climb to 80%. Front settle 4,047.39, spot 4,046.37, Dec-27 at a fat premium we won't pay for: the fa…",
+    "status": "ok",
+    "targets": [
+     "Goldman Sachs",
+     "J.P. Morgan Research"
+    ],
+    "terms": ""
+   },
+   "name": "COMEX",
+   "pending_commitments": [],
+   "reputation": 0.56,
+   "track_record": {
+    "broken": 0,
+    "kept": 0,
+    "lapsed": 0,
+    "open": 0,
+    "outcomes": {
+     "success": 3
+    },
+    "released": 0,
+    "reliability": null,
+    "reputation": 0.56,
+    "resolved": 0
+   }
+  },
+  {
+   "agency_class": "financial_institution",
+   "agent_id": 11,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.3,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "Confirmation statement delivered, consistent with disclosures.",
+    "reversibility": "reversible",
+    "round": 7,
+    "statement": "The Reserve Bank of India confirms that gold purchases during October 2026 proceeded in accordance with its established reserve diversification framework. Consistent with the custody arrangements disclosed in the Half-Yearly Report on Management of Foreign Exchange Reserves (published 28 October 2026), all incremental…",
+    "status": "ok",
+    "targets": [],
+    "terms": ""
+   },
+   "name": "Reserve Bank of India",
+   "pending_commitments": [],
+   "reputation": 0.54,
+   "track_record": {
+    "broken": 0,
+    "kept": 1,
+    "lapsed": 0,
+    "open": 0,
+    "outcomes": {
+     "success": 2
+    },
+    "released": 0,
+    "reliability": 1.0,
+    "reputation": 0.54,
+    "resolved": 1
+   }
+  }
+ ],
+ "as_of_date": "2026-10-22",
+ "brief": "# WORLD STATE — as of 2026-10-31 (after 2026-10-31)\n## Key facts\n- COMEX managed-money net long position: 90,591 contracts (was 91,866 contracts last period; falling 5 periods running)\n- COMEX-Goldman public anchor dispute: narrows [text] (was open last period)\n- Fed December 2026 hike implied probability: 0.82 probability (was 0.81 probability last period; rising 8 periods running)\n- Gold spot price: 3997.45 USD per troy ounce (was 4022.45 USD per troy ounce last period; falling 2 periods running)\n- Gold daily composite price: 4071.41 USD per troy ounce\n- Gold front-month futures settlement: 4055.95 USD per troy ounce\n- us_china_gold_rhetoric_escalation_level: elevated (public threat of measures against PBoC dollar sales)\n- rbi_gold_domestic_custody_share: 80 percent\n- 10-year TIPS real yield: 2.64 percent (as of 2026-09-30)\n- 10-year breakeven inflation rate: 2.35 percent (as of 2026-09-30)\n- Central bank gold purchases full years: 1082 tonnes (as of 2026-10-22)\n- China central bank policy rate: 3 percent per year (as of 2026-09-30)\n- Global copper price: 13,543 USD per metric ton (as of 2026-07-31)\n- Global gold ETF holdings: 4256 tonnes (as of 2026-09-30)\n## Moves last period\n- US President and administration: US President and administration makes no recorded move (invalid)\n- People's Bank of China: Deliver commitment [c3_8_2]: Continue scheduled monthly disclosure of official reserve asset data, including gold reserves, on or around November 7, 2026, in accordance with IMF SDDS formats. — \"The People's Bank of China confirms that official reserve asset data as of end-October 2026, including gold reserves, will be published on the official website…\"\n- National Bank of Poland: National Bank of Poland makes no recorded move (invalid)\n- Federal Reserve (FOMC): Federal Reserve (FOMC) holds position — \"Federal Reserve Board — The Committee enters the November 3-4 FOMC meeting blackout period effective Saturday, October 31. No further commentary on the economi…\"\n- J.P. Morgan Research: Accommodate or publicly answer COMEX's move → COMEX — \"J.P. Morgan Research, further to COMEX's note: our review trigger is defined on sustained prints, not a single day. Dec-2026 hike odds stand at ~81% (below 85%…\"\n- Goldman Sachs: Accommodate or publicly answer COMEX's move → COMEX, J.P. Morgan Research — \"Goldman Sachs GIR formal data check, as pre-announced on 26 October: (i) WGC Q3 shows official-sector buying running at 289t in Q2 — above our 40t/month trigge…\"\n## Consequences and events\n- Federal Reserve (FOMC)'s commitment lapsed: Publish minutes of the October 27-28, 2026 FOMC meeting three weeks after the meeting date, per standard schedule.\n- National Bank of Poland's commitment lapsed: Publish end-October 2026 official reserve statistics, including gold holdings, on the regular monthly schedule on 7 November 2026.\n- RBI Half-Yearly Report on Management of Foreign Exchange Reserves (31 Oct) may reveal further gold accumulation detail.\n- If the Fed hikes in December as priced, an incremental real-yield squeeze on gold into year-end.\n- PBoC November disclosure expected to show continued accumulation, underpinning official-sector demand.",
+ "committed_round": 9,
+ "digest": "Gold consolidates just below $4,000 as spec liquidation continues while physical/official-sector demand and Goldman's floor thesis ($5,400-5,600 for 2027) limit downside. COMEX's anchor dispute with Goldman persists unresolved; J.P. Morgan's reply narrowing its review trigger to sustained prints defuses one flashpoint. Fed December hike odds tick up, reinforcing the real-yield squeeze that is gradually unwinding speculative length.\nMoves:\n- People's Bank of China: Deliver commitment [c3_8_2]: Continue scheduled monthly disclosure of official reserve asset data, including gold reserves, on or around November 7, 2026, in accordance with IMF SDDS formats.: \"The People's Bank of China confirms that official reserve asset data as of end-October 2026, including gold reserves, will be published on the official website on 7 November 2026, in accordance with IMF SDDS formats. Reserve management proceeds solely on the objectives of safety, liquidity and return; this Bank does not comment on market prices or the policy decisions of other jurisdictions.\"\n- J.P. Morgan Research: Accommodate or publicly answer COMEX's move (→ COMEX): \"J.P. Morgan Research, further to COMEX's note: our review trigger is defined on sustained prints, not a single day. Dec-2026 hike odds stand at ~81% (below 85%), and 10y TIPS was 2.64% as of the September monthly mean (2.77% daily on Oct 20 was one session, not a sustained break). Conditions for a formal target review are therefore not yet met; our $6,000 end-2026 / $5,400 end-2027 targets (LBMA basis) stand on the 4,256t record ETF base and ~1,082t annualized official-sector buying, with ~40% 12-month US/global recession probability as the key upside path.\"\n- Goldman Sachs: Accommodate or publicly answer COMEX's move (→ COMEX, J.P. Morgan Research): \"Goldman Sachs GIR formal data check, as pre-announced on 26 October: (i) WGC Q3 shows official-sector buying running at 289t in Q2 — above our 40t/month trigger — so our ~600t/yr 2026 assumption and the $5,400–5,600/oz 2027 range floor stand; (ii) FOMC held and the SEP median (4.25% through 2028) is more restrictive than market pricing, but the December hike at ~81% was already embedded in our end-2026 target of $4,900/oz. On COMEX's positioning tape: we read five straight declines in managed-money net longs as consistent with our 'hawkish-path discount, not trend reversal' framing — cyclical spec liquidation against a firm official-sector and ETF floor (record 4,256t). We restate our pre-committed trigger: if priced tightening through October 2027 is validated by realized policy, we will revise transparently, not defend stale targets.\"\nHeld position: Federal Reserve (FOMC)\nFacts that changed:\n- Gold spot price: 4022.45 USD per troy ounce → 3997.45 USD per troy ounce\n- Fed December 2026 hike implied probability: 0.81 probability → 0.82 probability\n- COMEX managed-money net long position: 91,866 contracts → 90,591 contracts\n- COMEX-Goldman public anchor dispute: open → narrows [text]\nEvents and consequences:\n- Federal Reserve (FOMC)'s commitment lapsed: Publish minutes of the October 27-28, 2026 FOMC meeting three weeks after the meeting date, per standard schedule.\n- National Bank of Poland's commitment lapsed: Publish end-October 2026 official reserve statistics, including gold holdings, on the regular monthly schedule on 7 November 2026.\n- RBI Half-Yearly Report on Management of Foreign Exchange Reserves (31 Oct) may reveal further gold accumulation detail.\n- If the Fed hikes in December as priced, an incremental real-yield squeeze on gold into year-end.\n- PBoC November disclosure expected to show continued accumulation, underpinning official-sector demand.\n- Managed-money net longs fall for a fifth consecutive period as hawkish Fed pricing squeezes speculative gold length.\n- J.P. Morgan publicly defines its divergence review trigger on sustained prints, easing one leg of the COMEX-Goldman anchor dispute.\n- Goldman formal data check cites 289t Q2 official-sector buying, reaffirming its $5,400-5,600/oz 2027 range floor.\nAlliances and rivalries:\n- J.P. Morgan Research — COMEX: allied (closer)",
+ "headline": "",
+ "history": [
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 1,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 8,
+    "total": 8
+   },
+   "deterministic": {
+    "actions": [
+     "Federal Reserve (FOMC) holds position",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → People's Bank of China",
+     "Publish findings or a forecast",
+     "Advance your documented plan: reports central banks intend to continue buying",
+     "Issue a public statement or warning"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "transactional",
+      "polarity": 0.65,
+      "source": "National Bank of Poland",
+      "target": "World Gold Council",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.4975,
+      "source": "Reserve Bank of India",
+      "target": "People's Bank of China",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "fed_december_2026_hike_implied_probability",
+      "name": "Fed December 2026 hike implied probability",
+      "unit": "probability",
+      "value": 0.73
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 4099.2,
+      "id": "gold_spot_price",
+      "name": "Gold spot price",
+      "to": 4112.8,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 4092.5,
+      "id": "gold_front_month_futures_settlement",
+      "name": "Gold front-month futures settlement",
+      "to": 4104.4,
+      "unit": "USD per troy ounce"
+     }
+    ]
+   },
+   "digest": "A cluster of official-sector communications (PBoC, NBP, RBI, WGC survey) reinforced the structural central-bank bid narrative, while Goldman and J.P. Morgan published bullish targets. However, expectations of a hawkish Fed (December hike odds ~73%, TIPS at 2.64%) capped the rally; the US President's pro-dollar rhetoric was largely discounted given its track record. Net effect: a modest spot uptick toward the low $4,100s with futures curve slightly firmer.\nMoves:\n- People's Bank of China: Issue a public statement or warning: \"The People's Bank of China continues to optimize the structure of its reserve assets in accordance with established principles of safety, liquidity and diversification. Gold reserves stood at 2,346.43 tonnes at end-June 2026, and the process of reserve asset diversification will proceed steadily. We do not comment on short-term market movements.\"\n- National Bank of Poland: Issue a public statement or warning: \"Narodowy Bank Polski confirms that, as of end-August 2026, official gold reserve holdings stood at 648 tonnes, with year-to-date purchases of 98 tonnes under our reserve diversification programme. The Bank reiterates that reserve management continues to be guided solely by the principles of diversification and security. The Bank does not comment on market speculation regarding future purchase schedules or gold price developments.\"\n- Goldman Sachs: Issue a public statement or warning: \"Our framework remains 'structurally bullish, cyclically delayed': we maintain our end-2026 gold target of $4,900/oz and our 2027 range of $5,400–5,600/oz. Our rate-gold sensitivity model shows each 50bp of Fed easing adds roughly $120/oz of support, while hawkish repricing since June constitutes a several-hundred-dollar headwind; with spot near $4,100 and 10-year TIPS at 2.64%, we see current prices as consistent with a hawkish path, not a trend reversal, provided central bank buying holds near ~50t/month.\"\n- US President and administration: Issue a public statement or warning (→ People's Bank of China): \"America's economy is STRONG — jobs up, markets confident, and the dollar remains the world's undisputed reserve currency! Anyone betting on gold over the dollar is betting against the greatest economy in history. Our tariffs are WINNING concessions, and our sanctions have forced Russia to dump its gold. America First!\"\n- J.P. Morgan Research: Publish findings or a forecast: \"J.P. Morgan Research reiterates its $6,000/oz end-2026 and $5,400/oz end-2027 gold targets (LBMA basis) with spot near $4,100. We maintain a ~40% probability of US and global recession within 12 months; while 10-year TIPS at 2.638% pressures bullion, record ETF holdings (4,256t, September) and central bank demand (~1,082t annualized) form a firm floor. If the priced ~77bp of tightening through October 2027 materializes without a growth shock, downside risk to our targets rises materially.\"\n- World Gold Council: Advance your documented plan: reports central banks intend to continue buying: \"Our 2026 central bank gold survey remains the benchmark for official-sector intentions: 89% of surveyed central banks expect global gold reserves to rise, and respondents signal continued net purchasing despite the price correction from January's $5,501.70/oz LBMA high to ~$4,099/oz. Q2's record 289t of official buying — against an H1 total of 345t — shows demand is uneven but structurally intact. Full Goldhub survey data is available for transparent review.\"\n- Reserve Bank of India: Issue a public statement or warning: \"The Reserve Bank of India will publish its Half-Yearly Report on Management of Foreign Exchange Reserves on 31 October 2026. India's reserve position remains robust and adequately diversified. As of March 2026, 78 percent of gold reserves are held domestically, reflecting continued optimization of custody arrangements in line with the principles of reserve sovereignty and prudent diversification. The Reserve Bank does not comment on short-term price movements in any reserve asset.\"\nHeld position: Federal Reserve (FOMC)\nFacts that changed:\n- Gold spot price: 4099.2 USD per troy ounce → 4112.8 USD per troy ounce\n- Gold front-month futures settlement: 4092.5 USD per troy ounce → 4104.4 USD per troy ounce\n- New: Fed December 2026 hike implied probability = 0.73 probability\nEvents and consequences:\n- WGC survey headline (89% of central banks expect global gold reserves to rise) is picked up by financial media, reinforcing the official-sector floor under prices.\n- Divergent bank targets ($4,900–6,000 end-2026) widen the analyst distribution; traders focus on the lower end given real yields at 2.64%.\n- White House 'gold skeptics are betting against America' statement gets brief traction on social media but no measurable dollar or gold impact; markets discount it.\n- PBoC's neutral, procedurally-worded disclosure is read as confirmation of ongoing quiet accumulation; no change in pace signaled.\nAlliances and rivalries:\n- National Bank of Poland — World Gold Council: allied (closer)\n- Reserve Bank of India — People's Bank of China: allied (closer)",
+   "headline": "2026-10-23: 8 decisions · 2 facts changed · 4 events · arbiter=applied · A cluster of official-sector communications (PBoC, NBP, RBI, WGC survey) reinforced the structural central-bank bid narrative, while Goldma…",
+   "narrative": "A cluster of official-sector communications (PBoC, NBP, RBI, WGC survey) reinforced the structural central-bank bid narrative, while Goldman and J.P. Morgan published bullish targets. However, expectations of a hawkish Fed (December hike odds ~73%, TIPS at 2.64%) capped the rally; the US President's pro-dollar rhetoric was largely discounted given its track record. Net effect: a modest spot uptick toward the low $4,100s with futures curve slightly firmer.",
+   "period_label": "2026-10-23",
+   "round": 1,
+   "scenario_pressure": {
+    "Base: grind higher": "up",
+    "Bear: real-yield squeeze": "flat",
+    "Bull: policy and crisis premium": "flat",
+    "Range-bound consolidation": "flat"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 1,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 6,
+    "total": 6
+   },
+   "deterministic": {
+    "actions": [
+     "Accommodate or publicly answer US President and administration's move → US President and administration",
+     "Federal Reserve (FOMC) holds position",
+     "Deliver commitment [c5_1_1]: Publish updated gold framework note with explicit Fed path assumptions after the October 28 FOMC and WGC Q3 demand report",
+     "Deliver commitment [c6_1_1]: Publish an updated gold target and recession probability assessment by 2026-10-31",
+     "Form or deepen an alliance / joint initiative → World Gold Council",
+     "Issue a public statement or warning"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [
+     "National Bank of Poland made an offer to World Gold Council [i2_1]: Deepen data-cooperation with the World Gold Council: NBP continues timely disclosure of monthly official gold reserve data; WGC continues to track and publish it in its monthly central bank statistics. (answer due by 2026-10-26)"
+    ],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [
+     {
+      "from": null,
+      "id": "i2_1",
+      "kind": "proposal",
+      "proposer": "National Bank of Poland",
+      "recipient": "World Gold Council",
+      "terms": "Deepen data-cooperation with the World Gold Council: NBP continues timely disclosure of monthly official gold reserve data; WGC continues to track and publish it in its monthly central bank statistics.",
+      "to": "open"
+     }
+    ],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 1.0,
+      "source": "National Bank of Poland",
+      "target": "World Gold Council",
+      "to": "allied"
+     },
+     {
+      "from": null,
+      "polarity": 0.0,
+      "source": "Federal Reserve (FOMC)",
+      "target": "US President and administration",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 4112.8,
+      "id": "gold_spot_price",
+      "name": "Gold spot price",
+      "to": 4123.085,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 4132.0,
+      "id": "gold_daily_composite_price",
+      "name": "Gold daily composite price",
+      "to": 4142.2,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 4104.4,
+      "id": "gold_front_month_futures_settlement",
+      "name": "Gold front-month futures settlement",
+      "to": 4112.134999999999,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 0.73,
+      "id": "fed_december_2026_hike_implied_probability",
+      "name": "Fed December 2026 hike implied probability",
+      "to": 0.747,
+      "unit": "probability"
+     }
+    ]
+   },
+   "digest": "Gold ground slightly higher to ~$4,125 as Goldman's early framework note and J.P. Morgan's reaffirmed $6,000/oz end-2026 target offset hawkish December-hike pricing (73%). The President's pre-FOMC blast at the gold pullback landed flat given his failed prior move, while PBoC's boilerplate diversification language was read as quietly bullish. NBP's WGC data-cooperation offer remains open. Net: consolidation with a mild risk-premium tilt ahead of the 27–28 FOMC.\nMoves:\n- People's Bank of China: Accommodate or publicly answer US President and administration's move (→ US President and administration): \"The People's Bank of China does not engage in commentary on the policy positions of other governments. Reserve management at this Bank follows established principles of safety, liquidity and diversification, as practiced by central banks worldwide. Gold reserves stood at 2,346.43 tonnes at end-June 2026; disclosure will continue on the regular monthly schedule.\"\n- Goldman Sachs: Deliver commitment [c5_1_1]: Publish updated gold framework note with explicit Fed path assumptions after the October 28 FOMC and WGC Q3 demand report: \"Goldman Sachs GIR publishes its gold framework update (dated 24 October, ahead of the 27–28 FOMC and WGC Q3 report): our end-2026 target of $4,900/oz and 2027 range of $5,400–5,600/oz are explicitly conditional on a Fed path of no further hikes beyond December 2026, first cut June 2027, and official-sector buying near 50t/month. Assumption transparency: each 50bp of realized easing ≈ +$120/oz; conversely, full realization of the ~77bp of priced tightening through October 2027 would risk a further ~$200/oz downside to our 2027 range. We will revise within one week of the FOMC decision and WGC Q3 data if assumptions are breached.\"\n- J.P. Morgan Research: Deliver commitment [c6_1_1]: Publish an updated gold target and recession probability assessment by 2026-10-31: \"J.P. Morgan Research delivers its scheduled update ahead of the October 27-28 FOMC: we maintain gold targets of $6,000/oz end-2026 and $5,400/oz end-2027 (LBMA basis) with spot at $4,113. Our US and global recession probability stands at ~40% over the next 12 months, conditional on labor market deterioration; a record 4,256t of ETF holdings (Sept) and ~1,082t annualized central bank buying underpin the floor despite 10-year TIPS at 2.64% (Sept). Risks: if the priced ~77bp of tightening through October 2027 materializes without a growth shock, our targets face material downside.\"\n- National Bank of Poland: Form or deepen an alliance / joint initiative (→ World Gold Council): \"Narodowy Bank Polski values its long-standing data cooperation with the World Gold Council, whose monthly official-sector statistics provide transparency for market participants. The Bank reaffirms that gold remains a core component of our reserve diversification programme — holdings of 648 tonnes as of end-August 2026 — managed exclusively on principles of security and diversification. The Bank does not comment on market speculation regarding future purchase schedules or price developments.\"\n- US President and administration: Issue a public statement or warning: \"Ahead of Tuesday's FOMC meeting, let me be clear: America's economy is firing on all cylinders — manufacturing jobs are coming home, and our tariff strategy is delivering the biggest trade concessions in history. The recent gold pullback from January's highs reflects nothing more than the world's confidence in a STRONG dollar and a STRONG America. We expect our trading partners at the table next week, and deals will be AMERICA FIRST!\"\nHeld position: Federal Reserve (FOMC)\nFacts that changed:\n- Gold spot price: 4112.8 USD per troy ounce → 4123.09 USD per troy ounce\n- Gold daily composite price: 4132 USD per troy ounce → 4142.2 USD per troy ounce\n- Gold front-month futures settlement: 4104.4 USD per troy ounce → 4112.13 USD per troy ounce\n- Fed December 2026 hike implied probability: 0.73 probability → 0.75 probability\nEvents and consequences:\n- Goldman GIR publishes gold framework update ahead of FOMC, making $4,900/oz end-2026 and $5,400–5,600/oz 2027 range explicitly conditional on no further Fed hikes.\n- J.P. Morgan reaffirms $6,000/oz end-2026 and $5,400/oz end-2027 targets, keeping a wide spread vs Goldman and highlighting Fed-path divergence for traders.\n- President's pre-FOMC statement touting the economy and dismissing the gold pullback gets limited market traction after his prior failed move, though it briefly steadied risk sentiment.\n- PBoC's boilerplate reserve-diversification statement is read as neutral-to-supportive; no new buying announced, but India and WGC observers note quiet alignment on diversification language.\n- NBP formally offers to deepen WGC data cooperation; WGC has until 10-26 to respond, expected to be welcomed.\n- J.P. Morgan Research fulfilled commitment [c6_1_1]: Publish an updated gold target and recession probability assessment by 2026-10-31\nOffers and agreements:\n- National Bank of Poland made an offer to World Gold Council [i2_1]: Deepen data-cooperation with the World Gold Council: NBP continues timely disclosure of monthly official gold reserve data; WGC continues to track and publish it in its monthly central bank statistics. (answer due by 2026-10-26)\nAlliances and rivalries:\n- National Bank of Poland — World Gold Council: allied (closer)\n- Federal Reserve (FOMC) — US President and administration: neutral",
+   "headline": "2026-10-24: 6 decisions · 4 facts changed · 6 events · arbiter=applied · Gold ground slightly higher to ~$4,125 as Goldman's early framework note and J.P. Morgan's reaffirmed $6,000/oz end-2026 target offset hawk…",
+   "narrative": "Gold ground slightly higher to ~$4,125 as Goldman's early framework note and J.P. Morgan's reaffirmed $6,000/oz end-2026 target offset hawkish December-hike pricing (73%). The President's pre-FOMC blast at the gold pullback landed flat given his failed prior move, while PBoC's boilerplate diversification language was read as quietly bullish. NBP's WGC data-cooperation offer remains open. Net: consolidation with a mild risk-premium tilt ahead of the 27–28 FOMC.",
+   "period_label": "2026-10-24",
+   "round": 2,
+   "scenario_pressure": {
+    "Base: grind higher": "up",
+    "Bear: real-yield squeeze": "flat",
+    "Bull: policy and crisis premium": "up",
+    "Range-bound consolidation": "flat"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 2,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 8,
+    "total": 8
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "J.P. Morgan Research holds position",
+     "Counter People's Bank of China's move (Accommodate or publicly answer US President and administration's move → US Pres…) → People's Bank of China",
+     "Deliver commitment [c5_1_1]: Publish updated gold framework note with explicit Fed path assumptions after the October 28 FOMC and WGC Q3 demand report",
+     "Issue a public statement or warning → Reserve Bank of India",
+     "Federal Reserve (FOMC) holds position",
+     "Issue a public statement or warning",
+     "Accept National Bank of Poland's offer [i2_1] on exactly these terms: Deepen data-cooperation with the World Gold Council: NBP continues timely disclosure of monthly official gold… — binds both sides → National Bank of Poland"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [
+     "World Gold Council: Publish monthly central bank and ETF commentary noting September's record 4,256t ETF holdings (+67t) alongside the survey findings"
+    ],
+    "effects_fired": [
+     "If Fed hikes in December, real yield pressure could clip $50–100/oz from spot.",
+     "Sustained central bank buying per WGC survey supports grind-higher path toward $4,200 by year-end.",
+     "WGC acceptance of NBP data-cooperation offer, adding transparency support to official-sector demand narrative."
+    ],
+    "offers_answered": [
+     "Agreement [i2_1]: World Gold Council accepted National Bank of Poland's offer — Deepen data-cooperation with the World Gold Council: NBP continues timely disclosure of monthly official gold reserve data; WGC continues to track and publish it in its monthly central bank statistics. (both sides' obligations due 2026-10-…"
+    ],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [
+     {
+      "from": "open",
+      "id": "i2_1",
+      "kind": "proposal",
+      "proposer": "National Bank of Poland",
+      "recipient": "World Gold Council",
+      "terms": "Deepen data-cooperation with the World Gold Council: NBP continues timely disclosure of monthly official gold reserve data; WGC continues to track and publish it in its monthly central bank statistics.",
+      "to": "accepted"
+     }
+    ],
+    "relationships_changed": [
+     {
+      "direction": "farther",
+      "from": "adversarial",
+      "polarity": -0.62,
+      "source": "People's Bank of China",
+      "target": "US President and administration",
+      "to": "adversarial"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.745,
+      "source": "Reserve Bank of India",
+      "target": "People's Bank of China",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 4123.085,
+      "id": "gold_spot_price",
+      "name": "Gold spot price",
+      "to": 4121.029625625,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 4112.134999999999,
+      "id": "gold_front_month_futures_settlement",
+      "name": "Gold front-month futures settlement",
+      "to": 4113.43975,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 0.747,
+      "id": "fed_december_2026_hike_implied_probability",
+      "name": "Fed December 2026 hike implied probability",
+      "to": 0.7555000000000001,
+      "unit": "probability"
+     }
+    ]
+   },
+   "digest": "Markets took the week's communications in stride. The US President's rhetorical jab at PBoC gold buying and Trump-era tariff framing was met with a neutral PBoC response to the RBI — no substantive escalation — so geopolitical premium was unchanged. The WGC–NBP data-cooperation deal reinforced the transparent official-sector buying narrative, and Goldman's published framework ($4,900 end-2026) cemented a modest grind-higher consensus into the October 28 FOMC, with hawkish pricing (75% December hike odds) capping upside.\nMoves:\n- National Bank of Poland: Issue a public statement or warning: \"Narodowy Bank Polski confirms that official reserve data for September 2026 will be published on the scheduled monthly disclosure date, in line with the Bank's transparency standards. Reserve management continues to be conducted exclusively on the principles of security, liquidity and diversification; the Bank does not comment on market speculation regarding future purchase schedules, price developments, or the policy decisions of other institutions.\"\n- US President and administration: Counter People's Bank of China's move (Accommodate or publicly answer US President and administration's move → US Pres…) (→ People's Bank of China): \"China's central bank posts another polite statement about 'optimizing reserves' while its 19-month gold buying streak continues — the American people see through it. Meanwhile, our tariffs have brought manufacturing jobs HOME and extracted the biggest trade concessions in history. Next week's negotiations will deliver even more for American workers. The Dollar is STRONG, America is WINNING!\"\n- Goldman Sachs: Deliver commitment [c5_1_1]: Publish updated gold framework note with explicit Fed path assumptions after the October 28 FOMC and WGC Q3 demand report: \"Goldman Sachs GIR confirms delivery of its gold framework note (24 October): end-2026 target $4,900/oz, 2027 range $5,400–5,600/oz, conditional on no Fed hikes beyond December 2026, first cut June 2027, and official-sector buying near 50t/month. With the December hike now priced at 75% and spot at $4,123, we flag that our 2027 range embeds ~$200/oz downside if the full ~77bp of priced tightening is realized. We will publish a formal data check within one week of the October 27–28 FOMC decision and the WGC Q3 demand report.\"\n- People's Bank of China: Issue a public statement or warning (→ Reserve Bank of India): \"The People's Bank of China takes note of the Reserve Bank of India's disclosure on domestic custody arrangements. Reserve diversification and the optimization of reserve asset structure, conducted on the principles of safety, liquidity and gradualism, are common practices among central banks. Official data on this Bank's reserve assets will continue to be released on the regular monthly schedule in early November.\"\n- SPDR Gold Shares (GLD): Issue a public statement or warning: \"GLD Daily Holdings Update: As of 24 October 2026, SPDR Gold Shares holdings stand at 1,053.91 tonnes, unchanged week-on-week. Spot gold $4,123.09/oz; front-month futures settled $4,112.13. Global gold ETF holdings remain at a record 4,256t (September, WGC). This content is informational only and does not constitute investment advice; please read the prospectus before investing.\"\n- World Gold Council: Accept National Bank of Poland's offer [i2_1] on exactly these terms: Deepen data-cooperation with the World Gold Council: NBP continues timely disclosure of monthly official gold… — binds both sides (→ National Bank of Poland): \"The World Gold Council accepts Narodowy Bank Polski's proposal to deepen our data cooperation: NBP's timely monthly reserve disclosures will continue to be tracked in our monthly central bank statistics on Goldhub. Timely official-sector disclosure — exemplified by NBP's 648t end-September holdings — strengthens market transparency; our monthly central bank and ETF commentary, including September's record 4,256t global ETF holdings (+67t), follows within one period.\"\nHeld position: J.P. Morgan Research, Federal Reserve (FOMC)\nFacts that changed:\n- Gold spot price: 4123.09 USD per troy ounce → 4121.03 USD per troy ounce\n- Gold front-month futures settlement: 4112.13 USD per troy ounce → 4113.44 USD per troy ounce\n- Fed December 2026 hike implied probability: 0.75 probability → 0.76 probability\nEvents and consequences:\n- World Gold Council's commitment lapsed: Publish monthly central bank and ETF commentary noting September's record 4,256t ETF holdings (+67t) alongside the survey findings\n- If Fed hikes in December, real yield pressure could clip $50–100/oz from spot.\n- Sustained central bank buying per WGC survey supports grind-higher path toward $4,200 by year-end.\n- WGC acceptance of NBP data-cooperation offer, adding transparency support to official-sector demand narrative.\n- Goldman framework note ($4,900 end-2026, 2027 range $5,400–5,600) widely circulated; institutional desks cite it as consensus anchor, muting volatility into FOMC.\n- Presidential criticism of PBoC gold buying generates brief headlines but no capital-flow response; markets discount given mixed presidential track record.\n- WGC–NBP data cooperation formalized; Goldhub will track NBP monthly disclosures, modestly strengthening official-sector demand confidence.\n- GLD holdings flat at 1,053.91t; record 4,256t global ETF base held without new inflows, consistent with wait-and-see ahead of October 28 FOMC.\nOffers and agreements:\n- Agreement [i2_1]: World Gold Council accepted National Bank of Poland's offer — Deepen data-cooperation with the World Gold Council: NBP continues timely disclosure of monthly official gold reserve data; WGC continues to track and publish it in its monthly central bank statistics. (both sides' obligations due 2026-10-…\nAlliances and rivalries:\n- People's Bank of China — US President and administration: adversarial (farther)\n- Reserve Bank of India — People's Bank of China: allied (closer)",
+   "headline": "2026-10-25: 8 decisions · 3 facts changed · 5 events · arbiter=applied · Markets took the week's communications in stride. The US President's rhetorical jab at PBoC gold buying and Trump-era tariff framing was me…",
+   "narrative": "Markets took the week's communications in stride. The US President's rhetorical jab at PBoC gold buying and Trump-era tariff framing was met with a neutral PBoC response to the RBI — no substantive escalation — so geopolitical premium was unchanged. The WGC–NBP data-cooperation deal reinforced the transparent official-sector buying narrative, and Goldman's published framework ($4,900 end-2026) cemented a modest grind-higher consensus into the October 28 FOMC, with hawkish pricing (75% December hike odds) capping upside.",
+   "period_label": "2026-10-25",
+   "round": 3,
+   "scenario_pressure": {
+    "Base: grind higher": "up",
+    "Bear: real-yield squeeze": "flat",
+    "Bull: policy and crisis premium": "flat",
+    "Range-bound consolidation": "down"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 1,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 9,
+    "total": 9
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "Deliver commitment [c4_3_1]: Honour the agreement with World Gold Council: Deepen data-cooperation with the World Gold Council: NBP continues timely disclosure of monthly official gold reserve data; WGC continues to track and publish it in its mont… → World Gold Council",
+     "Issue a public statement or warning → People's Bank of China",
+     "J.P. Morgan Research holds position",
+     "Issue a public statement or warning → Federal Reserve (FOMC), World Gold Council",
+     "Deliver commitment [c9_3_1]: Continue daily holdings and price data updates each trading day through 31 October 2026.",
+     "Deliver commitment [c2_3_2]: Honour the agreement with National Bank of Poland: Deepen data-cooperation with the World Gold Council: NBP continues timely disclosure of monthly official gold reserve data; WGC continues to track and publish it in its… → National Bank of Poland",
+     "Counter Goldman Sachs's move (Goldman framework note ($4,900 end-2026, 2027 range $5,400–5,600) widely circul…) → Goldman Sachs",
+     "Deliver commitment [c0_2_1]: Issue the FOMC post-meeting statement on October 28, 2026, per the published calendar"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Goldman note conditionality: if Fed signals hike beyond December 2026 or no June 2027 cut, framework and market consensus revise down; $50–100/oz spot risk."
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "from": null,
+      "polarity": -0.27,
+      "source": "COMEX",
+      "target": "Goldman Sachs",
+      "to": "adversarial"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "comex_managed_money_net_long_position",
+      "name": "COMEX managed-money net long position",
+      "unit": "contracts",
+      "value": 104000.0
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 4121.029625625,
+      "id": "gold_spot_price",
+      "name": "Gold spot price",
+      "to": 4054.00518178125,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 4142.2,
+      "id": "gold_daily_composite_price",
+      "name": "Gold daily composite price",
+      "to": 4089.67,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 4113.43975,
+      "id": "gold_front_month_futures_settlement",
+      "name": "Gold front-month futures settlement",
+      "to": 4063.5487874999994,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 0.7555000000000001,
+      "id": "fed_december_2026_hike_implied_probability",
+      "name": "Fed December 2026 hike implied probability",
+      "to": 0.776325,
+      "unit": "probability"
+     }
+    ]
+   },
+   "digest": "A hawkish-hold FOMC statement (Oct 28) with inflation still above target cemented December-hike pricing near 76-78%, while COMEX positioning data pushed back on Goldman's bullish framework; the mechanical downward revision to the $4,900 framework took $50-100/oz out of spot, which settled at $4,054. Official-sector demand stayed sturdy (NBP-WGC data cooperation delivered, record 4,256t ETF holdings) but was outweighed this week by real-yield pressure (10y TIPS 2.64%) and managed-money long liquidation.\nMoves:\n- People's Bank of China: Issue a public statement or warning: \"The People's Bank of China does not comment on the political characterizations of other parties. Reserve asset management is conducted solely on the objectives of safety, liquidity and return, and the optimization of reserve asset structure is a common practice of central banks internationally. Official reserve data for end-October 2026 will be published on the regular schedule in early November.\"\n- National Bank of Poland: Deliver commitment [c4_3_1]: Honour the agreement with World Gold Council: Deepen data-cooperation with the World Gold Council: NBP continues timely disclosure of monthly official gold reserve data; WGC continues to track and publish it in its mont… (→ World Gold Council): \"Narodowy Bank Polski, pursuant to its data-cooperation arrangement with the World Gold Council, confirms that October's official reserve statistics — including end-September gold holdings (following 648 tonnes at end-August, after purchases of 51 tonnes in Q2 and 8 tonnes in August) — will be transmitted to the World Gold Council for inclusion in its monthly central bank statistics, on the scheduled disclosure date. The Bank's reserve management continues to proceed exclusively on the principles of security, liquidity and diversification.\"\n- US President and administration: Issue a public statement or warning (→ People's Bank of China): \"Next week's trade negotiations will put American workers FIRST. Our tariff strategy is already delivering: the biggest concessions in history, manufacturing jobs coming HOME, and record energy exports. To Beijing: keep buying gold — it changes nothing. The Dollar is and will remain the world's reserve currency, and no accumulation streak will change that. AMERICA WINS!\"\n- Goldman Sachs: Issue a public statement or warning (→ Federal Reserve (FOMC), World Gold Council): \"Goldman Sachs GIR pre-positioning note ahead of the October 27–28 FOMC and the WGC Q3 demand report: our end-2026 target of $4,900/oz and 2027 range of $5,400–5,600/oz assume no Fed hikes beyond a fully-priced December 2026 move and first easing in June 2027. We publish our explicit revision triggers now: (i) if WGC Q3 official-sector purchases run below ~40t/month for a second consecutive quarter, we will cut our 600t/yr 2026 assumption and the 2027 range floor by ~$150/oz; (ii) if the market's full ~77bp of priced tightening through October 2027 is validated by FOMC guidance, our easing assumption is falsified and we will revise transparently rather than defend stale targets. Spot at $4,121 against our end-2026 target remains, in our framework, a hawkish-path discount, not a trend reversal.\"\n- SPDR Gold Shares (GLD): Deliver commitment [c9_3_1]: Continue daily holdings and price data updates each trading day through 31 October 2026.: \"GLD Daily Holdings Update: As of 23 October 2026, SPDR Gold Shares holdings stand at 1,053.91 tonnes, unchanged. Spot gold $4,121.03/oz (21 Oct, WGC); front-month futures settled $4,113.44; Dec 2027 futures settled $4,363.70. Global gold ETF holdings: record 4,256t (September, WGC). This content is informational only and does not constitute investment advice; please read the prospectus before investing.\"\n- World Gold Council: Deliver commitment [c2_3_2]: Honour the agreement with National Bank of Poland: Deepen data-cooperation with the World Gold Council: NBP continues timely disclosure of monthly official gold reserve data; WGC continues to track and publish it in its… (→ National Bank of Poland): \"World Gold Council monthly central bank & ETF commentary is now published on Goldhub: global gold ETF holdings reached a record 4,256t in September (+67t), driven by contrarian inflows amid the correction from January's $5,501.70 high. Under our data-cooperation agreement, we track Narodowy Bank Polski's disclosed 648t end-September holdings — timely official-sector disclosure of this kind strengthens market transparency. Our 2026 survey remains relevant context: 89% of surveyed central banks expect global gold reserves to rise.\"\n- COMEX: Counter Goldman Sachs's move (Goldman framework note ($4,900 end-2026, 2027 range $5,400–5,600) widely circul…) (→ Goldman Sachs): \"Managed money pushback on the GS framework: a $4,900 end-2026 anchor 'conditional on no Fed hikes' is not a base case while Dec-26 hike odds sit at 76% and 10y TIPS holds 2.64%. Our book says so — net long 107,089 (13 Oct), down 3,898 w/w, Dec-27 OI barely 1,166 lots at a 4,363.70 settle. Marginal speculative length is momentum-sensitive, not a structural floor; fade the consensus anchor into FOMC.\"\n- Federal Reserve (FOMC): Deliver commitment [c0_2_1]: Issue the FOMC post-meeting statement on October 28, 2026, per the published calendar: \"Release, Wednesday, October 28, 2026, 2:00 p.m. ET — FOMC statement: The Committee raised the target range for the federal funds rate by 25 basis points to 3.75–4.00 percent at the September meeting and today maintains that range. Inflation remains elevated; the Committee judges that a restrictive policy stance remains appropriate to return inflation to 2 percent over time. In assessing the appropriate stance, the Committee will remain data-dependent, careful attention to incoming information on inflation, labor markets, and financial conditions.\"\nHeld position: J.P. Morgan Research\nFacts that changed:\n- Gold spot price: 4121.03 USD per troy ounce → 4054.01 USD per troy ounce\n- Gold daily composite price: 4142.2 USD per troy ounce → 4089.67 USD per troy ounce\n- Gold front-month futures settlement: 4113.44 USD per troy ounce → 4063.55 USD per troy ounce\n- Fed December 2026 hike implied probability: 0.76 probability → 0.78 probability\n- New: COMEX managed-money net long position = 104,000 contracts\nEvents and consequences:\n- Goldman note conditionality: if Fed signals hike beyond December 2026 or no June 2027 cut, framework and market consensus revise down; $50–100/oz spot risk.\n- FOMC holds at 3.75-4.00% with hawkish language; December hike odds tick to 78%.\n- Goldman's $4,900/oz end-2026 framework widely contested by managed-money community given hike pricing and 2.64% real yields; consensus end-2026 anchor drifts toward low-$4,800s.\n- NBP-WGC joint data publication confirms continued official-sector accumulation narrative; limits downside.\n- PBoC's neutral reserve-management statement defuses US political framing; brief headlines, no capital-flow impact.\n- World Gold Council fulfilled commitment [c2_3_2]: Honour the agreement with National Bank of Poland: Deepen data-cooperation with the World Gold Council: NBP continues timely disclosure of monthly official gold reserve data; WGC continues to track and publish it in its…\n- National Bank of Poland fulfilled commitment [c4_3_1]: Honour the agreement with World Gold Council: Deepen data-cooperation with the World Gold Council: NBP continues timely disclosure of monthly official gold reserve data; WGC continues to track and publish it in its mont…\n- SPDR Gold Shares (GLD) fulfilled commitment [c9_3_1]: Continue daily holdings and price data updates each trading day through 31 October 2026.\nAlliances and rivalries:\n- COMEX — Goldman Sachs: adversarial",
+   "headline": "2026-10-26: 9 decisions · 4 facts changed · 7 events · arbiter=applied · A hawkish-hold FOMC statement (Oct 28) with inflation still above target cemented December-hike pricing near 76-78%, while COMEX positionin…",
+   "narrative": "A hawkish-hold FOMC statement (Oct 28) with inflation still above target cemented December-hike pricing near 76-78%, while COMEX positioning data pushed back on Goldman's bullish framework; the mechanical downward revision to the $4,900 framework took $50-100/oz out of spot, which settled at $4,054. Official-sector demand stayed sturdy (NBP-WGC data cooperation delivered, record 4,256t ETF holdings) but was outweighed this week by real-yield pressure (10y TIPS 2.64%) and managed-money long liquidation.",
+   "period_label": "2026-10-26",
+   "round": 4,
+   "scenario_pressure": {
+    "Base: grind higher": "down",
+    "Bear: real-yield squeeze": "up",
+    "Bull: policy and crisis premium": "down",
+    "Range-bound consolidation": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 4,
+    "invalid": 3,
+    "language_mismatch": 0,
+    "ok": 6,
+    "total": 9
+   },
+   "deterministic": {
+    "actions": [
+     "Deliver commitment [c3_4_1]: Publish official end-October 2026 reserve data, including gold holdings, on the regular monthly schedule in early November.",
+     "Issue a public statement or warning → Federal Reserve (FOMC), World Gold Council",
+     "Issue a public statement or warning",
+     "J.P. Morgan Research holds position",
+     "Federal Reserve (FOMC) makes no recorded move (invalid)",
+     "Goldman Sachs makes no recorded move (invalid)",
+     "SPDR Gold Shares (GLD) makes no recorded move (invalid)",
+     "Issue a public statement or warning",
+     "Accommodate or publicly answer Goldman Sachs's move → Goldman Sachs"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [
+     "Federal Reserve (FOMC): Issue the FOMC post-meeting statement on October 28, 2026, per the published calendar"
+    ],
+    "effects_fired": [
+     "Did not materialise: WGC Q3 demand report may cite record ETF holdings and central bank buying, modestly supporting sentiment."
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "farther",
+      "from": "adversarial",
+      "polarity": -0.77,
+      "source": "People's Bank of China",
+      "target": "US President and administration",
+      "to": "adversarial"
+     },
+     {
+      "from": null,
+      "polarity": 0.0,
+      "source": "World Gold Council",
+      "target": "Goldman Sachs",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 4054.00518178125,
+      "id": "gold_spot_price",
+      "name": "Gold spot price",
+      "to": 4045.4844045140626,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 4089.67,
+      "id": "gold_daily_composite_price",
+      "name": "Gold daily composite price",
+      "to": 4077.3195,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 4063.5487874999994,
+      "id": "gold_front_month_futures_settlement",
+      "name": "Gold front-month futures settlement",
+      "to": 4050.8914693749994,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 0.776325,
+      "id": "fed_december_2026_hike_implied_probability",
+      "name": "Fed December 2026 hike implied probability",
+      "to": 0.7848250000000001,
+      "unit": "probability"
+     },
+     {
+      "from": 104000.0,
+      "id": "comex_managed_money_net_long_position",
+      "name": "COMEX managed-money net long position",
+      "to": 98900.0,
+      "unit": "contracts"
+     }
+    ]
+   },
+   "digest": "The week was dominated by the run-up to the October 28 FOMC meeting, with the implied probability of a December hike edging to 0.78 on firm CPI and the White House's pro-strong-dollar, pro-hike rhetoric. Gold slipped further as real yields firmed and the dollar held strong, though Tuesday's modest bounce off the lows suggested dip-buying tied to steady official-sector demand expectations. PBoC confirmed routine October reserve disclosure for early November; NBP and WGC communications were neutral housekeeping with no price impact.\nMoves:\n- People's Bank of China: Deliver commitment [c3_4_1]: Publish official end-October 2026 reserve data, including gold holdings, on the regular monthly schedule in early November.: \"In accordance with the regular monthly disclosure schedule, the People's Bank of China, together with the State Administration of Foreign Exchange, publishes official reserve asset data for end-October 2026. Official monetary gold reserves continue to increase, and the reserve asset structure continues to be optimized. Reserve operations are conducted solely on the objectives of safety, liquidity and return, consistent with common international practice among central banks.\"\n- US President and administration: Issue a public statement or warning (→ Federal Reserve (FOMC), World Gold Council): \"While the Fed meets this week, the White House is focused on what we control: JOBS, TARIFFS THAT WORK, and the STRONGEST DOLLAR in decades. Recent market wobbles are media noise — consumer demand is resilient and our trade deals are bringing investment home by the billions. America's economy is STRONG, and November will prove it at the ballot box!\"\n- National Bank of Poland: Issue a public statement or warning: \"Ahead of the scheduled 7 November 2026 release of official reserve statistics, Narodowy Bank Polski reiterates that reserve management proceeds exclusively on the principles of security, liquidity and diversification. The Bank takes note of recent commentary characterizing its gold policy; it does not comment on political interpretations of its reserve operations, on gold price developments, or on speculation regarding future purchase volumes. Disclosures will continue at the established monthly rhythm.\"\n- LBMA Gold Price auction: Issue a public statement or warning: \"LBMA Gold Price, 26 October 2026: no auctions conducted (weekend); most recent p.m. auction settled with the benchmark tracking spot in a narrow band. We note ongoing market commentary: the LBMA Gold Price is produced via transparent electronic auction with published participant volumes; small differences versus COMEX settlement reflect timing of fix versus settlement, not divergence of benchmarks. No comment on price direction.\"\n- World Gold Council: Accommodate or publicly answer Goldman Sachs's move (→ Goldman Sachs): \"We note the pre-positioning references to our Q3 dataset. For the record and to keep the empirical baseline clear ahead of the FOMC: WGC publishes observed demand, supply and positioning data — not price targets. Q3 reference points: record ETF holdings of 4,256t (September, +67t m/m), Q2 official-sector buying of 289t (H1 345t, weakest since 2022), and record H1 mine output of 1,867t. The Q3 Gold Demand Trends report will publish on Goldhub on schedule with full tonnage detail.\"\nHeld position: J.P. Morgan Research\nFacts that changed:\n- Gold spot price: 4054.01 USD per troy ounce → 4045.48 USD per troy ounce\n- Gold daily composite price: 4089.67 USD per troy ounce → 4077.32 USD per troy ounce\n- Gold front-month futures settlement: 4063.55 USD per troy ounce → 4050.89 USD per troy ounce\n- Fed December 2026 hike implied probability: 0.78 probability → 0.78 probability\n- COMEX managed-money net long position: 104,000 contracts → 98,900 contracts\nEvents and consequences:\n- Federal Reserve (FOMC)'s commitment lapsed: Issue the FOMC post-meeting statement on October 28, 2026, per the published calendar\n- Did not materialise: WGC Q3 demand report may cite record ETF holdings and central bank buying, modestly supporting sentiment.\n- Markets priced a hawkish FOMC, compressing gold about 0.5% and trimming speculative length.\n- Gold found a floor near 4,030-4,050 as traders positioned for PBoC's early-November reserve data to show continued accumulation.\n- WGC's clarification that its Q3 data is descriptive, not a price call, modestly cooled speculative enthusiasm built on analyst floor narratives.\nAlliances and rivalries:\n- People's Bank of China — US President and administration: adversarial (farther)\n- World Gold Council — Goldman Sachs: neutral",
+   "headline": "2026-10-27: 9 decisions · 5 facts changed · 3 events · arbiter=applied · The week was dominated by the run-up to the October 28 FOMC meeting, with the implied probability of a December hike edging to 0.78 on firm…",
+   "narrative": "The week was dominated by the run-up to the October 28 FOMC meeting, with the implied probability of a December hike edging to 0.78 on firm CPI and the White House's pro-strong-dollar, pro-hike rhetoric. Gold slipped further as real yields firmed and the dollar held strong, though Tuesday's modest bounce off the lows suggested dip-buying tied to steady official-sector demand expectations. PBoC confirmed routine October reserve disclosure for early November; NBP and WGC communications were neutral housekeeping with no price impact.",
+   "period_label": "2026-10-27",
+   "round": 5,
+   "scenario_pressure": {
+    "Base: grind higher": "flat",
+    "Bear: real-yield squeeze": "up",
+    "Bull: policy and crisis premium": "down",
+    "Range-bound consolidation": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 2,
+    "invalid": 1,
+    "language_mismatch": 0,
+    "ok": 7,
+    "total": 8
+   },
+   "deterministic": {
+    "actions": [
+     "National Bank of Poland holds position",
+     "Deliver commitment [c6_3_2]: Publish a post-FOMC reconciliation note within one week of the October 27-28 meeting, integrating the FOMC decision, updated hike pricing, and WGC Q3 demand data into our gold target and recession probability framework.",
+     "Issue a public statement or warning",
+     "Deliver commitment [c3_4_1]: Publish official end-October 2026 reserve data, including gold holdings, on the regular monthly schedule in early November.",
+     "Issue a public statement or warning → People's Bank of China, World Gold Council",
+     "Goldman Sachs makes no recorded move (invalid)",
+     "Issue a public statement or warning",
+     "Deliver commitment [c11_1_1]: Publish Half-Yearly Report on Management of Foreign Exchange Reserves with audited data on gold custody distribution as of September 2026."
+    ],
+    "breaches": [],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Did not materialise: FOMC outcome (27–28 Oct) reshapes gold pricing: hawkish hold sustains real-yield drag; any dovish hint lifts gold toward futures-implied levels.",
+     "WGC Q3 demand report and October 28 FOMC resolution to set positioning regime for November.",
+     "Did not materialise: If Fed signals or delivers hikes beyond December 2026, further $50-100/oz downside per GS framework conditionality.",
+     "PBoC end-October reserve data released in early November; expected to confirm continued gold accumulation, supporting sentiment.",
+     "If FOMC statement leans hawkish and December hike firms, further real-yield pressure on gold."
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": [
+     "[2026-10-28] Scheduled FOMC meeting with market-implied odds of 83.9% on a hold at 3.75–4.00%, 16.1% on a hike"
+    ]
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [],
+    "variables_added": [
+     {
+      "id": "rbi_gold_domestic_custody_share",
+      "name": "rbi_gold_domestic_custody_share",
+      "unit": "percent",
+      "value": 80.0
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 4045.4844045140626,
+      "id": "gold_spot_price",
+      "name": "Gold spot price",
+      "to": 4043.5487849221986,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 4077.3195,
+      "id": "gold_daily_composite_price",
+      "name": "Gold daily composite price",
+      "to": 4070.221575,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 4050.8914693749994,
+      "id": "gold_front_month_futures_settlement",
+      "name": "Gold front-month futures settlement",
+      "to": 4045.2327489687495,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 0.7848250000000001,
+      "id": "fed_december_2026_hike_implied_probability",
+      "name": "Fed December 2026 hike implied probability",
+      "to": 0.7933250000000001,
+      "unit": "probability"
+     },
+     {
+      "from": 98900.0,
+      "id": "comex_managed_money_net_long_position",
+      "name": "COMEX managed-money net long position",
+      "to": 95160.0,
+      "unit": "contracts"
+     }
+    ]
+   },
+   "digest": "The FOMC's hawkish hold at 3.75–4.00% with December hike pricing firm at 78% kept the 2.64% TIPS real yield as the binding drag on gold; spot drifted slightly lower to ~4,040. PBoC and RBI both delivered scheduled reserve disclosures confirming continued official-sector accumulation (China +, India 80% domestic custody), which cushioned ETF-flat, spec-trimmed investor positioning. The White House's strong-dollar broadside was absorbed as noise given its mixed track record.\nMoves:\n- J.P. Morgan Research: Deliver commitment [c6_3_2]: Publish a post-FOMC reconciliation note within one week of the October 27-28 meeting, integrating the FOMC decision, updated hike pricing, and WGC Q3 demand data into our gold target and recession probability framework.: \"J.P. Morgan Research post-FOMC reconciliation note (28 Oct 2026): with the Committee holding at 3.75–4.00% and December-2026 hike pricing at ~78% (up four consecutive sessions), 10-year TIPS at 2.64% remains the binding constraint on gold — yet the demand floor (record 4,256t ETF holdings, 1,082t annualized central bank buying per WGC Q3 data) holds. We maintain our $6,000/oz end-2026 target (LBMA basis) and $5,400 end-2027, with US/global recession probability at ~40% over 12 months; our framework turns on policy easing or recession realization versus a sustained hawkish path, and we will flag explicitly if December hike odds above 85% force a target review.\"\n- Federal Reserve (FOMC): Issue a public statement or warning: \"Release, Wednesday, October 28, 2026, 2:00 p.m. ET — FOMC statement: The Committee today maintains the target range for the federal funds rate at 3.75 to 4 percent. Inflation remains elevated, and the Committee judges that a restrictive policy stance remains appropriate to return inflation to the 2 percent objective over time. In assessing the appropriate stance of policy, the Committee will remain data-dependent, paying careful attention to incoming information on inflation, labor market conditions, and financial conditions. The Committee makes no comment on individual asset prices or private forecasts; its policy communication occurs solely through the statement, minutes, SEP, and the Chair's testimony.\"\n- People's Bank of China: Deliver commitment [c3_4_1]: Publish official end-October 2026 reserve data, including gold holdings, on the regular monthly schedule in early November.: \"Per the established monthly schedule, the People's Bank of China and the State Administration of Foreign Exchange hereby publish official reserve asset data for end-October 2026. Official monetary gold reserves continued to increase in October, extending the ongoing sequence of monthly additions, and the reserve asset structure continues to be optimized. Reserve management proceeds solely on the objectives of safety, liquidity and return, consistent with common international central bank practice.\"\n- US President and administration: Issue a public statement or warning (→ People's Bank of China, World Gold Council): \"As the Fed's meeting concludes today, the White House reiterates what the world already knows: the DOLLAR is STRONG, our sanctions forced Russia to dump 56 tonnes of its gold this year, and no amount of quiet hoarding by others will shake American economic leadership. Our record trade deals are delivering for American workers — and after November 3, the verdict will be even CLEARER!\"\n- SPDR Gold Shares (GLD): Issue a public statement or warning: \"GLD Daily Holdings Update: As of 27 October 2026, SPDR Gold Shares holdings stand at 1,053.91 tonnes, unchanged — no creation/redemption activity observed around the FOMC decision. Observed price data: spot gold $4,045.48/oz, front-month futures settled $4,050.89. We report tonnage and price as observed data only, without directional interpretation. This content does not constitute investment advice; please read the prospectus before investing.\"\n- Reserve Bank of India: Deliver commitment [c11_1_1]: Publish Half-Yearly Report on Management of Foreign Exchange Reserves with audited data on gold custody distribution as of September 2026.: \"The Reserve Bank of India has published its Half-Yearly Report on Management of Foreign Exchange Reserves, containing audited data as of 30 September 2026. Gold holdings held in domestic custody stood at 80 percent of total gold reserves as of end-September 2026, compared with 78 percent as of March 2026 and 45 percent three years earlier, reflecting the continued optimization of custody arrangements. The Reserve Bank reiterates that it does not comment on short-term price movements in any reserve asset.\"\nHeld position: National Bank of Poland\nFacts that changed:\n- Gold spot price: 4045.48 USD per troy ounce → 4043.55 USD per troy ounce\n- Gold daily composite price: 4077.32 USD per troy ounce → 4070.22 USD per troy ounce\n- Gold front-month futures settlement: 4050.89 USD per troy ounce → 4045.23 USD per troy ounce\n- Fed December 2026 hike implied probability: 0.78 probability → 0.79 probability\n- COMEX managed-money net long position: 98,900 contracts → 95,160 contracts\n- New: rbi_gold_domestic_custody_share = 80 percent\nEvents and consequences:\n- [2026-10-28] Scheduled FOMC meeting with market-implied odds of 83.9% on a hold at 3.75–4.00%, 16.1% on a hike\n- Did not materialise: FOMC outcome (27–28 Oct) reshapes gold pricing: hawkish hold sustains real-yield drag; any dovish hint lifts gold toward futures-implied levels.\n- WGC Q3 demand report and October 28 FOMC resolution to set positioning regime for November.\n- Did not materialise: If Fed signals or delivers hikes beyond December 2026, further $50-100/oz downside per GS framework conditionality.\n- PBoC end-October reserve data released in early November; expected to confirm continued gold accumulation, supporting sentiment.\n- If FOMC statement leans hawkish and December hike firms, further real-yield pressure on gold.\n- FOMC holds at 3.75–4.00% with hawkish language; December hike pricing firms, spec longs trim, gold softens modestly.\n- PBoC confirms continued October gold accumulation in scheduled monthly disclosure; de-dollarization accusations from White House generate headlines only.",
+   "headline": "2026-10-28: 8 decisions · 5 facts changed · 6 events · arbiter=applied · The FOMC's hawkish hold at 3.75–4.00% with December hike pricing firm at 78% kept the 2.64% TIPS real yield as the binding drag on gold; sp…",
+   "narrative": "The FOMC's hawkish hold at 3.75–4.00% with December hike pricing firm at 78% kept the 2.64% TIPS real yield as the binding drag on gold; spot drifted slightly lower to ~4,040. PBoC and RBI both delivered scheduled reserve disclosures confirming continued official-sector accumulation (China +, India 80% domestic custody), which cushioned ETF-flat, spec-trimmed investor positioning. The White House's strong-dollar broadside was absorbed as noise given its mixed track record.",
+   "period_label": "2026-10-28",
+   "round": 6,
+   "scenario_pressure": {
+    "Base: grind higher": "down",
+    "Bear: real-yield squeeze": "up",
+    "Bull: policy and crisis premium": "flat",
+    "Range-bound consolidation": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 3,
+    "invalid": 3,
+    "language_mismatch": 0,
+    "ok": 6,
+    "total": 9
+   },
+   "deterministic": {
+    "actions": [
+     "Counter People's Bank of China's move (PBoC confirms continued October gold accumulation in scheduled monthly disclosu…) → People's Bank of China",
+     "J.P. Morgan Research makes no recorded move (invalid)",
+     "Accommodate or publicly answer US President and administration's move → US President and administration",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "National Bank of Poland makes no recorded move (invalid)",
+     "Goldman Sachs makes no recorded move (invalid)",
+     "Issue a public statement or warning → Goldman Sachs, Federal Reserve (FOMC)",
+     "Issue a public statement or warning"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [
+     "J.P. Morgan Research: Publish a post-FOMC reconciliation note within one week of the October 27-28 meeting, integrating the FOMC decision, updated hike pricing, and WGC Q3 demand data into our gold target and recession probability framework."
+    ],
+    "effects_fired": [
+     "JPM reconciliation note publication within one week may recalibrate sell-side gold targets."
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "farther",
+      "from": "adversarial",
+      "polarity": -1.0,
+      "source": "People's Bank of China",
+      "target": "US President and administration",
+      "to": "adversarial"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.895,
+      "source": "Reserve Bank of India",
+      "target": "People's Bank of China",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "comex_goldman_public_anchor_dispute",
+      "name": "COMEX-Goldman public anchor dispute",
+      "unit": "",
+      "value": "open"
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 4043.5487849221986,
+      "id": "gold_spot_price",
+      "name": "Gold spot price",
+      "to": 4046.371467183869,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 4045.2327489687495,
+      "id": "gold_front_month_futures_settlement",
+      "name": "Gold front-month futures settlement",
+      "to": 4047.392836623437,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 0.7933250000000001,
+      "id": "fed_december_2026_hike_implied_probability",
+      "name": "Fed December 2026 hike implied probability",
+      "to": 0.801825,
+      "unit": "probability"
+     },
+     {
+      "from": 95160.0,
+      "id": "comex_managed_money_net_long_position",
+      "name": "COMEX managed-money net long position",
+      "to": 93375.0,
+      "unit": "contracts"
+     }
+    ]
+   },
+   "digest": "The US-China rhetorical exchange over PBoC gold buying produced no substantive escalation; PBoC's measured 'routine diversification' statement, echoed by the RBI, kept official-sector demand expectations intact but added little new premium. The dominant force remained the hawkish backdrop: 79% priced December hike odds and a 2.64% real yield continued to squeeze speculative length, with managed-money net longs trimmed a fourth straight week. Spot drifted marginally lower on the day; COMEX's pointed challenge to the GS $4,900 anchor nudged sell-side view dispersion.\nMoves:\n- US President and administration: Counter People's Bank of China's move (PBoC confirms continued October gold accumulation in scheduled monthly disclosu…) (→ People's Bank of China): \"Beijing's twentieth straight month of gold buying isn't 'routine diversification' — it's a political project to undermine the DOLLAR, and the American people see right through it. Let me be clear: no foreign hoarding scheme will weaken the strongest economy and currency in the world. After our historic victory on November 3, we will double down on America First trade policy — and anyone betting against the dollar will lose!\"\n- People's Bank of China: Accommodate or publicly answer US President and administration's move (→ US President and administration): \"This Bank has noted recent public characterizations of its reserve management. For the record: gold reserve accumulation forms part of routine, long-term reserve asset diversification, consistent with the practice of numerous central banks globally, and is not directed at any individual currency or country. Reserve management proceeds solely on the objectives of safety, liquidity and return. This Bank does not comment on market prices or the policy decisions of other jurisdictions.\"\n- Federal Reserve (FOMC): Issue a public statement or warning: \"Federal Reserve statistical release, Thursday, October 29, 2026, 4:30 p.m. ET — H.4.1 Factors Affecting Reserve Balances: total assets of the Federal Reserve System remain on the established runoff path; no change to administrative or operational arrangements. FRED daily series updated: 10-year TIPS yield (daily) per latest market data. The Committee makes no comment on asset prices or private forecasts.\"\n- Central Bank of Turkey: Issue a public statement or warning: \"CBRT reserve management update: following the resumption of modest net gold purchases in August 2026 (+3 tonnes), the Bank continues to assess reserve composition within its established diversification framework. Gold sales conducted in the second quarter were a routine mobilization of crisis liquidity in line with our external balance objectives and do not constitute a directional view on gold. The Bank does not comment on price levels or market speculation.\"\n- COMEX: Issue a public statement or warning (→ Goldman Sachs, Federal Reserve (FOMC)): \"Post-FOMC positioning tape: managed-money net long trimmed again to 95,160 contracts (from 98,900), fourth straight decline; Dec-26 hike odds firm to 79%, front settle 4,045.23, spot 4,043.55 — the GS $4,900 anchor needs a no-hike path the market won't give it. Our book is disciplined: long but cutting into real yields, front-loaded in Dec-26; momentum is in retreat until 10y TIPS breaks back below ~2.5%.\"\n- Reserve Bank of India: Issue a public statement or warning: \"The Reserve Bank of India confirms that gold purchases during October 2026 proceeded in accordance with its established reserve diversification framework. Consistent with the custody arrangements disclosed in the Half-Yearly Report on Management of Foreign Exchange Reserves (published 28 October 2026), all incremental acquisitions are settled with physical delivery and held in domestic custody. The Reserve Bank does not comment on short-term price movements in any reserve asset.\"\nFacts that changed:\n- Gold spot price: 4043.55 USD per troy ounce → 4046.37 USD per troy ounce\n- Gold front-month futures settlement: 4045.23 USD per troy ounce → 4047.39 USD per troy ounce\n- Fed December 2026 hike implied probability: 0.79 probability → 0.8 probability\n- COMEX managed-money net long position: 95,160 contracts → 93,375 contracts\n- New: COMEX-Goldman public anchor dispute = open\nEvents and consequences:\n- J.P. Morgan Research's commitment lapsed: Publish a post-FOMC reconciliation note within one week of the October 27-28 meeting, integrating the FOMC decision, updated hike pricing, and WGC Q3 demand data into our gold target and recession probability framework.\n- JPM reconciliation note publication within one week may recalibrate sell-side gold targets.\n- Markets shrugged off the presidential 'political project' broadside; gold barely reacted, pricing it as rhetoric given the administration's mixed track record.\n- PBoC's calm 'routine diversification' statement reinforced its high-credibility track record, stabilizing expectations of continued monthly accumulation.\n- RBI's matching neutral framing signaled quiet official-sector alignment, supporting the physical bid under the market.\n- CBRT's disclosure of resumed modest purchases (+3t August) and tapering sales modestly improved the official-demand outlook.\n- COMEX's public jab at the Goldman $4,900 anchor widened sell-side dispersion; traders now watch whether JPM's reconciliation note recalibrates targets.\nAlliances and rivalries:\n- People's Bank of China — US President and administration: adversarial (farther)\n- Reserve Bank of India — People's Bank of China: allied (closer)",
+   "headline": "2026-10-29: 9 decisions · 4 facts changed · 5 events · arbiter=applied · The US-China rhetorical exchange over PBoC gold buying produced no substantive escalation; PBoC's measured 'routine diversification' statem…",
+   "narrative": "The US-China rhetorical exchange over PBoC gold buying produced no substantive escalation; PBoC's measured 'routine diversification' statement, echoed by the RBI, kept official-sector demand expectations intact but added little new premium. The dominant force remained the hawkish backdrop: 79% priced December hike odds and a 2.64% real yield continued to squeeze speculative length, with managed-money net longs trimmed a fourth straight week. Spot drifted marginally lower on the day; COMEX's pointed challenge to the GS $4,900 anchor nudged sell-side view dispersion.",
+   "period_label": "2026-10-29",
+   "round": 7,
+   "scenario_pressure": {
+    "Base: grind higher": "flat",
+    "Bear: real-yield squeeze": "up",
+    "Bull: policy and crisis premium": "flat",
+    "Range-bound consolidation": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 4,
+    "invalid": 3,
+    "language_mismatch": 0,
+    "ok": 5,
+    "total": 8
+   },
+   "deterministic": {
+    "actions": [
+     "Escalate pressure on another actor (campaign, threat, retaliation) → People's Bank of China",
+     "People's Bank of China holds position",
+     "Accommodate or publicly answer COMEX's move → COMEX",
+     "National Bank of Poland makes no recorded move (invalid)",
+     "Deliver commitment [c0_6_2]: Publish minutes of the October 27-28, 2026 FOMC meeting three weeks after the meeting date, per standard schedule.",
+     "Goldman Sachs makes no recorded move (invalid)",
+     "World Gold Council makes no recorded move (invalid)",
+     "Issue a public statement or warning → Goldman Sachs, J.P. Morgan Research"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [
+     "World Gold Council: Publish the Q3 2026 Gold Demand Trends report on Goldhub on schedule (within 2 periods), with full tonnage detail on ETF flows, official-sector buying, and mine output.",
+     "Goldman Sachs: Within one week of the October 27–28 FOMC decision and WGC Q3 report, publish a formal data check applying the pre-announced revision triggers to the end-2026 target and 2027 range, with any changes fully transparent.",
+     "SPDR Gold Shares (GLD): Continue daily holdings and observed price data updates each trading day through 31 October 2026."
+    ],
+    "effects_fired": [
+     "If December hike is delivered, additional real-yield pressure on gold ($30–60 downside risk per GS conditionality).",
+     "Did not materialise: JPM reconciliation note may recalibrate sell-side gold targets and recession probabilities, shifting consensus positioning."
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.97,
+      "source": "Reserve Bank of India",
+      "target": "People's Bank of China",
+      "to": "allied"
+     },
+     {
+      "from": null,
+      "polarity": 0.15,
+      "source": "J.P. Morgan Research",
+      "target": "COMEX",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "us_china_gold_rhetoric_escalation_level",
+      "name": "us_china_gold_rhetoric_escalation_level",
+      "unit": "",
+      "value": "elevated (public threat of measures against PBoC dollar sales)"
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 4046.371467183869,
+      "id": "gold_spot_price",
+      "name": "Gold spot price",
+      "to": 4022.445,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 4070.221575,
+      "id": "gold_daily_composite_price",
+      "name": "Gold daily composite price",
+      "to": 4071.41333875,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 4047.392836623437,
+      "id": "gold_front_month_futures_settlement",
+      "name": "Gold front-month futures settlement",
+      "to": 4055.95,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 0.801825,
+      "id": "fed_december_2026_hike_implied_probability",
+      "name": "Fed December 2026 hike implied probability",
+      "to": 0.8087737500000001,
+      "unit": "probability"
+     },
+     {
+      "from": 93375.0,
+      "id": "comex_managed_money_net_long_position",
+      "name": "COMEX managed-money net long position",
+      "to": 91866.25,
+      "unit": "contracts"
+     }
+    ]
+   },
+   "digest": "The President's fresh escalation against the PBoC added a modest geopolitical bid, but it was largely offset by continued positioning bleed and an 80% December hike probability that keeps real-yield pressure on gold. Spot slipped slightly to ~$4,010–4,015 while the front-month future held near $4,047 on contango. The FOMC's minutes commitment is procedural and on schedule but not yet delivered (publication date Nov 18), so it resolves as pending. COMEX and JPM's public exchange validated the bearish-positioning narrative without moving prices materially.\nMoves:\n- US President and administration: Escalate pressure on another actor (campaign, threat, retaliation) (→ People's Bank of China): \"The Chinese Communist Party's central bank has now admitted to 2,346 tonnes of gold — twenty straight months of dumping dollars while they run a $1 TRILLION trade surplus against American workers. That ends now. After our November 3 victory, this administration will announce a new round of reciprocal measures against countries that manipulate reserves to undermine the dollar. The dollar is STRONG, the American economy is STRONG, and gold bugs betting against the USA will be crushed!\"\n- J.P. Morgan Research: Accommodate or publicly answer COMEX's move (→ COMEX): \"J.P. Morgan Research, in response to COMEX's positioning tape: we take the point — managed-money net longs have fallen four straight periods (93,375 contracts) and Dec-2026 hike pricing has firmed to ~80%, six sessions running. Per our stated trigger, if hike odds exceed 85% or 10-year TIPS sustains above ~2.7%, we will publish a formal target review; we are not there yet. The record 4,256t ETF base and 1,082t annualized official-sector buying remain our floor, and our $6,000 end-2026 / $5,400 end-2027 targets (LBMA basis) stand with ~40% US/global recession probability over 12 months.\"\n- Federal Reserve (FOMC): Deliver commitment [c0_6_2]: Publish minutes of the October 27-28, 2026 FOMC meeting three weeks after the meeting date, per standard schedule.: \"Federal Reserve Board — Minutes of the Federal Open Market Committee meeting held October 27–28, 2026, are scheduled for publication on Wednesday, November 18, 2026, at 2:00 p.m. ET, consistent with the three-week standard. Today's weekly H.4.1 release and FRED updates proceed as scheduled. The Committee makes no comment on asset prices or private forecasts.\"\n- COMEX: Issue a public statement or warning (→ Goldman Sachs, J.P. Morgan Research): \"Friday positioning tape, 30 Oct: managed-money net long 93,375 contracts, down 1,785 w/w and a fifth straight decline — from 107,089 on 10/13 to 93,375, that's 13,700 contracts cut in three weeks while Dec-26 hike odds climb to 80%. Front settle 4,047.39, spot 4,046.37, Dec-27 at a fat premium we won't pay for: the far-dated conviction Goldman's $4,900 anchor requires simply isn't on our tape — 1,166 contracts in Dec-27 vs 315k in Dec-26. Our discipline stands: long but trimming into 2.64% TIPS, and momentum stays in retreat until 10y real yields break back below ~2.5%. To JPM: your official-sector floor is real, but a floor is not a bid — it doesn't restart trend, it only slows the bleed.\"\nHeld position: People's Bank of China\nFacts that changed:\n- Gold spot price: 4046.37 USD per troy ounce → 4022.45 USD per troy ounce\n- Gold daily composite price: 4070.22 USD per troy ounce → 4071.41 USD per troy ounce\n- Gold front-month futures settlement: 4047.39 USD per troy ounce → 4055.95 USD per troy ounce\n- Fed December 2026 hike implied probability: 0.8 probability → 0.81 probability\n- COMEX managed-money net long position: 93,375 contracts → 91,866 contracts\n- New: us_china_gold_rhetoric_escalation_level = elevated (public threat of measures against PBoC dollar sales)\nEvents and consequences:\n- World Gold Council's commitment lapsed: Publish the Q3 2026 Gold Demand Trends report on Goldhub on schedule (within 2 periods), with full tonnage detail on ETF flows, official-sector buying, and mine output.\n- Goldman Sachs's commitment lapsed: Within one week of the October 27–28 FOMC decision and WGC Q3 report, publish a formal data check applying the pre-announced revision triggers to the end-2026 target and 2027 range, with any changes fully transparent.\n- SPDR Gold Shares (GLD)'s commitment lapsed: Continue daily holdings and observed price data updates each trading day through 31 October 2026.\n- If December hike is delivered, additional real-yield pressure on gold ($30–60 downside risk per GS conditionality).\n- Did not materialise: JPM reconciliation note may recalibrate sell-side gold targets and recession probabilities, shifting consensus positioning.\n- Modest safe-haven dip-buying in gold on the presidential threat against the PBoC, capped by hawkish rate pricing; spot ends slightly lower.\n- PBoC issues a terse statement reiterating routine reserve management and SDDS transparency, denying escalation — as the White House expected.\n- COMEX positioning tape and JPM's public response consolidate a sell-side narrative of weakening speculative positioning under rising hike odds; no target changes yet.\nAlliances and rivalries:\n- Reserve Bank of India — People's Bank of China: allied (closer)\n- J.P. Morgan Research — COMEX: neutral",
+   "headline": "2026-10-30: 8 decisions · 5 facts changed · 3 events · arbiter=applied · The President's fresh escalation against the PBoC added a modest geopolitical bid, but it was largely offset by continued positioning bleed…",
+   "narrative": "The President's fresh escalation against the PBoC added a modest geopolitical bid, but it was largely offset by continued positioning bleed and an 80% December hike probability that keeps real-yield pressure on gold. Spot slipped slightly to ~$4,010–4,015 while the front-month future held near $4,047 on contango. The FOMC's minutes commitment is procedural and on schedule but not yet delivered (publication date Nov 18), so it resolves as pending. COMEX and JPM's public exchange validated the bearish-positioning narrative without moving prices materially.",
+   "period_label": "2026-10-30",
+   "round": 8,
+   "scenario_pressure": {
+    "Base: grind higher": "flat",
+    "Bear: real-yield squeeze": "up",
+    "Bull: policy and crisis premium": "up",
+    "Range-bound consolidation": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 3,
+    "invalid": 2,
+    "language_mismatch": 0,
+    "ok": 4,
+    "total": 6
+   },
+   "deterministic": {
+    "actions": [
+     "US President and administration makes no recorded move (invalid)",
+     "Deliver commitment [c3_8_2]: Continue scheduled monthly disclosure of official reserve asset data, including gold reserves, on or around November 7, 2026, in accordance with IMF SDDS formats.",
+     "National Bank of Poland makes no recorded move (invalid)",
+     "Federal Reserve (FOMC) holds position",
+     "Accommodate or publicly answer COMEX's move → COMEX",
+     "Accommodate or publicly answer COMEX's move → COMEX, J.P. Morgan Research"
+    ],
+    "breaches": [],
+    "commitments_lapsed": [
+     "Federal Reserve (FOMC): Publish minutes of the October 27-28, 2026 FOMC meeting three weeks after the meeting date, per standard schedule.",
+     "National Bank of Poland: Publish end-October 2026 official reserve statistics, including gold holdings, on the regular monthly schedule on 7 November 2026."
+    ],
+    "effects_fired": [
+     "RBI Half-Yearly Report on Management of Foreign Exchange Reserves (31 Oct) may reveal further gold accumulation detail.",
+     "If the Fed hikes in December as priced, an incremental real-yield squeeze on gold into year-end.",
+     "PBoC November disclosure expected to show continued accumulation, underpinning official-sector demand."
+    ],
+    "offers_answered": [],
+    "offers_lapsed": [],
+    "offers_opened": [],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": 0.3,
+      "source": "J.P. Morgan Research",
+      "target": "COMEX",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [],
+    "variables_changed": [
+     {
+      "from": 4022.445,
+      "id": "gold_spot_price",
+      "name": "Gold spot price",
+      "to": 3997.455,
+      "unit": "USD per troy ounce"
+     },
+     {
+      "from": 0.8087737500000001,
+      "id": "fed_december_2026_hike_implied_probability",
+      "name": "Fed December 2026 hike implied probability",
+      "to": 0.8183160625,
+      "unit": "probability"
+     },
+     {
+      "from": 91866.25,
+      "id": "comex_managed_money_net_long_position",
+      "name": "COMEX managed-money net long position",
+      "to": 90591.25,
+      "unit": "contracts"
+     },
+     {
+      "from": "open",
+      "id": "comex_goldman_public_anchor_dispute",
+      "name": "COMEX-Goldman public anchor dispute",
+      "to": "narrows [text]",
+      "unit": ""
+     }
+    ]
+   },
+   "digest": "Gold consolidates just below $4,000 as spec liquidation continues while physical/official-sector demand and Goldman's floor thesis ($5,400-5,600 for 2027) limit downside. COMEX's anchor dispute with Goldman persists unresolved; J.P. Morgan's reply narrowing its review trigger to sustained prints defuses one flashpoint. Fed December hike odds tick up, reinforcing the real-yield squeeze that is gradually unwinding speculative length.\nMoves:\n- People's Bank of China: Deliver commitment [c3_8_2]: Continue scheduled monthly disclosure of official reserve asset data, including gold reserves, on or around November 7, 2026, in accordance with IMF SDDS formats.: \"The People's Bank of China confirms that official reserve asset data as of end-October 2026, including gold reserves, will be published on the official website on 7 November 2026, in accordance with IMF SDDS formats. Reserve management proceeds solely on the objectives of safety, liquidity and return; this Bank does not comment on market prices or the policy decisions of other jurisdictions.\"\n- J.P. Morgan Research: Accommodate or publicly answer COMEX's move (→ COMEX): \"J.P. Morgan Research, further to COMEX's note: our review trigger is defined on sustained prints, not a single day. Dec-2026 hike odds stand at ~81% (below 85%), and 10y TIPS was 2.64% as of the September monthly mean (2.77% daily on Oct 20 was one session, not a sustained break). Conditions for a formal target review are therefore not yet met; our $6,000 end-2026 / $5,400 end-2027 targets (LBMA basis) stand on the 4,256t record ETF base and ~1,082t annualized official-sector buying, with ~40% 12-month US/global recession probability as the key upside path.\"\n- Goldman Sachs: Accommodate or publicly answer COMEX's move (→ COMEX, J.P. Morgan Research): \"Goldman Sachs GIR formal data check, as pre-announced on 26 October: (i) WGC Q3 shows official-sector buying running at 289t in Q2 — above our 40t/month trigger — so our ~600t/yr 2026 assumption and the $5,400–5,600/oz 2027 range floor stand; (ii) FOMC held and the SEP median (4.25% through 2028) is more restrictive than market pricing, but the December hike at ~81% was already embedded in our end-2026 target of $4,900/oz. On COMEX's positioning tape: we read five straight declines in managed-money net longs as consistent with our 'hawkish-path discount, not trend reversal' framing — cyclical spec liquidation against a firm official-sector and ETF floor (record 4,256t). We restate our pre-committed trigger: if priced tightening through October 2027 is validated by realized policy, we will revise transparently, not defend stale targets.\"\nHeld position: Federal Reserve (FOMC)\nFacts that changed:\n- Gold spot price: 4022.45 USD per troy ounce → 3997.45 USD per troy ounce\n- Fed December 2026 hike implied probability: 0.81 probability → 0.82 probability\n- COMEX managed-money net long position: 91,866 contracts → 90,591 contracts\n- COMEX-Goldman public anchor dispute: open → narrows [text]\nEvents and consequences:\n- Federal Reserve (FOMC)'s commitment lapsed: Publish minutes of the October 27-28, 2026 FOMC meeting three weeks after the meeting date, per standard schedule.\n- National Bank of Poland's commitment lapsed: Publish end-October 2026 official reserve statistics, including gold holdings, on the regular monthly schedule on 7 November 2026.\n- RBI Half-Yearly Report on Management of Foreign Exchange Reserves (31 Oct) may reveal further gold accumulation detail.\n- If the Fed hikes in December as priced, an incremental real-yield squeeze on gold into year-end.\n- PBoC November disclosure expected to show continued accumulation, underpinning official-sector demand.\n- Managed-money net longs fall for a fifth consecutive period as hawkish Fed pricing squeezes speculative gold length.\n- J.P. Morgan publicly defines its divergence review trigger on sustained prints, easing one leg of the COMEX-Goldman anchor dispute.\n- Goldman formal data check cites 289t Q2 official-sector buying, reaffirming its $5,400-5,600/oz 2027 range floor.\nAlliances and rivalries:\n- J.P. Morgan Research — COMEX: allied (closer)",
+   "headline": "2026-10-31: 6 decisions · 4 facts changed · 5 events · arbiter=applied · Gold consolidates just below $4,000 as spec liquidation continues while physical/official-sector demand and Goldman's floor thesis ($5,400-…",
+   "narrative": "Gold consolidates just below $4,000 as spec liquidation continues while physical/official-sector demand and Goldman's floor thesis ($5,400-5,600 for 2027) limit downside. COMEX's anchor dispute with Goldman persists unresolved; J.P. Morgan's reply narrowing its review trigger to sustained prints defuses one flashpoint. Fed December hike odds tick up, reinforcing the real-yield squeeze that is gradually unwinding speculative length.",
+   "period_label": "2026-10-31",
+   "round": 9,
+   "scenario_pressure": {
+    "Base: grind higher": "flat",
+    "Bear: real-yield squeeze": "up",
+    "Bull: policy and crisis premium": "down",
+    "Range-bound consolidation": "up"
+   }
+  }
+ ],
+ "horizon_date": "2026-10-31",
+ "interactions": [
+  {
+   "expires_round": 4,
+   "id": "i2_1",
+   "kind": "proposal",
+   "obligations": 2,
+   "opened_round": 2,
+   "proposer": "National Bank of Poland",
+   "recipient": "World Gold Council",
+   "resolved_round": 3,
+   "response": "The World Gold Council accepts Narodowy Bank Polski's proposal to deepen our data cooperation: NBP's timely monthly reserve disclosures will continue to be tracked in our monthly central bank statist…",
+   "status": "accepted",
+   "terms": "Deepen data-cooperation with the World Gold Council: NBP continues timely disclosure of monthly official gold reserve data; WGC continues to track and publish it in its monthly central bank statistics."
+  }
+ ],
+ "pending_effects": [
+  {
+   "actor_id": null,
+   "created_round": 8,
+   "description": "FOMC minutes published Nov 18, 2026; if they reinforce the hawkish tilt, December hike probability firms further and gold sees modest downside.",
+   "due_round": 27,
+   "id": "fx8_17",
+   "op": "set",
+   "probability": 0.6,
+   "source": "arbiter",
+   "targets": [],
+   "value": 0.83,
+   "variable_id": "fed_december_2026_hike_implied_probability"
+  },
+  {
+   "actor_id": null,
+   "created_round": 8,
+   "description": "If December hike is delivered, additional real-yield pressure on gold ($30–60 downside per GS conditionality).",
+   "due_round": 14,
+   "id": "fx8_18",
+   "op": "add",
+   "probability": 0.75,
+   "source": "arbiter",
+   "targets": [],
+   "value": -45.0,
+   "variable_id": "gold_spot_price"
+  },
+  {
+   "actor_id": null,
+   "created_round": 8,
+   "description": "US escalation against PBoC gold buying could trigger defensive official-sector buying (China, Turkey, Russia repurchases) if actual measures follow rhetoric.",
+   "due_round": 11,
+   "id": "fx8_19",
+   "op": "add",
+   "probability": 0.35,
+   "source": "arbiter",
+   "targets": [],
+   "value": 40.0,
+   "variable_id": "gold_spot_price"
+  },
+  {
+   "actor_id": null,
+   "created_round": 9,
+   "description": "PBoC November 7 disclosure likely shows continued gold accumulation, supporting official-sector demand narrative.",
+   "due_round": 16,
+   "id": "fx9_20",
+   "op": "set",
+   "probability": 0.8,
+   "source": "arbiter",
+   "targets": [],
+   "value": null,
+   "variable_id": null
+  },
+  {
+   "actor_id": null,
+   "created_round": 9,
+   "description": "If Fed hikes in December as priced, incremental real-yield squeeze on gold into year-end.",
+   "due_round": 11,
+   "id": "fx9_21",
+   "op": "add",
+   "probability": 0.75,
+   "source": "arbiter",
+   "targets": [],
+   "value": -40.0,
+   "variable_id": "gold_spot_price"
+  },
+  {
+   "actor_id": null,
+   "created_round": 9,
+   "description": "If managed-money net longs keep falling, ETF holdings test becomes market focus per Goldman's expectation of COMEX commentary.",
+   "due_round": 10,
+   "id": "fx9_22",
+   "op": "add",
+   "probability": 0.4,
+   "source": "arbiter",
+   "targets": [],
+   "value": -15.0,
+   "variable_id": "global_gold_etf_holdings"
+  }
+ ],
+ "period": {
+  "label": "2026-10-31",
+  "period_end": "2026-10-31",
+  "period_start": "2026-10-31",
+  "round": 8
+ },
+ "question": "Forecast the price of gold (spot price in US dollars per troy ounce, benchmarked to the LBMA gold price / COMEX spot) as of December 31, 2027. Establish the baseline first: the current spot price as of late October 2026, its 2024-2026 trajectory and all-time highs, year-to-date performance, and the current level of official-sector and investor positioning at the start of the forecast window. Re…",
+ "recent_events": [
+  {
+   "action_kind": "communication",
+   "actors": [
+    "COMEX"
+   ],
+   "description": "Issue a public statement or warning → Goldman Sachs, Federal Reserve (FOMC)",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2026-10-29",
+   "round": 7,
+   "source": "decision",
+   "statement": "Post-FOMC positioning tape: managed-money net long trimmed again to 95,160 contracts (from 98,900), fourth straight decline; Dec-26 hike odds firm to 79%, front settle 4,045.23, spot 4,043.55 — the GS $4,900 anchor needs a no-hike path the market won't give it. Our book is disciplined: long but cutting into real yield…",
+   "targets": [
+    "Goldman Sachs",
+    "Federal Reserve (FOMC)"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Reserve Bank of India"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2026-10-29",
+   "round": 7,
+   "source": "decision",
+   "statement": "The Reserve Bank of India confirms that gold purchases during October 2026 proceeded in accordance with its established reserve diversification framework. Consistent with the custody arrangements disclosed in the Half-Yearly Report on Management of Foreign Exchange Reserves (published 28 October 2026), all incremental…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "JPM reconciliation note publication within one week may recalibrate sell-side gold targets.",
+   "kind": "consequence",
+   "period_label": "2026-10-29",
+   "round": 7,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "US President and administration"
+   ],
+   "description": "Markets shrugged off the presidential 'political project' broadside; gold barely reacted, pricing it as rhetoric given the administration's mixed track record.",
+   "kind": "emergent",
+   "period_label": "2026-10-29",
+   "round": 7,
+   "source": "arbiter",
+   "targets": [
+    "People's Bank of China"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "People's Bank of China"
+   ],
+   "description": "PBoC's calm 'routine diversification' statement reinforced its high-credibility track record, stabilizing expectations of continued monthly accumulation.",
+   "kind": "consequence",
+   "period_label": "2026-10-29",
+   "round": 7,
+   "source": "arbiter",
+   "targets": [
+    "World Gold Council",
+    "Reserve Bank of India"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Reserve Bank of India"
+   ],
+   "description": "RBI's matching neutral framing signaled quiet official-sector alignment, supporting the physical bid under the market.",
+   "kind": "consequence",
+   "period_label": "2026-10-29",
+   "round": 7,
+   "source": "arbiter",
+   "targets": [
+    "People's Bank of China"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Central Bank of Turkey"
+   ],
+   "description": "CBRT's disclosure of resumed modest purchases (+3t August) and tapering sales modestly improved the official-demand outlook.",
+   "kind": "consequence",
+   "period_label": "2026-10-29",
+   "round": 7,
+   "source": "arbiter",
+   "targets": [
+    "World Gold Council"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "COMEX"
+   ],
+   "description": "COMEX's public jab at the Goldman $4,900 anchor widened sell-side dispersion; traders now watch whether JPM's reconciliation note recalibrates targets.",
+   "kind": "emergent",
+   "period_label": "2026-10-29",
+   "round": 7,
+   "source": "arbiter",
+   "targets": [
+    "Goldman Sachs",
+    "J.P. Morgan Research"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "World Gold Council"
+   ],
+   "description": "World Gold Council's commitment lapsed: Publish the Q3 2026 Gold Demand Trends report on Goldhub on schedule (within 2 periods), with full tonnage detail on ETF flows, official-sector buying, and mine output.",
+   "kind": "consequence",
+   "round": 8,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Goldman Sachs"
+   ],
+   "description": "Goldman Sachs's commitment lapsed: Within one week of the October 27–28 FOMC decision and WGC Q3 report, publish a formal data check applying the pre-announced revision triggers to the end-2026 target and 2027 range, with any changes fully transparent.",
+   "kind": "consequence",
+   "round": 8,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "SPDR Gold Shares (GLD)"
+   ],
+   "description": "SPDR Gold Shares (GLD)'s commitment lapsed: Continue daily holdings and observed price data updates each trading day through 31 October 2026.",
+   "kind": "consequence",
+   "round": 8,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "coercive",
+   "actors": [
+    "US President and administration"
+   ],
+   "description": "Escalate pressure on another actor (campaign, threat, retaliation) → People's Bank of China",
+   "kind": "action",
+   "option_id": "escalate_pressure",
+   "period_label": "2026-10-30",
+   "round": 8,
+   "source": "decision",
+   "statement": "The Chinese Communist Party's central bank has now admitted to 2,346 tonnes of gold — twenty straight months of dumping dollars while they run a $1 TRILLION trade surplus against American workers. That ends now. After our November 3 victory, this administration will announce a new round of reciprocal measures against…",
+   "targets": [
+    "People's Bank of China"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "wait",
+   "actors": [
+    "People's Bank of China"
+   ],
+   "description": "People's Bank of China holds position",
+   "kind": "action",
+   "option_id": "hold_position",
+   "period_label": "2026-10-30",
+   "round": 8,
+   "source": "decision",
+   "statement": "This Bank has stated its position and refers all interested parties to its monthly official reserve asset disclosures, published in accordance with IMF SDDS formats. Reserve management proceeds solely on the objectives of safety, liquidity and return. This Bank does not comment on market prices or the policy decisions…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "J.P. Morgan Research"
+   ],
+   "description": "Accommodate or publicly answer COMEX's move → COMEX",
+   "kind": "action",
+   "option_id": "respond_1_accommodate",
+   "period_label": "2026-10-30",
+   "round": 8,
+   "source": "decision",
+   "statement": "J.P. Morgan Research, in response to COMEX's positioning tape: we take the point — managed-money net longs have fallen four straight periods (93,375 contracts) and Dec-2026 hike pricing has firmed to ~80%, six sessions running. Per our stated trigger, if hike odds exceed 85% or 10-year TIPS sustains above ~2.7%, we wi…",
+   "targets": [
+    "COMEX"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "wait",
+   "actors": [
+    "National Bank of Poland"
+   ],
+   "description": "National Bank of Poland makes no recorded move (invalid)",
+   "kind": "action",
+   "option_id": "hold_position",
+   "period_label": "2026-10-30",
+   "round": 8,
+   "source": "decision",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "operational",
+   "actors": [
+    "Federal Reserve (FOMC)"
+   ],
+   "description": "Deliver commitment [c0_6_2]: Publish minutes of the October 27-28, 2026 FOMC meeting three weeks after the meeting date, per standard schedule.",
+   "kind": "action",
+   "option_id": "fulfill:c0_6_2",
+   "period_label": "2026-10-30",
+   "round": 8,
+   "source": "decision",
+   "statement": "Federal Reserve Board — Minutes of the Federal Open Market Committee meeting held October 27–28, 2026, are scheduled for publication on Wednesday, November 18, 2026, at 2:00 p.m. ET, consistent with the three-week standard. Today's weekly H.4.1 release and FRED updates proceed as scheduled. The Committee makes no comm…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "wait",
+   "actors": [
+    "Goldman Sachs"
+   ],
+   "description": "Goldman Sachs makes no recorded move (invalid)",
+   "kind": "action",
+   "option_id": "hold_position",
+   "period_label": "2026-10-30",
+   "round": 8,
+   "source": "decision",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "wait",
+   "actors": [
+    "World Gold Council"
+   ],
+   "description": "World Gold Council makes no recorded move (invalid)",
+   "kind": "action",
+   "option_id": "hold_position",
+   "period_label": "2026-10-30",
+   "round": 8,
+   "source": "decision",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "COMEX"
+   ],
+   "description": "Issue a public statement or warning → Goldman Sachs, J.P. Morgan Research",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2026-10-30",
+   "round": 8,
+   "source": "decision",
+   "statement": "Friday positioning tape, 30 Oct: managed-money net long 93,375 contracts, down 1,785 w/w and a fifth straight decline — from 107,089 on 10/13 to 93,375, that's 13,700 contracts cut in three weeks while Dec-26 hike odds climb to 80%. Front settle 4,047.39, spot 4,046.37, Dec-27 at a fat premium we won't pay for: the fa…",
+   "targets": [
+    "Goldman Sachs",
+    "J.P. Morgan Research"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "If December hike is delivered, additional real-yield pressure on gold ($30–60 downside risk per GS conditionality).",
+   "kind": "consequence",
+   "period_label": "2026-10-30",
+   "round": 8,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "gold_spot_price"
+   ]
+  },
+  {
+   "actors": [],
+   "description": "Did not materialise: JPM reconciliation note may recalibrate sell-side gold targets and recession probabilities, shifting consensus positioning.",
+   "kind": "consequence",
+   "period_label": "2026-10-30",
+   "round": 8,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "LBMA Gold Price auction"
+   ],
+   "description": "Modest safe-haven dip-buying in gold on the presidential threat against the PBoC, capped by hawkish rate pricing; spot ends slightly lower.",
+   "kind": "emergent",
+   "period_label": "2026-10-30",
+   "round": 8,
+   "source": "arbiter",
+   "targets": [
+    "US President and administration"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "People's Bank of China"
+   ],
+   "description": "PBoC issues a terse statement reiterating routine reserve management and SDDS transparency, denying escalation — as the White House expected.",
+   "kind": "consequence",
+   "period_label": "2026-10-30",
+   "round": 8,
+   "source": "arbiter",
+   "targets": [
+    "US President and administration"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "COMEX",
+    "J.P. Morgan Research"
+   ],
+   "description": "COMEX positioning tape and JPM's public response consolidate a sell-side narrative of weakening speculative positioning under rising hike odds; no target changes yet.",
+   "kind": "consequence",
+   "period_label": "2026-10-30",
+   "round": 8,
+   "source": "arbiter",
+   "targets": [
+    "Goldman Sachs"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Federal Reserve (FOMC)"
+   ],
+   "description": "Federal Reserve (FOMC)'s commitment lapsed: Publish minutes of the October 27-28, 2026 FOMC meeting three weeks after the meeting date, per standard schedule.",
+   "kind": "consequence",
+   "round": 9,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "National Bank of Poland"
+   ],
+   "description": "National Bank of Poland's commitment lapsed: Publish end-October 2026 official reserve statistics, including gold holdings, on the regular monthly schedule on 7 November 2026.",
+   "kind": "consequence",
+   "round": 9,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "wait",
+   "actors": [
+    "US President and administration"
+   ],
+   "description": "US President and administration makes no recorded move (invalid)",
+   "kind": "action",
+   "option_id": "hold_position",
+   "period_label": "2026-10-31",
+   "round": 9,
+   "source": "decision",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "operational",
+   "actors": [
+    "People's Bank of China"
+   ],
+   "description": "Deliver commitment [c3_8_2]: Continue scheduled monthly disclosure of official reserve asset data, including gold reserves, on or around November 7, 2026, in accordance with IMF SDDS formats.",
+   "kind": "action",
+   "option_id": "fulfill:c3_8_2",
+   "period_label": "2026-10-31",
+   "round": 9,
+   "source": "decision",
+   "statement": "The People's Bank of China confirms that official reserve asset data as of end-October 2026, including gold reserves, will be published on the official website on 7 November 2026, in accordance with IMF SDDS formats. Reserve management proceeds solely on the objectives of safety, liquidity and return; this Bank does n…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "wait",
+   "actors": [
+    "National Bank of Poland"
+   ],
+   "description": "National Bank of Poland makes no recorded move (invalid)",
+   "kind": "action",
+   "option_id": "hold_position",
+   "period_label": "2026-10-31",
+   "round": 9,
+   "source": "decision",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "wait",
+   "actors": [
+    "Federal Reserve (FOMC)"
+   ],
+   "description": "Federal Reserve (FOMC) holds position",
+   "kind": "action",
+   "option_id": "hold_position",
+   "period_label": "2026-10-31",
+   "round": 9,
+   "source": "decision",
+   "statement": "Federal Reserve Board — The Committee enters the November 3-4 FOMC meeting blackout period effective Saturday, October 31. No further commentary on the economic outlook or policy will be provided until after the meeting. The weekly H.4.1 release and FRED data updates, including the 10-year TIPS series (2.77% daily pri…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "J.P. Morgan Research"
+   ],
+   "description": "Accommodate or publicly answer COMEX's move → COMEX",
+   "kind": "action",
+   "option_id": "respond_1_accommodate",
+   "period_label": "2026-10-31",
+   "round": 9,
+   "source": "decision",
+   "statement": "J.P. Morgan Research, further to COMEX's note: our review trigger is defined on sustained prints, not a single day. Dec-2026 hike odds stand at ~81% (below 85%), and 10y TIPS was 2.64% as of the September monthly mean (2.77% daily on Oct 20 was one session, not a sustained break). Conditions for a formal target review…",
+   "targets": [
+    "COMEX"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Goldman Sachs"
+   ],
+   "description": "Accommodate or publicly answer COMEX's move → COMEX, J.P. Morgan Research",
+   "kind": "action",
+   "option_id": "respond_1_accommodate",
+   "period_label": "2026-10-31",
+   "round": 9,
+   "source": "decision",
+   "statement": "Goldman Sachs GIR formal data check, as pre-announced on 26 October: (i) WGC Q3 shows official-sector buying running at 289t in Q2 — above our 40t/month trigger — so our ~600t/yr 2026 assumption and the $5,400–5,600/oz 2027 range floor stand; (ii) FOMC held and the SEP median (4.25% through 2028) is more restrictive t…",
+   "targets": [
+    "COMEX",
+    "J.P. Morgan Research"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "RBI Half-Yearly Report on Management of Foreign Exchange Reserves (31 Oct) may reveal further gold accumulation detail.",
+   "kind": "consequence",
+   "period_label": "2026-10-31",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "If the Fed hikes in December as priced, an incremental real-yield squeeze on gold into year-end.",
+   "kind": "consequence",
+   "period_label": "2026-10-31",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "gold_spot_price"
+   ]
+  },
+  {
+   "actors": [],
+   "description": "PBoC November disclosure expected to show continued accumulation, underpinning official-sector demand.",
+   "kind": "consequence",
+   "period_label": "2026-10-31",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "COMEX",
+    "Federal Reserve (FOMC)"
+   ],
+   "description": "Managed-money net longs fall for a fifth consecutive period as hawkish Fed pricing squeezes speculative gold length.",
+   "kind": "consequence",
+   "period_label": "2026-10-31",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "J.P. Morgan Research",
+    "COMEX",
+    "Goldman Sachs"
+   ],
+   "description": "J.P. Morgan publicly defines its divergence review trigger on sustained prints, easing one leg of the COMEX-Goldman anchor dispute.",
+   "kind": "emergent",
+   "period_label": "2026-10-31",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Goldman Sachs",
+    "World Gold Council"
+   ],
+   "description": "Goldman formal data check cites 289t Q2 official-sector buying, reaffirming its $5,400-5,600/oz 2027 range floor.",
+   "kind": "consequence",
+   "period_label": "2026-10-31",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "People's Bank of China"
+   ],
+   "description": "PBoC confirms November 7 SDDS reserve disclosure; markets expect further reported gold accumulation.",
+   "kind": "consequence",
+   "period_label": "2026-10-31",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "LBMA Gold Price auction",
+    "SPDR Gold Shares (GLD)"
+   ],
+   "description": "Spot gold holds a tight band around $3,980-4,000, with ETF holdings providing a physical floor.",
+   "kind": "emergent",
+   "period_label": "2026-10-31",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  }
+ ],
+ "relationships": [
+  {
+   "kind": "INFLUENCES",
+   "last_changed_round": 0,
+   "polarity": -0.5,
+   "source": 0,
+   "strength": 0.8,
+   "target": 9,
+   "valence": "directional"
+  },
+  {
+   "kind": "COMPETES_WITH",
+   "last_changed_round": 8,
+   "polarity": -1.0,
+   "source": 3,
+   "strength": 0.9837,
+   "target": 7,
+   "valence": "adversarial"
+  },
+  {
+   "kind": "CUSTOMER_OF",
+   "last_changed_round": 4,
+   "polarity": 1.0,
+   "source": 4,
+   "strength": 0.9818,
+   "target": 2,
+   "valence": "allied"
+  },
+  {
+   "kind": "PARTNERS_WITH",
+   "last_changed_round": 8,
+   "polarity": 0.97,
+   "source": 11,
+   "strength": 0.9242,
+   "target": 3,
+   "valence": "allied"
+  },
+  {
+   "kind": "DEPENDS_ON",
+   "last_changed_round": 4,
+   "polarity": 0.0,
+   "source": 5,
+   "strength": 0.3,
+   "target": 0,
+   "valence": "neutral"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 6,
+   "polarity": 0.0,
+   "source": 0,
+   "strength": 0.3,
+   "target": 7,
+   "valence": "neutral"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 9,
+   "polarity": -0.27,
+   "source": 10,
+   "strength": 0.4553,
+   "target": 5,
+   "valence": "adversarial"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 5,
+   "polarity": 0.0,
+   "source": 2,
+   "strength": 0.3,
+   "target": 5,
+   "valence": "neutral"
+  },
+  {
+   "kind": "ALLY_OF",
+   "last_changed_round": 9,
+   "polarity": 0.3,
+   "source": 6,
+   "strength": 0.4215,
+   "target": 10,
+   "valence": "allied"
+  }
+ ],
+ "seed_gaps": [
+  {
+   "kind": "shock_without_window",
+   "note": "the window of its probability (per day ... year, a stretch of the calendar, or the forecast horizon) is not stated; not modelled as a shock",
+   "subject": "US and global recession"
+  },
+  {
+   "kind": "shock_without_window",
+   "note": "the window of its probability (per day ... year, a stretch of the calendar, or the forecast horizon) is not stated; not modelled as a shock",
+   "subject": "Fed holds at 3.75–4.00% at the 28 October 2026 FOMC"
+  },
+  {
+   "kind": "shock_window_after_horizon",
+   "note": "its window (2026-12-01 to 2026-12-31) starts after the forecast horizon; not modelled as a shock",
+   "subject": "Fed hikes to 4.00–4.25% by the 9 December 2026 FOMC"
+  },
+  {
+   "kind": "shock_without_window",
+   "note": "the window of its probability (per day ... year, a stretch of the calendar, or the forecast horizon) is not stated; not modelled as a shock",
+   "subject": "Fed hikes to 4.00–4.25% at the 28 October 2026 FOMC"
+  },
+  {
+   "kind": "shock_without_window",
+   "note": "the window of its probability (per day ... year, a stretch of the calendar, or the forecast horizon) is not stated; not modelled as a shock",
+   "subject": "Fed hikes to 4.00–4.25% at 28 October 2026 FOMC (FedWatch hold odds variant)"
+  },
+  {
+   "kind": "no_documented_shocks",
+   "note": "no risk is documented with a probability, its window and a source; the world has no exogenous shocks",
+   "subject": "world"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Federal Reserve (FOMC)"
+  },
+  {
+   "kind": "actor_unclassified",
+   "note": "no agency class inferred; falls back to the generic option catalogue",
+   "subject": "LBMA Gold Price auction"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "LBMA Gold Price auction"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "People's Bank of China"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "National Bank of Poland"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Goldman Sachs"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "J.P. Morgan Research"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "US President and administration"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Central Bank of Turkey"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "SPDR Gold Shares (GLD)"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "COMEX"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Reserve Bank of India"
+  }
+ ],
+ "simulation_id": "sim_a79deb6a2772",
+ "summary": {
+  "actors": 12,
+  "arbiter_enabled": true,
+  "arbiter_failed_rounds": 0,
+  "behaviour": {
+   "expectations_checked": 142,
+   "expectations_reacted": 76,
+   "moves": 43,
+   "offers_answered": 1,
+   "responsive_moves": 8,
+   "responsive_share": 0.186,
+   "rounds_scored": 8
+  },
+  "decision_actors_max": 24,
+  "events": 142,
+  "offers": {
+   "accepted": 1,
+   "breached": 0,
+   "countered": 0,
+   "lapsed": 0,
+   "open": 0,
+   "opened": 1,
+   "rejected": 0
+  },
+  "pending_effects": 6,
+  "relationships": 9,
+  "rounds_committed": 9,
+  "schema_version": "world-model-summary/v1",
+  "seed_gaps": 18,
+  "variables": 29
+ },
+ "variables": [
+  {
+   "as_of": "2026-10-21",
+   "history": [
+    {
+     "cause": "Sustained central bank buying per WGC survey supports grind-higher path toward $4,200 by year-end. [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "effect",
+     "value": 4116.8819125
+    },
+    {
+     "cause": "Supportive official-sector transparency narrative and ETF record holdings slightly outweigh hawkish Fed pricing; small grind-higher move consistent with suppressed speculative po… [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "arbiter",
+     "value": 4121.029625625
+    },
+    {
+     "cause": "Goldman note conditionality: if Fed signals hike beyond December 2026 or no June 2027 cut, framework and market consensus revise down; $50–100/oz spot risk. [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "effect",
+     "value": 4054.00518178125
+    },
+    {
+     "cause": "Pre-FOMC positioning and rising December hike odds (0.78) lifted real yields and the dollar, pressuring gold; offset partly by central-bank-buying expectations ahead of PBoC's No… [damped: 回归锚点κ=0.15]",
+     "round": 5,
+     "source": "arbiter",
+     "value": 4045.4844045140626
+    },
+    {
+     "cause": "PBoC end-October reserve data released in early November; expected to confirm continued gold accumulation, supporting sentiment. [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "effect",
+     "value": 4066.291743836953
+    },
+    {
+     "cause": "If FOMC statement leans hawkish and December hike firms, further real-yield pressure on gold. [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "effect",
+     "value": 4045.72798226141
+    },
+    {
+     "cause": "Hawkish hold plus elevated December hike odds sustain real-yield pressure; modest further drift lower, offset partly by confirmed central-bank buying. [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "arbiter",
+     "value": 4043.5487849221986
+    },
+    {
+     "cause": "Real-yield headwind and continued speculative de-risking outweigh steady official-sector buying; modest further drift. [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "arbiter",
+     "value": 4046.371467183869
+    },
+    {
+     "cause": "If December hike is delivered, additional real-yield pressure on gold ($30–60 downside risk per GS conditionality). [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "effect",
+     "value": 4016.0457471062887
+    },
+    {
+     "cause": "Net drift lower: fifth straight decline in managed-money net longs and 80% December hike odds outweigh a small safe-haven bid from the US-China escalation; move small (~-0.2%). [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 4022.445
+    },
+    {
+     "cause": "If the Fed hikes in December as priced, an incremental real-yield squeeze on gold into year-end. [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "effect",
+     "value": 3982.95825
+    },
+    {
+     "cause": "Slight drift lower on continued managed-money liquidation and firm December hike odds, cushioned by official-sector demand floor. [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "arbiter",
+     "value": 3997.455
+    }
+   ],
+   "id": "gold_spot_price",
+   "kind": "numeric",
+   "name": "Gold spot price",
+   "provenance": "arbiter",
+   "unit": "USD per troy ounce",
+   "value": 3997.455
+  },
+  {
+   "as_of": "2026-10-21",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 4132.0
+    },
+    {
+     "cause": "Composite of spot and futures ticks higher alongside pre-FOMC positioning. [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 4142.2
+    },
+    {
+     "cause": "Composite price tracked the spot correction from ~4,120 to ~4,054. [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "arbiter",
+     "value": 4089.67
+    },
+    {
+     "cause": "Composite benchmark followed spot and futures down in thin pre-FOMC trade. [damped: 回归锚点κ=0.15]",
+     "round": 5,
+     "source": "arbiter",
+     "value": 4077.3195
+    },
+    {
+     "cause": "Composite follows spot lower on hawkish-hold consolidation. [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "arbiter",
+     "value": 4070.221575
+    },
+    {
+     "cause": "Composite tracks spot lower in thin Friday trade. [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 4071.41333875
+    }
+   ],
+   "id": "gold_daily_composite_price",
+   "kind": "numeric",
+   "name": "Gold daily composite price",
+   "provenance": "arbiter",
+   "unit": "USD per troy ounce",
+   "value": 4071.41333875
+  },
+  {
+   "as_of": "2026-01-29",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 5501.7
+    }
+   ],
+   "id": "gold_all_time_high",
+   "kind": "numeric",
+   "name": "Gold all-time high",
+   "provenance": "research",
+   "unit": "USD per troy ounce",
+   "value": 5501.7
+  },
+  {
+   "as_of": "2026-06-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 4026.05
+    }
+   ],
+   "id": "gold_june_2026_close",
+   "kind": "numeric",
+   "name": "Gold June 2026 close",
+   "provenance": "research",
+   "unit": "USD per troy ounce",
+   "value": 4026.05
+  },
+  {
+   "as_of": "2024-12-31",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 2610.85
+    }
+   ],
+   "id": "gold_2024_close_and_annual_gain",
+   "kind": "numeric",
+   "name": "Gold 2024 close and annual gain",
+   "provenance": "research",
+   "unit": "USD per troy ounce",
+   "value": 2610.85
+  },
+  {
+   "as_of": "2026-10-22",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 2633.0
+    }
+   ],
+   "id": "gold_2025_range_and_average",
+   "kind": "numeric",
+   "name": "Gold 2025 range and average",
+   "provenance": "research",
+   "unit": "USD per ounce",
+   "value": 2633.0
+  },
+  {
+   "as_of": "2025-12-31",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 4083.55
+    }
+   ],
+   "id": "gold_31_dec_2025_spot",
+   "kind": "numeric",
+   "name": "Gold 31 Dec 2025 spot",
+   "provenance": "research",
+   "unit": "USD per troy ounce",
+   "value": 4083.55
+  },
+  {
+   "as_of": "2026-10-22",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 4092.5
+    },
+    {
+     "cause": "Futures track spot higher but managed-money longs remain suppressed on hawkish-by-default Fed read. [damped: 回归锚点κ=0.15]",
+     "round": 1,
+     "source": "arbiter",
+     "value": 4104.4
+    },
+    {
+     "cause": "Futures track spot with slight backwardation persistence; modest gain. [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 4112.134999999999
+    },
+    {
+     "cause": "Tracks spot modestly higher into month-end; positioning remains suppressed, limiting gains. [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "arbiter",
+     "value": 4113.43975
+    },
+    {
+     "cause": "Futures followed spot lower as managed money trimmed net longs and the GS framework was discounted. [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "arbiter",
+     "value": 4063.5487874999994
+    },
+    {
+     "cause": "Futures tracked spot lower on hawkish repricing; managed-money net longs trimmed further. [damped: 回归锚点κ=0.15]",
+     "round": 5,
+     "source": "arbiter",
+     "value": 4050.8914693749994
+    },
+    {
+     "cause": "Front-month futures track spot with slightly wider discount to carry. [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "arbiter",
+     "value": 4045.2327489687495
+    },
+    {
+     "cause": "Tracks spot; front settle edges lower with positioning unwind. [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "arbiter",
+     "value": 4047.392836623437
+    },
+    {
+     "cause": "Future roughly flat; rates carry keeps the curve steep vs spot. [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 4055.95
+    }
+   ],
+   "id": "gold_front_month_futures_settlement",
+   "kind": "numeric",
+   "name": "Gold front-month futures settlement",
+   "provenance": "arbiter",
+   "unit": "USD per troy ounce",
+   "value": 4055.95
+  },
+  {
+   "as_of": "2026-10-21",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 4363.7
+    }
+   ],
+   "id": "gold_dec_2027_futures_settlement",
+   "kind": "numeric",
+   "name": "Gold Dec 2027 futures settlement",
+   "provenance": "research",
+   "unit": "USD per troy ounce",
+   "value": 4363.7
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 3.875
+    }
+   ],
+   "id": "us_central_bank_policy_rate",
+   "kind": "numeric",
+   "name": "US central bank policy rate",
+   "provenance": "research",
+   "unit": "percent per year",
+   "value": 3.875
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 2.638
+    }
+   ],
+   "id": "10_year_tips_real_yield",
+   "kind": "numeric",
+   "name": "10-year TIPS real yield",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 2.638
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 3.717
+    }
+   ],
+   "id": "us_cpi_inflation",
+   "kind": "numeric",
+   "name": "US CPI inflation",
+   "provenance": "research",
+   "unit": "percent change from yea…",
+   "value": 3.717
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 2.351
+    }
+   ],
+   "id": "10_year_breakeven_inflation_rate",
+   "kind": "numeric",
+   "name": "10-year breakeven inflation rate",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 2.351
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 4256.0
+    }
+   ],
+   "id": "global_gold_etf_holdings",
+   "kind": "numeric",
+   "name": "Global gold ETF holdings",
+   "provenance": "research",
+   "unit": "tonnes",
+   "value": 4256.0
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 119.2152
+    }
+   ],
+   "id": "nominal_broad_us_dollar_index",
+   "kind": "numeric",
+   "name": "Nominal broad US dollar index",
+   "provenance": "research",
+   "unit": "index (Jan 2006=100)",
+   "value": 119.2152
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 107.11
+    }
+   ],
+   "id": "real_broad_effective_exchange_rate",
+   "kind": "numeric",
+   "name": "Real broad effective exchange rate",
+   "provenance": "research",
+   "unit": "index (2020=100)",
+   "value": 107.11
+  },
+  {
+   "as_of": "2026-08-31",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 4.0
+    }
+   ],
+   "id": "university_of_michigan_1_year_inflation_expectations",
+   "kind": "numeric",
+   "name": "University of Michigan 1-year inflation expectations",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 4.0
+  },
+  {
+   "as_of": "2026-09-30",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 3.0
+    }
+   ],
+   "id": "china_central_bank_policy_rate",
+   "kind": "numeric",
+   "name": "China central bank policy rate",
+   "provenance": "research",
+   "unit": "percent per year",
+   "value": 3.0
+  },
+  {
+   "as_of": "2026-07-31",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 13542.8209
+    }
+   ],
+   "id": "global_copper_price",
+   "kind": "numeric",
+   "name": "Global copper price",
+   "provenance": "research",
+   "unit": "USD per metric ton",
+   "value": 13542.8209
+  },
+  {
+   "as_of": "2026-10-22",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 1082.0
+    }
+   ],
+   "id": "central_bank_gold_purchases_full_years",
+   "kind": "numeric",
+   "name": "Central bank gold purchases full years",
+   "provenance": "research",
+   "unit": "tonnes",
+   "value": 1082.0
+  },
+  {
+   "as_of": "2026-08-31",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 648.0
+    }
+   ],
+   "id": "poland_gold_reserves_and_ytd_buying",
+   "kind": "numeric",
+   "name": "Poland gold reserves and YTD buying",
+   "provenance": "research",
+   "unit": "tonnes (reserves); +98t…",
+   "value": 648.0
+  },
+  {
+   "as_of": "2026-08-31",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 2271.0
+    }
+   ],
+   "id": "russia_gold_reserves_and_2026_sales",
+   "kind": "numeric",
+   "name": "Russia gold reserves and 2026 sales",
+   "provenance": "research",
+   "unit": "tonnes (reserves); -56t…",
+   "value": 2271.0
+  },
+  {
+   "as_of": "2026-08-31",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": -82.0
+    }
+   ],
+   "id": "turkey_2026_net_gold_sales",
+   "kind": "numeric",
+   "name": "Turkey 2026 net gold sales",
+   "provenance": "research",
+   "unit": "tonnes YTD",
+   "value": -82.0
+  },
+  {
+   "as_of": "2026-08-31",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 439.0
+    }
+   ],
+   "id": "uzbekistan_gold_reserves",
+   "kind": "numeric",
+   "name": "Uzbekistan gold reserves",
+   "provenance": "research",
+   "unit": "tonnes; ~+50t YTD",
+   "value": 439.0
+  },
+  {
+   "as_of": "2026-10-23",
+   "history": [
+    {
+     "cause": "Track record of hawkish SEP path and no walk-back keeps market pricing elevated, pressuring gold.",
+     "round": 1,
+     "source": "arbiter",
+     "value": 0.73
+    },
+    {
+     "cause": "Fed's read that no dovish pushback arrived keeps hike pricing firm, edging up slightly. [damped: 回归锚点κ=0.15]",
+     "round": 2,
+     "source": "arbiter",
+     "value": 0.747
+    },
+    {
+     "cause": "FOMC silence on presidential pressure and hawkish-by-default pricing persist; marginal drift up into the meeting. [damped: 回归锚点κ=0.15]",
+     "round": 3,
+     "source": "arbiter",
+     "value": 0.7555000000000001
+    },
+    {
+     "cause": "Hawkish hold and reiteration of inflation concerns nudged already-high December hike pricing up 2pp. [damped: 回归锚点κ=0.15]",
+     "round": 4,
+     "source": "arbiter",
+     "value": 0.776325
+    },
+    {
+     "cause": "White House pressure for a strong dollar and resilient-demand framing, plus firm CPI backdrop, nudged hike odds marginally higher into the meeting. [damped: 回归锚点κ=0.15]",
+     "round": 5,
+     "source": "arbiter",
+     "value": 0.7848250000000001
+    },
+    {
+     "cause": "Restrictive language nudges implied odds marginally higher to ~0.79. [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "arbiter",
+     "value": 0.7933250000000001
+    },
+    {
+     "cause": "Routine H.4.1 release confirming runoff path marginally reinforces hawkish pricing. [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "arbiter",
+     "value": 0.801825
+    },
+    {
+     "cause": "FOMC's routine, consistent communication read as maintaining the hawkish backdrop; marginal uptick. [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 0.8087737500000001
+    },
+    {
+     "cause": "J.P. Morgan publicly reaffirmed ~81% odds; modest firming on the round. [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "arbiter",
+     "value": 0.8183160625
+    }
+   ],
+   "id": "fed_december_2026_hike_implied_probability",
+   "kind": "numeric",
+   "name": "Fed December 2026 hike implied probability",
+   "provenance": "arbiter",
+   "unit": "probability",
+   "value": 0.8183160625
+  },
+  {
+   "as_of": "2026-10-26",
+   "history": [
+    {
+     "cause": "COMEX's disclosure warrants tracking speculative positioning as a bearish-pressure gauge.",
+     "round": 4,
+     "source": "arbiter",
+     "value": 104000.0
+    },
+    {
+     "cause": "Speculative longs reduced exposure ahead of the FOMC statement and December-hike pricing. [damped: 回归锚点κ=0.15]",
+     "round": 5,
+     "source": "arbiter",
+     "value": 98900.0
+    },
+    {
+     "cause": "FOMC expects and gets further speculative trimming as hike pricing firms a fourth straight session. [damped: 回归锚点κ=0.15]",
+     "round": 6,
+     "source": "arbiter",
+     "value": 95160.0
+    },
+    {
+     "cause": "Fifth straight trim as hawkish pricing and COMEX's public skepticism about the $4,900 anchor embolden cautious specs. [damped: 回归锚点κ=0.15]",
+     "round": 7,
+     "source": "arbiter",
+     "value": 93375.0
+    },
+    {
+     "cause": "Continued de-risking ahead of an 80%-priced hike; sixth straight weekly decline but pace slows as net longs approach stretched-short thresholds. [damped: 回归锚点κ=0.15]",
+     "round": 8,
+     "source": "arbiter",
+     "value": 91866.25
+    },
+    {
+     "cause": "Speculative length extends its multi-round decline; hawkish Fed pricing encourages trimming. [damped: 回归锚点κ=0.15]",
+     "round": 9,
+     "source": "arbiter",
+     "value": 90591.25
+    }
+   ],
+   "id": "comex_managed_money_net_long_position",
+   "kind": "numeric",
+   "name": "COMEX managed-money net long position",
+   "provenance": "arbiter",
+   "unit": "contracts",
+   "value": 90591.25
+  },
+  {
+   "as_of": "2026-10-28",
+   "history": [
+    {
+     "cause": "RBI half-yearly report establishes audited custody-distribution baseline now tracked by the market.",
+     "round": 6,
+     "source": "arbiter",
+     "value": 80.0
+    }
+   ],
+   "id": "rbi_gold_domestic_custody_share",
+   "kind": "numeric",
+   "name": "rbi_gold_domestic_custody_share",
+   "provenance": "arbiter",
+   "unit": "percent",
+   "value": 80.0
+  },
+  {
+   "as_of": "2026-10-29",
+   "history": [
+    {
+     "cause": "COMEX publicly challenged GS's $4,900 target; sell-side target dispersion now a tracked market narrative.",
+     "round": 7,
+     "source": "arbiter",
+     "value": "open"
+    },
+    {
+     "cause": "J.P. Morgan clarifies its trigger uses sustained prints; Goldman holds its floor, so dispute remains open but less acute.",
+     "round": 9,
+     "source": "arbiter",
+     "value": "narrows [text]"
+    }
+   ],
+   "id": "comex_goldman_public_anchor_dispute",
+   "kind": "categorical",
+   "name": "COMEX-Goldman public anchor dispute",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "narrows [text]"
+  },
+  {
+   "as_of": "2026-10-30",
+   "history": [
+    {
+     "cause": "The administration's new threat targeting PBoC gold accumulation/dollar diversification creates a trackable escalation channel.",
+     "round": 8,
+     "source": "arbiter",
+     "value": "elevated (public threat of measures against PBoC dollar sales)"
+    }
+   ],
+   "id": "us_china_gold_rhetoric_escalation_level",
+   "kind": "text",
+   "name": "us_china_gold_rhetoric_escalation_level",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "elevated (public threat of measures against PBoC dollar sales)"
+  }
+ ]
+}

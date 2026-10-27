@@ -596,6 +596,44 @@ def strip_placeholder_sections(md: str) -> str:
     return "".join(out)
 
 
+def export_world_state(simulation_id: str, graph_api: str | None, out: str) -> str | None:
+    """REFLEXIVE WORLD snapshot for the demo site's world-model tab.
+
+    Reads the public /world-state projection (latest world + bounded per-round
+    history) through the same running backend used for the graph export, so the
+    export never touches the simulation store the backend owns. A 404 — a legacy
+    run or a non-reflexive mode — is not an error: the bundle simply carries no
+    world_state.json and the site hides the tab. Returns the artifact name, or
+    None when nothing was written.
+    """
+    if not graph_api or not simulation_id:
+        return None
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    url = (
+        graph_api.rstrip("/")
+        + "/api/simulation/"
+        + urllib.parse.quote(simulation_id, safe="")
+        + "/world-state?rows=200"
+    )
+    try:
+        with urllib.request.urlopen(url, timeout=60) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return None
+        raise RuntimeError(
+            f"world-state API returned HTTP {exc.code} for {simulation_id}"
+        ) from exc
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not payload.get("success") or not isinstance(data, dict):
+        return None
+    _write_json(os.path.join(out, "world_state.json"), data)
+    return "world_state.json"
+
+
 def export_forum(sim_dir: str) -> dict:
     """Parse twitter/reddit actions.jsonl into a compact feed for the site."""
     feed = {}
@@ -1008,6 +1046,12 @@ def export_run(
     forum = export_forum(os.path.join(UPLOADS, "simulations", state["simulation_id"]))
     _write_json(os.path.join(out, "forum.json"), forum)
 
+    # stage 5.5 — reflexive world-state snapshot (absent on legacy runs; the site
+    # hides the world-model tab when the bundle carries no world_state.json)
+    world_state_artifact = export_world_state(state.get("simulation_id"), graph_api, out)
+    if world_state_artifact:
+        print(f"   world state: committed round snapshot exported")
+
     # stage 6 — final report (placeholder sections stripped for presentation) and
     # every published translation of it
     report_assets, report_languages = export_report(key, state["report_id"], out)
@@ -1024,6 +1068,7 @@ def export_run(
         "ontology.json",
         "graph.json",
         "forum.json",
+        *( [world_state_artifact] if world_state_artifact else [] ),
         *report_languages.values(),
         *dossier_assets,
         *report_assets,

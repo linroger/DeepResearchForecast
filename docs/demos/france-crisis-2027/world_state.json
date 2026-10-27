@@ -1,0 +1,4123 @@
+{
+ "actors": [
+  {
+   "agency_class": "regulator_agency",
+   "agent_id": 0,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Accommodate or publicly answer Cour des comptes's move",
+    "magnitude": 0.4,
+    "option_id": "respond_2_accommodate",
+    "resolution": "success",
+    "resolution_rationale": "EDP communication issued, anchoring on Cour data.",
+    "reversibility": "reversible",
+    "round": 13,
+    "status": "ok",
+    "targets": [
+     "Cour des comptes"
+    ]
+   },
+   "name": "European Commission",
+   "pending_commitments": [
+    {
+     "description": "Publish the 2027 Spring Economic Forecast including an updated assessment of France's deficit path under the EDP",
+     "due_round": 14,
+     "id": "c0_13_7",
+     "made_round": 13,
+     "source": "decision",
+     "status": "pending"
+    }
+   ],
+   "reputation": 0.66,
+   "track_record": null
+  },
+  {
+   "agency_class": "sovereign_government",
+   "agent_id": 1,
+   "archetype": "actor",
+   "capacity_per_round": 3,
+   "last_action": {
+    "kind": "coercive",
+    "label": "Counter Rassemblement National's move (Issue a public statement or warning → Prime Minister of France, French National…)",
+    "magnitude": 0.6,
+    "option_id": "respond_1_counter",
+    "resolution": "partial",
+    "resolution_rationale": "Credibility defense on deficit arithmetic; PLFR fate still open.",
+    "reversibility": "reversible",
+    "round": 13,
+    "status": "ok",
+    "targets": [
+     "Rassemblement National"
+    ]
+   },
+   "name": "Prime Minister of France",
+   "pending_commitments": [],
+   "reputation": 0.54,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 2,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "coercive",
+    "label": "Counter Nouveau Front Populaire / left coalition's move (Issue a public statement or warning → Rassemblement National, Prime Minister of…)",
+    "magnitude": 0.7,
+    "option_id": "respond_1_counter",
+    "resolution": "partial",
+    "resolution_rationale": "Counter-messaging landed; runoff outcome undecided.",
+    "reversibility": "reversible",
+    "round": 13,
+    "status": "ok",
+    "targets": [
+     "Nouveau Front Populaire / left coalition"
+    ]
+   },
+   "name": "Rassemblement National",
+   "pending_commitments": [],
+   "reputation": 0.47,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 3,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.4,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "Figures acknowledged by Commission, agencies and Assembly.",
+    "reversibility": "reversible",
+    "round": 13,
+    "status": "ok",
+    "targets": [
+     "French National Assembly",
+     "Prime Minister of France"
+    ]
+   },
+   "name": "Cour des comptes",
+   "pending_commitments": [
+    {
+     "description": "Publish updated public finance / deficit revision report after the new National Assembly convenes",
+     "due_round": 14,
+     "id": "c3_13_9",
+     "made_round": 13,
+     "source": "decision",
+     "status": "pending"
+    }
+   ],
+   "reputation": 0.76,
+   "track_record": null
+  },
+  {
+   "agency_class": "legislature",
+   "agent_id": 4,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Accommodate or publicly answer Rating agencies (S&P, Fitch, Moody's)'s move",
+    "magnitude": 0.3,
+    "option_id": "respond_1_accommodate",
+    "resolution": "pending",
+    "resolution_rationale": "PLFR examination acknowledged but still deferred until post-election session.",
+    "reversibility": "reversible",
+    "round": 13,
+    "status": "ok",
+    "targets": [
+     "Rating agencies (S&P, Fitch, Moody's)"
+    ]
+   },
+   "name": "French National Assembly",
+   "pending_commitments": [],
+   "reputation": 0.6,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 5,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.7,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "Publication calendar confirmed and credible.",
+    "reversibility": "reversible",
+    "round": 13,
+    "status": "ok",
+    "targets": []
+   },
+   "name": "INSEE",
+   "pending_commitments": [
+    {
+     "description": "Resume regular monthly CPI and employment releases and quarterly accounts per the published statistical calendar from May 2027 onward.",
+     "due_round": 14,
+     "id": "c5_13_10",
+     "made_round": 13,
+     "source": "decision",
+     "status": "pending"
+    }
+   ],
+   "reputation": 0.74,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 6,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Accommodate or publicly answer President Emmanuel Macron's move",
+    "magnitude": 0.6,
+    "option_id": "respond_1_accommodate",
+    "resolution": "success",
+    "resolution_rationale": "Conditional support signalling achieved leverage without commitment.",
+    "reversibility": "reversible",
+    "round": 5,
+    "status": "ok",
+    "targets": [
+     "President Emmanuel Macron"
+    ]
+   },
+   "name": "Les Républicains / centre-right",
+   "pending_commitments": [],
+   "reputation": 0.52,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 7,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.4,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "Election held on calendar; tallies received; certification proceeding routinely.",
+    "reversibility": "reversible",
+    "round": 13,
+    "status": "ok",
+    "targets": [
+     "Ministère de l'Intérieur / French police",
+     "French National Assembly"
+    ]
+   },
+   "name": "Conseil constitutionnel",
+   "pending_commitments": [
+    {
+     "description": "Publish first-round result proclamation and election-regularity rulings per constitutional timetable",
+     "due_round": 14,
+     "id": "c7_13_4",
+     "made_round": 13,
+     "source": "decision",
+     "status": "pending"
+    }
+   ],
+   "reputation": 0.66,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 8,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.4,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "Transition to pre-election coordination completed on schedule.",
+    "reversibility": "reversible",
+    "round": 8,
+    "status": "ok",
+    "targets": []
+   },
+   "name": "Ministère de l'Intérieur / French police",
+   "pending_commitments": [],
+   "reputation": 0.58,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 9,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.4,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "Orderly market functioning confirmed; modest spread widening consistent with statement.",
+    "reversibility": "reversible",
+    "round": 13,
+    "status": "ok",
+    "targets": []
+   },
+   "name": "Banque de France",
+   "pending_commitments": [
+    {
+     "description": "Publish June 2027 macroeconomic outlook per regular calendar",
+     "due_round": 14,
+     "id": "c9_12_5",
+     "made_round": 12,
+     "source": "decision",
+     "status": "pending"
+    },
+    {
+     "description": "Publish June 2027 macroeconomic outlook (growth forecast 0.8%) per regular calendar",
+     "due_round": 14,
+     "id": "c9_13_6",
+     "made_round": 13,
+     "source": "decision",
+     "status": "pending"
+    }
+   ],
+   "reputation": 0.76,
+   "track_record": null
+  },
+  {
+   "agency_class": "sovereign_government",
+   "agent_id": 10,
+   "archetype": "actor",
+   "capacity_per_round": 3,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.7,
+    "option_id": "public_statement",
+    "resolution": "partial",
+    "resolution_rationale": "Public commitment to one-month vote extracted, but actual vote depends on post-runoff Assembly arithmetic.",
+    "reversibility": "reversible",
+    "round": 13,
+    "status": "ok",
+    "targets": [
+     "French National Assembly",
+     "Prime Minister of France"
+    ]
+   },
+   "name": "President Emmanuel Macron",
+   "pending_commitments": [
+    {
+     "description": "Ensure the PLFR is tabled and brought to a vote in the National Assembly within one month after the 18 April first round, via negotiation or Article 49.3 if necessary.",
+     "due_round": 14,
+     "id": "c10_13_6",
+     "made_round": 13,
+     "source": "decision",
+     "status": "pending"
+    }
+   ],
+   "reputation": 0.5,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 11,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.4,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "Final settlement report on track; riot liability file effectively closed.",
+    "reversibility": "reversible",
+    "round": 13,
+    "status": "ok",
+    "targets": []
+   },
+   "name": "French insurers and reinsurers (FFA, CCR, Scor)",
+   "pending_commitments": [
+    {
+     "description": "Complete closure of the residual ~4% of October 2026 unrest claims files and publication of a closing technical note by 30 June 2027.",
+     "due_round": 14,
+     "id": "c11_13_4",
+     "made_round": 13,
+     "source": "decision",
+     "status": "pending"
+    }
+   ],
+   "reputation": 0.58,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 12,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.9,
+    "option_id": "public_statement",
+    "resolution": "partial",
+    "resolution_rationale": "High-visibility framing; electoral effect pending runoff.",
+    "reversibility": "reversible",
+    "round": 13,
+    "status": "ok",
+    "targets": [
+     "Rassemblement National"
+    ]
+   },
+   "name": "Nouveau Front Populaire / left coalition",
+   "pending_commitments": [],
+   "reputation": 0.47,
+   "track_record": null
+  },
+  {
+   "agency_class": "financial_institution",
+   "agent_id": 13,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Accommodate or publicly answer Cour des comptes's move",
+    "magnitude": 0.4,
+    "option_id": "respond_3_accommodate",
+    "resolution": "partial",
+    "resolution_rationale": "Analytical incorporation achieved; actual rating action deferred to scheduled reviews.",
+    "reversibility": "reversible",
+    "round": 13,
+    "status": "ok",
+    "targets": [
+     "Cour des comptes"
+    ]
+   },
+   "name": "Rating agencies (S&P, Fitch, Moody's)",
+   "pending_commitments": [
+    {
+     "description": "Publish next scheduled French sovereign review outcome per standard calendar, without pre-announcement",
+     "due_round": 14,
+     "id": "c13_12_6",
+     "made_round": 12,
+     "source": "decision",
+     "status": "pending"
+    }
+   ],
+   "reputation": 0.56,
+   "track_record": null
+  }
+ ],
+ "as_of_date": "2026-10-21",
+ "brief": "# WORLD STATE — as of 2027-04-30 (after 2027-04-H2)\n## Key facts\n- 10Y OAT-Bund spread: 148 bps (was 145 bps last period)\n- plfr_government_tabling_status: post-election vote outcome pending (was tabled before first round; examination deferred to post-election Assembly session last period)\n- plfr_vote_timing: government committed to vote within one month post-first-round (mid-May 2027); examination resuming (was deferred until after 18 April first round last period)\n- plfr_postelection_vote_window: by mid-May 2027 per presidential commitment\n- presidential_first_round_held: yes, 18 April 2027, results transmission to Conseil constitutionnel under way\n- nfp_single_candidacy_status: confirmed\n- election_calendar_constitutionally_confirmed: yes, first round 18 April 2027 unaffected by budget proceedings\n- riot_claims_settlement_rate: 96 percent of declared com…\n- rn_preelectoral_framing: deficit and 49.3 governance as central campaign themes\n- bdf_2027_growth_forecast: 0.8 percent\n- corrective_budget_required: yes — PLFR required following partial censures\n- riots_insured_losses_final_2026: 240 million EUR\n- rn_censure_motion_feb_2027: tabled, rejected below 289 threshold\n- nfp_plfr_feb_2027: tabled, committee examination\n## Moves last period\n- Conseil constitutionnel: Issue a public statement or warning → Ministère de l'Intérieur / French police, French National Assembly — \"The Conseil constitutionnel announces that, following the first round of the presidential election held on 18 April 2027 in accordance with the constitutionall…\"\n- European Commission: Accommodate or publicly answer Cour des comptes's move → Cour des comptes — \"The Commission takes note of the certification of France's 2026 accounts and the Cour des comptes' revised 2027 deficit estimate of 5.5% of GDP. The Commission…\"\n- Cour des comptes: Issue a public statement or warning → French National Assembly, Prime Minister of France — \"The Cour des comptes notes that the first round of the presidential election was held on 18 April 2027 and that examination of the PLFR remains deferred to the…\"\n- INSEE: Issue a public statement or warning — \"INSEE confirms the publication of the first complete 2026 annual national accounts on 30 April 2027 at 8:30 CET (insee.fr), covering general government deficit…\"",
+ "committed_round": 13,
+ "digest": "The first round proceeded on 18 April as constitutionally confirmed, with the Conseil constitutionnel receiving tallies normally. Fiscal pressure intensified rather than eased: the Cour des comptes' certified 5.5% 2027 deficit estimate, the Commission's non-compliant EDP stance and rating agencies' explicit incorporation of the worse figures kept the OAT-Bu…\nMoves:\n- Conseil constitutionnel: Issue a public statement or warning (→ Ministère de l'Intérieur / French police, French National Assembly): \"The Conseil constitutionnel announces that, following the first round of the presidential election held on 18 April 2027 in accordance with…\"\n- European Commission: Accommodate or publicly answer Cour des comptes's move (→ Cour des comptes): \"The Commission takes note of the certification of France's 2026 accounts and the Cour des comptes' revised 2027 deficit estimate of 5.5% of…\"",
+ "headline": "",
+ "history": [
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 1,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 11,
+    "total": 11
+   },
+   "deterministic": {
+    "actions": [
+     "Conseil constitutionnel holds position",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → Prime Minister of France",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → Prime Minister of France, French National Assembly",
+     "Issue a public statement or warning → Prime Minister of France, French National Assembly",
+     "Issue a public statement or warning → Prime Minister of France",
+     "Issue a public statement or warning → French National Assembly, Rating agencies (S&P, Fitch, Moody's)",
+     "Issue a public statement or warning → Prime Minister of France, French National Assembly",
+     "Issue a public statement or warning → French National Assembly, Prime Minister of France"
+    ],
+    "commitments_lapsed": [],
+    "effects_fired": [],
+    "scheduled_events": [
+     "[2026-10-23] Moody's review of France's Aa3/Negative rating scheduled",
+     "[2026-10-29] Reported ECB meeting",
+     "[2026-10-24] Second protest weekend announced, signpost for calm or renewed violence"
+    ]
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "from": null,
+      "polarity": 0.1275,
+      "source": "Prime Minister of France",
+      "target": "Les Républicains / centre-right",
+      "to": "neutral"
+     },
+     {
+      "from": null,
+      "polarity": -0.15,
+      "source": "Rassemblement National",
+      "target": "Prime Minister of France",
+      "to": "neutral"
+     },
+     {
+      "from": null,
+      "polarity": -0.15,
+      "source": "European Commission",
+      "target": "Prime Minister of France",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "plf_2027_first_part_vote_scheduled",
+      "name": "plf_2027_first_part_vote_scheduled",
+      "unit": "",
+      "value": "2026-11-17"
+     },
+     {
+      "id": "riots_calm_indicator",
+      "name": "riots_calm_indicator",
+      "unit": "",
+      "value": "de_escalation"
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 150.8,
+      "id": "10y_oat_bund_spread",
+      "name": "10Y OAT-Bund spread",
+      "to": 146.8,
+      "unit": "bps"
+     },
+     {
+      "from": 4.93,
+      "id": "10y_oat_yield",
+      "name": "10Y OAT yield",
+      "to": 4.87,
+      "unit": "percent"
+     },
+     {
+      "from": 7838.49,
+      "id": "cac_40_close",
+      "name": "CAC 40 close",
+      "to": 7883.49,
+      "unit": "index points"
+     }
+    ]
+   },
+   "digest": "Moody's confirmed France's Aa3 rating with Negative outlook on 23 October, sparing an immediate downgrade but keeping pressure on. The PM's commitment to a 17 November budget vote under 49.3 if necessary hardened NFP censure threats, while RN leaned into law-and-order framing after the October riots. The second protest weekend (24 Oct) passed with only scat…\nMoves:\n- Cour des comptes: Issue a public statement or warning: \"The Cour notes the scheduled review of France's rating and reiterates the findings of its February 2026 report: the 2026 deficit was revise…\"\n- European Commission: Issue a public statement or warning (→ Prime Minister of France): \"The Commission takes note of recent market developments and reiterates that France remains subject to the Excessive Deficit Procedure. Our…\"\n- INSEE: Issue a public statement or warning: \"INSEE publishes its scheduled data releases for late October 2026 in line with the pre-announced statistical calendar: the October business…\"",
+   "headline": "2026-10-H2: 11 decisions · 3 facts changed · 4 events · arbiter=applied · Moody's confirmed France's Aa3 rating with Negative outlook on 23 October, sparing an immediate downgrade but keeping pressure on. The PM's…",
+   "narrative": "Moody's confirmed France's Aa3 rating with Negative outlook on 23 October, sparing an immediate downgrade but keeping pressure on. The PM's commitment to a 17 November budget vote under 49.3 if necessary hardened NFP censure threats, while RN leaned into law-and-order framing after the October riots. The second protest weekend (24 Oct) passed with only scattered incidents, allowing markets to stabilise slightly; insurers confirmed a significant but manageable claims burden (~1.2bn EUR). All eyes now turn to the November PLF 2027 vote.",
+   "period_label": "2026-10-H2",
+   "round": 1,
+   "scenario_pressure": {
+    "Censure and left surge": "flat",
+    "Escalation and paralysis": "down",
+    "Muddle-through austerity": "up",
+    "Stabilisation rebound": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 2,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 11,
+    "total": 11
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "Conseil constitutionnel holds position",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → Prime Minister of France, French National Assembly",
+     "Issue a public statement or warning → French National Assembly, Prime Minister of France",
+     "Issue a public statement or warning → French National Assembly, Prime Minister of France",
+     "French National Assembly holds position",
+     "Issue a public statement or warning → Prime Minister of France, French National Assembly",
+     "Engage Article 49.3 on the whole PLF 2027 budget before the 17 November Assembly vote → French National Assembly, Nouveau Front Populaire / left coalition",
+     "Issue a public statement or warning → Prime Minister of France, French National Assembly"
+    ],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Did not materialise: PLF 2027 first-part vote / possible 49.3 and censure motion in November; censure pass requires 289 votes with both NFP and RN supporting.",
+     "Did not materialise: ECB meeting outcome; possible commentary on French spreads but no targeted intervention expected.",
+     "EC Autumn Forecast (November) likely shows deficit exceeding 5.0% target, adding pressure."
+    ],
+    "scheduled_events": [
+     "[2026-11] European Commission Autumn forecast due, not yet released as of 21 October 2026"
+    ]
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": 0.42,
+      "source": "Prime Minister of France",
+      "target": "Les Républicains / centre-right",
+      "to": "allied"
+     },
+     {
+      "direction": "farther",
+      "from": "neutral",
+      "polarity": -0.3,
+      "source": "Rassemblement National",
+      "target": "Prime Minister of France",
+      "to": "adversarial"
+     },
+     {
+      "from": null,
+      "polarity": 0.12,
+      "source": "President Emmanuel Macron",
+      "target": "Prime Minister of France",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "censure_votes_nov_2026_49_3_plf2027",
+      "name": "censure_votes_nov_2026_49_3_plf2027",
+      "unit": "votes",
+      "value": 271.0
+     },
+     {
+      "id": "plf_2027_whole_budget_engaged_via_49_3",
+      "name": "plf_2027_whole_budget_engaged_via_49_3",
+      "unit": "",
+      "value": true
+     },
+     {
+      "id": "ec_autumn_forecast_2026_deficit",
+      "name": "ec_autumn_forecast_2026_deficit",
+      "unit": "percent of GDP",
+      "value": 5.4
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 146.8,
+      "id": "10y_oat_bund_spread",
+      "name": "10Y OAT-Bund spread",
+      "to": 152.0,
+      "unit": "bps"
+     },
+     {
+      "from": 4.87,
+      "id": "10y_oat_yield",
+      "name": "10Y OAT yield",
+      "to": 4.92,
+      "unit": "percent"
+     }
+    ]
+   },
+   "digest": "PM Lecornu engaged 49.3 on the entire PLF 2027 on 17 November, forcing a censure vote. RN publicly hardened opposition, but the decisive factor was whether RN + NFP together exceed 289. Given prior censure votes at 267–269 and the post-riot atmosphere, the government narrowly survived (censure ~265–275), avoiding the 2025-style collapse. Markets stayed tens…\nMoves:\n- INSEE: Issue a public statement or warning: \"INSEE publishes, per its pre-announced statistical calendar, the first estimate of Q3 2026 GDP: +0.2% quarter-on-quarter after +0.1% in Q2…\"\n- Banque de France: Issue a public statement or warning: \"Banque de France market monitoring update (data as of 31 October 2026): the 10-year OAT yield stood at 4.87 percent and the OAT-Bund spread…\"\n- European Commission: Issue a public statement or warning: \"The Commission will publish its 2026 Autumn Economic Forecast on 11 November 2026, covering fiscal projections for all Member States, inclu…\"",
+   "headline": "2026-11-H1: 11 decisions · 2 facts changed · 4 events · arbiter=applied · PM Lecornu engaged 49.3 on the entire PLF 2027 on 17 November, forcing a censure vote. RN publicly hardened opposition, but the decisive fa…",
+   "narrative": "PM Lecornu engaged 49.3 on the entire PLF 2027 on 17 November, forcing a censure vote. RN publicly hardened opposition, but the decisive factor was whether RN + NFP together exceed 289. Given prior censure votes at 267–269 and the post-riot atmosphere, the government narrowly survived (censure ~265–275), avoiding the 2025-style collapse. Markets stayed tense: the Commission's Autumn Forecast showed the 2026 deficit overshooting, keeping OAT spreads elevated, while S&P's 27 November review proceeded on schedule.",
+   "period_label": "2026-11-H1",
+   "round": 2,
+   "scenario_pressure": {
+    "Censure and left surge": "down",
+    "Escalation and paralysis": "down",
+    "Muddle-through austerity": "up",
+    "Stabilisation rebound": "flat"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 1,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 10,
+    "total": 10
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Conseil constitutionnel holds position",
+     "Issue a public statement or warning → French National Assembly",
+     "Reprice risk: lending terms, ratings, exposure limits → Prime Minister of France, French National Assembly",
+     "Publish official scrutins for the 17 November 2026 first-part vote on PLF 2027",
+     "Counter Prime Minister of France's move (Government survives censure motion 271-... (below 289 threshold) after engaging…) → Prime Minister of France, French National Assembly",
+     "Issue a public statement or warning → French National Assembly, Prime Minister of France",
+     "Accommodate or publicly answer Rating agencies (S&P, Fitch, Moody's)'s move → Rating agencies (S&P, Fitch, Moody's), French National Assembly"
+    ],
+    "commitments_lapsed": [
+     "French insurers and reinsurers (FFA, CCR, Scor): Publish a first consolidated, verified loss estimate for the 17-19 October unrest within 1 period (by mid-November 2026).",
+     "Nouveau Front Populaire / left coalition: Vote against PLF 2027 first-part vote and support censure if 49.3 is engaged"
+    ],
+    "effects_fired": [
+     "S&P review 27 Nov: possible outlook revision to negative given 5.4% deficit path and political fragility."
+    ],
+    "scheduled_events": [
+     "[2026-11-17] Reported date for Assembly vote on the whole PLF 2027 (provisional)",
+     "[2026-11-27] S&P review of France's A+/Stable rating scheduled"
+    ]
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "farther",
+      "from": "adversarial",
+      "polarity": -0.585,
+      "source": "Rassemblement National",
+      "target": "Prime Minister of France",
+      "to": "adversarial"
+     },
+     {
+      "from": null,
+      "polarity": 0.18,
+      "source": "Rassemblement National",
+      "target": "Les Républicains / centre-right",
+      "to": "neutral"
+     },
+     {
+      "from": null,
+      "polarity": -0.135,
+      "source": "Rassemblement National",
+      "target": "French National Assembly",
+      "to": "neutral"
+     },
+     {
+      "from": null,
+      "polarity": -0.15,
+      "source": "Rating agencies (S&P, Fitch, Moody's)",
+      "target": "Prime Minister of France",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "sp_outlook_france_nov_2026",
+      "name": "sp_outlook_france_nov_2026",
+      "unit": "",
+      "value": "A+ / Negative"
+     },
+     {
+      "id": "plf_2027_status",
+      "name": "plf_2027_status",
+      "unit": "",
+      "value": "adopted via 49.3, no censure"
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 152.0,
+      "id": "10y_oat_bund_spread",
+      "name": "10Y OAT-Bund spread",
+      "to": 158.0,
+      "unit": "bps"
+     },
+     {
+      "from": 4.92,
+      "id": "10y_oat_yield",
+      "name": "10Y OAT yield",
+      "to": 4.97,
+      "unit": "percent"
+     },
+     {
+      "from": 7883.49,
+      "id": "cac_40_close",
+      "name": "CAC 40 close",
+      "to": 7828.49,
+      "unit": "index points"
+     }
+    ]
+   },
+   "digest": "The government survives the 17 November censure motion 271 votes to 289 needed, so PLF 2027 is adopted under Article 49.3 — an unprecedented use against the whole budget. S&P affirms A+ but shifts the outlook to Negative on 27 November, citing the 5.4% deficit and fiscal slippage; markets stay orderly with modest spread widening. RN frames the outcome as il…\nMoves:\n- Banque de France: Issue a public statement or warning: \"Banque de France market monitoring update (data as of 13 November 2026): the 10-year OAT yield stood at 4.92 percent and the OAT-Bund sprea…\"\n- European Commission: Issue a public statement or warning: \"The Commission publishes its 2026 Autumn Economic Forecast today, 11 November 2026. For France, the Commission projects a general governmen…\"\n- INSEE: Issue a public statement or warning: \"INSEE, per its pre-announced statistical calendar, publishes the provisional consumer price estimate for November 2026 and notes that the 2…\"",
+   "headline": "2026-11-H2: 10 decisions · 3 facts changed · 5 events · arbiter=applied · The government survives the 17 November censure motion 271 votes to 289 needed, so PLF 2027 is adopted under Article 49.3 — an unprecedente…",
+   "narrative": "The government survives the 17 November censure motion 271 votes to 289 needed, so PLF 2027 is adopted under Article 49.3 — an unprecedented use against the whole budget. S&P affirms A+ but shifts the outlook to Negative on 27 November, citing the 5.4% deficit and fiscal slippage; markets stay orderly with modest spread widening. RN frames the outcome as illegitimacy, sustaining electoral pressure toward April 2027.",
+   "period_label": "2026-11-H2",
+   "round": 3,
+   "scenario_pressure": {
+    "Censure and left surge": "down",
+    "Escalation and paralysis": "down",
+    "Muddle-through austerity": "up",
+    "Stabilisation rebound": "flat"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 1,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 11,
+    "total": 11
+   },
+   "deterministic": {
+    "actions": [
+     "Conseil constitutionnel holds position",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → Prime Minister of France",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → Prime Minister of France, French National Assembly",
+     "Issue a public statement or warning",
+     "Accommodate or publicly answer Cour des comptes's move → Cour des comptes",
+     "Issue a public statement or warning",
+     "Counter French National Assembly's move (Censure motion on PLF 2027 fails 271-289 threshold; budget adopted under 49.3) → French National Assembly",
+     "Issue a public statement or warning → French National Assembly, Les Républicains / centre-right",
+     "Counter French National Assembly's move (Censure motion on PLF 2027 fails 271-289 threshold; budget adopted under 49.3) → French National Assembly"
+    ],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Conseil constitutionnel challenges to PLF 2027 riders adopted via 49.3 (budgetary 'cavaliers')."
+    ],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "farther",
+      "from": "neutral",
+      "polarity": -0.3,
+      "source": "European Commission",
+      "target": "Prime Minister of France",
+      "to": "adversarial"
+     },
+     {
+      "direction": "farther",
+      "from": "neutral",
+      "polarity": -0.2625,
+      "source": "Rassemblement National",
+      "target": "French National Assembly",
+      "to": "adversarial"
+     },
+     {
+      "from": null,
+      "polarity": 0.3,
+      "source": "President Emmanuel Macron",
+      "target": "Les Républicains / centre-right",
+      "to": "allied"
+     },
+     {
+      "from": null,
+      "polarity": -0.34,
+      "source": "Nouveau Front Populaire / left coalition",
+      "target": "French National Assembly",
+      "to": "adversarial"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "edp_progress_assessment_timing",
+      "name": "edp_progress_assessment_timing",
+      "unit": "",
+      "value": "H1 2027"
+     },
+     {
+      "id": "plf_2027_constitutional_challenge_filed",
+      "name": "plf_2027_constitutional_challenge_filed",
+      "unit": "",
+      "value": true
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 158.0,
+      "id": "10y_oat_bund_spread",
+      "name": "10Y OAT-Bund spread",
+      "to": 152.0,
+      "unit": "bps"
+     },
+     {
+      "from": 4.97,
+      "id": "10y_oat_yield",
+      "name": "10Y OAT yield",
+      "to": 4.93,
+      "unit": "percent"
+     },
+     {
+      "from": 7828.49,
+      "id": "cac_40_close",
+      "name": "CAC 40 close",
+      "to": 7883.49,
+      "unit": "index points"
+     },
+     {
+      "from": "de_escalation",
+      "id": "riots_calm_indicator",
+      "name": "riots_calm_indicator",
+      "to": "calm",
+      "unit": ""
+     }
+    ]
+   },
+   "digest": "The 49.3-adopted PLF 2027 stands, censure having failed by 18 votes, and the period is dominated by post-budget institutional positioning rather than new shocks. Curfews are lifted as riot de-escalation holds, but S&P's Negative outlook, the Commission's EDP warning and the Cour des comptes' critical note keep fiscal pressure on. Markets show modest relief;…\nMoves:\n- INSEE: Issue a public statement or warning: \"INSEE, per its pre-announced statistical calendar, publishes the final November 2026 consumer price index and the monthly unemployment esti…\"\n- European Commission: Issue a public statement or warning (→ Prime Minister of France): \"Following adoption of the 2027 budget law and the publication of the 2026 Autumn Forecast (deficit projected at 5.4% of GDP), the Commissio…\"\n- Banque de France: Issue a public statement or warning: \"Banque de France market monitoring update (data as of 30 November 2026): the 10-year OAT yield stood at 4.97 percent and the OAT-Bund sprea…\"",
+   "headline": "2026-12-H1: 11 decisions · 4 facts changed · 4 events · arbiter=applied · The 49.3-adopted PLF 2027 stands, censure having failed by 18 votes, and the period is dominated by post-budget institutional positioning r…",
+   "narrative": "The 49.3-adopted PLF 2027 stands, censure having failed by 18 votes, and the period is dominated by post-budget institutional positioning rather than new shocks. Curfews are lifted as riot de-escalation holds, but S&P's Negative outlook, the Commission's EDP warning and the Cour des comptes' critical note keep fiscal pressure on. Markets show modest relief; opposition rhetoric hardens but no new censure motion is filed before year-end.",
+   "period_label": "2026-12-H1",
+   "round": 4,
+   "scenario_pressure": {
+    "Censure and left surge": "flat",
+    "Escalation and paralysis": "down",
+    "Muddle-through austerity": "up",
+    "Stabilisation rebound": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 1,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 12,
+    "total": 12
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "European Commission holds position",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Publish a market view or forecast → Banque de France",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Accommodate or publicly answer Rating agencies (S&P, Fitch, Moody's)'s move → Rating agencies (S&P, Fitch, Moody's)",
+     "Issue a public statement or warning → Prime Minister of France, French National Assembly",
+     "Accommodate or publicly answer President Emmanuel Macron's move → President Emmanuel Macron",
+     "Accommodate or publicly answer European Commission's move → European Commission",
+     "Issue a public statement or warning → French National Assembly, Prime Minister of France"
+    ],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Did not materialise: Riot insurance payouts (1.2bn EUR) pressure local businesses and 2027 growth by ~0.05pp.",
+     "Did not materialise: Risk of constitutional referral of PLF 2027 (49.3 on whole budget) to Conseil constitutionnel by opposition deputies"
+    ],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "adversarial",
+      "polarity": -0.03,
+      "source": "European Commission",
+      "target": "Prime Minister of France",
+      "to": "neutral"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.69,
+      "source": "President Emmanuel Macron",
+      "target": "Les Républicains / centre-right",
+      "to": "allied"
+     },
+     {
+      "from": null,
+      "polarity": -0.15,
+      "source": "Nouveau Front Populaire / left coalition",
+      "target": "Prime Minister of France",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "constitutional_decision_plf2027_timing",
+      "name": "constitutional_decision_plf2027_timing",
+      "unit": "",
+      "value": "Q1 2027 expected"
+     },
+     {
+      "id": "nfp_december_mobilization_scale",
+      "name": "nfp_december_mobilization_scale",
+      "unit": "",
+      "value": "limited"
+     },
+     {
+      "id": "commission_trajectory_deadline_france",
+      "name": "commission_trajectory_deadline_france",
+      "unit": "",
+      "value": "2027-01-31"
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 152.0,
+      "id": "10y_oat_bund_spread",
+      "name": "10Y OAT-Bund spread",
+      "to": 149.0,
+      "unit": "bps"
+     },
+     {
+      "from": 4.93,
+      "id": "10y_oat_yield",
+      "name": "10Y OAT yield",
+      "to": 4.89,
+      "unit": "percent"
+     },
+     {
+      "from": 7883.49,
+      "id": "cac_40_close",
+      "name": "CAC 40 close",
+      "to": 7965.0,
+      "unit": "index points"
+     }
+    ]
+   },
+   "digest": "PLF 2027 stands adopted via 49.3 (no censure: 271 < 289), and the period closes with a consolidation of that fragile status quo rather than escalation. Constitutional referrals registered but Conseil constitutionnel's review is pending into 2027; markets eased modestly (spread 158→152bps) on S&P affirmation and budget passage. NFP street mobilization stayed…\nMoves:\n- Cour des comptes: Issue a public statement or warning: \"Cour des comptes publishes its scheduled December revision of the public-accounts estimate: based on observed execution through end-Novembe…\"\n- Banque de France: Issue a public statement or warning: \"Banque de France market monitoring update (data as of 15 December 2026): the 10-year OAT yield stood at 4.93 percent and the OAT-Bund sprea…\"\n- INSEE: Issue a public statement or warning: \"INSEE, per its pre-announced statistical calendar, publishes the final November 2026 consumer price index and the quarterly national accoun…\"",
+   "headline": "2026-12-H2: 12 decisions · 3 facts changed · 6 events · arbiter=applied · PLF 2027 stands adopted via 49.3 (no censure: 271 < 289), and the period closes with a consolidation of that fragile status quo rather than…",
+   "narrative": "PLF 2027 stands adopted via 49.3 (no censure: 271 < 289), and the period closes with a consolidation of that fragile status quo rather than escalation. Constitutional referrals registered but Conseil constitutionnel's review is pending into 2027; markets eased modestly (spread 158→152bps) on S&P affirmation and budget passage. NFP street mobilization stayed limited (riots calm), and LR signalled conditional support, keeping the Lecornu government alive but constrained.",
+   "period_label": "2026-12-H2",
+   "round": 5,
+   "scenario_pressure": {
+    "Censure and left surge": "down",
+    "Escalation and paralysis": "down",
+    "Muddle-through austerity": "up",
+    "Stabilisation rebound": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 12,
+    "total": 12
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → INSEE",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → French National Assembly",
+     "Accommodate or publicly answer Rassemblement National's move → Rassemblement National",
+     "Publish PLF 2027 implementation decree package and transmit multiannual fiscal trajectory to the European Commission ahead of the 31 Januar… → European Commission, French National Assembly",
+     "Seek talks with Les Républicains / centre-right over its move → Les Républicains / centre-right",
+     "Issue a public statement or warning",
+     "Escalate pressure on another actor (campaign, threat, retaliation) → Prime Minister of France",
+     "Issue a public statement or warning → Conseil constitutionnel, Prime Minister of France"
+    ],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Did not materialise: Further rating pressure (Fitch/Moody's reviews) if deficit trajectory deteriorates",
+     "Did not materialise: Riot-related fiscal costs (reparations, security) add ~0.05pp to 2027 deficit",
+     "Conseil constitutionnel ruling on PLF 2027 referrals — partial strike-down of rider provisions plausible, full annulment unlikely."
+    ],
+    "scheduled_events": [
+     "[2027] INSEE spring 2027 first full-year 2026 national-accounts estimate resolves the deficit threshold"
+    ]
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "farther",
+      "from": "adversarial",
+      "polarity": -0.72,
+      "source": "Rassemblement National",
+      "target": "Prime Minister of France",
+      "to": "adversarial"
+     },
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": 0.0975,
+      "source": "European Commission",
+      "target": "Prime Minister of France",
+      "to": "neutral"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 1.0,
+      "source": "President Emmanuel Macron",
+      "target": "Les Républicains / centre-right",
+      "to": "allied"
+     },
+     {
+      "direction": "farther",
+      "from": "neutral",
+      "polarity": -0.3,
+      "source": "Nouveau Front Populaire / left coalition",
+      "target": "Prime Minister of France",
+      "to": "adversarial"
+     },
+     {
+      "from": null,
+      "polarity": -0.2125,
+      "source": "Nouveau Front Populaire / left coalition",
+      "target": "Rassemblement National",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "plf_2027_constitutional_outcome",
+      "name": "plf_2027_constitutional_outcome",
+      "unit": "",
+      "value": "validated with partial censures of rider provisions"
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 149.0,
+      "id": "10y_oat_bund_spread",
+      "name": "10Y OAT-Bund spread",
+      "to": 145.0,
+      "unit": "bps"
+     },
+     {
+      "from": 4.89,
+      "id": "10y_oat_yield",
+      "name": "10Y OAT yield",
+      "to": 4.85,
+      "unit": "percent"
+     },
+     {
+      "from": 7965.0,
+      "id": "cac_40_close",
+      "name": "CAC 40 close",
+      "to": 8010.0,
+      "unit": "index points"
+     },
+     {
+      "from": "adopted via 49.3, no censure",
+      "id": "plf_2027_status",
+      "name": "plf_2027_status",
+      "to": "adopted via 49.3, constitutional ruling issued (partial censures likely)",
+      "unit": ""
+     }
+    ]
+   },
+   "digest": "The Conseil constitutionnel issued its PLF 2027 ruling: the law is declared constitutional in its revenue and balance provisions, with several riders struck down — significant but not crippling cave strokes. INSEE's full-year 2026 accounts confirmed a ~5.4% deficit, prompting the Cour des comptes and Commission to flag fiscal slippage ahead of the EDP asses…\nMoves:\n- Cour des comptes: Issue a public statement or warning: \"Cour des comptes notes the publication by INSEE of the first full-year 2026 national-accounts estimate confirming the general government de…\"\n- Banque de France: Issue a public statement or warning: \"Banque de France market monitoring update (data as of 31 December 2026): the 10-year OAT yield stood at 4.89 percent and the OAT-Bund sprea…\"\n- European Commission: Issue a public statement or warning (→ INSEE): \"The Commission takes note of INSEE's first full-year 2026 national-accounts estimate for France. The data will feed into the Commission's E…\"",
+   "headline": "2027-01-H1: 12 decisions · 4 facts changed · 4 events · arbiter=applied · The Conseil constitutionnel issued its PLF 2027 ruling: the law is declared constitutional in its revenue and balance provisions, with seve…",
+   "narrative": "The Conseil constitutionnel issued its PLF 2027 ruling: the law is declared constitutional in its revenue and balance provisions, with several riders struck down — significant but not crippling cave strokes. INSEE's full-year 2026 accounts confirmed a ~5.4% deficit, prompting the Cour des comptes and Commission to flag fiscal slippage ahead of the EDP assessment. Markets took the ruling calmly; the OAT-Bund spread tightened slightly. RN escalated anti-49.3 campaigning while Macron courted LR for institutional stability.",
+   "period_label": "2027-01-H1",
+   "round": 6,
+   "scenario_pressure": {
+    "Censure and left surge": "down",
+    "Escalation and paralysis": "flat",
+    "Muddle-through austerity": "up",
+    "Stabilisation rebound": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 9,
+    "total": 9
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → European Commission",
+     "Issue a public statement or warning",
+     "Accommodate or publicly answer European Commission's move → European Commission",
+     "Issue a public statement or warning",
+     "Accommodate or publicly answer Rating agencies (S&P, Fitch, Moody's)'s move → Rating agencies (S&P, Fitch, Moody's)",
+     "Escalate pressure on another actor (campaign, threat, retaliation) → Prime Minister of France",
+     "Counter Conseil constitutionnel's move (Conseil constitutionnel validates PLF 2027's core provisions while censuring se…) → Conseil constitutionnel, Prime Minister of France"
+    ],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Moody's/Fitch follow S&P with negative outlook or downgrade at next scheduled reviews",
+     "Conseil constitutionnel strikes down selected PLF 2027 riders, requiring corrective legislation",
+     "France transmits EDP multiannual trajectory; Commission assessment H1 2027 could open or escalate excessive-deficit steps.",
+     "Fitch/Moody's scheduled reviews could move outlooks to negative given 5.4% EC deficit forecast.",
+     "NFP-pushed censure motions on consequential finance bills (PLFSS, rectificatives) in early 2027 — unlikely to pass absent LR defection."
+    ],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "farther",
+      "from": "adversarial",
+      "polarity": -0.9975,
+      "source": "Rassemblement National",
+      "target": "Prime Minister of France",
+      "to": "adversarial"
+     },
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": 0.2475,
+      "source": "European Commission",
+      "target": "Prime Minister of France",
+      "to": "neutral"
+     },
+     {
+      "direction": "farther",
+      "from": "adversarial",
+      "polarity": -0.42,
+      "source": "Nouveau Front Populaire / left coalition",
+      "target": "Prime Minister of France",
+      "to": "adversarial"
+     },
+     {
+      "from": null,
+      "polarity": -0.27,
+      "source": "Nouveau Front Populaire / left coalition",
+      "target": "Conseil constitutionnel",
+      "to": "adversarial"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "cour_des_comptes_2026_deficit_revision",
+      "name": "cour_des_comptes_2026_deficit_revision",
+      "unit": "percent of GDP",
+      "value": 5.4
+     },
+     {
+      "id": "corrective_budget_required",
+      "name": "corrective_budget_required",
+      "unit": "",
+      "value": true
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 145.0,
+      "id": "10y_oat_bund_spread",
+      "name": "10Y OAT-Bund spread",
+      "to": 140.0,
+      "unit": "bps"
+     },
+     {
+      "from": 4.85,
+      "id": "10y_oat_yield",
+      "name": "10Y OAT yield",
+      "to": 4.8,
+      "unit": "percent"
+     },
+     {
+      "from": 8010.0,
+      "id": "cac_40_close",
+      "name": "CAC 40 close",
+      "to": 8045.0,
+      "unit": "index points"
+     }
+    ]
+   },
+   "digest": "The Conseil's published reasoning confirms PLF 2027 survives in core but with censured riders, requiring a modest corrective loi rectificative. Cour des comptes' 5.4% revision and the 31 January EDP trajectory submission keep fiscal pressure high; markets take modest comfort from procedural clarity, spread tightening slightly. RN escalates anti-Lecornu rhet…\nMoves:\n- Conseil constitutionnel: Issue a public statement or warning: \"The Conseil constitutionnel publishes the full text of its reasoned decision on the referrals concerning the loi de finances pour 2027, ado…\"\n- Banque de France: Issue a public statement or warning: \"Banque de France market monitoring update (data as of 15 January 2027): the 10-year OAT yield stood at 4.85 percent and the OAT-Bund spread…\"\n- Rating agencies (S&P, Fitch, Moody's): Issue a public statement or warning (→ European Commission): \"The agencies note the Conseil constitutionnel's partial censure of certain PLF 2027 provisions and the 31 January 2027 deadline for France'…\"",
+   "headline": "2027-01-H2: 9 decisions · 3 facts changed · 5 events · arbiter=applied · The Conseil's published reasoning confirms PLF 2027 survives in core but with censured riders, requiring a modest corrective loi rectificat…",
+   "narrative": "The Conseil's published reasoning confirms PLF 2027 survives in core but with censured riders, requiring a modest corrective loi rectificative. Cour des comptes' 5.4% revision and the 31 January EDP trajectory submission keep fiscal pressure high; markets take modest comfort from procedural clarity, spread tightening slightly. RN escalates anti-Lecornu rhetoric while NFP attacks the Council, but neither shifts the Assembly arithmetic before the April election.",
+   "period_label": "2027-01-H2",
+   "round": 7,
+   "scenario_pressure": {
+    "Censure and left surge": "down",
+    "Escalation and paralysis": "flat",
+    "Muddle-through austerity": "up",
+    "Stabilisation rebound": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [
+    "non-numeric change for numeric variable 'cour_des_comptes_2026_deficit_revision'"
+   ],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 11,
+    "total": 11
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → French National Assembly, Prime Minister of France",
+     "Accommodate or publicly answer Cour des comptes's move → Cour des comptes",
+     "Issue a public statement or warning",
+     "Accommodate or publicly answer Nouveau Front Populaire / left coalition's move → Nouveau Front Populaire / left coalition",
+     "Publish 2027 Spring Semester EDP progress assessment for France and transmit to Council → Prime Minister of France, Rating agencies (S&P, Fitch, Moody's)",
+     "Issue a public statement or warning",
+     "Accommodate or publicly answer Conseil constitutionnel's move → Conseil constitutionnel",
+     "Escalate pressure on another actor (campaign, threat, retaliation) → Prime Minister of France, French National Assembly",
+     "Accommodate or publicly answer Rassemblement National's move → Rassemblement National",
+     "Issue a public statement or warning → Prime Minister of France, French National Assembly"
+    ],
+    "commitments_lapsed": [
+     "Prime Minister of France: Ensure full and timely implementation and publication of PLF 2027 measures (including deficit reduction path toward 5.4% in 2026 and consolidation in 2027)",
+     "Prime Minister of France: Ensure full and timely implementation and publication of PLF 2027 measures and monitor first-month execution indicators",
+     "Ministère de l'Intérieur / French police: Continue weekly consolidated security bulletins each Monday through 31 January 2027, then transition to standard pre-election security coordination reporting.",
+     "President Emmanuel Macron: Convene parliamentary group leaders for stability consultations by end of January 2027"
+    ],
+    "effects_fired": [
+     "Fitch or Moody's negative outlook/revision following EDP assessment"
+    ],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.5325,
+      "source": "Prime Minister of France",
+      "target": "Les Républicains / centre-right",
+      "to": "allied"
+     },
+     {
+      "direction": "farther",
+      "from": "adversarial",
+      "polarity": -1.0,
+      "source": "Rassemblement National",
+      "target": "Prime Minister of France",
+      "to": "adversarial"
+     },
+     {
+      "direction": "farther",
+      "from": "neutral",
+      "polarity": 0.0975,
+      "source": "European Commission",
+      "target": "Prime Minister of France",
+      "to": "neutral"
+     },
+     {
+      "direction": "farther",
+      "from": "adversarial",
+      "polarity": -0.3975,
+      "source": "Rassemblement National",
+      "target": "French National Assembly",
+      "to": "adversarial"
+     },
+     {
+      "direction": "closer",
+      "from": "adversarial",
+      "polarity": -0.2125,
+      "source": "Nouveau Front Populaire / left coalition",
+      "target": "French National Assembly",
+      "to": "neutral"
+     },
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": -0.0325,
+      "source": "Nouveau Front Populaire / left coalition",
+      "target": "Rassemblement National",
+      "to": "neutral"
+     },
+     {
+      "direction": "closer",
+      "from": "adversarial",
+      "polarity": -0.12,
+      "source": "Nouveau Front Populaire / left coalition",
+      "target": "Conseil constitutionnel",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "rn_censure_motion_feb_2027",
+      "name": "rn_censure_motion_feb_2027",
+      "unit": "",
+      "value": "tabled"
+     },
+     {
+      "id": "nfp_plfr_feb_2027",
+      "name": "nfp_plfr_feb_2027",
+      "unit": "",
+      "value": "announced, drafting"
+     },
+     {
+      "id": "ec_spring_2027_edp_assessment",
+      "name": "ec_spring_2027_edp_assessment",
+      "unit": "",
+      "value": "published, France assessed as non-compliant / insufficient progress"
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 140.0,
+      "id": "10y_oat_bund_spread",
+      "name": "10Y OAT-Bund spread",
+      "to": 138.0,
+      "unit": "bps"
+     },
+     {
+      "from": 8045.0,
+      "id": "cac_40_close",
+      "name": "CAC 40 close",
+      "to": 7990.0,
+      "unit": "index points"
+     },
+     {
+      "from": "A+ / Negative",
+      "id": "sp_outlook_france_nov_2026",
+      "name": "sp_outlook_france_nov_2026",
+      "to": "second agency negative outlook",
+      "unit": ""
+     }
+    ]
+   },
+   "digest": "INSEE confirmed 2026 borrowing at 5.5% of GDP, slightly above the Cour des comptes' 5.4%, while the Commission's Spring EDP assessment and an agency negative outlook kept fiscal pressure on the government. The Conseil constitutionnel's validation of the core PLF 2027 held, but RN's censure motion and the NFP's announced PLFR signal renewed parliamentary con…\nMoves:\n- INSEE: Issue a public statement or warning: \"INSEE publishes, per its statistical calendar, the first estimates for Q4 2026 and full-year 2026: general government net borrowing is esti…\"\n- Cour des comptes: Issue a public statement or warning (→ French National Assembly, Prime Minister of France): \"The Cour des comptes notes the Conseil constitutionnel's decision partially censuring provisions of the loi de finances pour 2027. The cens…\"\n- Rating agencies (S&P, Fitch, Moody's): Accommodate or publicly answer Cour des comptes's move (→ Cour des comptes): \"The agencies note the Cour des comptes' revision of the 2026 general government deficit to 5.4% of GDP, consistent with our surveillance pa…\"",
+   "headline": "2027-02-H1: 11 decisions · 3 facts changed · 5 events · arbiter=applied · INSEE confirmed 2026 borrowing at 5.5% of GDP, slightly above the Cour des comptes' 5.4%, while the Commission's Spring EDP assessment and…",
+   "narrative": "INSEE confirmed 2026 borrowing at 5.5% of GDP, slightly above the Cour des comptes' 5.4%, while the Commission's Spring EDP assessment and an agency negative outlook kept fiscal pressure on the government. The Conseil constitutionnel's validation of the core PLF 2027 held, but RN's censure motion and the NFP's announced PLFR signal renewed parliamentary contestation. Markets stayed tense but orderly; the spread tightened marginally on confirmation the budget is in force.",
+   "period_label": "2027-02-H1",
+   "round": 8,
+   "scenario_pressure": {
+    "Censure and left surge": "flat",
+    "Escalation and paralysis": "up",
+    "Muddle-through austerity": "up",
+    "Stabilisation rebound": "down"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 9,
+    "total": 9
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → Prime Minister of France",
+     "Accommodate or publicly answer Rating agencies (S&P, Fitch, Moody's)'s move → Rating agencies (S&P, Fitch, Moody's)",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → French National Assembly, Prime Minister of France",
+     "Accommodate or publicly answer Cour des comptes's move → Cour des comptes",
+     "Accommodate or publicly answer European Commission's move → European Commission",
+     "Issue a public statement or warning → French National Assembly, Prime Minister of France"
+    ],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Commission EDP progress assessment in Spring package could recommend escalation steps given 5.4% deficit",
+     "Fitch/Moody's scheduled reviews move outlooks to negative or downgrade citing 5.4% deficit and 119% debt",
+     "Corrective rectificative bill for censured PLF provisions faces NFP censure motions",
+     "Did not materialise: RN censure motion vote in Assembly; passage would topple government.",
+     "NFP PLFR tabling and committee examination; unlikely adoption but shapes campaign narrative."
+    ],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "farther",
+      "from": "neutral",
+      "polarity": -0.245,
+      "source": "Nouveau Front Populaire / left coalition",
+      "target": "Rassemblement National",
+      "to": "neutral"
+     },
+     {
+      "from": null,
+      "polarity": 0.15,
+      "source": "Rating agencies (S&P, Fitch, Moody's)",
+      "target": "European Commission",
+      "to": "neutral"
+     },
+     {
+      "from": null,
+      "polarity": -0.15,
+      "source": "President Emmanuel Macron",
+      "target": "Nouveau Front Populaire / left coalition",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "plfr_government_tabling_status",
+      "name": "plfr_government_tabling_status",
+      "unit": "",
+      "value": "announced by Macron, PM drafting"
+     },
+     {
+      "id": "presidential_first_round_date_confirmed",
+      "name": "presidential_first_round_date_confirmed",
+      "unit": "",
+      "value": true
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 138.0,
+      "id": "10y_oat_bund_spread",
+      "name": "10Y OAT-Bund spread",
+      "to": 142.0,
+      "unit": "bps"
+     },
+     {
+      "from": "second agency negative outlook",
+      "id": "sp_outlook_france_nov_2026",
+      "name": "sp_outlook_france_nov_2026",
+      "to": "negative outlook confirmed or downgrade to A",
+      "unit": ""
+     },
+     {
+      "from": "announced, drafting",
+      "id": "nfp_plfr_feb_2027",
+      "name": "nfp_plfr_feb_2027",
+      "to": "tabled, committee examination",
+      "unit": ""
+     }
+    ]
+   },
+   "digest": "Communication-heavy period with no binding decisions. Commission Spring assessment finds France non-compliant (5.5% of 2026 deficit estimate), prompting Macron to demand a PLFR and rating agencies to signal negative outlooks; Banque de France notes markets orderly despite 138bp spread. INSEE confirms 2026 borrowing near 5.4% GDP; Conseil constitutionnel fix…\nMoves:\n- Banque de France: Issue a public statement or warning: \"Banque de France market monitoring update (data as of 15 February 2027): the 10-year OAT yield stood at 4.80 percent and the 10-year OAT-Bu…\"\n- European Commission: Issue a public statement or warning (→ Prime Minister of France): \"The Commission has transmitted to the Council and the French authorities its assessment under the 2027 Spring Semester: France's net borrow…\"\n- Cour des comptes: Accommodate or publicly answer Rating agencies (S&P, Fitch, Moody's)'s move (→ Rating agencies (S&P, Fitch, Moody's)): \"The Cour des comptes takes note of the rating agencies' assessments referencing its 5.4% of GDP revision of the 2026 general government def…\"",
+   "headline": "2027-02-H2: 9 decisions · 3 facts changed · 5 events · arbiter=applied · Communication-heavy period with no binding decisions. Commission Spring assessment finds France non-compliant (5.5% of 2026 deficit estimat…",
+   "narrative": "Communication-heavy period with no binding decisions. Commission Spring assessment finds France non-compliant (5.5% of 2026 deficit estimate), prompting Macron to demand a PLFR and rating agencies to signal negative outlooks; Banque de France notes markets orderly despite 138bp spread. INSEE confirms 2026 borrowing near 5.4% GDP; Conseil constitutionnel fixes the electoral calendar (first round 18 April 2027), hardening the campaign frame around fiscal credibility.",
+   "period_label": "2027-02-H2",
+   "round": 9,
+   "scenario_pressure": {
+    "Censure and left surge": "flat",
+    "Escalation and paralysis": "up",
+    "Muddle-through austerity": "up",
+    "Stabilisation rebound": "down"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 11,
+    "total": 11
+   },
+   "deterministic": {
+    "actions": [
+     "Accommodate or publicly answer French National Assembly's move → French National Assembly",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → Rassemblement National, French National Assembly",
+     "Accommodate or publicly answer Cour des comptes's move → Cour des comptes",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → Prime Minister of France, French National Assembly",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → Prime Minister of France, European Commission",
+     "Accommodate or publicly answer European Commission's move → European Commission"
+    ],
+    "commitments_lapsed": [
+     "Rassemblement National: Escalate pressure on another actor (campaign, threat, retaliation) (announced)"
+    ],
+    "effects_fired": [
+     "Commission EDP progress assessment: significant deviation finding likely given 5.4% deficit vs path",
+     "Did not materialise: Possible agency downgrade (one-notch) if EDP non-compliance formalised by Council.",
+     "Corrective budget (PLFR) becomes necessary as constitutional censures open a revenue/expenditure hole.",
+     "Government PLFR presented to Council of Ministers and first Assembly reading amid censure threats."
+    ],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.6525,
+      "source": "Prime Minister of France",
+      "target": "Les Républicains / centre-right",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": 0.2475,
+      "source": "European Commission",
+      "target": "Prime Minister of France",
+      "to": "neutral"
+     },
+     {
+      "direction": "farther",
+      "from": "neutral",
+      "polarity": -0.47,
+      "source": "Nouveau Front Populaire / left coalition",
+      "target": "Rassemblement National",
+      "to": "adversarial"
+     },
+     {
+      "from": null,
+      "polarity": -0.15,
+      "source": "Rassemblement National",
+      "target": "European Commission",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "riots_insured_losses_final_2026",
+      "name": "riots_insured_losses_final_2026",
+      "unit": "million EUR",
+      "value": 240.0
+     },
+     {
+      "id": "bdf_2027_growth_forecast",
+      "name": "bdf_2027_growth_forecast",
+      "unit": "percent",
+      "value": 0.8
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 142.0,
+      "id": "10y_oat_bund_spread",
+      "name": "10Y OAT-Bund spread",
+      "to": 138.0,
+      "unit": "bps"
+     },
+     {
+      "from": true,
+      "id": "corrective_budget_required",
+      "name": "corrective_budget_required",
+      "to": "yes — PLFR required following partial censures",
+      "unit": ""
+     },
+     {
+      "from": "tabled",
+      "id": "rn_censure_motion_feb_2027",
+      "name": "rn_censure_motion_feb_2027",
+      "to": "tabled, rejected below 289 threshold",
+      "unit": ""
+     },
+     {
+      "from": "announced by Macron, PM drafting",
+      "id": "plfr_government_tabling_status",
+      "name": "plfr_government_tabling_status",
+      "to": "tabled, first Assembly reading underway amid 49.3 threat",
+      "unit": ""
+     }
+    ]
+   },
+   "digest": "Institutional communications dominated a tense but non-explosive fortnight: Cour des comptes, Commission, Banque de France and agencies converged on a 5.4% deficit narrative, hardening the EDP/corrective-budget track while markets stayed orderly. The February RN censure motion failed to clear 289 (per Assembly scrutiny records), but NFP and RN escalatory st…\nMoves:\n- Cour des comptes: Accommodate or publicly answer French National Assembly's move (→ French National Assembly): \"The Cour des comptes takes note of the National Assembly's references to its work in the February budget debates. The Cour recalls that its…\"\n- INSEE: Issue a public statement or warning: \"INSEE publishes, per its statistical calendar, the February 2027 consumer price index (first estimate: provisional, subject to revision) an…\"\n- Conseil constitutionnel: Issue a public statement or warning (→ Rassemblement National, French National Assembly): \"The Conseil constitutionnel takes note of the censure motion tabled in the National Assembly in February 2027. It recalls that, in accordan…\"",
+   "headline": "2027-03-H1: 11 decisions · 4 facts changed · 4 events · arbiter=applied · Institutional communications dominated a tense but non-explosive fortnight: Cour des comptes, Commission, Banque de France and agencies con…",
+   "narrative": "Institutional communications dominated a tense but non-explosive fortnight: Cour des comptes, Commission, Banque de France and agencies converged on a 5.4% deficit narrative, hardening the EDP/corrective-budget track while markets stayed orderly. The February RN censure motion failed to clear 289 (per Assembly scrutiny records), but NFP and RN escalatory statements kept political pressure high ahead of April's first round. Insurers closed out riot claims near-final, removing a fiscal tail risk.",
+   "period_label": "2027-03-H1",
+   "round": 10,
+   "scenario_pressure": {
+    "Censure and left surge": "down",
+    "Escalation and paralysis": "flat",
+    "Muddle-through austerity": "up",
+    "Stabilisation rebound": "flat"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 9,
+    "total": 9
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning → French National Assembly, Ministère de l'Intérieur / French police",
+     "Accommodate or publicly answer Prime Minister of France's move → Prime Minister of France",
+     "Issue a public statement or warning → Rating agencies (S&P, Fitch, Moody's), French National Assembly",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Accommodate or publicly answer Cour des comptes's move → Cour des comptes",
+     "Issue a public statement or warning → European Commission, Prime Minister of France",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → Prime Minister of France"
+    ],
+    "commitments_lapsed": [
+     "Ministère de l'Intérieur / French police: Publish the first standard pre-election security coordination report by end of February 2027 and maintain inter-force coordination through the first round of the presidential election."
+    ],
+    "effects_fired": [
+     "Did not materialise: S&P outlook pressure persists; downgrade to A possible if trajectory judged implausible",
+     "Did not materialise: ECB/spread repricing if EDP escalation to Council recommendations or agency downgrade materialises.",
+     "Did not materialise: RN tabled censure motion gains traction if PLFR perceived as austerity; government survival contested.",
+     "PLFR adoption path: 49.3 engagement with censure risk"
+    ],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": 0.3975,
+      "source": "European Commission",
+      "target": "Prime Minister of France",
+      "to": "allied"
+     },
+     {
+      "from": null,
+      "polarity": 0.15,
+      "source": "Cour des comptes",
+      "target": "Rating agencies (S&P, Fitch, Moody's)",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "election_calendar_constitutionally_confirmed",
+      "name": "election_calendar_constitutionally_confirmed",
+      "unit": "",
+      "value": "yes, first round 18 April 2027 unaffected by budget proceedings"
+     },
+     {
+      "id": "riot_claims_settlement_rate",
+      "name": "riot_claims_settlement_rate",
+      "unit": "percent of declared com…",
+      "value": 96.0
+     },
+     {
+      "id": "rn_preelectoral_framing",
+      "name": "rn_preelectoral_framing",
+      "unit": "",
+      "value": "deficit and 49.3 governance as central campaign themes"
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": "tabled, first Assembly reading underway amid 49.3 threat",
+      "id": "plfr_government_tabling_status",
+      "name": "plfr_government_tabling_status",
+      "to": "engaged via 49.3 or adopted after negotiation",
+      "unit": ""
+     }
+    ]
+   },
+   "digest": "The final pre-election fortnick was dominated by positioning rather than institutional change. The Conseil constitutionnel confirmed the 18 April first round, insulating the electoral calendar from the budget crisis. The Commission's accommodating tone and the Cour des comptes' publication calendar reassured markets (spread stable at 138 bps, CAC near 7990)…\nMoves:\n- Conseil constitutionnel: Issue a public statement or warning (→ French National Assembly, Ministère de l'Intérieur / French police): \"The Conseil constitutionnel recalls that the first round of the presidential election will be held on 18 April 2027 pursuant to its decisio…\"\n- European Commission: Accommodate or publicly answer Prime Minister of France's move (→ Prime Minister of France): \"The Commission takes note of the French authorities' response to its Spring 2027 assessment. The Commission reiterates its readiness to pur…\"",
+   "headline": "2027-03-H2: 9 decisions · 1 facts changed · 4 events · arbiter=applied · The final pre-election fortnick was dominated by positioning rather than institutional change. The Conseil constitutionnel confirmed the 18…",
+   "narrative": "The final pre-election fortnick was dominated by positioning rather than institutional change. The Conseil constitutionnel confirmed the 18 April first round, insulating the electoral calendar from the budget crisis. The Commission's accommodating tone and the Cour des comptes' publication calendar reassured markets (spread stable at 138 bps, CAC near 7990), while RN exploited the 5.4% deficit and EDP non-compliance record one month before the vote. Insurance claims from the October 2026 riots closed out with no fiscal spillover.",
+   "period_label": "2027-03-H2",
+   "round": 11,
+   "scenario_pressure": {
+    "Censure and left surge": "flat",
+    "Escalation and paralysis": "flat",
+    "Muddle-through austerity": "up",
+    "Stabilisation rebound": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [
+    "non-numeric change for numeric variable 'cour_des_comptes_2026_deficit_revision'",
+    "unknown relationship direction 'flat'"
+   ],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 11,
+    "total": 11
+   },
+   "deterministic": {
+    "actions": [
+     "Accommodate or publicly answer Rating agencies (S&P, Fitch, Moody's)'s move → Rating agencies (S&P, Fitch, Moody's)",
+     "Issue a public statement or warning → French National Assembly, European Commission",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → Ministère de l'Intérieur / French police, French National Assembly",
+     "Issue a public statement or warning → Rating agencies (S&P, Fitch, Moody's), French National Assembly, European Commission",
+     "Accommodate or publicly answer Conseil constitutionnel's move → Conseil constitutionnel",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → Prime Minister of France, French National Assembly",
+     "Issue a public statement or warning → French National Assembly, Prime Minister of France",
+     "Issue a public statement or warning → Rassemblement National, Prime Minister of France",
+     "Table the PLFR corrective finance bill before the National Assembly → French National Assembly, European Commission"
+    ],
+    "commitments_lapsed": [
+     "President Emmanuel Macron: PLFR to be tabled by the government and brought to a vote in the National Assembly before end of March 2027.",
+     "Nouveau Front Populaire / left coalition: Sustain the censure vote push and finalize a single NFP presidential candidacy by end of March 2027."
+    ],
+    "effects_fired": [
+     "Did not materialise: Possible one-notch agency downgrade after Council formalises EDP deviation",
+     "Did not materialise: Cour des comptes spring report could revise 2027 trajectory worse than government path",
+     "Did not materialise: Cour des comptes certified accounts and updated trajectory publication; possible rating action if trajectory judged implausible",
+     "First-round election outcome resolves RN framing effectiveness and PLFR censure calculus",
+     "INSEE final 2026 accounts confirm weak growth, supporting deficit-stickiness narrative"
+    ],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.8325,
+      "source": "Prime Minister of France",
+      "target": "Les Républicains / centre-right",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.63,
+      "source": "European Commission",
+      "target": "Prime Minister of France",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": -0.085,
+      "source": "Nouveau Front Populaire / left coalition",
+      "target": "French National Assembly",
+      "to": "neutral"
+     },
+     {
+      "from": null,
+      "polarity": -0.15,
+      "source": "Cour des comptes",
+      "target": "Prime Minister of France",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "plfr_vote_timing",
+      "name": "plfr_vote_timing",
+      "unit": "",
+      "value": "deferred until after 18 April first round"
+     },
+     {
+      "id": "nfp_single_candidacy_status",
+      "name": "nfp_single_candidacy_status",
+      "unit": "",
+      "value": "confirmed"
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 138.0,
+      "id": "10y_oat_bund_spread",
+      "name": "10Y OAT-Bund spread",
+      "to": 145.0,
+      "unit": "bps"
+     },
+     {
+      "from": "engaged via 49.3 or adopted after negotiation",
+      "id": "plfr_government_tabling_status",
+      "name": "plfr_government_tabling_status",
+      "to": "tabled before first round; examination deferred to post-election Assembly session",
+      "unit": ""
+     }
+    ]
+   },
+   "digest": "The Cour des comptes spring report revised the 2027 trajectory to 5.5% of GDP (worse than government's 5.0%), but rating agencies held fire pending scheduled reviews, and no downgrade materialised. The government tabled the PLFR before the first round, while Macron's call for a pre-election vote went unheeded as the Assembly suspended plenary sittings until…\nMoves:\n- European Commission: Accommodate or publicly answer Rating agencies (S&P, Fitch, Moody's)'s move (→ Rating agencies (S&P, Fitch, Moody's)): \"The Commission takes note of recent rating agency communications on France. The Commission's assessment is based on the EDP framework and t…\"\n- Rating agencies (S&P, Fitch, Moody's): Issue a public statement or warning (→ French National Assembly, European Commission): \"Rating agencies remind investors of the scheduled review calendar for French sovereign ratings in 2027 (S&P, Fitch, Moody's), noting that a…\"",
+   "headline": "2027-04-H1: 11 decisions · 2 facts changed · 4 events · arbiter=applied · The Cour des comptes spring report revised the 2027 trajectory to 5.5% of GDP (worse than government's 5.0%), but rating agencies held fire…",
+   "narrative": "The Cour des comptes spring report revised the 2027 trajectory to 5.5% of GDP (worse than government's 5.0%), but rating agencies held fire pending scheduled reviews, and no downgrade materialised. The government tabled the PLFR before the first round, while Macron's call for a pre-election vote went unheeded as the Assembly suspended plenary sittings until after 18 April. RN amplified deficit/49.3 framing; the NFP confirmed a single candidacy. Markets stayed tense but orderly (spread ~138-145bp).",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "scenario_pressure": {
+    "Censure and left surge": "flat",
+    "Escalation and paralysis": "up",
+    "Muddle-through austerity": "flat",
+    "Stabilisation rebound": "down"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [
+    "non-numeric change for numeric variable 'cour_des_comptes_2026_deficit_revision'",
+    "non-numeric change for numeric variable 'riot_claims_settlement_rate'"
+   ],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 12,
+    "total": 12
+   },
+   "deterministic": {
+    "actions": [
+     "Issue a public statement or warning → Ministère de l'Intérieur / French police, French National Assembly",
+     "Accommodate or publicly answer Cour des comptes's move → Cour des comptes",
+     "Issue a public statement or warning → French National Assembly, Prime Minister of France",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning",
+     "Accommodate or publicly answer Cour des comptes's move → Cour des comptes",
+     "Issue a public statement or warning",
+     "Accommodate or publicly answer Rating agencies (S&P, Fitch, Moody's)'s move → Rating agencies (S&P, Fitch, Moody's)",
+     "Issue a public statement or warning → French National Assembly, Prime Minister of France",
+     "Issue a public statement or warning → Rassemblement National",
+     "Counter Nouveau Front Populaire / left coalition's move (Issue a public statement or warning → Rassemblement National, Prime Minister of…) → Nouveau Front Populaire / left coalition",
+     "Counter Rassemblement National's move (Issue a public statement or warning → Prime Minister of France, French National…) → Rassemblement National"
+    ],
+    "commitments_lapsed": [
+     "French insurers and reinsurers (FFA, CCR, Scor): Publish the complete final claims-settlement report for the October 2026 unrest by end of Q2 2027, on track with this interim release."
+    ],
+    "effects_fired": [
+     "Post-election PLFR vote: passage, negotiated amendment, or censure depending on first-round result",
+     "INSEE definitive 2026 deficit/debt publication 30 April"
+    ],
+    "scheduled_events": [
+     "[2027-04-18] First round of the French presidential election scheduled"
+    ]
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "farther",
+      "from": "adversarial",
+      "polarity": -0.7475,
+      "source": "Nouveau Front Populaire / left coalition",
+      "target": "Rassemblement National",
+      "to": "adversarial"
+     },
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": 0.3,
+      "source": "Cour des comptes",
+      "target": "Rating agencies (S&P, Fitch, Moody's)",
+      "to": "allied"
+     },
+     {
+      "from": null,
+      "polarity": 0.15,
+      "source": "European Commission",
+      "target": "Cour des comptes",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "presidential_first_round_held",
+      "name": "presidential_first_round_held",
+      "unit": "",
+      "value": "yes, 18 April 2027, results transmission to Conseil constitutionnel under way"
+     },
+     {
+      "id": "plfr_postelection_vote_window",
+      "name": "plfr_postelection_vote_window",
+      "unit": "",
+      "value": "by mid-May 2027 per presidential commitment"
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 145.0,
+      "id": "10y_oat_bund_spread",
+      "name": "10Y OAT-Bund spread",
+      "to": 148.0,
+      "unit": "bps"
+     },
+     {
+      "from": "tabled before first round; examination deferred to post-election Assembly session",
+      "id": "plfr_government_tabling_status",
+      "name": "plfr_government_tabling_status",
+      "to": "post-election vote outcome pending",
+      "unit": ""
+     },
+     {
+      "from": "deferred until after 18 April first round",
+      "id": "plfr_vote_timing",
+      "name": "plfr_vote_timing",
+      "to": "government committed to vote within one month post-first-round (mid-May 2027); examination resuming",
+      "unit": ""
+     }
+    ]
+   },
+   "digest": "The first round proceeded on 18 April as constitutionally confirmed, with the Conseil constitutionnel receiving tallies normally. Fiscal pressure intensified rather than eased: the Cour des comptes' certified 5.5% 2027 deficit estimate, the Commission's non-compliant EDP stance and rating agencies' explicit incorporation of the worse figures kept the OAT-Bu…\nMoves:\n- Conseil constitutionnel: Issue a public statement or warning (→ Ministère de l'Intérieur / French police, French National Assembly): \"The Conseil constitutionnel announces that, following the first round of the presidential election held on 18 April 2027 in accordance with…\"\n- European Commission: Accommodate or publicly answer Cour des comptes's move (→ Cour des comptes): \"The Commission takes note of the certification of France's 2026 accounts and the Cour des comptes' revised 2027 deficit estimate of 5.5% of…\"",
+   "headline": "2027-04-H2: 12 decisions · 3 facts changed · 5 events · arbiter=applied · The first round proceeded on 18 April as constitutionally confirmed, with the Conseil constitutionnel receiving tallies normally. Fiscal pr…",
+   "narrative": "The first round proceeded on 18 April as constitutionally confirmed, with the Conseil constitutionnel receiving tallies normally. Fiscal pressure intensified rather than eased: the Cour des comptes' certified 5.5% 2027 deficit estimate, the Commission's non-compliant EDP stance and rating agencies' explicit incorporation of the worse figures kept the OAT-Bund spread near 145bp, though markets stayed orderly. Macron's post-election push to bring the PLFR to a vote within a month met a deferred but not hostile Assembly, leaving resolution to the post-election session. INSEE confirmed definitive 2026 accounts for 30 April.",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "scenario_pressure": {
+    "Censure and left surge": "flat",
+    "Escalation and paralysis": "flat",
+    "Muddle-through austerity": "up",
+    "Stabilisation rebound": "down"
+   }
+  }
+ ],
+ "horizon_date": "2027-04-30",
+ "interactions": [],
+ "pending_effects": [
+  {
+   "actor_id": null,
+   "created_round": 12,
+   "description": "Rating review action after election and INSEE definitive 2026 accounts",
+   "due_round": 14,
+   "id": "fx12_35",
+   "op": "set",
+   "probability": 0.35,
+   "source": "arbiter",
+   "targets": [],
+   "value": null,
+   "variable_id": null
+  },
+  {
+   "actor_id": null,
+   "created_round": 13,
+   "description": "PLFR vote in post-election Assembly session — passage, amended passage, or censure depending on runoff outcome and new Assembly arithmetic.",
+   "due_round": 14,
+   "id": "fx13_38",
+   "op": "set",
+   "probability": 0.75,
+   "source": "arbiter",
+   "targets": [],
+   "value": "voted or censured in extraordinary session",
+   "variable_id": "plfr_government_tabling_status"
+  },
+  {
+   "actor_id": null,
+   "created_round": 13,
+   "description": "INSEE definitive 2026 deficit/debt publication on 30 April could revise figures, feeding EDP and rating reviews.",
+   "due_round": 14,
+   "id": "fx13_39",
+   "op": "set",
+   "probability": 0.9,
+   "source": "arbiter",
+   "targets": [],
+   "value": null,
+   "variable_id": null
+  },
+  {
+   "actor_id": null,
+   "created_round": 13,
+   "description": "Rating action (outlook cut or downgrade) at next review following certified 5.5% path and EDP non-compliance.",
+   "due_round": 15,
+   "id": "fx13_40",
+   "op": "set",
+   "probability": 0.45,
+   "source": "arbiter",
+   "targets": [],
+   "value": "downgrade or further negative outlook action",
+   "variable_id": "sp_outlook_france_nov_2026"
+  },
+  {
+   "actor_id": null,
+   "created_round": 13,
+   "description": "EC spring EDP step: recommendation of intensified scrutiny or financial-penalty track for France.",
+   "due_round": 15,
+   "id": "fx13_41",
+   "op": "set",
+   "probability": 0.6,
+   "source": "arbiter",
+   "targets": [],
+   "value": "non-compliant, next steps proposed",
+   "variable_id": "ec_spring_2027_edp_assessment"
+  }
+ ],
+ "period": {
+  "label": "2027-04-H2",
+  "period_end": "2027-04-30",
+  "period_start": "2027-04-16",
+  "round": 12
+ },
+ "question": "Forecast the outcome of France budgetary and political crisis through the first round of the presidential election in April 2027, explicitly incorporating the recent French riots and their likely fiscal, market, and electoral ramifications. Deliver calibrated probabilities with objective resolution criteria for: (1) Fiscal path - whether the 2027 loi de finances is enacted before 31 December 2026…",
+ "recent_events": [
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Rating agencies (S&P, Fitch, Moody's)"
+   ],
+   "description": "Issue a public statement or warning → French National Assembly, European Commission",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "decision",
+   "statement": "Rating agencies remind investors of the scheduled review calendar for French sovereign ratings in 2027 (S&P, Fitch, Moody's), noting that assessments remain in progress and no conclusions will be pre-announced. Our frameworks incorporate observable data: OAT-Bund spread at 138 bps, debt at 119.0% of GDP (end-Q2 2026),…",
+   "targets": [
+    "French National Assembly",
+    "European Commission"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Banque de France"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "decision",
+   "statement": "Ahead of the first round of the presidential election on 18 April 2027, the Banque de France confirms that market infrastructures and payment systems under its oversight are operating normally; our monitoring shows the 10-year OAT-Bund spread at 138 basis points as of end-March 2027 (data: Banque de France/Bundesbank,…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Conseil constitutionnel"
+   ],
+   "description": "Issue a public statement or warning → Ministère de l'Intérieur / French police, French National Assembly",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "decision",
+   "statement": "The Conseil constitutionnel announces that, in accordance with its decision setting the election calendar, the first round of the presidential election will be held on 18 April 2027. The Council has received the campaign accounts and declarations and reminds all parties that it will rule on complaints and on the regul…",
+   "targets": [
+    "Ministère de l'Intérieur / French police",
+    "French National Assembly"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Cour des comptes"
+   ],
+   "description": "Issue a public statement or warning → Rating agencies (S&P, Fitch, Moody's), French National Assembly, European Commission",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "decision",
+   "statement": "The Cour des comptes publishes its spring report: certification of the 2026 public accounts is issued with observations, and the updated 2027 deficit trajectory is revised to 5.5 percent of GDP under unchanged policies, versus the 5.0 percent target retained in the PLF 2027. The report notes that the gap rests primari…",
+   "targets": [
+    "Rating agencies (S&P, Fitch, Moody's)",
+    "French National Assembly",
+    "European Commission"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "French National Assembly"
+   ],
+   "description": "Accommodate or publicly answer Conseil constitutionnel's move → Conseil constitutionnel",
+   "kind": "action",
+   "option_id": "respond_3_accommodate",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "decision",
+   "statement": "The Bureau of the National Assembly takes note of the Conseil constitutionnel's decision confirming the first round of the presidential election on 18 April 2027. In accordance with the Rules of Procedure, plenary sittings scheduled after 10 April are suspended until after the second round, with committee work on the…",
+   "targets": [
+    "Conseil constitutionnel"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "INSEE"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "decision",
+   "statement": "INSEE announces, pursuant to its pre-released statistical calendar, the publication on 30 April 2027 of the first complete annual national accounts for 2026, including the definitive general government deficit and debt figures for the 2026 fiscal year. All figures are provisional estimates subject to later revision; m…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Rassemblement National"
+   ],
+   "description": "Issue a public statement or warning → Prime Minister of France, French National Assembly",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "decision",
+   "statement": "With 18 April approaching, the record speaks for itself: three governments, every budget forced through by 49.3, a 5.4% deficit, a negative outlook from the rating agencies, and a European Commission verdict of non-compliance. The same elites who mismanaged France's finances now ask for your trust. On 18 April, vote t…",
+   "targets": [
+    "Prime Minister of France",
+    "French National Assembly"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "President Emmanuel Macron"
+   ],
+   "description": "Issue a public statement or warning → French National Assembly, Prime Minister of France",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "decision",
+   "statement": "As the nation prepares to vote on 18 April, I call on all political forces to act responsibly: the PLFR must be examined and voted in the Assembly without delay after the election, in the framework of our institutions. I reaffirm that the Constitution's calendar is fixed, that the Republic's finances will be honoured,…",
+   "targets": [
+    "French National Assembly",
+    "Prime Minister of France"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Nouveau Front Populaire / left coalition"
+   ],
+   "description": "Issue a public statement or warning → Rassemblement National, Prime Minister of France",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "decision",
+   "statement": "The Nouveau Front Populaire confirms its united presidential candidacy and calls for a massive republican mobilisation against the far right on 18 April. We pledge to repeal the austerity of the 49.3-imposed budgets, raise the minimum wage, freeze prices on essentials, and restore public services — funded by tax justi…",
+   "targets": [
+    "Rassemblement National",
+    "Prime Minister of France"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "policy",
+   "actors": [
+    "Prime Minister of France"
+   ],
+   "description": "Table the PLFR corrective finance bill before the National Assembly → French National Assembly, European Commission",
+   "kind": "action",
+   "option_id": "custom",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "decision",
+   "statement": "In an acte de responsabilité, the government tables the PLFR today to correct our 2027 trajectory in line with our European commitments: targeted savings and measures that bring the deficit onto a credible path without breaking growth, which the Banque de France confirms at 0.8 percent. We ask the Assembly to judge it…",
+   "targets": [
+    "French National Assembly",
+    "European Commission"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "Did not materialise: Possible one-notch agency downgrade after Council formalises EDP deviation",
+   "kind": "consequence",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "Did not materialise: Cour des comptes spring report could revise 2027 trajectory worse than government path",
+   "kind": "consequence",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "Did not materialise: Cour des comptes certified accounts and updated trajectory publication; possible rating action if trajectory judged implausible",
+   "kind": "consequence",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "First-round election outcome resolves RN framing effectiveness and PLFR censure calculus",
+   "kind": "consequence",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "INSEE final 2026 accounts confirm weak growth, supporting deficit-stickiness narrative",
+   "kind": "consequence",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Cour des comptes"
+   ],
+   "description": "Cour des comptes certifies 2026 accounts with observations; revises 2027 deficit to 5.5% of GDP, above government's 5.0% path",
+   "kind": "consequence",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [
+    "Rating agencies (S&P, Fitch, Moody's)",
+    "European Commission",
+    "French National Assembly"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Rating agencies (S&P, Fitch, Moody's)"
+   ],
+   "description": "Rating agencies confirm scheduled 2027 review calendar, no pre-announced conclusions; OAT-Bund spread widens modestly to ~145bp",
+   "kind": "consequence",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [
+    "Prime Minister of France"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Prime Minister of France",
+    "French National Assembly"
+   ],
+   "description": "PLFR tabled but no vote before first round; Assembly suspends plenary sittings",
+   "kind": "resolution",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [
+    "European Commission"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Rassemblement National",
+    "Nouveau Front Populaire / left coalition"
+   ],
+   "description": "RN launches final pre-first-round salvo on deficit, 49.3 and non-compliance; NFP counters with unified candidacy and anti-austerity platform",
+   "kind": "emergent",
+   "period_label": "2027-04-H1",
+   "round": 12,
+   "source": "arbiter",
+   "targets": [
+    "Prime Minister of France"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Conseil constitutionnel"
+   ],
+   "description": "[2027-04-18] First round of the French presidential election scheduled",
+   "kind": "scheduled",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "research_timeline",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "French insurers and reinsurers (FFA, CCR, Scor)"
+   ],
+   "description": "French insurers and reinsurers (FFA, CCR, Scor)'s commitment lapsed: Publish the complete final claims-settlement report for the October 2026 unrest by end of Q2 2027, on track with this interim release.",
+   "kind": "consequence",
+   "round": 13,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Conseil constitutionnel"
+   ],
+   "description": "Issue a public statement or warning → Ministère de l'Intérieur / French police, French National Assembly",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "decision",
+   "statement": "The Conseil constitutionnel announces that, following the first round of the presidential election held on 18 April 2027 in accordance with the constitutionally confirmed calendar, it has received the vote tallies transmitted by the Ministry of the Interior, reviewed their regularity, and will publish the official pro…",
+   "targets": [
+    "Ministère de l'Intérieur / French police",
+    "French National Assembly"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "European Commission"
+   ],
+   "description": "Accommodate or publicly answer Cour des comptes's move → Cour des comptes",
+   "kind": "action",
+   "option_id": "respond_2_accommodate",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "decision",
+   "statement": "The Commission takes note of the certification of France's 2026 accounts and the Cour des comptes' revised 2027 deficit estimate of 5.5% of GDP. The Commission's assessment under the Excessive Deficit Procedure will draw on all available independent data, including its forthcoming 2027 Spring Forecast, and will be con…",
+   "targets": [
+    "Cour des comptes"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Cour des comptes"
+   ],
+   "description": "Issue a public statement or warning → French National Assembly, Prime Minister of France",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "decision",
+   "statement": "The Cour des comptes notes that the first round of the presidential election was held on 18 April 2027 and that examination of the PLFR remains deferred to the post-election Assembly session. The Cour recalls its published figures — a 2026 deficit of 5.4% of GDP and debt of 119.0% of GDP at end-Q2 2026 — and confirms…",
+   "targets": [
+    "French National Assembly",
+    "Prime Minister of France"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "INSEE"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "decision",
+   "statement": "INSEE confirms the publication of the first complete 2026 annual national accounts on 30 April 2027 at 8:30 CET (insee.fr), covering general government deficit and debt (Maastricht口径) and GDP, with full methodology notes and revision flags for provisional and semi-final estimates. Monthly CPI and employment indicators…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Banque de France"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "decision",
+   "statement": "Following the first round of the presidential election on 18 April 2027, the Banque de France notes that French sovereign debt markets have continued to function in an orderly manner, with the 10-year OAT-Bund spread at 145 basis points as of 15 April (Banque de France/Bundesbank data). In line with our mandate, we re…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Rating agencies (S&P, Fitch, Moody's)"
+   ],
+   "description": "Accommodate or publicly answer Cour des comptes's move → Cour des comptes",
+   "kind": "action",
+   "option_id": "respond_3_accommodate",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "decision",
+   "statement": "We take note of the Cour des comptes' certification of the 2026 accounts and its revised 2027 deficit estimate of 5.5% of GDP, above the government's 5.0% path. This independent fiscal data will be incorporated into our analytical framework; our scheduled French sovereign review calendar remains unchanged, and no conc…",
+   "targets": [
+    "Cour des comptes"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "French insurers and reinsurers (FFA, CCR, Scor)"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "decision",
+   "statement": "FFA, CCR and Scor publish the final claims-settlement report for the October 2026 unrest: total insured losses confirmed at 240 million EUR, with 96% of declared claims fully settled as of 15 April 2027. Remaining files are expected to close by end of Q2 2027. The industry confirms its statutory role in loss quantific…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "French National Assembly"
+   ],
+   "description": "Accommodate or publicly answer Rating agencies (S&P, Fitch, Moody's)'s move → Rating agencies (S&P, Fitch, Moody's)",
+   "kind": "action",
+   "option_id": "respond_1_accommodate",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "decision",
+   "statement": "The National Assembly takes note of the rating agencies' communications regarding their 2027 review calendar. The Assembly notes that examination of the PLFR 2027 was deferred until after the first round of the presidential election on 18 April 2027, in accordance with the confirmed constitutional calendar, and reaffi…",
+   "targets": [
+    "Rating agencies (S&P, Fitch, Moody's)"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "President Emmanuel Macron"
+   ],
+   "description": "Issue a public statement or warning → French National Assembly, Prime Minister of France",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "decision",
+   "statement": "Now that the first round is behind us, the Republic must return to the work of the nation. I call on all political forces to resume examination of the PLFR immediately; the government will bring it to a vote within one month, and I ask every group to choose responsibility over obstruction. Order, stability and the cre…",
+   "targets": [
+    "French National Assembly",
+    "Prime Minister of France"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Nouveau Front Populaire / left coalition"
+   ],
+   "description": "Issue a public statement or warning → Rassemblement National",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "decision",
+   "statement": "On 18 April, the choice is clear: the politics of austerity, 49.3 and deficit obsession that looted the country's social fabric, or the united NFP programme of tax justice, wage increases and protected public services. We call on every voter to block the far right and vote massively for the single NFP candidacy on Sun…",
+   "targets": [
+    "Rassemblement National"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "coercive",
+   "actors": [
+    "Rassemblement National"
+   ],
+   "description": "Counter Nouveau Front Populaire / left coalition's move (Issue a public statement or warning → Rassemblement National, Prime Minister of…) → Nouveau Front Populaire / left coalition",
+   "kind": "action",
+   "option_id": "respond_1_counter",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "decision",
+   "statement": "As the first round approaches, the far left lectures France while its own record speaks: record deficits of 5.4% of GDP, budgets imposed by 49.3, and cities set ablaze in October. We are the only force offering order, borders, and French people first. On 18 April, the choice is between the chaos of the system and the…",
+   "targets": [
+    "Nouveau Front Populaire / left coalition"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "coercive",
+   "actors": [
+    "Prime Minister of France"
+   ],
+   "description": "Counter Rassemblement National's move (Issue a public statement or warning → Prime Minister of France, French National…) → Rassemblement National",
+   "kind": "action",
+   "option_id": "respond_1_counter",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "decision",
+   "statement": "The RN campaigns on the deficit and 49.3 while proposing neither a single credible saving nor a parliamentary majority: their arithmetic would add tens of billions to debt the markets already price at 145 basis points over Bunds. My government has protected the republican order, settled 96% of riot claims, and tabled…",
+   "targets": [
+    "Rassemblement National"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "Post-election PLFR vote: passage, negotiated amendment, or censure depending on first-round result",
+   "kind": "consequence",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "plfr_government_tabling_status"
+   ]
+  },
+  {
+   "actors": [],
+   "description": "INSEE definitive 2026 deficit/debt publication 30 April",
+   "kind": "consequence",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Conseil constitutionnel",
+    "Ministère de l'Intérieur / French police"
+   ],
+   "description": "First round held on schedule; Conseil constitutionnel receives tallies and begins certification.",
+   "kind": "resolution",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Rating agencies (S&P, Fitch, Moody's)",
+    "European Commission"
+   ],
+   "description": "Rating agencies and Commission publicly incorporate Cour des comptes' 5.5% 2027 deficit estimate, hardening EDP non-compliance narrative ahead of spring assessment.",
+   "kind": "consequence",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [
+    "Cour des comptes"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Banque de France"
+   ],
+   "description": "OAT-Bund spread widens modestly to ~148bp post-first-round amid runoff uncertainty and fiscal data; markets orderly per Banque de France.",
+   "kind": "consequence",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "President Emmanuel Macron"
+   ],
+   "description": "Macron demands immediate resumption of PLFR examination with vote within one month.",
+   "kind": "consequence",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [
+    "French National Assembly",
+    "Prime Minister of France"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Nouveau Front Populaire / left coalition",
+    "Rassemblement National"
+   ],
+   "description": "NFP and RN exchange sharply polarised final-round framing on austerity, 49.3, riots and deficit.",
+   "kind": "emergent",
+   "period_label": "2027-04-H2",
+   "round": 13,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  }
+ ],
+ "relationships": [
+  {
+   "kind": "ALLY_OF",
+   "last_changed_round": 12,
+   "polarity": 0.8325,
+   "source": 1,
+   "strength": 0.7944,
+   "target": 6,
+   "valence": "allied"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 13,
+   "polarity": -1.0,
+   "source": 2,
+   "strength": 0.956,
+   "target": 1,
+   "valence": "adversarial"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 12,
+   "polarity": 0.63,
+   "source": 0,
+   "strength": 0.7086,
+   "target": 1,
+   "valence": "allied"
+  },
+  {
+   "kind": "ALLY_OF",
+   "last_changed_round": 2,
+   "polarity": 0.12,
+   "source": 10,
+   "strength": 0.336,
+   "target": 1,
+   "valence": "neutral"
+  },
+  {
+   "kind": "ALLY_OF",
+   "last_changed_round": 3,
+   "polarity": 0.18,
+   "source": 2,
+   "strength": 0.354,
+   "target": 6,
+   "valence": "neutral"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 8,
+   "polarity": -0.3975,
+   "source": 2,
+   "strength": 0.4942,
+   "target": 4,
+   "valence": "adversarial"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 3,
+   "polarity": -0.15,
+   "source": 13,
+   "strength": 0.345,
+   "target": 1,
+   "valence": "neutral"
+  },
+  {
+   "kind": "ALLY_OF",
+   "last_changed_round": 13,
+   "polarity": 1.0,
+   "source": 10,
+   "strength": 0.9536,
+   "target": 6,
+   "valence": "allied"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 12,
+   "polarity": -0.085,
+   "source": 12,
+   "strength": 0.442,
+   "target": 4,
+   "valence": "neutral"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 7,
+   "polarity": -0.42,
+   "source": 12,
+   "strength": 0.5111,
+   "target": 1,
+   "valence": "adversarial"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 13,
+   "polarity": -0.7475,
+   "source": 12,
+   "strength": 0.7428,
+   "target": 2,
+   "valence": "adversarial"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 8,
+   "polarity": -0.12,
+   "source": 12,
+   "strength": 0.4103,
+   "target": 7,
+   "valence": "neutral"
+  },
+  {
+   "kind": "ALLY_OF",
+   "last_changed_round": 9,
+   "polarity": 0.15,
+   "source": 13,
+   "strength": 0.345,
+   "target": 0,
+   "valence": "neutral"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 9,
+   "polarity": -0.15,
+   "source": 10,
+   "strength": 0.345,
+   "target": 12,
+   "valence": "neutral"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 10,
+   "polarity": -0.15,
+   "source": 2,
+   "strength": 0.345,
+   "target": 0,
+   "valence": "neutral"
+  },
+  {
+   "kind": "ALLY_OF",
+   "last_changed_round": 13,
+   "polarity": 0.3,
+   "source": 3,
+   "strength": 0.4215,
+   "target": 13,
+   "valence": "allied"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 12,
+   "polarity": -0.15,
+   "source": 3,
+   "strength": 0.345,
+   "target": 1,
+   "valence": "neutral"
+  },
+  {
+   "kind": "ALLY_OF",
+   "last_changed_round": 13,
+   "polarity": 0.15,
+   "source": 0,
+   "strength": 0.345,
+   "target": 3,
+   "valence": "neutral"
+  }
+ ],
+ "seed_gaps": [
+  {
+   "kind": "actor_without_goals",
+   "note": "no documented goals; decisions lean on the role brief alone",
+   "subject": "European Commission"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "European Commission"
+  },
+  {
+   "kind": "actor_without_goals",
+   "note": "no documented goals; decisions lean on the role brief alone",
+   "subject": "Prime Minister of France"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Prime Minister of France"
+  },
+  {
+   "kind": "actor_without_goals",
+   "note": "no documented goals; decisions lean on the role brief alone",
+   "subject": "Rassemblement National"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Rassemblement National"
+  },
+  {
+   "kind": "actor_without_goals",
+   "note": "no documented goals; decisions lean on the role brief alone",
+   "subject": "Cour des comptes"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Cour des comptes"
+  },
+  {
+   "kind": "actor_without_goals",
+   "note": "no documented goals; decisions lean on the role brief alone",
+   "subject": "French National Assembly"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "French National Assembly"
+  },
+  {
+   "kind": "actor_without_goals",
+   "note": "no documented goals; decisions lean on the role brief alone",
+   "subject": "INSEE"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "INSEE"
+  },
+  {
+   "kind": "actor_without_goals",
+   "note": "no documented goals; decisions lean on the role brief alone",
+   "subject": "Les Républicains / centre-right"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Les Républicains / centre-right"
+  },
+  {
+   "kind": "actor_without_goals",
+   "note": "no documented goals; decisions lean on the role brief alone",
+   "subject": "Conseil constitutionnel"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Conseil constitutionnel"
+  },
+  {
+   "kind": "actor_without_goals",
+   "note": "no documented goals; decisions lean on the role brief alone",
+   "subject": "Ministère de l'Intérieur / French police"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Ministère de l'Intérieur / French police"
+  },
+  {
+   "kind": "actor_without_goals",
+   "note": "no documented goals; decisions lean on the role brief alone",
+   "subject": "Banque de France"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Banque de France"
+  },
+  {
+   "kind": "actor_without_goals",
+   "note": "no documented goals; decisions lean on the role brief alone",
+   "subject": "President Emmanuel Macron"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "President Emmanuel Macron"
+  },
+  {
+   "kind": "actor_without_goals",
+   "note": "no documented goals; decisions lean on the role brief alone",
+   "subject": "French insurers and reinsurers (FFA, CCR, Scor)"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "French insurers and reinsurers (FFA, CCR, Scor)"
+  },
+  {
+   "kind": "actor_without_goals",
+   "note": "no documented goals; decisions lean on the role brief alone",
+   "subject": "Nouveau Front Populaire / left coalition"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Nouveau Front Populaire / left coalition"
+  },
+  {
+   "kind": "actor_without_goals",
+   "note": "no documented goals; decisions lean on the role brief alone",
+   "subject": "Rating agencies (S&P, Fitch, Moody's)"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Rating agencies (S&P, Fitch, Moody's)"
+  },
+  {
+   "kind": "no_relationships",
+   "note": "no grounded relationships between the actors; alliances start from scratch",
+   "subject": "cast"
+  }
+ ],
+ "simulation_id": "sim_9ae6378766a6",
+ "summary": {
+  "actors": 14,
+  "arbiter_enabled": true,
+  "arbiter_failed_rounds": 0,
+  "behaviour": {
+   "moves": 0,
+   "offers_answered": 0,
+   "responsive_moves": 0,
+   "responsive_share": null,
+   "rounds_scored": 0
+  },
+  "decision_actors_max": 24,
+  "events": 253,
+  "offers": {
+   "accepted": 0,
+   "breached": 0,
+   "countered": 0,
+   "lapsed": 0,
+   "open": 0,
+   "opened": 0,
+   "rejected": 0
+  },
+  "pending_effects": 5,
+  "relationships": 18,
+  "rounds_committed": 13,
+  "schema_version": "world-model-summary/v1",
+  "seed_gaps": 29,
+  "variables": 53
+ },
+ "variables": [
+  {
+   "as_of": "2026",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": -5.065
+    }
+   ],
+   "id": "net_general_government_borrowing_2025",
+   "kind": "numeric",
+   "name": "Net general government borrowing 2025",
+   "provenance": "research",
+   "unit": "percent of GDP",
+   "value": -5.065
+  },
+  {
+   "as_of": "2026",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": -5.758
+    }
+   ],
+   "id": "net_general_government_borrowing_2024",
+   "kind": "numeric",
+   "name": "Net general government borrowing 2024",
+   "provenance": "research",
+   "unit": "percent of GDP",
+   "value": -5.758
+  },
+  {
+   "as_of": "2026-10-21",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 0.841
+    }
+   ],
+   "id": "gdp_growth",
+   "kind": "numeric",
+   "name": "GDP growth",
+   "provenance": "research",
+   "unit": "percent per annum",
+   "value": 0.841
+  },
+  {
+   "as_of": "2026-03",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 5.1
+    }
+   ],
+   "id": "2025_deficit",
+   "kind": "numeric",
+   "name": "2025 deficit",
+   "provenance": "research",
+   "unit": "percent of GDP",
+   "value": 5.1
+  },
+  {
+   "as_of": "2026-10-21",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 289.0
+    }
+   ],
+   "id": "censure_threshold",
+   "kind": "numeric",
+   "name": "Censure threshold",
+   "provenance": "research",
+   "unit": "deputies",
+   "value": 289.0
+  },
+  {
+   "as_of": "2026-07-06",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 122.0
+    }
+   ],
+   "id": "rn_group_size",
+   "kind": "numeric",
+   "name": "RN group size",
+   "provenance": "research",
+   "unit": "members",
+   "value": 122.0
+  },
+  {
+   "as_of": "2026-01-23",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 269.0
+    }
+   ],
+   "id": "censure_votes_for_23_jan_2026",
+   "kind": "numeric",
+   "name": "Censure votes for, 23 Jan 2026",
+   "provenance": "research",
+   "unit": "votes",
+   "value": 269.0
+  },
+  {
+   "as_of": "2026-01-27",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 267.0
+    }
+   ],
+   "id": "censure_votes_for_27_jan_2026",
+   "kind": "numeric",
+   "name": "Censure votes for, 27 Jan 2026",
+   "provenance": "research",
+   "unit": "votes",
+   "value": 267.0
+  },
+  {
+   "as_of": "2026-07-06",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 132.0
+    }
+   ],
+   "id": "censure_votes_for_6_jul_2026",
+   "kind": "numeric",
+   "name": "Censure votes for, 6 Jul 2026",
+   "provenance": "research",
+   "unit": "votes",
+   "value": 132.0
+  },
+  {
+   "as_of": "2026-10-20",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 3000.0
+    }
+   ],
+   "id": "shops_looted",
+   "kind": "numeric",
+   "name": "Shops looted",
+   "provenance": "research",
+   "unit": "shops",
+   "value": 3000.0
+  },
+  {
+   "as_of": "2026-10-20",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 3000.0
+    }
+   ],
+   "id": "shops_damaged",
+   "kind": "numeric",
+   "name": "Shops damaged",
+   "provenance": "research",
+   "unit": "shops",
+   "value": 3000.0
+  },
+  {
+   "as_of": "2026-10-21",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 50.0
+    }
+   ],
+   "id": "carrefour_shops_damaged",
+   "kind": "numeric",
+   "name": "Carrefour shops damaged",
+   "provenance": "research",
+   "unit": "shops",
+   "value": 50.0
+  },
+  {
+   "as_of": "2026-10-19",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 2400.0
+    }
+   ],
+   "id": "arrests",
+   "kind": "numeric",
+   "name": "Arrests",
+   "provenance": "research",
+   "unit": "arrests",
+   "value": 2400.0
+  },
+  {
+   "as_of": "2026-10-19",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 1000.0
+    }
+   ],
+   "id": "injured_police_officers",
+   "kind": "numeric",
+   "name": "Injured police officers",
+   "provenance": "research",
+   "unit": "officers",
+   "value": 1000.0
+  },
+  {
+   "as_of": "2026-10-20",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 1.2
+    }
+   ],
+   "id": "insured_loss_estimate_october_2026_riots",
+   "kind": "numeric",
+   "name": "Insured loss estimate, October 2026 riots",
+   "provenance": "research",
+   "unit": "billion EUR (below)",
+   "value": 1.2
+  },
+  {
+   "as_of": "2026-10-21",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 730.0
+    }
+   ],
+   "id": "nahel_riots_insured_losses",
+   "kind": "numeric",
+   "name": "Nahel riots insured losses",
+   "provenance": "research",
+   "unit": "million EUR",
+   "value": 730.0
+  },
+  {
+   "as_of": "2026-10-21",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 200.0
+    }
+   ],
+   "id": "2005_riots_insured_losses",
+   "kind": "numeric",
+   "name": "2005 riots insured losses",
+   "provenance": "research",
+   "unit": "million EUR (approx.)",
+   "value": 200.0
+  },
+  {
+   "as_of": "2026-10-21",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 220.0
+    }
+   ],
+   "id": "gilets_jaunes_insured_losses",
+   "kind": "numeric",
+   "name": "Gilets jaunes insured losses",
+   "provenance": "research",
+   "unit": "million EUR (approx.)",
+   "value": 220.0
+  },
+  {
+   "as_of": "2026-10-21",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 1000.0
+    }
+   ],
+   "id": "new_caledonia_insured_losses",
+   "kind": "numeric",
+   "name": "New Caledonia insured losses",
+   "provenance": "research",
+   "unit": "million EUR (approx.)",
+   "value": 1000.0
+  },
+  {
+   "as_of": "2026-10-21",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 2500.0
+    }
+   ],
+   "id": "businesses_vandalised_in_2023_riots",
+   "kind": "numeric",
+   "name": "Businesses vandalised in 2023 riots",
+   "provenance": "research",
+   "unit": "businesses (approx.)",
+   "value": 2500.0
+  },
+  {
+   "as_of": "2026-10-20",
+   "history": [
+    {
+     "cause": "Slight spread compression (~147 bps) on rating confirmation and calmer second protest weekend.",
+     "round": 1,
+     "source": "arbiter",
+     "value": 146.8
+    },
+    {
+     "cause": "49.3 on the whole budget plus RN hostility and a critical EC Autumn Forecast widened the spread modestly; the successful censeure vote capped the move.",
+     "round": 2,
+     "source": "arbiter",
+     "value": 152.0
+    },
+    {
+     "cause": "S&P negative outlook and adoption of an unvoted budget widen the spread modestly from 152 to ~158 bps; Banque de France stress on orderly functioning limits the move.",
+     "round": 3,
+     "source": "arbiter",
+     "value": 158.0
+    },
+    {
+     "cause": "Modest spread compression on budget adoption and riot de-escalation, partly offset by S&P Negative outlook and EDP pressure.",
+     "round": 4,
+     "source": "arbiter",
+     "value": 152.0
+    },
+    {
+     "cause": "Modest further tightening on budget enacted, S&P affirmation and calm streets; limited by constitutional challenge and EDP uncertainty.",
+     "round": 5,
+     "source": "arbiter",
+     "value": 149.0
+    },
+    {
+     "cause": "Conseil constitutionnel validation of PLF 2027 removes a major uncertainty; modest spread tightening consistent with prior CdC pattern of calming markets.",
+     "round": 6,
+     "source": "arbiter",
+     "value": 145.0
+    },
+    {
+     "cause": "Spread eases to ~140bps as worst-case annulment scenarios fade",
+     "round": 7,
+     "source": "arbiter",
+     "value": 140.0
+    },
+    {
+     "cause": "Slight tightening as constitutional validation stands and budget is in force, offset by negative outlook and EDP friction.",
+     "round": 8,
+     "source": "arbiter",
+     "value": 138.0
+    },
+    {
+     "cause": "Commission non-compliance finding and agency negative-outlook signals nudge the spread a few bps wider within orderly conditions.",
+     "round": 9,
+     "source": "arbiter",
+     "value": 142.0
+    },
+    {
+     "cause": "Orderly institutional messaging, failed censure and settled riot claims allow modest tightening from 142 bps; non-compliance already priced.",
+     "round": 10,
+     "source": "arbiter",
+     "value": 138.0
+    },
+    {
+     "cause": "Mild widening on Cour des comptes revision and election-week risk premium, offset by orderly-institution signals",
+     "round": 12,
+     "source": "arbiter",
+     "value": 145.0
+    },
+    {
+     "cause": "Slight widening on certified deficit overshoot and post-election uncertainty; BdF confirms orderly functioning.",
+     "round": 13,
+     "source": "arbiter",
+     "value": 148.0
+    }
+   ],
+   "id": "10y_oat_bund_spread",
+   "kind": "numeric",
+   "name": "10Y OAT-Bund spread",
+   "provenance": "arbiter",
+   "unit": "bps",
+   "value": 148.0
+  },
+  {
+   "as_of": "2026-10-20",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 4.93
+    },
+    {
+     "cause": "Moody's confirmation of Aa3 (no downgrade) brought modest relief; yields edge down to ~4.87%.",
+     "round": 1,
+     "source": "arbiter",
+     "value": 4.87
+    },
+    {
+     "cause": "Slight rise in line with spread widening amid budget uncertainty.",
+     "round": 2,
+     "source": "arbiter",
+     "value": 4.92
+    },
+    {
+     "cause": "Modest repricing on negative outlook, contained by orderly market functioning and a passed budget.",
+     "round": 3,
+     "source": "arbiter",
+     "value": 4.97
+    },
+    {
+     "cause": "Slight relief rally; fiscal concerns cap gains.",
+     "round": 4,
+     "source": "arbiter",
+     "value": 4.93
+    },
+    {
+     "cause": "Small decline tracking spread compression; French risk premium still elevated vs A+ peers.",
+     "round": 5,
+     "source": "arbiter",
+     "value": 4.89
+    },
+    {
+     "cause": "Slight rally on constitutional clarity; Bund yields assumed broadly stable.",
+     "round": 6,
+     "source": "arbiter",
+     "value": 4.85
+    },
+    {
+     "cause": "Slight relief rally on constitutional clarity and Banque de France reporting calmer conditions",
+     "round": 7,
+     "source": "arbiter",
+     "value": 4.8
+    }
+   ],
+   "id": "10y_oat_yield",
+   "kind": "numeric",
+   "name": "10Y OAT yield",
+   "provenance": "arbiter",
+   "unit": "percent",
+   "value": 4.8
+  },
+  {
+   "as_of": "2026-10-20",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 7838.49
+    },
+    {
+     "cause": "Modest rebound on avoided downgrade and easing riot risk.",
+     "round": 1,
+     "source": "arbiter",
+     "value": 7883.49
+    },
+    {
+     "cause": "Slight risk-off on rating outlook and political noise; budget adoption limits downside to ~7828.",
+     "round": 3,
+     "source": "arbiter",
+     "value": 7828.49
+    },
+    {
+     "cause": "Equities recover modestly on removed budget-censure tail risk and curfew lifting.",
+     "round": 4,
+     "source": "arbiter",
+     "value": 7883.49
+    },
+    {
+     "cause": "Relief rally on enacted budget and easing political risk; gains capped by fiscal outlook and weak growth.",
+     "round": 5,
+     "source": "arbiter",
+     "value": 7965.0
+    },
+    {
+     "cause": "Small relief rally on budget clarity, capped by fiscal concerns.",
+     "round": 6,
+     "source": "arbiter",
+     "value": 8010.0
+    },
+    {
+     "cause": "Mild positive reaction to reduced legal uncertainty on the budget",
+     "round": 7,
+     "source": "arbiter",
+     "value": 8045.0
+    },
+    {
+     "cause": "Mild equity pullback on fiscal warnings, agency negative outlook and political noise; not a shock.",
+     "round": 8,
+     "source": "arbiter",
+     "value": 7990.0
+    }
+   ],
+   "id": "cac_40_close",
+   "kind": "numeric",
+   "name": "CAC 40 close",
+   "provenance": "arbiter",
+   "unit": "index points",
+   "value": 7990.0
+  },
+  {
+   "as_of": "2026-10-14",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 37.0
+    }
+   ],
+   "id": "le_pen_first_round_voting_intention_odoxa",
+   "kind": "numeric",
+   "name": "Le Pen first-round voting intention (Odoxa)",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 37.0
+  },
+  {
+   "as_of": "2026-10-31",
+   "history": [
+    {
+     "cause": "PM committed to a full-budget first-part vote on 17 November, with 49.3 envisaged.",
+     "round": 1,
+     "source": "arbiter",
+     "value": "2026-11-17"
+    }
+   ],
+   "id": "plf_2027_first_part_vote_scheduled",
+   "kind": "text",
+   "name": "plf_2027_first_part_vote_scheduled",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "2026-11-17"
+  },
+  {
+   "as_of": "2026-10-31",
+   "history": [
+    {
+     "cause": "Second protest weekend (24 Oct) passed without major unrest; insurers' protocol activated without escalation.",
+     "round": 1,
+     "source": "arbiter",
+     "value": "de_escalation"
+    },
+    {
+     "cause": "Interior Ministry lifts all remaining curfews; sustained de-escalation.",
+     "round": 4,
+     "source": "arbiter",
+     "value": "calm"
+    }
+   ],
+   "id": "riots_calm_indicator",
+   "kind": "categorical",
+   "name": "riots_calm_indicator",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "calm"
+  },
+  {
+   "as_of": "2026-11-15",
+   "history": [
+    {
+     "cause": "Motion de censure after 49.3 on PLF 2027: RN and most of NFP vote censure but fall short of 289, consistent with January 2026 pattern (267-269).",
+     "round": 2,
+     "source": "arbiter",
+     "value": 271.0
+    }
+   ],
+   "id": "censure_votes_nov_2026_49_3_plf2027",
+   "kind": "numeric",
+   "name": "censure_votes_nov_2026_49_3_plf2027",
+   "provenance": "arbiter",
+   "unit": "votes",
+   "value": 271.0
+  },
+  {
+   "as_of": "2026-11-15",
+   "history": [
+    {
+     "cause": "Government engaged responsibility on entire PLF 2027; survives censure, so budget is adopted without a vote.",
+     "round": 2,
+     "source": "arbiter",
+     "value": true
+    }
+   ],
+   "id": "plf_2027_whole_budget_engaged_via_49_3",
+   "kind": "boolean",
+   "name": "plf_2027_whole_budget_engaged_via_49_3",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": true
+  },
+  {
+   "as_of": "2026-11-15",
+   "history": [
+    {
+     "cause": "Commission Autumn Forecast projects 2026 deficit above government's 5.1-5.2% path, adding EDP pressure.",
+     "round": 2,
+     "source": "arbiter",
+     "value": 5.4
+    }
+   ],
+   "id": "ec_autumn_forecast_2026_deficit",
+   "kind": "numeric",
+   "name": "ec_autumn_forecast_2026_deficit",
+   "provenance": "arbiter",
+   "unit": "percent of GDP",
+   "value": 5.4
+  },
+  {
+   "as_of": "2026-11-30",
+   "history": [
+    {
+     "cause": "S&P affirmed A+ but revised outlook from Stable to Negative on 27 November 2026.",
+     "round": 3,
+     "source": "arbiter",
+     "value": "A+ / Negative"
+    },
+    {
+     "cause": "Fitch or Moody's negative outlook/revision following EDP assessment",
+     "round": 8,
+     "source": "effect",
+     "value": "second agency negative outlook"
+    },
+    {
+     "cause": "Fitch/Moody's scheduled reviews move outlooks to negative or downgrade citing 5.4% deficit and 119% debt",
+     "round": 9,
+     "source": "effect",
+     "value": "negative outlook confirmed or downgrade to A"
+    }
+   ],
+   "id": "sp_outlook_france_nov_2026",
+   "kind": "text",
+   "name": "sp_outlook_france_nov_2026",
+   "provenance": "effect",
+   "unit": "",
+   "value": "negative outlook confirmed or downgrade to A"
+  },
+  {
+   "as_of": "2026-11-30",
+   "history": [
+    {
+     "cause": "PLF 2027 adopted after censure motion failed with 271 of 289 required votes on 17 November 2026.",
+     "round": 3,
+     "source": "arbiter",
+     "value": "adopted via 49.3, no censure"
+    },
+    {
+     "cause": "Conseil constitutionnel ruling on PLF 2027 referrals — partial strike-down of rider provisions plausible, full annulment unlikely.",
+     "round": 6,
+     "source": "effect",
+     "value": "adopted via 49.3, constitutional ruling issued (partial censures likely)"
+    }
+   ],
+   "id": "plf_2027_status",
+   "kind": "categorical",
+   "name": "plf_2027_status",
+   "provenance": "effect",
+   "unit": "",
+   "value": "adopted via 49.3, constitutional ruling issued (partial censures likely)"
+  },
+  {
+   "as_of": "2026-12-15",
+   "history": [
+    {
+     "cause": "Commission signals forthcoming EDP progress assessment on France's multiannual path.",
+     "round": 4,
+     "source": "arbiter",
+     "value": "H1 2027"
+    }
+   ],
+   "id": "edp_progress_assessment_timing",
+   "kind": "text",
+   "name": "edp_progress_assessment_timing",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "H1 2027"
+  },
+  {
+   "as_of": "2026-12-15",
+   "history": [
+    {
+     "cause": "Opposition groups refer 49.3 riders to the Conseil constitutionnel.",
+     "round": 4,
+     "source": "arbiter",
+     "value": true
+    }
+   ],
+   "id": "plf_2027_constitutional_challenge_filed",
+   "kind": "boolean",
+   "name": "plf_2027_constitutional_challenge_filed",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": true
+  },
+  {
+   "as_of": "2026-12-31",
+   "history": [
+    {
+     "cause": "Conseil constitutionnel confirmed referrals registered; ruling typically within ~2 months, i.e. by early 2027.",
+     "round": 5,
+     "source": "arbiter",
+     "value": "Q1 2027 expected"
+    }
+   ],
+   "id": "constitutional_decision_plf2027_timing",
+   "kind": "text",
+   "name": "constitutional_decision_plf2027_timing",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "Q1 2027 expected"
+  },
+  {
+   "as_of": "2026-12-31",
+   "history": [
+    {
+     "cause": "NFP day of mobilization proceeded but attendance modest; riots_calm_indicator = calm.",
+     "round": 5,
+     "source": "arbiter",
+     "value": "limited"
+    }
+   ],
+   "id": "nfp_december_mobilization_scale",
+   "kind": "categorical",
+   "name": "nfp_december_mobilization_scale",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "limited"
+  },
+  {
+   "as_of": "2026-12-31",
+   "history": [
+    {
+     "cause": "PM committed to transmit multiannual deficit trajectory (<3% by 2030) to Commission by end-January 2027.",
+     "round": 5,
+     "source": "arbiter",
+     "value": "2027-01-31"
+    }
+   ],
+   "id": "commission_trajectory_deadline_france",
+   "kind": "text",
+   "name": "commission_trajectory_deadline_france",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "2027-01-31"
+  },
+  {
+   "as_of": "2027-01-15",
+   "history": [
+    {
+     "cause": "Conseil constitutionnel decision issued: main budget upheld, several unrelated riders struck.",
+     "round": 6,
+     "source": "arbiter",
+     "value": "validated with partial censures of rider provisions"
+    }
+   ],
+   "id": "plf_2027_constitutional_outcome",
+   "kind": "categorical",
+   "name": "plf_2027_constitutional_outcome",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "validated with partial censures of rider provisions"
+  },
+  {
+   "as_of": "2027-01-31",
+   "history": [
+    {
+     "cause": "Cour des comptes January 2027 revision of the 2026 outturn deficit",
+     "round": 7,
+     "source": "arbiter",
+     "value": 5.4
+    }
+   ],
+   "id": "cour_des_comptes_2026_deficit_revision",
+   "kind": "numeric",
+   "name": "cour_des_comptes_2026_deficit_revision",
+   "provenance": "arbiter",
+   "unit": "percent of GDP",
+   "value": 5.4
+  },
+  {
+   "as_of": "2027-01-31",
+   "history": [
+    {
+     "cause": "Partial censures of PLF 2027 riders require corrective finance legislation in 2027",
+     "round": 7,
+     "source": "arbiter",
+     "value": true
+    },
+    {
+     "cause": "Corrective budget (PLFR) becomes necessary as constitutional censures open a revenue/expenditure hole.",
+     "round": 10,
+     "source": "effect",
+     "value": "yes — PLFR required following partial censures"
+    }
+   ],
+   "id": "corrective_budget_required",
+   "kind": "text",
+   "name": "corrective_budget_required",
+   "provenance": "effect",
+   "unit": "",
+   "value": "yes — PLFR required following partial censures"
+  },
+  {
+   "as_of": "2027-02-15",
+   "history": [
+    {
+     "cause": "RN announced a censure motion against the Lecornu government over use of 49.3; must be tracked ahead of the vote.",
+     "round": 8,
+     "source": "arbiter",
+     "value": "tabled"
+    },
+    {
+     "cause": "Assembly published scrutiny tally; motion fails as in prior pattern (271-vote bloc insufficient).",
+     "round": 10,
+     "source": "arbiter",
+     "value": "tabled, rejected below 289 threshold"
+    }
+   ],
+   "id": "rn_censure_motion_feb_2027",
+   "kind": "categorical",
+   "name": "rn_censure_motion_feb_2027",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "tabled, rejected below 289 threshold"
+  },
+  {
+   "as_of": "2027-02-15",
+   "history": [
+    {
+     "cause": "NFP committed to tabling a corrective finance bill; creates fiscal-revision track.",
+     "round": 8,
+     "source": "arbiter",
+     "value": "announced, drafting"
+    },
+    {
+     "cause": "NFP formally tables its corrective PLFR; committee stage reached but adoption unlikely.",
+     "round": 9,
+     "source": "arbiter",
+     "value": "tabled, committee examination"
+    }
+   ],
+   "id": "nfp_plfr_feb_2027",
+   "kind": "categorical",
+   "name": "nfp_plfr_feb_2027",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "tabled, committee examination"
+  },
+  {
+   "as_of": "2027-02-15",
+   "history": [
+    {
+     "cause": "Commission Spring Semester package transmitted to Council with adverse assessment given 5.4-5.5% deficit.",
+     "round": 8,
+     "source": "arbiter",
+     "value": "published, France assessed as non-compliant / insufficient progress"
+    }
+   ],
+   "id": "ec_spring_2027_edp_assessment",
+   "kind": "text",
+   "name": "ec_spring_2027_edp_assessment",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "published, France assessed as non-compliant / insufficient progress"
+  },
+  {
+   "as_of": "2027-02-28",
+   "history": [
+    {
+     "cause": "Macron publicly instructs PM to present a corrective budget without delay; a new trackable fact.",
+     "round": 9,
+     "source": "arbiter",
+     "value": "announced by Macron, PM drafting"
+    },
+    {
+     "cause": "PM moved from drafting to formal first reading, publishing execution indicators as acte de responsabilité.",
+     "round": 10,
+     "source": "arbiter",
+     "value": "tabled, first Assembly reading underway amid 49.3 threat"
+    },
+    {
+     "cause": "PLFR adoption path: 49.3 engagement with censure risk",
+     "round": 11,
+     "source": "effect",
+     "value": "engaged via 49.3 or adopted after negotiation"
+    },
+    {
+     "cause": "PM tabled PLFR; Assembly suspended plenary sittings per Bureau decision",
+     "round": 12,
+     "source": "arbiter",
+     "value": "tabled before first round; examination deferred to post-election Assembly session"
+    },
+    {
+     "cause": "Post-election PLFR vote: passage, negotiated amendment, or censure depending on first-round result",
+     "round": 13,
+     "source": "effect",
+     "value": "post-election vote outcome pending"
+    }
+   ],
+   "id": "plfr_government_tabling_status",
+   "kind": "categorical",
+   "name": "plfr_government_tabling_status",
+   "provenance": "effect",
+   "unit": "",
+   "value": "post-election vote outcome pending"
+  },
+  {
+   "as_of": "2027-02-28",
+   "history": [
+    {
+     "cause": "Conseil constitutionnel confirms 18 April 2027 first round and 19–26 March candidacy window.",
+     "round": 9,
+     "source": "arbiter",
+     "value": true
+    }
+   ],
+   "id": "presidential_first_round_date_confirmed",
+   "kind": "boolean",
+   "name": "presidential_first_round_date_confirmed",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": true
+  },
+  {
+   "as_of": "2027-03-15",
+   "history": [
+    {
+     "cause": "FFA/CCR/Scor confirmed final quantification, modestly above the 2005 benchmark, >90% of BI claims settled.",
+     "round": 10,
+     "source": "arbiter",
+     "value": 240.0
+    }
+   ],
+   "id": "riots_insured_losses_final_2026",
+   "kind": "numeric",
+   "name": "riots_insured_losses_final_2026",
+   "provenance": "arbiter",
+   "unit": "million EUR",
+   "value": 240.0
+  },
+  {
+   "as_of": "2027-03-15",
+   "history": [
+    {
+     "cause": "Banque de France spring projection anchors weak-growth austerity debate.",
+     "round": 10,
+     "source": "arbiter",
+     "value": 0.8
+    }
+   ],
+   "id": "bdf_2027_growth_forecast",
+   "kind": "numeric",
+   "name": "bdf_2027_growth_forecast",
+   "provenance": "arbiter",
+   "unit": "percent",
+   "value": 0.8
+  },
+  {
+   "as_of": "2027-03-31",
+   "history": [
+    {
+     "cause": "Conseil constitutionnel public statement locks in the date",
+     "round": 11,
+     "source": "arbiter",
+     "value": "yes, first round 18 April 2027 unaffected by budget proceedings"
+    }
+   ],
+   "id": "election_calendar_constitutionally_confirmed",
+   "kind": "text",
+   "name": "election_calendar_constitutionally_confirmed",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "yes, first round 18 April 2027 unaffected by budget proceedings"
+  },
+  {
+   "as_of": "2027-03-31",
+   "history": [
+    {
+     "cause": "FFA/CCR/Scor published consolidated settlement statistics closing the October 2026 unrest file",
+     "round": 11,
+     "source": "arbiter",
+     "value": 96.0
+    }
+   ],
+   "id": "riot_claims_settlement_rate",
+   "kind": "numeric",
+   "name": "riot_claims_settlement_rate",
+   "provenance": "arbiter",
+   "unit": "percent of declared com…",
+   "value": 96.0
+  },
+  {
+   "as_of": "2027-03-31",
+   "history": [
+    {
+     "cause": "High-magnitude RN statement one month before round one",
+     "round": 11,
+     "source": "arbiter",
+     "value": "deficit and 49.3 governance as central campaign themes"
+    }
+   ],
+   "id": "rn_preelectoral_framing",
+   "kind": "categorical",
+   "name": "rn_preelectoral_framing",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "deficit and 49.3 governance as central campaign themes"
+  },
+  {
+   "as_of": "2027-04-15",
+   "history": [
+    {
+     "cause": "Assembly Bureau suspended sittings; vote now hinges on post-election composition",
+     "round": 12,
+     "source": "arbiter",
+     "value": "deferred until after 18 April first round"
+    },
+    {
+     "cause": "Macron's explicit one-month commitment to the Assembly.",
+     "round": 13,
+     "source": "arbiter",
+     "value": "government committed to vote within one month post-first-round (mid-May 2027); examination resuming"
+    }
+   ],
+   "id": "plfr_vote_timing",
+   "kind": "categorical",
+   "name": "plfr_vote_timing",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "government committed to vote within one month post-first-round (mid-May 2027); examination resuming"
+  },
+  {
+   "as_of": "2027-04-15",
+   "history": [
+    {
+     "cause": "NFP announced united presidential candidacy",
+     "round": 12,
+     "source": "arbiter",
+     "value": "confirmed"
+    }
+   ],
+   "id": "nfp_single_candidacy_status",
+   "kind": "text",
+   "name": "nfp_single_candidacy_status",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "confirmed"
+  },
+  {
+   "as_of": "2027-04-30",
+   "history": [
+    {
+     "cause": "Confirmed election event; runoff field still being certified.",
+     "round": 13,
+     "source": "arbiter",
+     "value": "yes, 18 April 2027, results transmission to Conseil constitutionnel under way"
+    }
+   ],
+   "id": "presidential_first_round_held",
+   "kind": "text",
+   "name": "presidential_first_round_held",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "yes, 18 April 2027, results transmission to Conseil constitutionnel under way"
+  },
+  {
+   "as_of": "2027-04-30",
+   "history": [
+    {
+     "cause": "New commitment created by Macron's move.",
+     "round": 13,
+     "source": "arbiter",
+     "value": "by mid-May 2027 per presidential commitment"
+    }
+   ],
+   "id": "plfr_postelection_vote_window",
+   "kind": "text",
+   "name": "plfr_postelection_vote_window",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "by mid-May 2027 per presidential commitment"
+  }
+ ]
+}

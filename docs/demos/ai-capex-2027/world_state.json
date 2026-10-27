@@ -1,0 +1,3415 @@
+{
+ "actors": [
+  {
+   "agency_class": "firm",
+   "agent_id": 0,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "coalition",
+    "label": "Accept NVIDIA's offer [i8_1]: NVIDIA commits prioritized Blackwell/Rubin-class allocation to Microsoft through 2029; Microsoft provides mul… — binds both sides",
+    "magnitude": 0.8,
+    "option_id": "accept:i8_1",
+    "resolution": "success",
+    "resolution_rationale": "Framework accepted and binding on both sides.",
+    "reversibility": "sticky",
+    "round": 9,
+    "status": "ok",
+    "targets": [
+     "NVIDIA"
+    ]
+   },
+   "name": "Microsoft",
+   "pending_commitments": [
+    {
+     "description": "Deliver the next Azure AI capacity increment under OpenAI commitments in 2028-Q4",
+     "due_round": 9,
+     "id": "c0_8_8",
+     "made_round": 8,
+     "source": "decision",
+     "status": "due"
+    },
+    {
+     "counterparty": 12,
+     "description": "Honour the agreement with NVIDIA: NVIDIA commits prioritized Blackwell/Rubin-class allocation to Microsoft through 2029; Microsoft provides multi-quarter demand visibility and co-scheduling of deliveries against energiz…",
+     "due_round": 10,
+     "id": "c0_9_9",
+     "made_round": 9,
+     "source": "agreement:i8_1",
+     "status": "pending"
+    }
+   ],
+   "reputation": 0.66,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 1,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.6,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "Hyperion tranche online; compliance disclosure well received.",
+    "reversibility": "reversible",
+    "round": 9,
+    "status": "ok",
+    "targets": [
+     "PJM Interconnection",
+     "FERC"
+    ]
+   },
+   "name": "Meta Platforms",
+   "pending_commitments": [],
+   "reputation": 0.66,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 2,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Accommodate or publicly answer PJM Interconnection's move",
+    "magnitude": 0.5,
+    "option_id": "respond_1_accommodate",
+    "resolution": "success",
+    "resolution_rationale": "All 2028 milestones and turbine deliveries confirmed on schedule.",
+    "reversibility": "reversible",
+    "round": 9,
+    "status": "ok",
+    "targets": [
+     "PJM Interconnection",
+     "GE Vernova"
+    ]
+   },
+   "name": "Amazon (AWS)",
+   "pending_commitments": [],
+   "reputation": 0.64,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 3,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.7,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "Capex executed within guidance; $55B debt funding completed at tight spreads.",
+    "reversibility": "reversible",
+    "round": 9,
+    "status": "ok",
+    "targets": []
+   },
+   "name": "Alphabet (Google)",
+   "pending_commitments": [],
+   "reputation": 0.66,
+   "track_record": null
+  },
+  {
+   "agency_class": "media_outlet",
+   "agent_id": 4,
+   "archetype": "actor",
+   "capacity_per_round": 1,
+   "last_action": {
+    "kind": "communication",
+    "label": "Accommodate or publicly answer Amazon (AWS)'s move",
+    "magnitude": 0.7,
+    "option_id": "respond_1_accommodate",
+    "resolution": "success",
+    "resolution_rationale": "Full staged execution confirmed; backlog firm.",
+    "reversibility": "reversible",
+    "round": 9,
+    "status": "ok",
+    "targets": [
+     "Amazon (AWS)"
+    ]
+   },
+   "name": "GE Vernova",
+   "pending_commitments": [],
+   "reputation": 0.68,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 5,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Accommodate or publicly answer Amazon (AWS)'s move",
+    "magnitude": 0.4,
+    "option_id": "respond_1_accommodate",
+    "resolution": "success",
+    "resolution_rationale": "21 expedited-track projects performing within 10-month GIA target.",
+    "reversibility": "reversible",
+    "round": 9,
+    "status": "ok",
+    "targets": [
+     "Amazon (AWS)"
+    ]
+   },
+   "name": "PJM Interconnection",
+   "pending_commitments": [
+    {
+     "description": "Publish full-year 2028 Expedited Track GIA execution statistics (signed GIA counts, days-to-GIA vs. 10-month target) and the January 2029 load forecast vintage.",
+     "due_round": 10,
+     "id": "c5_9_9",
+     "made_round": 9,
+     "source": "decision",
+     "status": "pending"
+    }
+   ],
+   "reputation": 0.58,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 6,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.7,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "Annex published; actuals consistent with central path.",
+    "reversibility": "reversible",
+    "round": 9,
+    "status": "ok",
+    "targets": []
+   },
+   "name": "IEA",
+   "pending_commitments": [],
+   "reputation": 0.66,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 7,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.4,
+    "option_id": "public_statement",
+    "resolution": "partial",
+    "resolution_rationale": "Clarity provided, but capacity-responsibility rules still face ongoing compliance friction.",
+    "reversibility": "reversible",
+    "round": 9,
+    "status": "ok",
+    "targets": [
+     "Meta Platforms",
+     "PJM Interconnection"
+    ]
+   },
+   "name": "FERC",
+   "pending_commitments": [],
+   "reputation": 0.5,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 8,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": null,
+   "name": "EIA",
+   "pending_commitments": [],
+   "reputation": 0.5,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 9,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Accommodate or publicly answer PJM Interconnection's move",
+    "magnitude": 0.6,
+    "option_id": "respond_2_accommodate",
+    "resolution": "success",
+    "resolution_rationale": "First expedited-track GIA energizations delivered within timeline window.",
+    "reversibility": "reversible",
+    "round": 8,
+    "status": "ok",
+    "targets": [
+     "PJM Interconnection"
+    ]
+   },
+   "name": "Dominion Energy",
+   "pending_commitments": [
+    {
+     "description": "Deliver the next tranche of expedited-track GIA-backed energizations on schedule in 2028-Q4",
+     "due_round": 9,
+     "id": "c9_8_4",
+     "made_round": 8,
+     "source": "decision",
+     "status": "due"
+    }
+   ],
+   "reputation": 0.54,
+   "track_record": null
+  },
+  {
+   "agency_class": "individual_leader",
+   "agent_id": 10,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": null,
+   "name": "ERCOT",
+   "pending_commitments": [],
+   "reputation": 0.5,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 11,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Issue a public statement or warning",
+    "magnitude": 0.7,
+    "option_id": "public_statement",
+    "resolution": "success",
+    "resolution_rationale": "Stargate tranche on track; compute remains binding constraint noted.",
+    "reversibility": "reversible",
+    "round": 9,
+    "status": "ok",
+    "targets": [
+     "Oracle",
+     "Microsoft"
+    ]
+   },
+   "name": "OpenAI",
+   "pending_commitments": [],
+   "reputation": 0.54,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 12,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "coalition",
+    "label": "Form or deepen an alliance / joint initiative",
+    "magnitude": 0.7,
+    "option_id": "form_alliance",
+    "resolution": "pending",
+    "resolution_rationale": "Framework offer to Microsoft remains open and unanswered.",
+    "reversibility": "sticky",
+    "round": 8,
+    "status": "ok",
+    "targets": [
+     "Microsoft"
+    ]
+   },
+   "name": "NVIDIA",
+   "pending_commitments": [
+    {
+     "description": "Deliver prioritized accelerator allocations to Microsoft aligned with its datacenter energization schedule through 2029",
+     "due_round": 12,
+     "id": "c12_8_1",
+     "made_round": 8,
+     "source": "decision",
+     "status": "pending"
+    },
+    {
+     "counterparty": 0,
+     "description": "Honour the agreement with Microsoft: NVIDIA commits prioritized Blackwell/Rubin-class allocation to Microsoft through 2029; Microsoft provides multi-quarter demand visibility and co-scheduling of deliveries against ener…",
+     "due_round": 10,
+     "id": "c12_9_2",
+     "made_round": 9,
+     "source": "agreement:i8_1",
+     "status": "pending"
+    }
+   ],
+   "reputation": 0.56,
+   "track_record": null
+  },
+  {
+   "agency_class": "firm",
+   "agent_id": 13,
+   "archetype": "actor",
+   "capacity_per_round": 2,
+   "last_action": {
+    "kind": "communication",
+    "label": "Accommodate or publicly answer OpenAI's move",
+    "magnitude": 0.6,
+    "option_id": "respond_2_accommodate",
+    "resolution": "success",
+    "resolution_rationale": "All contracted milestones delivered; $18B buildout fully deployed.",
+    "reversibility": "reversible",
+    "round": 9,
+    "status": "ok",
+    "targets": [
+     "OpenAI"
+    ]
+   },
+   "name": "Oracle",
+   "pending_commitments": [
+    {
+     "description": "Deliver remaining 2028 Stargate tranches to OpenAI on or ahead of schedule",
+     "due_round": 10,
+     "id": "c13_9_4",
+     "made_round": 9,
+     "source": "decision",
+     "status": "pending"
+    }
+   ],
+   "reputation": 0.56,
+   "track_record": null
+  }
+ ],
+ "as_of_date": "2026-10-20",
+ "brief": "# WORLD STATE — as of 2028-12-31 (after 2028-Q4)\n## Key facts\n- Four-hyperscaler combined capex: 780 billion USD (was 718 billion USD last period)\n- Global data center electricity consumption: 668 TWh (was 570 TWh last period)\n- NVIDIA-Microsoft supply framework status: framework accepted; prioritized Blackwell/Rubin allocation through 2029 with multi-quarter demand visibility and delive… (was offer open, unanswered last period)\n- US datacenter capacity delayed into 2028 by grid constraints: 5.5 GW (was 4.2 GW last period)\n- us_datacenter_capacity_delayed_into_2029_by_grid_constraints: 4.5 GW\n- GE Vernova gas capacity under contract: 116 GW\n- PJM expedited interconnection track projects: 21 projects\n- alphabet_2027_2028_cumulative_debt_funding: 55 billion USD\n- iea_2028_datacenter_consumption_outlook: 660-680 TWh projected for 2028, central path toward ~950 TWh by 2030\n- Four-hyperscaler combined capex guidance: 780 billion USD\n- four_hyperscaler_combined_capex_guidance_2028: 780 billion USD\n- global_datacenter_electricity_growth_2027_yoy: 18 percent\n- AWS–GE Vernova multi-year turbine supply talks status: framework agreement concluded; definitive multi-year supply contract signed with staged deliveries from 2028\n- Alphabet bond issuance (2027 cumulative): 55 billion USD\n## Moves last period\n- PJM Interconnection: Accommodate or publicly answer Amazon (AWS)'s move → Amazon (AWS) — \"PJM's 2028-Q4 Expedited Interconnection Track report: 21 active projects with cumulative signed-GIA performance within the 10-month target, and on-time staged…\"\n- Meta Platforms: Issue a public statement or warning → PJM Interconnection, FERC — \"Meta confirms the next Hyperion energization tranche came online in Q4 2028 on schedule, and publishes its PJM/FERC compliance status alongside quarterly discl…\"\n- Alphabet (Google): Issue a public statement or warning — \"Alphabet's Q4 2028 debt-funding update: full-year 2028 capex executed within our stated guidance, with cumulative 2027–28 debt funding of $55B completed at dis…\"\n- Microsoft: Accept NVIDIA's offer [i8_1]: NVIDIA commits prioritized Blackwell/Rubin-class allocation to Microsoft through 2029; Microsoft provides mul… — binds both sides → NVIDIA — \"Microsoft has accepted NVIDIA's supply framework: prioritized Blackwell/Rubin-class allocation through 2029, with Microsoft providing multi-quarter demand visi…\"",
+ "committed_round": 9,
+ "digest": "Q4 2028 closes a year of largely on-schedule execution: Microsoft–NVIDIA supply framework signed with co-scheduling, AWS–GE Vernova staged deliveries complete 100% on time, Meta and Oracle hit energization milestones, and four-hyperscaler capex converges to ~780B guidance. IEA's Q1 actuals (570 TWh, 18% 2027 growth) hold through reconciliation, keeping 2028…\nMoves:\n- PJM Interconnection: Accommodate or publicly answer Amazon (AWS)'s move (→ Amazon (AWS)): \"PJM's 2028-Q4 Expedited Interconnection Track report: 21 active projects with cumulative signed-GIA performance within the 10-month target,…\"\n- Meta Platforms: Issue a public statement or warning (→ PJM Interconnection, FERC): \"Meta confirms the next Hyperion energization tranche came online in Q4 2028 on schedule, and publishes its PJM/FERC compliance status along…\"\n- Alphabet (Google): Issue a public statement or warning: \"Alphabet's Q4 2028 debt-funding update: full-year 2028 capex executed within our stated guidance, with cumulative 2027–28 debt funding of $…\"",
+ "headline": "",
+ "history": [
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 9,
+    "total": 9
+   },
+   "deterministic": {
+    "actions": [
+     "Advance your documented plan: Build TPU-driven AI infrastructure",
+     "Advance your documented plan: Expand electrification segment → Amazon (AWS), Meta Platforms, Microsoft",
+     "Advance your documented plan: Deliver committed AI capacity incl. OpenAI commitments → OpenAI, NVIDIA",
+     "Advance your documented plan: Fund Hyperion-scale campuses",
+     "Advance your documented plan: Secure AI/cloud compute capacity for 2027 → GE Vernova",
+     "Issue a public statement or warning → PJM Interconnection, ERCOT",
+     "Issue a public statement or warning → EIA",
+     "Advance your documented plan: Build Stargate AI capacity for OpenAI-anchored demand → OpenAI",
+     "Advance your documented plan: Reform queue processing → FERC"
+    ],
+    "commitments_lapsed": [],
+    "effects_fired": [],
+    "scheduled_events": [
+     "[2026-11-16] RTO show-cause responses to FERC large-load protocols due (reported)"
+    ]
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "transactional",
+      "polarity": 0.635,
+      "source": "Microsoft",
+      "target": "OpenAI",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 1.0,
+      "source": "Oracle",
+      "target": "OpenAI",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "directional",
+      "polarity": 0.9163,
+      "source": "Amazon (AWS)",
+      "target": "GE Vernova",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": 0.45,
+      "source": "FERC",
+      "target": "PJM Interconnection",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": 0.405,
+      "source": "IEA",
+      "target": "EIA",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "pjm_expedited_interconnection_track_projects",
+      "name": "PJM expedited interconnection track projects",
+      "unit": "projects",
+      "value": 10.0
+     },
+     {
+      "id": "ferc_large_load_show_cause_review_status",
+      "name": "FERC large-load show-cause review status",
+      "unit": "",
+      "value": "responses under review"
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 720.0,
+      "id": "four_hyperscaler_combined_capex_guidance",
+      "name": "Four-hyperscaler combined capex guidance",
+      "to": 735.0,
+      "unit": "billion USD"
+     },
+     {
+      "from": 415.0,
+      "id": "global_data_center_electricity_consumption",
+      "name": "Global data center electricity consumption",
+      "to": 480.0,
+      "unit": "TWh"
+     },
+     {
+      "from": 128.0,
+      "id": "main_power_transformer_lead_time",
+      "name": "Main power transformer lead time",
+      "to": 132.0,
+      "unit": "weeks"
+     }
+    ]
+   },
+   "digest": "Hyperscalers continued executing large capex plans on schedule (AWS ~$220B plan, Alphabet $195–205B, Oracle's $18B Stargate fully deployed), lifting 2026 combined capex modestly above guidance path. But physical grid constraints bit: transformer lead times and PJM queue reforms mean much capacity slides right. FERC's review and PJM's expedited track create…\nMoves:\n- Alphabet (Google): Advance your documented plan: Build TPU-driven AI infrastructure: \"We continue to execute the largest AI infrastructure buildout in our history: 2026 capital expenditures of $195–205 billion, anchored by ou…\"\n- GE Vernova: Advance your documented plan: Expand electrification segment (→ Amazon (AWS), Meta Platforms, Microsoft): \"GE Vernova continues to scale its electrification segment to match accelerating datacenter demand: grid equipment orders supporting datacen…\"",
+   "headline": "2026-Q4: 9 decisions · 3 facts changed · 4 events · arbiter=applied · Hyperscalers continued executing large capex plans on schedule (AWS ~$220B plan, Alphabet $195–205B, Oracle's $18B Stargate fully deployed)…",
+   "narrative": "Hyperscalers continued executing large capex plans on schedule (AWS ~$220B plan, Alphabet $195–205B, Oracle's $18B Stargate fully deployed), lifting 2026 combined capex modestly above guidance path. But physical grid constraints bit: transformer lead times and PJM queue reforms mean much capacity slides right. FERC's review and PJM's expedited track create institutional friction rather than immediate capacity. IEA reiterated ~14-15% growth, below the 20% threshold question.",
+   "period_label": "2026-Q4",
+   "round": 1,
+   "scenario_pressure": {
+    "Continued buildout surge": "up",
+    "Measured growth plateau": "flat",
+    "Overbuild correction": "flat",
+    "Power-constrained slowdown": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 10,
+    "total": 10
+   },
+   "deterministic": {
+    "actions": [
+     "Advance your documented plan: Deliver committed AI capacity incl. OpenAI commitments → OpenAI, NVIDIA",
+     "Advance your documented plan: Build TPU-driven AI infrastructure",
+     "Accommodate or publicly answer Amazon (AWS)'s move → Amazon (AWS)",
+     "Accommodate or publicly answer FERC's move → FERC",
+     "Advance your documented plan: Fund Hyperion-scale campuses",
+     "Advance your documented plan: Secure AI/cloud compute capacity for 2027 → GE Vernova",
+     "Accommodate or publicly answer PJM Interconnection's move → PJM Interconnection",
+     "Issue a public statement or warning → PJM Interconnection, FERC",
+     "Issue a public statement or warning",
+     "Advance your documented plan: Build Stargate AI capacity for OpenAI-anchored demand → OpenAI"
+    ],
+    "commitments_lapsed": [],
+    "effects_fired": [],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.7738,
+      "source": "Microsoft",
+      "target": "OpenAI",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "transactional",
+      "polarity": 0.7275,
+      "source": "GE Vernova",
+      "target": "Meta Platforms",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 1.0,
+      "source": "Amazon (AWS)",
+      "target": "GE Vernova",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "directional",
+      "polarity": 0.555,
+      "source": "Dominion Energy",
+      "target": "PJM Interconnection",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.8325,
+      "source": "FERC",
+      "target": "PJM Interconnection",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "pjm_large_load_protocol_decision_deadline",
+      "name": "PJM large-load protocol decision deadline",
+      "unit": "",
+      "value": "2027-06-01"
+     },
+     {
+      "id": "ge_vernova_2027_delivery_slot_commitment",
+      "name": "GE Vernova 2027 delivery slot commitment",
+      "unit": "percent",
+      "value": 100.0
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 480.0,
+      "id": "global_data_center_electricity_consumption",
+      "name": "Global data center electricity consumption",
+      "to": 490.0,
+      "unit": "TWh"
+     },
+     {
+      "from": 132.0,
+      "id": "main_power_transformer_lead_time",
+      "name": "Main power transformer lead time",
+      "to": 134.0,
+      "unit": "weeks"
+     },
+     {
+      "from": "responses under review",
+      "id": "ferc_large_load_show_cause_review_status",
+      "name": "FERC large-load show-cause review status",
+      "to": "PJM response accepted for review; decision pending",
+      "unit": ""
+     }
+    ]
+   },
+   "digest": "Hyperscalers broadly delivered on stated plans this quarter, with capex tracking the $735B guidance path and AWS securing firm turbine delivery slots amid GE Vernova's fully committed 2027 order book. FERC accepted PJM's show-cause response for review without immediate rule changes, leaving interconnection protocol uncertainty pending into mid-2027. The IEA…\nMoves:\n- Microsoft: Advance your documented plan: Deliver committed AI capacity incl. OpenAI commitments (→ OpenAI, NVIDIA): \"Microsoft is on track to deliver contracted Azure AI capacity increments under our OpenAI commitments, with new capacity online by end of Q…\"\n- Alphabet (Google): Advance your documented plan: Build TPU-driven AI infrastructure: \"Alphabet confirms full-year 2026 capital expenditures of $198 billion, within our $195–205 billion guidance range. Our custom TPU silicon a…\"\n- GE Vernova: Accommodate or publicly answer Amazon (AWS)'s move (→ Amazon (AWS)): \"We closed 2026 having exceeded our gas contracting target, with capacity under contract and slot reservations reaching beyond 125 GW, and o…\"",
+   "headline": "2027-Q1: 10 decisions · 3 facts changed · 4 events · arbiter=applied · Hyperscalers broadly delivered on stated plans this quarter, with capex tracking the $735B guidance path and AWS securing firm turbine deli…",
+   "narrative": "Hyperscalers broadly delivered on stated plans this quarter, with capex tracking the $735B guidance path and AWS securing firm turbine delivery slots amid GE Vernova's fully committed 2027 order book. FERC accepted PJM's show-cause response for review without immediate rule changes, leaving interconnection protocol uncertainty pending into mid-2027. The IEA's Q1 update pegged 2026 datacenter consumption at ~480 TWh and guided 2027 growth to 14–17%, tempering the most aggressive demand extrapolations while confirming continued strong buildout.",
+   "period_label": "2027-Q1",
+   "round": 2,
+   "scenario_pressure": {
+    "Continued buildout surge": "up",
+    "Measured growth plateau": "up",
+    "Overbuild correction": "flat",
+    "Power-constrained slowdown": "flat"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [
+    "relationship change with unknown or identical actors"
+   ],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 1,
+    "held": 1,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 7,
+    "total": 8
+   },
+   "deterministic": {
+    "actions": [
+     "Advance your documented plan: Deliver committed AI capacity incl. OpenAI commitments → OpenAI, NVIDIA",
+     "Advance your documented plan: Convert backlog at rising prices (Wood Mackenzie projects $600/kW by end-2027) → Amazon (AWS), Meta Platforms",
+     "Advance your documented plan: Build TPU-driven AI infrastructure",
+     "Advance your documented plan: Fund Hyperion-scale campuses",
+     "Issue a public statement or warning → FERC, Dominion Energy",
+     "Advance your documented plan: Secure AI/cloud compute capacity for 2027 → GE Vernova, Dominion Energy",
+     "NVIDIA makes no recorded move (failed)",
+     "Issue a public statement or warning"
+    ],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "AWS 2026 capex execution (~$220B) lands in reported 2026 combined hyperscaler capex.",
+     "Oracle first Stargate capacity milestone energization"
+    ],
+    "scheduled_events": [
+     "[2027-06-01] PJM IRAS large-load rules take effect: new ≥50 MW loads must bring new capacity, buy a backstop, or face curtailment"
+    ]
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.9088,
+      "source": "Microsoft",
+      "target": "OpenAI",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.99,
+      "source": "GE Vernova",
+      "target": "Meta Platforms",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.675,
+      "source": "Dominion Energy",
+      "target": "PJM Interconnection",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.9525,
+      "source": "FERC",
+      "target": "PJM Interconnection",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.525,
+      "source": "IEA",
+      "target": "EIA",
+      "to": "allied"
+     },
+     {
+      "from": null,
+      "polarity": 0.15,
+      "source": "Amazon (AWS)",
+      "target": "Dominion Energy",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "pjm_iras_rule_compliance_pathway_split",
+      "name": "PJM IRAS rule compliance pathway split",
+      "unit": "",
+      "value": "capacity-addition 40% / backstop procurement 45% / curtailment acceptance 15%"
+     },
+     {
+      "id": "ge_vernova_gas_turbine_slot_reservations",
+      "name": "GE Vernova gas turbine slot reservations",
+      "unit": "GW",
+      "value": 128.0
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 380.0,
+      "id": "four_hyperscaler_combined_capex",
+      "name": "Four-hyperscaler combined capex",
+      "to": 535.0,
+      "unit": "billion USD"
+     },
+     {
+      "from": 735.0,
+      "id": "four_hyperscaler_combined_capex_guidance",
+      "name": "Four-hyperscaler combined capex guidance",
+      "to": 750.0,
+      "unit": "billion USD"
+     },
+     {
+      "from": 490.0,
+      "id": "global_data_center_electricity_consumption",
+      "name": "Global data center electricity consumption",
+      "to": 520.0,
+      "unit": "TWh"
+     },
+     {
+      "from": 53.8,
+      "id": "dominion_contracted_datacenter_capacity",
+      "name": "Dominion contracted datacenter capacity",
+      "to": 56.0,
+      "unit": "GW"
+     },
+     {
+      "from": 10.0,
+      "id": "pjm_expedited_interconnection_track_projects",
+      "name": "PJM expedited interconnection track projects",
+      "to": 12.0,
+      "unit": "projects"
+     }
+    ]
+   },
+   "digest": "Q2 2027 closes with hyperscalers broadly executing on plan: AWS locked 100% of its GE Vernova 2027 turbine slots and dedicated transmission, Microsoft brought OpenAI-committed Azure capacity online on schedule, Meta hit its Hyperion energization milestone, and Alphabet guided 2027 capex to $235–255B. The binding development is PJM's IRAS large-load rules ta…\nMoves:\n- Microsoft: Advance your documented plan: Deliver committed AI capacity incl. OpenAI commitments (→ OpenAI, NVIDIA): \"Microsoft confirms the contracted Azure AI capacity increments under our OpenAI commitments are now online, completed on schedule by end of…\"\n- GE Vernova: Advance your documented plan: Convert backlog at rising prices (Wood Mackenzie projects $600/kW by end-2027) (→ Amazon (AWS), Meta Platforms): \"GE Vernova confirms all 2027 gas turbine delivery slots remain committed and on schedule, with capacity under contract and slot reservation…\"",
+   "headline": "2027-Q2: 8 decisions · 5 facts changed · 5 events · arbiter=applied · Q2 2027 closes with hyperscalers broadly executing on plan: AWS locked 100% of its GE Vernova 2027 turbine slots and dedicated transmission…",
+   "narrative": "Q2 2027 closes with hyperscalers broadly executing on plan: AWS locked 100% of its GE Vernova 2027 turbine slots and dedicated transmission, Microsoft brought OpenAI-committed Azure capacity online on schedule, Meta hit its Hyperion energization milestone, and Alphabet guided 2027 capex to $235–255B. The binding development is PJM's IRAS large-load rules taking effect June 1, which now impose capacity-addition, backstop procurement, or curtailment obligations on ≥50 MW new loads — a constraint that will bite projects lacking generation plans. Grid equipment remains the physical bottleneck, with transformer lead times still extreme, capping how fast even funded projects energize.",
+   "period_label": "2027-Q2",
+   "round": 3,
+   "scenario_pressure": {
+    "Continued buildout surge": "up",
+    "Measured growth plateau": "flat",
+    "Overbuild correction": "flat",
+    "Power-constrained slowdown": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 9,
+    "total": 9
+   },
+   "deterministic": {
+    "actions": [
+     "Advance your documented plan: Secure long-lead power via nuclear PPAs",
+     "Advance your documented plan: Build TPU-driven AI infrastructure → GE Vernova",
+     "Advance your documented plan: Convert backlog at rising prices (Wood Mackenzie projects $600/kW by end-2027) → Amazon (AWS), Meta Platforms",
+     "Advance your documented plan: Fund Hyperion-scale campuses",
+     "Advance your documented plan: Reform queue processing",
+     "Seek talks with GE Vernova over its move → GE Vernova",
+     "Advance your documented plan: Secure massive compute capacity → Oracle, Microsoft",
+     "Issue a public statement or warning",
+     "Accommodate or publicly answer Microsoft's move → Microsoft"
+    ],
+    "commitments_lapsed": [
+     "Dominion Energy: Publish updated contracted datacenter pipeline and conversion progress with Q4/year-end 2026 earnings in early February 2027",
+     "Oracle: Deploy October 2026 $18B bond proceeds into Stargate datacenter construction with first new capacity milestone in 2 periods",
+     "Oracle: Deliver first new Stargate capacity milestone on schedule"
+    ],
+    "effects_fired": [
+     "FERC compliance rulings on large-load protocols; possible standardized curtailment/co-location rules shifting project economics.",
+     "FERC order on large-load interconnection protocols"
+    ],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "farther",
+      "from": "allied",
+      "polarity": 0.9088,
+      "source": "Microsoft",
+      "target": "OpenAI",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 1.0,
+      "source": "FERC",
+      "target": "PJM Interconnection",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "transactional",
+      "polarity": 0.82,
+      "source": "NVIDIA",
+      "target": "Microsoft",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "directional",
+      "polarity": 0.835,
+      "source": "OpenAI",
+      "target": "Oracle",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.645,
+      "source": "IEA",
+      "target": "EIA",
+      "to": "allied"
+     },
+     {
+      "from": null,
+      "polarity": 0.135,
+      "source": "Alphabet (Google)",
+      "target": "GE Vernova",
+      "to": "neutral"
+     },
+     {
+      "from": null,
+      "polarity": 0.135,
+      "source": "Meta Platforms",
+      "target": "PJM Interconnection",
+      "to": "neutral"
+     },
+     {
+      "from": null,
+      "polarity": -0.15,
+      "source": "Microsoft",
+      "target": "GE Vernova",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "aws_ge_vernova_multi_year_turbine_supply_talks_status",
+      "name": "AWS–GE Vernova multi-year turbine supply talks status",
+      "unit": "",
+      "value": "negotiations opened; terms not finalized"
+     },
+     {
+      "id": "microsoft_nuclear_ppa_portfolio_secured_capacity",
+      "name": "Microsoft nuclear PPA portfolio secured capacity",
+      "unit": "GW",
+      "value": 2.5
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 535.0,
+      "id": "four_hyperscaler_combined_capex",
+      "name": "Four-hyperscaler combined capex",
+      "to": 560.0,
+      "unit": "billion USD"
+     },
+     {
+      "from": 520.0,
+      "id": "global_data_center_electricity_consumption",
+      "name": "Global data center electricity consumption",
+      "to": 535.0,
+      "unit": "TWh"
+     },
+     {
+      "from": "PJM response accepted for review; decision pending",
+      "id": "ferc_large_load_show_cause_review_status",
+      "name": "FERC large-load show-cause review status",
+      "to": "order issued; capacity-responsibility rules adopted with modifications",
+      "unit": ""
+     }
+    ]
+   },
+   "digest": "The quarter saw continued disciplined expansion: hyperscalers tracked toward combined ~$750B capex guidance, with Meta's Hyperion energization and Google's TPU tranches on schedule. GE Vernova's AWS supply talks pushed heavy-duty turbine pricing toward $600/kW, tightening 2028+ economics. PJM's expedited track expanded modestly but GIAs still target Q2 2028…\nMoves:\n- Microsoft: Advance your documented plan: Secure long-lead power via nuclear PPAs: \"Microsoft announces signed long-lead power purchase agreements adding nuclear capacity to our datacenter supply portfolio, securing firm cl…\"\n- Alphabet (Google): Advance your documented plan: Build TPU-driven AI infrastructure (→ GE Vernova): \"Alphabet's TPU-driven buildout remains on schedule: we are tracking within our $235–255 billion 2027 capex guidance, with all TPU v7 deploy…\"",
+   "headline": "2027-Q3: 9 decisions · 3 facts changed · 3 events · arbiter=applied · The quarter saw continued disciplined expansion: hyperscalers tracked toward combined ~$750B capex guidance, with Meta's Hyperion energizat…",
+   "narrative": "The quarter saw continued disciplined expansion: hyperscalers tracked toward combined ~$750B capex guidance, with Meta's Hyperion energization and Google's TPU tranches on schedule. GE Vernova's AWS supply talks pushed heavy-duty turbine pricing toward $600/kW, tightening 2028+ economics. PJM's expedited track expanded modestly but GIAs still target Q2 2028, and IEA confirmed demand tracking above its central path (~14%/yr), keeping the growth surge intact without a break in either direction.",
+   "period_label": "2027-Q3",
+   "round": 4,
+   "scenario_pressure": {
+    "Continued buildout surge": "up",
+    "Measured growth plateau": "flat",
+    "Overbuild correction": "flat",
+    "Power-constrained slowdown": "up"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 10,
+    "total": 10
+   },
+   "deterministic": {
+    "actions": [
+     "Advance your documented plan: Deliver committed AI capacity incl. OpenAI commitments → OpenAI",
+     "Advance your documented plan: Fund buildout efficiently via debt markets",
+     "Advance your documented plan: Fund Hyperion-scale campuses",
+     "Advance your documented plan: Reform queue processing → Dominion Energy, FERC",
+     "Seek talks with Amazon (AWS) over its move → Amazon (AWS)",
+     "Seek talks with GE Vernova over its move → GE Vernova",
+     "Issue a public statement or warning → PJM Interconnection",
+     "Advance your documented plan: Secure massive compute capacity → Oracle, Microsoft",
+     "Issue a public statement or warning",
+     "Issue a public statement or warning → Microsoft, Amazon (AWS), Meta Platforms, Alphabet (Google)"
+    ],
+    "commitments_lapsed": [
+     "FERC: Issue determinations on standardized large-load interconnection protocols by end of Q2 2027"
+    ],
+    "effects_fired": [
+     "Did not materialise: FERC final decision on PJM IRAS rules; approval entrenches cost-causation model, rejection forces restructuring of queued loads"
+    ],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 1.0,
+      "source": "Microsoft",
+      "target": "OpenAI",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 1.0,
+      "source": "GE Vernova",
+      "target": "Meta Platforms",
+      "to": "allied"
+     },
+     {
+      "direction": "farther",
+      "from": "allied",
+      "polarity": 0.63,
+      "source": "Dominion Energy",
+      "target": "PJM Interconnection",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.9587,
+      "source": "NVIDIA",
+      "target": "Microsoft",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 1.0,
+      "source": "OpenAI",
+      "target": "Oracle",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.765,
+      "source": "IEA",
+      "target": "EIA",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "alphabet_bond_issuance_2027_cumulative",
+      "name": "Alphabet bond issuance (2027 cumulative)",
+      "unit": "billion USD",
+      "value": 55.0
+     },
+     {
+      "id": "us_datacenter_capacity_delayed_into_2028_by_grid_constraints",
+      "name": "US datacenter capacity delayed into 2028 by grid constraints",
+      "unit": "GW",
+      "value": 4.2
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 560.0,
+      "id": "four_hyperscaler_combined_capex",
+      "name": "Four-hyperscaler combined capex",
+      "to": 605.0,
+      "unit": "billion USD"
+     },
+     {
+      "from": 535.0,
+      "id": "global_data_center_electricity_consumption",
+      "name": "Global data center electricity consumption",
+      "to": 565.0,
+      "unit": "TWh"
+     },
+     {
+      "from": 12.0,
+      "id": "pjm_expedited_interconnection_track_projects",
+      "name": "PJM expedited interconnection track projects",
+      "to": 15.0,
+      "unit": "projects"
+     },
+     {
+      "from": "negotiations opened; terms not finalized",
+      "id": "aws_ge_vernova_multi_year_turbine_supply_talks_status",
+      "name": "AWS–GE Vernova multi-year turbine supply talks status",
+      "to": "framework agreement concluded; definitive multi-year supply contract signed with staged deliveries from 2028",
+      "unit": ""
+     }
+    ]
+   },
+   "digest": "Q4 2027 closes with execution broadly on track: hyperscalers delivered committed energizations, Alphabet's $30B bond priced easily, and the AWS–GE Vernova framework was concluded, converting talks into a supply agreement. IEA data (535 TWh, ~14% growth tracking) pushes back against the >20% YoY growth scenario. Friction persists in transformers (134-week le…\nMoves:\n- Microsoft: Advance your documented plan: Deliver committed AI capacity incl. OpenAI commitments (→ OpenAI): \"Microsoft confirms delivery of the next tranche of contracted Azure AI capacity under our OpenAI commitments this quarter, on schedule and…\"\n- Alphabet (Google): Advance your documented plan: Fund buildout efficiently via debt markets: \"Alphabet announces a $30 billion multi-tranche bond issuance to fund 2027–2028 AI infrastructure buildout, following >4x order-book coverag…\"\n- Meta Platforms: Advance your documented plan: Fund Hyperion-scale campuses: \"Meta confirms the next staged energization milestone at the Louisiana Hyperion campus was delivered on schedule this quarter, funded within…\"",
+   "headline": "2027-Q4: 10 decisions · 4 facts changed · 5 events · arbiter=applied · Q4 2027 closes with execution broadly on track: hyperscalers delivered committed energizations, Alphabet's $30B bond priced easily, and the…",
+   "narrative": "Q4 2027 closes with execution broadly on track: hyperscalers delivered committed energizations, Alphabet's $30B bond priced easily, and the AWS–GE Vernova framework was concluded, converting talks into a supply agreement. IEA data (535 TWh, ~14% growth tracking) pushes back against the >20% YoY growth scenario. Friction persists in transformers (134-week lead times) and PJM protocol implementation, capping how fast even funded capacity can energize.",
+   "period_label": "2027-Q4",
+   "round": 5,
+   "scenario_pressure": {
+    "Continued buildout surge": "up",
+    "Measured growth plateau": "up",
+    "Overbuild correction": "down",
+    "Power-constrained slowdown": "flat"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 9,
+    "total": 9
+   },
+   "deterministic": {
+    "actions": [
+     "Seek talks with OpenAI over its move → OpenAI",
+     "Accommodate or publicly answer NVIDIA's move → NVIDIA",
+     "Advance your documented plan: Fund Hyperion-scale campuses → PJM Interconnection, FERC",
+     "Accommodate or publicly answer GE Vernova's move → GE Vernova",
+     "Advance your documented plan: Convert backlog at rising prices (Wood Mackenzie projects $600/kW by end-2027)",
+     "Accommodate or publicly answer PJM Interconnection's move → PJM Interconnection",
+     "Advance your documented plan: Reform queue processing → Dominion Energy, FERC",
+     "Advance your documented plan: Build Stargate AI capacity for OpenAI-anchored demand → OpenAI",
+     "Issue a public statement or warning"
+    ],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "Did not materialise: Transformer lead time extension delays >5GW of US datacenter capacity into 2028.",
+     "Did not materialise: IEA-projected 2027 consumption path implies ~550–560 TWh year-end",
+     "Did not materialise: Possible grid interconnection delays exceeding 5 GW pushed into 2028 if PJM protocols tighten",
+     "Alphabet 2027 capex lands in reported combined hyperscaler capex as execution proceeds",
+     "AWS–GE Vernova multi-year supply agreement signed, locking 2028+ turbine slots",
+     "Turbine pricing reaches ~$600/kW, compressing non-locked hyperscaler project economics"
+    ],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 1.0,
+      "source": "Dominion Energy",
+      "target": "PJM Interconnection",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.9587,
+      "source": "NVIDIA",
+      "target": "Microsoft",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "four_hyperscaler_combined_capex_guidance_2028",
+      "name": "four_hyperscaler_combined_capex_guidance_2028",
+      "unit": "billion USD",
+      "value": 780.0
+     },
+     {
+      "id": "global_datacenter_electricity_growth_2027_yoy",
+      "name": "global_datacenter_electricity_growth_2027_yoy",
+      "unit": "percent",
+      "value": 18.0
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 605.0,
+      "id": "four_hyperscaler_combined_capex",
+      "name": "Four-hyperscaler combined capex",
+      "to": 705.0,
+      "unit": "billion USD"
+     },
+     {
+      "from": 750.0,
+      "id": "four_hyperscaler_combined_capex_guidance",
+      "name": "Four-hyperscaler combined capex guidance",
+      "to": 780.0,
+      "unit": "billion USD"
+     },
+     {
+      "from": 15.0,
+      "id": "pjm_expedited_interconnection_track_projects",
+      "name": "PJM expedited interconnection track projects",
+      "to": 18.0,
+      "unit": "projects"
+     }
+    ]
+   },
+   "digest": "2027 closed with the four hyperscalers reporting combined capex of $705B against $750B guidance, reflecting normal slippage and supply-chain pacing rather than retrenchment. Global datacenter electricity consumption reached ~565 TWh (+~18% y/y, below the 20% threshold), while US grid-constrained delays into 2028 held at 4.2 GW as PJM's expedited track and t…\nMoves:\n- Microsoft: Seek talks with OpenAI over its move (→ OpenAI): \"Microsoft confirms delivery of the next Azure AI capacity tranche under our OpenAI commitments this quarter, on schedule and fully energize…\"\n- Alphabet (Google): Accommodate or publicly answer NVIDIA's move (→ NVIDIA): \"We welcome NVIDIA's confirmation that supply remains strong through 2027. Our inference demand growth continues to outpace installed capaci…\"\n- Meta Platforms: Advance your documented plan: Fund Hyperion-scale campuses (→ PJM Interconnection, FERC): \"Meta confirms the next staged Hyperion energization milestone in Louisiana was delivered on schedule this quarter, fully funded within the…\"",
+   "headline": "2028-Q1: 9 decisions · 3 facts changed · 5 events · arbiter=applied · 2027 closed with the four hyperscalers reporting combined capex of $705B against $750B guidance, reflecting normal slippage and supply-chai…",
+   "narrative": "2027 closed with the four hyperscalers reporting combined capex of $705B against $750B guidance, reflecting normal slippage and supply-chain pacing rather than retrenchment. Global datacenter electricity consumption reached ~565 TWh (+~18% y/y, below the 20% threshold), while US grid-constrained delays into 2028 held at 4.2 GW as PJM's expedited track and the AWS–GE Vernova contract eased but did not eliminate bottleneck risk. Transformer lead times (134 weeks) and 128 GW of turbine slot reservations cap how fast 2028 capacity can accelerate.",
+   "period_label": "2028-Q1",
+   "round": 6,
+   "scenario_pressure": {
+    "Continued buildout surge": "up",
+    "Measured growth plateau": "flat",
+    "Overbuild correction": "down",
+    "Power-constrained slowdown": "flat"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 9,
+    "total": 9
+   },
+   "deterministic": {
+    "actions": [
+     "Advance your documented plan: Secure AI/cloud compute capacity for 2027 → GE Vernova, PJM Interconnection",
+     "Accommodate or publicly answer Amazon (AWS)'s move → Amazon (AWS)",
+     "Advance your documented plan: Fund Hyperion-scale campuses → PJM Interconnection, FERC",
+     "Advance your documented plan: Reform queue processing → Meta Platforms, Dominion Energy",
+     "Advance your documented plan: Deliver committed AI capacity incl. OpenAI commitments → OpenAI",
+     "Advance your documented plan: Fund buildout efficiently via debt markets",
+     "Accommodate or publicly answer PJM Interconnection's move → PJM Interconnection",
+     "Issue a public statement or warning",
+     "Accommodate or publicly answer Alphabet (Google)'s move → Alphabet (Google)"
+    ],
+    "commitments_lapsed": [
+     "OpenAI: Deliver the next tranche of Stargate datacenter capacity under the Oracle long-term compute agreement within two quarters",
+     "OpenAI: Deliver the next tranche of Stargate datacenter capacity under the Oracle long-term compute agreement"
+    ],
+    "effects_fired": [
+     "IRAS compliance friction and curtailment risk begin delaying some PJM-area projects past 2028, feeding the >5 GW delay probability",
+     "PJM first-tranche expedited GIAs executed; if slipped, backlog risk grows",
+     "Did not materialise: 2028 hyperscaler capex guidance rebased upward on debt-market access and demand outpacing compute",
+     "IEA Electricity 2028 report publishes final 2027 figure with 2028 outlook; modest revision risk to 565 TWh"
+    ],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.9587,
+      "source": "NVIDIA",
+      "target": "Microsoft",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "transactional",
+      "polarity": 0.65,
+      "source": "NVIDIA",
+      "target": "Alphabet (Google)",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.885,
+      "source": "IEA",
+      "target": "EIA",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "neutral",
+      "polarity": 0.285,
+      "source": "Meta Platforms",
+      "target": "PJM Interconnection",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "iea_2028_datacenter_consumption_outlook",
+      "name": "iea_2028_datacenter_consumption_outlook",
+      "unit": "",
+      "value": "660-680 TWh projected for 2028, central path toward ~950 TWh by 2030"
+     },
+     {
+      "id": "alphabet_2027_2028_cumulative_debt_funding",
+      "name": "alphabet_2027_2028_cumulative_debt_funding",
+      "unit": "billion USD",
+      "value": 55.0
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 565.0,
+      "id": "global_data_center_electricity_consumption",
+      "name": "Global data center electricity consumption",
+      "to": 570.0,
+      "unit": "TWh"
+     },
+     {
+      "from": 18.0,
+      "id": "pjm_expedited_interconnection_track_projects",
+      "name": "PJM expedited interconnection track projects",
+      "to": 22.0,
+      "unit": "projects"
+     },
+     {
+      "from": 4.2,
+      "id": "us_datacenter_capacity_delayed_into_2028_by_grid_constraints",
+      "name": "US datacenter capacity delayed into 2028 by grid constraints",
+      "to": 4.8,
+      "unit": "GW"
+     }
+    ]
+   },
+   "digest": "The quarter resolved favorably across the board: first GE Vernova staged deliveries to AWS arrived on schedule, Meta's second Hyperion tranche energized, Microsoft delivered its Azure AI increment ahead of ramp, and Alphabet's $30B bond closed with 4x oversubscription. PJM's expedited track expanded to 18-22 projects while IRAS compliance friction keeps som…\nMoves:\n- Amazon (AWS): Advance your documented plan: Secure AI/cloud compute capacity for 2027 (→ GE Vernova, PJM Interconnection): \"AWS confirmed this quarter that the first staged GE Vernova turbine deliveries under our multi-year supply agreement arrived on schedule, s…\"\n- GE Vernova: Accommodate or publicly answer Amazon (AWS)'s move (→ Amazon (AWS)): \"GE Vernova confirms the first staged 2028 turbine deliveries to AWS shipped on schedule this quarter, with all committed 2028 slots on trac…\"",
+   "headline": "2028-Q2: 9 decisions · 3 facts changed · 6 events · arbiter=applied · The quarter resolved favorably across the board: first GE Vernova staged deliveries to AWS arrived on schedule, Meta's second Hyperion tran…",
+   "narrative": "The quarter resolved favorably across the board: first GE Vernova staged deliveries to AWS arrived on schedule, Meta's second Hyperion tranche energized, Microsoft delivered its Azure AI increment ahead of ramp, and Alphabet's $30B bond closed with 4x oversubscription. PJM's expedited track expanded to 18-22 projects while IRAS compliance friction keeps some delays accumulating. The IEA's Electricity 2028 report finalized 2027 at ~570 TWh (+18%), confirming growth below the 20% threshold and sustaining the central buildout path.",
+   "period_label": "2028-Q2",
+   "round": 7,
+   "scenario_pressure": {
+    "Continued buildout surge": "up",
+    "Measured growth plateau": "flat",
+    "Overbuild correction": "down",
+    "Power-constrained slowdown": "flat"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 10,
+    "total": 10
+   },
+   "deterministic": {
+    "actions": [
+     "Advance your documented plan: Secure AI/cloud compute capacity for 2027 → GE Vernova, PJM Interconnection",
+     "Accommodate or publicly answer Amazon (AWS)'s move → Amazon (AWS)",
+     "Advance your documented plan: Deliver committed AI capacity incl. OpenAI commitments → OpenAI, NVIDIA",
+     "Issue a public statement or warning",
+     "Accommodate or publicly answer Amazon (AWS)'s move → Amazon (AWS)",
+     "Advance your documented plan: Secure massive compute capacity → Oracle, Microsoft",
+     "Advance your documented plan: Fund Hyperion-scale campuses → PJM Interconnection, FERC",
+     "Accommodate or publicly answer PJM Interconnection's move → PJM Interconnection",
+     "Issue a public statement or warning → EIA",
+     "Form or deepen an alliance / joint initiative → Microsoft"
+    ],
+    "commitments_lapsed": [],
+    "effects_fired": [
+     "First batch of PJM expedited-track generator interconnection agreements executed",
+     "Did not materialise: Transformer- and interconnection-driven delays push US datacenter capacity deferrals above 5 GW threshold"
+    ],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [
+     {
+      "from": null,
+      "id": "i8_1",
+      "kind": "proposal",
+      "proposer": "NVIDIA",
+      "recipient": "Microsoft",
+      "terms": "NVIDIA commits prioritized Blackwell/Rubin-class allocation to Microsoft through 2029; Microsoft provides multi-quarter demand visibility and co-scheduling of deliveries against energization milestones; joint engineering on power-efficient AI factory reference designs.",
+      "to": "open"
+     }
+    ],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 1.0,
+      "source": "NVIDIA",
+      "target": "Microsoft",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.7625,
+      "source": "NVIDIA",
+      "target": "Alphabet (Google)",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.99,
+      "source": "IEA",
+      "target": "EIA",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.42,
+      "source": "Meta Platforms",
+      "target": "PJM Interconnection",
+      "to": "allied"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "ge_vernova_gas_capacity_under_contract",
+      "name": "GE Vernova gas capacity under contract",
+      "unit": "GW",
+      "value": 116.0
+     },
+     {
+      "id": "nvidia_microsoft_supply_framework_status",
+      "name": "NVIDIA-Microsoft supply framework status",
+      "unit": "",
+      "value": "offer open, unanswered"
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 705.0,
+      "id": "four_hyperscaler_combined_capex",
+      "name": "Four-hyperscaler combined capex",
+      "to": 718.0,
+      "unit": "billion USD"
+     },
+     {
+      "from": 22.0,
+      "id": "pjm_expedited_interconnection_track_projects",
+      "name": "PJM expedited interconnection track projects",
+      "to": 21.0,
+      "unit": "projects"
+     },
+     {
+      "from": 4.8,
+      "id": "us_datacenter_capacity_delayed_into_2028_by_grid_constraints",
+      "name": "US datacenter capacity delayed into 2028 by grid constraints",
+      "to": 4.2,
+      "unit": "GW"
+     }
+    ]
+   },
+   "digest": "Execution risks continued to ease: PJM's expedited interconnection track expanded to 22 projects, GE Vernova delivered all committed 2028 turbine slots, and Meta, Microsoft and AWS all hit Q3 energization milestones. NVIDIA's supply framework offer to Microsoft remains unanswered, leaving that coordination gain unrealized. The buildout is converging toward…\nMoves:\n- Amazon (AWS): Advance your documented plan: Secure AI/cloud compute capacity for 2027 (→ GE Vernova, PJM Interconnection): \"AWS Q3 2028 execution update: second tranche of staged GE Vernova turbine deliveries arrived on schedule, keeping every 2028 energization m…\"\n- PJM Interconnection: Accommodate or publicly answer Amazon (AWS)'s move (→ Amazon (AWS)): \"PJM acknowledges AWS's confirmation of on-time staged turbine deliveries and thanks all participants as our 2028-Q3 Expedited Interconnecti…\"",
+   "headline": "2028-Q3: 10 decisions · 3 facts changed · 5 events · arbiter=applied · Execution risks continued to ease: PJM's expedited interconnection track expanded to 22 projects, GE Vernova delivered all committed 2028 t…",
+   "narrative": "Execution risks continued to ease: PJM's expedited interconnection track expanded to 22 projects, GE Vernova delivered all committed 2028 turbine slots, and Meta, Microsoft and AWS all hit Q3 energization milestones. NVIDIA's supply framework offer to Microsoft remains unanswered, leaving that coordination gain unrealized. The buildout is converging toward the upper end of guidance rather than accelerating beyond it, with IEA holding its 660-680 TWh 2028 outlook.",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "scenario_pressure": {
+    "Continued buildout surge": "up",
+    "Measured growth plateau": "flat",
+    "Overbuild correction": "down",
+    "Power-constrained slowdown": "down"
+   }
+  },
+  {
+   "arbiter_attempts": [],
+   "arbiter_problems": [],
+   "arbiter_status": "applied",
+   "decisions": {
+    "failed": 0,
+    "held": 0,
+    "invalid": 0,
+    "language_mismatch": 0,
+    "ok": 10,
+    "total": 10
+   },
+   "deterministic": {
+    "actions": [
+     "Accommodate or publicly answer Amazon (AWS)'s move → Amazon (AWS)",
+     "Issue a public statement or warning → PJM Interconnection, FERC",
+     "Issue a public statement or warning",
+     "Accept NVIDIA's offer [i8_1]: NVIDIA commits prioritized Blackwell/Rubin-class allocation to Microsoft through 2029; Microsoft provides mul… — binds both sides → NVIDIA",
+     "Accommodate or publicly answer PJM Interconnection's move → PJM Interconnection, GE Vernova",
+     "Accommodate or publicly answer Amazon (AWS)'s move → Amazon (AWS)",
+     "Issue a public statement or warning → Oracle, Microsoft",
+     "Issue a public statement or warning → Meta Platforms, PJM Interconnection",
+     "Issue a public statement or warning",
+     "Accommodate or publicly answer OpenAI's move → OpenAI"
+    ],
+    "commitments_lapsed": [
+     "Oracle: Deliver next contracted Stargate capacity tranche to OpenAI on or ahead of schedule"
+    ],
+    "effects_fired": [
+     "Hyperion full-campus energization adds material load to global consumption",
+     "Did not materialise: Transformer lead-time-driven delays could push 2028 delays above 5 GW if queue volumes outpace PJM expedited track",
+     "Delayed PJM-area projects under IRAS curtailment/backstop pathways could push total US grid-delayed capacity above 5 GW into 2029",
+     "Did not materialise: IEA 570 TWh 2027 figure subject to modest downward revision risk (to ~565 TWh) in later data reconciliation",
+     "If Microsoft accepts NVIDIA framework, supply-energization co-scheduling improves 2029 delivery reliability.",
+     "Four-hyperscaler capex converges toward 780B guidance as Q4 spend lands."
+    ],
+    "scheduled_events": []
+   },
+   "diff": {
+    "interactions_changed": [
+     {
+      "from": "open",
+      "id": "i8_1",
+      "kind": "proposal",
+      "proposer": "NVIDIA",
+      "recipient": "Microsoft",
+      "terms": "NVIDIA commits prioritized Blackwell/Rubin-class allocation to Microsoft through 2029; Microsoft provides multi-quarter demand visibility and co-scheduling of deliveries against energization milestones; joint engineering on power-efficient AI factory reference designs.",
+      "to": "accepted"
+     }
+    ],
+    "relationships_changed": [
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 1.0,
+      "source": "IEA",
+      "target": "EIA",
+      "to": "allied"
+     },
+     {
+      "direction": "closer",
+      "from": "allied",
+      "polarity": 0.54,
+      "source": "Meta Platforms",
+      "target": "PJM Interconnection",
+      "to": "allied"
+     },
+     {
+      "from": null,
+      "polarity": 0.15,
+      "source": "Meta Platforms",
+      "target": "FERC",
+      "to": "neutral"
+     }
+    ],
+    "variables_added": [
+     {
+      "id": "us_datacenter_capacity_delayed_into_2029_by_grid_constraints",
+      "name": "us_datacenter_capacity_delayed_into_2029_by_grid_constraints",
+      "unit": "GW",
+      "value": 4.5
+     }
+    ],
+    "variables_changed": [
+     {
+      "from": 718.0,
+      "id": "four_hyperscaler_combined_capex",
+      "name": "Four-hyperscaler combined capex",
+      "to": 780.0,
+      "unit": "billion USD"
+     },
+     {
+      "from": 570.0,
+      "id": "global_data_center_electricity_consumption",
+      "name": "Global data center electricity consumption",
+      "to": 668.0,
+      "unit": "TWh"
+     },
+     {
+      "from": 4.2,
+      "id": "us_datacenter_capacity_delayed_into_2028_by_grid_constraints",
+      "name": "US datacenter capacity delayed into 2028 by grid constraints",
+      "to": 5.5,
+      "unit": "GW"
+     },
+     {
+      "from": "offer open, unanswered",
+      "id": "nvidia_microsoft_supply_framework_status",
+      "name": "NVIDIA-Microsoft supply framework status",
+      "to": "framework accepted; prioritized Blackwell/Rubin allocation through 2029 with multi-quarter demand visibility and delivery-energization co-scheduling",
+      "unit": ""
+     }
+    ]
+   },
+   "digest": "Q4 2028 closes a year of largely on-schedule execution: Microsoft–NVIDIA supply framework signed with co-scheduling, AWS–GE Vernova staged deliveries complete 100% on time, Meta and Oracle hit energization milestones, and four-hyperscaler capex converges to ~780B guidance. IEA's Q1 actuals (570 TWh, 18% 2027 growth) hold through reconciliation, keeping 2028…\nMoves:\n- PJM Interconnection: Accommodate or publicly answer Amazon (AWS)'s move (→ Amazon (AWS)): \"PJM's 2028-Q4 Expedited Interconnection Track report: 21 active projects with cumulative signed-GIA performance within the 10-month target,…\"\n- Meta Platforms: Issue a public statement or warning (→ PJM Interconnection, FERC): \"Meta confirms the next Hyperion energization tranche came online in Q4 2028 on schedule, and publishes its PJM/FERC compliance status along…\"\n- Alphabet (Google): Issue a public statement or warning: \"Alphabet's Q4 2028 debt-funding update: full-year 2028 capex executed within our stated guidance, with cumulative 2027–28 debt funding of $…\"",
+   "headline": "2028-Q4: 10 decisions · 4 facts changed · 4 events · arbiter=applied · Q4 2028 closes a year of largely on-schedule execution: Microsoft–NVIDIA supply framework signed with co-scheduling, AWS–GE Vernova staged…",
+   "narrative": "Q4 2028 closes a year of largely on-schedule execution: Microsoft–NVIDIA supply framework signed with co-scheduling, AWS–GE Vernova staged deliveries complete 100% on time, Meta and Oracle hit energization milestones, and four-hyperscaler capex converges to ~780B guidance. IEA's Q1 actuals (570 TWh, 18% 2027 growth) hold through reconciliation, keeping 2028 on the 660–680 TWh path. Grid friction persists but stays within tolerance: US delays into 2028 hold at 5.5 GW despite 134-week transformer lead times and PJM IRAS pathway splits.",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "scenario_pressure": {
+    "Continued buildout surge": "up",
+    "Measured growth plateau": "flat",
+    "Overbuild correction": "down",
+    "Power-constrained slowdown": "down"
+   }
+  }
+ ],
+ "horizon_date": "2028-12-31",
+ "interactions": [
+  {
+   "expires_round": 10,
+   "id": "i8_1",
+   "kind": "proposal",
+   "obligations": 2,
+   "opened_round": 8,
+   "proposer": "NVIDIA",
+   "recipient": "Microsoft",
+   "resolved_round": 9,
+   "response": "Microsoft has accepted NVIDIA's supply framework: prioritized Blackwell/Rubin-class allocation through 2029, with Microsoft providing multi-quarter demand visibility and delivery co-scheduling agains…",
+   "status": "accepted",
+   "terms": "NVIDIA commits prioritized Blackwell/Rubin-class allocation to Microsoft through 2029; Microsoft provides multi-quarter demand visibility and co-scheduling of deliveries against energization milestones; joint engineering on power-efficient AI factory reference designs."
+  }
+ ],
+ "pending_effects": [
+  {
+   "actor_id": null,
+   "created_round": 6,
+   "description": "GE Vernova staged deliveries under AWS contract begin converting to energized capacity",
+   "due_round": 10,
+   "id": "fx6_18",
+   "op": "add",
+   "probability": 0.5,
+   "source": "arbiter",
+   "targets": [],
+   "value": -0.7,
+   "variable_id": "us_datacenter_capacity_delayed_into_2028_by_grid_constraints"
+  },
+  {
+   "actor_id": null,
+   "created_round": 7,
+   "description": "2028 hyperscaler capex guidance could be rebased upward if demand outpacing compute persists into 2028-Q3/Q4",
+   "due_round": 10,
+   "id": "fx7_22",
+   "op": "set",
+   "probability": 0.4,
+   "source": "arbiter",
+   "targets": [],
+   "value": 820.0,
+   "variable_id": "four_hyperscaler_combined_capex_guidance_2028"
+  },
+  {
+   "actor_id": null,
+   "created_round": 8,
+   "description": "Transformer lead times (134 weeks) still bind late-2029 energizations; backlog pressure persists despite expedited track.",
+   "due_round": 11,
+   "id": "fx8_24",
+   "op": "set",
+   "probability": 0.5,
+   "source": "arbiter",
+   "targets": [],
+   "value": 4.5,
+   "variable_id": "us_datacenter_capacity_delayed_into_2028_by_grid_constraints"
+  },
+  {
+   "actor_id": null,
+   "created_round": 9,
+   "description": "Microsoft–NVIDIA co-scheduling improves 2029 delivery reliability and may lift 2029 hyperscaler capex guidance.",
+   "due_round": 11,
+   "id": "fx9_27",
+   "op": "set",
+   "probability": 0.65,
+   "source": "arbiter",
+   "targets": [],
+   "value": null,
+   "variable_id": null
+  },
+  {
+   "actor_id": null,
+   "created_round": 9,
+   "description": "Transformer lead times (134 weeks) push a growing share of 2029 queue into 2030 despite expedited-track performance.",
+   "due_round": 12,
+   "id": "fx9_28",
+   "op": "set",
+   "probability": 0.4,
+   "source": "arbiter",
+   "targets": [],
+   "value": null,
+   "variable_id": null
+  },
+  {
+   "actor_id": null,
+   "created_round": 9,
+   "description": "IEA 570 TWh Q1 figure revised modestly to ~565 TWh in later reconciliation.",
+   "due_round": 11,
+   "id": "fx9_29",
+   "op": "add",
+   "probability": 0.3,
+   "source": "arbiter",
+   "targets": [],
+   "value": -3.0,
+   "variable_id": "global_data_center_electricity_consumption"
+  }
+ ],
+ "period": {
+  "label": "2028-Q4",
+  "period_end": "2028-12-31",
+  "period_start": "2028-10-01",
+  "round": 8
+ },
+ "question": "Forecast global AI datacenter capital expenditure and electricity demand for calendar year 2027: total hyperscaler capex with a 70% confidence interval, whether global datacenter electricity consumption growth exceeds 20 percent year-over-year, and the probability that grid interconnection constraints delay more than 5 gigawatts of planned US datacenter capacity into 2028. Cover the four major hy…",
+ "recent_events": [
+  {
+   "action_kind": "economic",
+   "actors": [
+    "Amazon (AWS)"
+   ],
+   "description": "Advance your documented plan: Secure AI/cloud compute capacity for 2027 → GE Vernova, PJM Interconnection",
+   "kind": "action",
+   "option_id": "plan_1",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "decision",
+   "statement": "AWS Q3 2028 execution update: second tranche of staged GE Vernova turbine deliveries arrived on schedule, keeping every 2028 energization milestone across our capacity regions on track, and we've now energized 100% of our committed 2027 capacity regions. Capacity is arriving because customer demand is real — working b…",
+   "targets": [
+    "GE Vernova",
+    "PJM Interconnection"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "PJM Interconnection"
+   ],
+   "description": "Accommodate or publicly answer Amazon (AWS)'s move → Amazon (AWS)",
+   "kind": "action",
+   "option_id": "respond_1_accommodate",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "decision",
+   "statement": "PJM acknowledges AWS's confirmation of on-time staged turbine deliveries and thanks all participants as our 2028-Q3 Expedited Interconnection Track update reports 22 projects in the track (up from 18), with median days-to-GIA continuing below the 10-month target. New large loads (≥50MW) remain subject to capacity-resp…",
+   "targets": [
+    "Amazon (AWS)"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "economic",
+   "actors": [
+    "Microsoft"
+   ],
+   "description": "Advance your documented plan: Deliver committed AI capacity incl. OpenAI commitments → OpenAI, NVIDIA",
+   "kind": "action",
+   "option_id": "plan_1",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "decision",
+   "statement": "Microsoft confirms delivery of the 2028-Q3 Azure AI capacity increment under our OpenAI commitments, on schedule, with our nuclear PPA portfolio now securing 2.5 GW of firm long-lead power supporting the next phase of buildout.",
+   "targets": [
+    "OpenAI",
+    "NVIDIA"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Alphabet (Google)"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "decision",
+   "statement": "Alphabet confirms full-year 2027 capex delivery within our $235–255B guidance range, with cumulative 2027–28 debt funding of $55B executed at disciplined spreads against >4x order-book coverage. TPU-driven capacity ramp remains on schedule, underpinned by clean-energy PPAs, and we see sustained demand supporting our l…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "GE Vernova"
+   ],
+   "description": "Accommodate or publicly answer Amazon (AWS)'s move → Amazon (AWS)",
+   "kind": "action",
+   "option_id": "respond_1_accommodate",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "decision",
+   "statement": "GE Vernova confirms all committed 2028 turbine slots — including AWS staged deliveries — remain on schedule through Q3, with delivered capacity tracking 100% against contract. Gas capacity under contract now stands at 116 GW with disciplined execution across our order book.",
+   "targets": [
+    "Amazon (AWS)"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "economic",
+   "actors": [
+    "OpenAI"
+   ],
+   "description": "Advance your documented plan: Secure massive compute capacity → Oracle, Microsoft",
+   "kind": "action",
+   "option_id": "plan_1",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "decision",
+   "statement": "Compute remains the binding input. This quarter OpenAI confirmed the next Stargate capacity tranche with Oracle remains on schedule, and the Azure capacity increments delivered ahead of ramp curve under our Microsoft commitments are now supporting inference demand that continues to scale with installed capacity. These…",
+   "targets": [
+    "Oracle",
+    "Microsoft"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "economic",
+   "actors": [
+    "Meta Platforms"
+   ],
+   "description": "Advance your documented plan: Fund Hyperion-scale campuses → PJM Interconnection, FERC",
+   "kind": "action",
+   "option_id": "plan_1",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "decision",
+   "statement": "Meta confirms the next staged Hyperion energization tranche in Louisiana was delivered this quarter on schedule, fully funded within the previously announced financing framework. We welcome PJM's expedited interconnection track expansion to 22 projects and confirm full compliance with FERC's capacity-responsibility ru…",
+   "targets": [
+    "PJM Interconnection",
+    "FERC"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Dominion Energy"
+   ],
+   "description": "Accommodate or publicly answer PJM Interconnection's move → PJM Interconnection",
+   "kind": "action",
+   "option_id": "respond_2_accommodate",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "decision",
+   "statement": "Dominion Energy confirms the first tranche of GIA-backed datacenter energizations under PJM's Expedited Interconnection Track was delivered this quarter, within the committed timeline window. Our contracted pipeline stands at 56 GW, and we continue converting signed requests into reliable, served load in coordination…",
+   "targets": [
+    "PJM Interconnection"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "IEA"
+   ],
+   "description": "Issue a public statement or warning → EIA",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "decision",
+   "statement": "IEA's mid-year assessment: 2027 global data centre electricity consumption grew 18% year-on-year, tracking close to our central path of ~14–15%/yr toward ~950 TWh by 2030; our 2028 projection remains 660–680 TWh. We note rising but so far manageable grid friction, with 4.8 GW of US capacity delayed into 2028. The full…",
+   "targets": [
+    "EIA"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "coalition",
+   "actors": [
+    "NVIDIA"
+   ],
+   "description": "Form or deepen an alliance / joint initiative → Microsoft",
+   "kind": "action",
+   "option_id": "form_alliance",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "decision",
+   "statement": "NVIDIA and Microsoft are deepening their long-standing collaboration with a multi-year accelerator supply and co-engineering framework tied to Microsoft's datacenter buildout, ensuring GPU deliveries align with energization schedules through 2029. Compute demand remains durable — inference is just getting started, and…",
+   "targets": [
+    "Microsoft"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "NVIDIA"
+   ],
+   "description": "NVIDIA made an offer to Microsoft [i8_1]: NVIDIA commits prioritized Blackwell/Rubin-class allocation to Microsoft through 2029; Microsoft provides multi-quarter demand visibility and co-scheduling of deliveries against energization milestones; joint engineering on power-efficient AI factory reference designs. (answer…",
+   "kind": "offer",
+   "option_id": "form_alliance",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "interaction",
+   "targets": [
+    "Microsoft"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "First batch of PJM expedited-track generator interconnection agreements executed",
+   "kind": "consequence",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "pjm_expedited_interconnection_track_projects"
+   ]
+  },
+  {
+   "actors": [],
+   "description": "Did not materialise: Transformer- and interconnection-driven delays push US datacenter capacity deferrals above 5 GW threshold",
+   "kind": "consequence",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "PJM Interconnection",
+    "Dominion Energy"
+   ],
+   "description": "PJM expedited interconnection track expands to 22 projects with falling median days-to-GIA, improving 2029 energization outlook.",
+   "kind": "resolution",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "arbiter",
+   "targets": [
+    "Meta Platforms",
+    "Amazon (AWS)"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "GE Vernova"
+   ],
+   "description": "GE Vernova confirms 100% on-time delivery of committed 2028 turbine slots, easing near-term power supply fears among hyperscalers.",
+   "kind": "consequence",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "arbiter",
+   "targets": [
+    "Amazon (AWS)",
+    "Microsoft"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "IEA"
+   ],
+   "description": "IEA mid-year assessment holds 660-680 TWh 2028 projection, noting 18% 2027 growth as within central path — no upward revision despite capex strength.",
+   "kind": "consequence",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "arbiter",
+   "targets": [
+    "EIA"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Microsoft"
+   ],
+   "description": "Microsoft delivers Q3 Azure AI capacity on schedule with 2.5 GW nuclear PPAs secured, reinforcing OpenAI's compute ramp confidence.",
+   "kind": "resolution",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "arbiter",
+   "targets": [
+    "OpenAI",
+    "NVIDIA"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "OpenAI"
+   ],
+   "description": "OpenAI confirms next Stargate tranche with Oracle on schedule, signaling sustained multi-supplier demand into 2029.",
+   "kind": "consequence",
+   "period_label": "2028-Q3",
+   "round": 8,
+   "source": "arbiter",
+   "targets": [
+    "Oracle"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Oracle"
+   ],
+   "description": "Oracle's commitment lapsed: Deliver next contracted Stargate capacity tranche to OpenAI on or ahead of schedule",
+   "kind": "consequence",
+   "round": 9,
+   "source": "commitment",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "PJM Interconnection"
+   ],
+   "description": "Accommodate or publicly answer Amazon (AWS)'s move → Amazon (AWS)",
+   "kind": "action",
+   "option_id": "respond_1_accommodate",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "decision",
+   "statement": "PJM's 2028-Q4 Expedited Interconnection Track report: 21 active projects with cumulative signed-GIA performance within the 10-month target, and on-time staged deliveries under the AWS–GE Vernova supply contract reflected in confirmed 2028 energization milestones. We will publish the 2029-2030 load forecast vintage and…",
+   "targets": [
+    "Amazon (AWS)"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Meta Platforms"
+   ],
+   "description": "Issue a public statement or warning → PJM Interconnection, FERC",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "decision",
+   "statement": "Meta confirms the next Hyperion energization tranche came online in Q4 2028 on schedule, and publishes its PJM/FERC compliance status alongside quarterly disclosure: all expedited-track milestones met, with capacity-responsibility obligations under the FERC large-load order fully incorporated into our 2029 energizatio…",
+   "targets": [
+    "PJM Interconnection",
+    "FERC"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Alphabet (Google)"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "decision",
+   "statement": "Alphabet's Q4 2028 debt-funding update: full-year 2028 capex executed within our stated guidance, with cumulative 2027–28 debt funding of $55B completed at disciplined spreads on >4x order-book coverage. TPU-driven capacity milestones for 2028 were all delivered on schedule, and we enter 2029 with our infrastructure-l…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "coalition",
+   "actors": [
+    "Microsoft"
+   ],
+   "description": "Accept NVIDIA's offer [i8_1]: NVIDIA commits prioritized Blackwell/Rubin-class allocation to Microsoft through 2029; Microsoft provides mul… — binds both sides → NVIDIA",
+   "kind": "action",
+   "option_id": "accept:i8_1",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "decision",
+   "statement": "Microsoft has accepted NVIDIA's supply framework: prioritized Blackwell/Rubin-class allocation through 2029, with Microsoft providing multi-quarter demand visibility and delivery co-scheduling against energization milestones, plus joint engineering on power-efficient AI factory reference designs. This supports on-time…",
+   "targets": [
+    "NVIDIA"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "Microsoft",
+    "NVIDIA"
+   ],
+   "description": "Agreement [i8_1]: Microsoft accepted NVIDIA's offer — NVIDIA commits prioritized Blackwell/Rubin-class allocation to Microsoft through 2029; Microsoft provides multi-quarter demand visibility and co-scheduling of deliveries against energization milestones; joint engineering on power-efficient AI factory reference desi…",
+   "kind": "agreement",
+   "option_id": "form_alliance",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "interaction",
+   "statement": "Microsoft has accepted NVIDIA's supply framework: prioritized Blackwell/Rubin-class allocation through 2029, with Microsoft providing multi-quarter demand visibility and delivery co-scheduling against energization milestones, plus joint engineering on power-efficient AI factory reference designs. This supports on-time…",
+   "targets": [
+    "NVIDIA"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Amazon (AWS)"
+   ],
+   "description": "Accommodate or publicly answer PJM Interconnection's move → PJM Interconnection, GE Vernova",
+   "kind": "action",
+   "option_id": "respond_1_accommodate",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "decision",
+   "statement": "AWS Q4 2028 final execution report: all staged GE Vernova turbine deliveries for 2028 completed on schedule, and every 2028 energization milestone across our 2027–28 capacity regions was met — closing out two years of 100% on-time delivery. We thank PJM and our utility partners; the expedited interconnection track sho…",
+   "targets": [
+    "PJM Interconnection",
+    "GE Vernova"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "GE Vernova"
+   ],
+   "description": "Accommodate or publicly answer Amazon (AWS)'s move → Amazon (AWS)",
+   "kind": "action",
+   "option_id": "respond_1_accommodate",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "decision",
+   "statement": "GE Vernova confirms the multi-year AWS turbine supply framework is now in full staged execution, with 2028 delivery tranches landing on schedule and our gas capacity under contract holding at 116 GW with slots committed through the decade. Our electrification segment continues to expand in parallel, converting record…",
+   "targets": [
+    "Amazon (AWS)"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "OpenAI"
+   ],
+   "description": "Issue a public statement or warning → Oracle, Microsoft",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "decision",
+   "statement": "OpenAI confirms the next Stargate tranche energization milestone with Oracle is on track for completion by end of Q4 2028, and acknowledges Microsoft's on-schedule Q3 Azure AI capacity delivery under our commitments. Compute remains the binding input: every contracted megawatt is backed by real and growing demand for…",
+   "targets": [
+    "Oracle",
+    "Microsoft"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "FERC"
+   ],
+   "description": "Issue a public statement or warning → Meta Platforms, PJM Interconnection",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "decision",
+   "statement": "FERC notes Meta Platforms' Hyperion filing at PJM and confirms it will be processed under the large-load interconnection protocols adopted in our 18 June 2026 order, as modified by the subsequent show-cause capacity-responsibility rules. Large-load additions remain subject to demonstrated capacity responsibility befor…",
+   "targets": [
+    "Meta Platforms",
+    "PJM Interconnection"
+   ],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "IEA"
+   ],
+   "description": "Issue a public statement or warning",
+   "kind": "action",
+   "option_id": "public_statement",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "decision",
+   "statement": "IEA publishes the Electricity 2028 mid-year update annex on Energy & AI, incorporating Q1 2028 actuals: global data centre electricity consumption tracked at 570 TWh and 2027 growth of 18% YoY, consistent with our central path of 660–680 TWh in 2028 and roughly 950 TWh by 2030 (~3% of global electricity). Grid interco…",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "action_kind": "communication",
+   "actors": [
+    "Oracle"
+   ],
+   "description": "Accommodate or publicly answer OpenAI's move → OpenAI",
+   "kind": "action",
+   "option_id": "respond_2_accommodate",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "decision",
+   "statement": "Oracle confirms delivery of the 2028-Q3 Stargate capacity tranche to OpenAI on schedule, completing every contracted milestone to date. With our $18B debt-funded buildout fully deployed and energization running ahead of grid-constrained peers, we are engaging OpenAI on additional 2029 capacity under a multi-year frame…",
+   "targets": [
+    "OpenAI"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "Hyperion full-campus energization adds material load to global consumption",
+   "kind": "consequence",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "global_data_center_electricity_consumption"
+   ]
+  },
+  {
+   "actors": [],
+   "description": "Did not materialise: Transformer lead-time-driven delays could push 2028 delays above 5 GW if queue volumes outpace PJM expedited track",
+   "kind": "consequence",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "Delayed PJM-area projects under IRAS curtailment/backstop pathways could push total US grid-delayed capacity above 5 GW into 2029",
+   "kind": "consequence",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "us_datacenter_capacity_delayed_into_2028_by_grid_constraints"
+   ]
+  },
+  {
+   "actors": [],
+   "description": "Did not materialise: IEA 570 TWh 2027 figure subject to modest downward revision risk (to ~565 TWh) in later data reconciliation",
+   "kind": "consequence",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "If Microsoft accepts NVIDIA framework, supply-energization co-scheduling improves 2029 delivery reliability.",
+   "kind": "consequence",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": []
+  },
+  {
+   "actors": [],
+   "description": "Four-hyperscaler capex converges toward 780B guidance as Q4 spend lands.",
+   "kind": "consequence",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [],
+   "variable_ids": [
+    "four_hyperscaler_combined_capex"
+   ]
+  },
+  {
+   "actors": [
+    "Microsoft",
+    "NVIDIA"
+   ],
+   "description": "Microsoft–NVIDIA supply framework acceptance signals durable GPU demand visibility through 2029, tightening remaining merchant allocation for other buyers.",
+   "kind": "consequence",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [
+    "Oracle",
+    "Meta Platforms"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "GE Vernova",
+    "Amazon (AWS)"
+   ],
+   "description": "GE Vernova confirms full staged execution of the AWS framework with 116 GW under contract; slot backlog now effectively sold out, firming 2029+ turbine pricing.",
+   "kind": "consequence",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [
+    "Dominion Energy",
+    "ERCOT"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "IEA"
+   ],
+   "description": "IEA mid-year annex with Q1 2028 actuals (570 TWh) validates the central 660–680 TWh path, anchoring investor expectations on power demand durability.",
+   "kind": "resolution",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [
+    "FERC",
+    "EIA"
+   ],
+   "variable_ids": []
+  },
+  {
+   "actors": [
+    "FERC",
+    "PJM Interconnection"
+   ],
+   "description": "FERC processes Meta's Hyperion filing under the 2026 large-load protocols as modified by show-cause capacity-responsibility rules, providing regulatory clarity for subsequent filings.",
+   "kind": "resolution",
+   "period_label": "2028-Q4",
+   "round": 9,
+   "source": "arbiter",
+   "targets": [
+    "Meta Platforms"
+   ],
+   "variable_ids": []
+  }
+ ],
+ "relationships": [
+  {
+   "kind": "COMPETES_WITH",
+   "last_changed_round": 0,
+   "polarity": -0.3,
+   "source": 2,
+   "strength": 0.6,
+   "target": 0,
+   "valence": "adversarial"
+  },
+  {
+   "kind": "COMPETES_WITH",
+   "last_changed_round": 0,
+   "polarity": -0.3,
+   "source": 3,
+   "strength": 0.6,
+   "target": 2,
+   "valence": "adversarial"
+  },
+  {
+   "kind": "CUSTOMER_OF",
+   "last_changed_round": 9,
+   "polarity": 1.0,
+   "source": 0,
+   "strength": 0.9955,
+   "target": 11,
+   "valence": "allied"
+  },
+  {
+   "kind": "PARTNERS_WITH",
+   "last_changed_round": 9,
+   "polarity": 1.0,
+   "source": 13,
+   "strength": 1.0,
+   "target": 11,
+   "valence": "allied"
+  },
+  {
+   "kind": "SUPPLIES",
+   "last_changed_round": 9,
+   "polarity": 1.0,
+   "source": 4,
+   "strength": 0.9942,
+   "target": 1,
+   "valence": "allied"
+  },
+  {
+   "kind": "DEPENDS_ON",
+   "last_changed_round": 9,
+   "polarity": 1.0,
+   "source": 2,
+   "strength": 1.0,
+   "target": 4,
+   "valence": "allied"
+  },
+  {
+   "kind": "DEPENDS_ON",
+   "last_changed_round": 9,
+   "polarity": 1.0,
+   "source": 9,
+   "strength": 0.9926,
+   "target": 5,
+   "valence": "allied"
+  },
+  {
+   "kind": "REGULATES",
+   "last_changed_round": 5,
+   "polarity": 1.0,
+   "source": 7,
+   "strength": 0.9508,
+   "target": 5,
+   "valence": "allied"
+  },
+  {
+   "kind": "INFLUENCES",
+   "last_changed_round": 0,
+   "polarity": 0.2,
+   "source": 7,
+   "strength": 0.5,
+   "target": 10,
+   "valence": "neutral"
+  },
+  {
+   "kind": "SUPPLIES",
+   "last_changed_round": 9,
+   "polarity": 1.0,
+   "source": 12,
+   "strength": 1.0,
+   "target": 0,
+   "valence": "allied"
+  },
+  {
+   "kind": "SUPPLIES",
+   "last_changed_round": 8,
+   "polarity": 0.7625,
+   "source": 12,
+   "strength": 0.8915,
+   "target": 3,
+   "valence": "allied"
+  },
+  {
+   "kind": "COMPETES_WITH",
+   "last_changed_round": 0,
+   "polarity": -0.3,
+   "source": 1,
+   "strength": 0.6,
+   "target": 2,
+   "valence": "adversarial"
+  },
+  {
+   "kind": "COMPETES_WITH",
+   "last_changed_round": 0,
+   "polarity": -0.3,
+   "source": 3,
+   "strength": 0.6,
+   "target": 1,
+   "valence": "adversarial"
+  },
+  {
+   "kind": "DEPENDS_ON",
+   "last_changed_round": 9,
+   "polarity": 1.0,
+   "source": 11,
+   "strength": 1.0,
+   "target": 13,
+   "valence": "allied"
+  },
+  {
+   "kind": "OTHER",
+   "last_changed_round": 9,
+   "polarity": 1.0,
+   "source": 6,
+   "strength": 0.9439,
+   "target": 8,
+   "valence": "allied"
+  },
+  {
+   "kind": "ALLY_OF",
+   "last_changed_round": 3,
+   "polarity": 0.15,
+   "source": 2,
+   "strength": 0.345,
+   "target": 9,
+   "valence": "neutral"
+  },
+  {
+   "kind": "ALLY_OF",
+   "last_changed_round": 4,
+   "polarity": 0.135,
+   "source": 3,
+   "strength": 0.3405,
+   "target": 4,
+   "valence": "neutral"
+  },
+  {
+   "kind": "ALLY_OF",
+   "last_changed_round": 9,
+   "polarity": 0.54,
+   "source": 1,
+   "strength": 0.606,
+   "target": 5,
+   "valence": "allied"
+  },
+  {
+   "kind": "OPPOSES",
+   "last_changed_round": 4,
+   "polarity": -0.15,
+   "source": 0,
+   "strength": 0.345,
+   "target": 4,
+   "valence": "neutral"
+  },
+  {
+   "kind": "ALLY_OF",
+   "last_changed_round": 9,
+   "polarity": 0.15,
+   "source": 1,
+   "strength": 0.345,
+   "target": 7,
+   "valence": "neutral"
+  }
+ ],
+ "seed_gaps": [
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "IEA"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "FERC"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "EIA"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "Dominion Energy"
+  },
+  {
+   "kind": "actor_without_plans",
+   "note": "no documented plans or red lines; option menu is class-generic",
+   "subject": "NVIDIA"
+  }
+ ],
+ "simulation_id": "sim_06de440f5bea",
+ "summary": {
+  "actors": 14,
+  "arbiter_enabled": true,
+  "arbiter_failed_rounds": 0,
+  "behaviour": {
+   "moves": 0,
+   "offers_answered": 0,
+   "responsive_moves": 0,
+   "responsive_share": null,
+   "rounds_scored": 0
+  },
+  "decision_actors_max": 24,
+  "events": 159,
+  "offers": {
+   "accepted": 1,
+   "breached": 0,
+   "countered": 0,
+   "lapsed": 0,
+   "open": 0,
+   "opened": 1,
+   "rejected": 0
+  },
+  "pending_effects": 6,
+  "relationships": 20,
+  "rounds_committed": 9,
+  "schema_version": "world-model-summary/v1",
+  "seed_gaps": 5,
+  "variables": 41
+ },
+ "variables": [
+  {
+   "as_of": "2025-10",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 380.0
+    },
+    {
+     "cause": "AWS 2026 capex execution (~$220B) lands in reported 2026 combined hyperscaler capex.",
+     "round": 3,
+     "source": "effect",
+     "value": 480.0
+    },
+    {
+     "cause": "Q2 execution across MSFT, AWS, Meta, Alphabet tracking toward the $735B guidance; incremental firm commitments (AWS turbine locks, Meta energization) add roughly $55B to realized/committed 2027 spend…",
+     "round": 3,
+     "source": "arbiter",
+     "value": 535.0
+    },
+    {
+     "cause": "Q3 spend consistent with on-track delivery against $750B guidance; modest sequential step-up from energizations.",
+     "round": 4,
+     "source": "arbiter",
+     "value": 560.0
+    },
+    {
+     "cause": "Q4 spend keeps 2027 full-year total tracking toward ~$605B against $750B guidance; modest incremental outlay as energizations land on schedule.",
+     "round": 5,
+     "source": "arbiter",
+     "value": 605.0
+    },
+    {
+     "cause": "Alphabet 2027 capex lands in reported combined hyperscaler capex as execution proceeds",
+     "round": 6,
+     "source": "effect",
+     "value": 705.0
+    },
+    {
+     "cause": "On-time Q3 execution and Alphabet confirming 2027 delivery in range nudges realized capex slightly toward 780 guidance.",
+     "round": 8,
+     "source": "arbiter",
+     "value": 718.0
+    },
+    {
+     "cause": "Four-hyperscaler capex converges toward 780B guidance as Q4 spend lands.",
+     "round": 9,
+     "source": "effect",
+     "value": 760.0
+    },
+    {
+     "cause": "Q4 spend lands within guidance; Alphabet confirms execution within stated guidance and full-year convergence.",
+     "round": 9,
+     "source": "arbiter",
+     "value": 780.0
+    }
+   ],
+   "id": "four_hyperscaler_combined_capex",
+   "kind": "numeric",
+   "name": "Four-hyperscaler combined capex",
+   "provenance": "arbiter",
+   "unit": "billion USD",
+   "value": 780.0
+  },
+  {
+   "as_of": "2026-10-20",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 720.0
+    },
+    {
+     "cause": "AWS ~$220B plan and Alphabet $195–205B guidance push combined guidance slightly above the ~$720B path; Meta, Microsoft hold.",
+     "round": 1,
+     "source": "arbiter",
+     "value": 735.0
+    },
+    {
+     "cause": "Alphabet's new $235–255B guidance and AWS firm delivery schedules nudge combined 2027 guidance to ~$735–765B; midpoint rises to ~$750B.",
+     "round": 3,
+     "source": "arbiter",
+     "value": 750.0
+    },
+    {
+     "cause": "Initial 2028 guidance issued with Q4 results, up modestly on 2027 actuals as all four signal continued buildout with tighter discipline.",
+     "round": 6,
+     "source": "arbiter",
+     "value": 780.0
+    }
+   ],
+   "id": "four_hyperscaler_combined_capex_guidance",
+   "kind": "numeric",
+   "name": "Four-hyperscaler combined capex guidance",
+   "provenance": "arbiter",
+   "unit": "billion USD",
+   "value": 780.0
+  },
+  {
+   "as_of": "2025-10",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 64.55
+    }
+   ],
+   "id": "microsoft_fiscal_2025_capex",
+   "kind": "numeric",
+   "name": "Microsoft fiscal 2025 capex",
+   "provenance": "research",
+   "unit": "billion USD",
+   "value": 64.55
+  },
+  {
+   "as_of": "2025-10",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 125.0
+    }
+   ],
+   "id": "amazon_2025_capex_guidance",
+   "kind": "numeric",
+   "name": "Amazon 2025 capex guidance",
+   "provenance": "research",
+   "unit": "billion USD",
+   "value": 125.0
+  },
+  {
+   "as_of": "2025-10",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 91.0
+    }
+   ],
+   "id": "alphabet_2025_capex_guidance",
+   "kind": "numeric",
+   "name": "Alphabet 2025 capex guidance",
+   "provenance": "research",
+   "unit": "billion USD",
+   "value": 91.0
+  },
+  {
+   "as_of": "2025-10",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 70.0
+    }
+   ],
+   "id": "meta_2025_capex_guidance",
+   "kind": "numeric",
+   "name": "Meta 2025 capex guidance",
+   "provenance": "research",
+   "unit": "billion USD",
+   "value": 70.0
+  },
+  {
+   "as_of": "2026-08",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 284.0
+    }
+   ],
+   "id": "2026_estimate_revision_path",
+   "kind": "numeric",
+   "name": "2026 estimate revision path",
+   "provenance": "research",
+   "unit": "billion USD",
+   "value": 284.0
+  },
+  {
+   "as_of": "2026-08",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 253.0
+    }
+   ],
+   "id": "2025_estimate_revision_path",
+   "kind": "numeric",
+   "name": "2025 estimate revision path",
+   "provenance": "research",
+   "unit": "billion USD",
+   "value": 253.0
+  },
+  {
+   "as_of": "2026-10-20",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 400.0
+    }
+   ],
+   "id": "largest_tech_companies_combined_capex",
+   "kind": "numeric",
+   "name": "Largest tech companies combined capex",
+   "provenance": "research",
+   "unit": "billion USD",
+   "value": 400.0
+  },
+  {
+   "as_of": "2025",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 415.0
+    },
+    {
+     "cause": "IEA notes 485 TWh (+17%) for 2025 baseline; Q4 2026 additions keep consumption on central path, incremental AI capacity partially energized.",
+     "round": 1,
+     "source": "arbiter",
+     "value": 480.0
+    },
+    {
+     "cause": "Q1 2027 seasonal increment consistent with IEA 14–17% annual growth path; small defensible step toward ~550–560 TWh year-end.",
+     "round": 2,
+     "source": "arbiter",
+     "value": 490.0
+    },
+    {
+     "cause": "Quarterly additions from Azure capacity, Hyperion energization, and Stargate milestone lift global consumption ~30 TWh from Q1 to ~520 TWh annualized pace; growth strong but interconnection-limited.",
+     "round": 3,
+     "source": "arbiter",
+     "value": 520.0
+    },
+    {
+     "cause": "IEA interim update tracks ~520 TWh with ~14%/yr growth; Q3 adds modest seasonal-adjacent increment, tracking slightly above central path.",
+     "round": 4,
+     "source": "arbiter",
+     "value": 535.0
+    },
+    {
+     "cause": "Q4 seasonal/compute ramp adds ~30 TWh, ending 2027 near 565 TWh — ~14% YoY growth, above IEA's earlier annualized estimate but below 20%.",
+     "round": 5,
+     "source": "arbiter",
+     "value": 565.0
+    },
+    {
+     "cause": "IEA Electricity 2028 report publishes final 2027 figure with 2028 outlook; modest revision risk to 565 TWh",
+     "round": 7,
+     "source": "effect",
+     "value": 570.0
+    },
+    {
+     "cause": "Hyperion full-campus energization adds material load to global consumption",
+     "round": 9,
+     "source": "effect",
+     "value": 595.0
+    },
+    {
+     "cause": "Hyperion energization and on-time Stargate/Azure tranches push 2028 toward the upper-central IEA path (660–680 TWh), partially offset by IRAS curtailment pathways.",
+     "round": 9,
+     "source": "arbiter",
+     "value": 668.0
+    }
+   ],
+   "id": "global_data_center_electricity_consumption",
+   "kind": "numeric",
+   "name": "Global data center electricity consumption",
+   "provenance": "arbiter",
+   "unit": "TWh",
+   "value": 668.0
+  },
+  {
+   "as_of": "2026",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 50.0
+    }
+   ],
+   "id": "ai_focused_datacenter_consumption_growth",
+   "kind": "numeric",
+   "name": "AI-focused datacenter consumption growth",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 50.0
+  },
+  {
+   "as_of": "2026-07",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 150578.728
+    }
+   ],
+   "id": "us_commercial_retail_electricity_sales",
+   "kind": "numeric",
+   "name": "US commercial retail electricity sales",
+   "provenance": "research",
+   "unit": "million kWh",
+   "value": 150578.728
+  },
+  {
+   "as_of": "2026-07",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 4.306
+    }
+   ],
+   "id": "us_commercial_retail_sales_yoy_growth",
+   "kind": "numeric",
+   "name": "US commercial retail sales YoY growth",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 4.306
+  },
+  {
+   "as_of": "2025-12",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 9.788
+    }
+   ],
+   "id": "virginia_commercial_retail_sales_yoy_growth",
+   "kind": "numeric",
+   "name": "Virginia commercial retail sales YoY growth",
+   "provenance": "research",
+   "unit": "percent",
+   "value": 9.788
+  },
+  {
+   "as_of": "2025-12",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 2060.0
+    }
+   ],
+   "id": "us_transmission_interconnection_queue",
+   "kind": "numeric",
+   "name": "US transmission interconnection queue",
+   "provenance": "research",
+   "unit": "GW",
+   "value": 2060.0
+  },
+  {
+   "as_of": "2025-12",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 5.0
+    }
+   ],
+   "id": "median_request_to_operation_time",
+   "kind": "numeric",
+   "name": "Median request-to-operation time",
+   "provenance": "research",
+   "unit": "years",
+   "value": 5.0
+  },
+  {
+   "as_of": "2026-10-20",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 201.5
+    }
+   ],
+   "id": "pjm_cycle_1_qualified_capacity",
+   "kind": "numeric",
+   "name": "PJM Cycle 1 qualified capacity",
+   "provenance": "research",
+   "unit": "GW",
+   "value": 201.5
+  },
+  {
+   "as_of": "2026-10-20",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 128.0
+    },
+    {
+     "cause": "GE Vernova's doubled grid orders signal demand outpacing manufacturing additions; modest further extension.",
+     "round": 1,
+     "source": "arbiter",
+     "value": 132.0
+    },
+    {
+     "cause": "Sustained ordering pressure keeps lead times elevated; GE Vernova slot commitments and hyperscaler contracting marginally lengthen queues.",
+     "round": 2,
+     "source": "arbiter",
+     "value": 134.0
+    }
+   ],
+   "id": "main_power_transformer_lead_time",
+   "kind": "numeric",
+   "name": "Main power transformer lead time",
+   "provenance": "arbiter",
+   "unit": "weeks",
+   "value": 134.0
+  },
+  {
+   "as_of": "2026",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 25.0
+    }
+   ],
+   "id": "alphabet_bond_sale",
+   "kind": "numeric",
+   "name": "Alphabet bond sale",
+   "provenance": "research",
+   "unit": "billion USD",
+   "value": 25.0
+  },
+  {
+   "as_of": "2026-09",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 30.0
+    }
+   ],
+   "id": "meta_debt_issuance",
+   "kind": "numeric",
+   "name": "Meta debt issuance",
+   "provenance": "research",
+   "unit": "billion USD",
+   "value": 30.0
+  },
+  {
+   "as_of": "2026-10",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 18.0
+    }
+   ],
+   "id": "oracle_debt_issuance",
+   "kind": "numeric",
+   "name": "Oracle debt issuance",
+   "provenance": "research",
+   "unit": "billion USD",
+   "value": 18.0
+  },
+  {
+   "as_of": "2026-07",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 850.0
+    }
+   ],
+   "id": "tech_datacenter_lease_commitments",
+   "kind": "numeric",
+   "name": "Tech datacenter lease commitments",
+   "provenance": "research",
+   "unit": "billion USD",
+   "value": 850.0
+  },
+  {
+   "as_of": "2024-12",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 40000.0
+    }
+   ],
+   "id": "dominion_datacenter_capacity_requests",
+   "kind": "numeric",
+   "name": "Dominion datacenter capacity requests",
+   "provenance": "research",
+   "unit": "MW",
+   "value": 40000.0
+  },
+  {
+   "as_of": "2026-07",
+   "history": [
+    {
+     "cause": "seed",
+     "round": 0,
+     "source": "research",
+     "value": 53.8
+    },
+    {
+     "cause": "AWS dedicated transmission/substation contracting with Dominion converts some of the 40 GW request queue into firm contracted capacity (~56 GW total).",
+     "round": 3,
+     "source": "arbiter",
+     "value": 56.0
+    }
+   ],
+   "id": "dominion_contracted_datacenter_capacity",
+   "kind": "numeric",
+   "name": "Dominion contracted datacenter capacity",
+   "provenance": "arbiter",
+   "unit": "GW",
+   "value": 56.0
+  },
+  {
+   "as_of": "2026-12-31",
+   "history": [
+    {
+     "cause": "PJM's filing formalizes up to ten ≥250MW expedited projects annually — a new institutional fact.",
+     "round": 1,
+     "source": "arbiter",
+     "value": 10.0
+    },
+    {
+     "cause": "IRAS rules taking effect on June 1 push some large loads into the expedited track alongside their capacity commitments; modest net addition of 2 projects qualifying under new rules.",
+     "round": 3,
+     "source": "arbiter",
+     "value": 12.0
+    },
+    {
+     "cause": "PJM reform push adds a few qualifying projects, but 10-month GIA window means slow incremental additions.",
+     "round": 5,
+     "source": "arbiter",
+     "value": 15.0
+    },
+    {
+     "cause": "PJM's Q4 execution report shows continued queue processing; a few additional large projects enter accelerated review.",
+     "round": 6,
+     "source": "arbiter",
+     "value": 18.0
+    },
+    {
+     "cause": "PJM first-tranche expedited GIAs executed; if slipped, backlog risk grows",
+     "round": 7,
+     "source": "effect",
+     "value": 22.0
+    },
+    {
+     "cause": "First batch of PJM expedited-track generator interconnection agreements executed",
+     "round": 8,
+     "source": "effect",
+     "value": 14.0
+    },
+    {
+     "cause": "PJM Q3 update reports track growth from 18 to 22 projects.",
+     "round": 8,
+     "source": "arbiter",
+     "value": 21.0
+    }
+   ],
+   "id": "pjm_expedited_interconnection_track_projects",
+   "kind": "numeric",
+   "name": "PJM expedited interconnection track projects",
+   "provenance": "arbiter",
+   "unit": "projects",
+   "value": 21.0
+  },
+  {
+   "as_of": "2026-12-31",
+   "history": [
+    {
+     "cause": "Nov 16 deadline met; FERC review pending with compliance determinations expected 2027.",
+     "round": 1,
+     "source": "arbiter",
+     "value": "responses under review"
+    },
+    {
+     "cause": "FERC accepted PJM's revised protocol filing but issued no order.",
+     "round": 2,
+     "source": "arbiter",
+     "value": "PJM response accepted for review; decision pending"
+    },
+    {
+     "cause": "FERC order on large-load interconnection protocols",
+     "round": 4,
+     "source": "effect",
+     "value": "order issued; capacity-responsibility rules adopted with modifications"
+    }
+   ],
+   "id": "ferc_large_load_show_cause_review_status",
+   "kind": "text",
+   "name": "FERC large-load show-cause review status",
+   "provenance": "effect",
+   "unit": "",
+   "value": "order issued; capacity-responsibility rules adopted with modifications"
+  },
+  {
+   "as_of": "2027-03-31",
+   "history": [
+    {
+     "cause": "Dominion references June 1, 2027 effective date for new protocols; now a tracked institutional milestone.",
+     "round": 2,
+     "source": "arbiter",
+     "value": "2027-06-01"
+    }
+   ],
+   "id": "pjm_large_load_protocol_decision_deadline",
+   "kind": "text",
+   "name": "PJM large-load protocol decision deadline",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "2027-06-01"
+  },
+  {
+   "as_of": "2027-03-31",
+   "history": [
+    {
+     "cause": "Company stated 2027 delivery slots fully committed.",
+     "round": 2,
+     "source": "arbiter",
+     "value": 100.0
+    }
+   ],
+   "id": "ge_vernova_2027_delivery_slot_commitment",
+   "kind": "numeric",
+   "name": "GE Vernova 2027 delivery slot commitment",
+   "provenance": "arbiter",
+   "unit": "percent",
+   "value": 100.0
+  },
+  {
+   "as_of": "2027-06-30",
+   "history": [
+    {
+     "cause": "Initial indications of how new ≥50 MW loads are electing to comply in first month under the rules.",
+     "round": 3,
+     "source": "arbiter",
+     "value": "capacity-addition 40% / backstop procurement 45% / curtailment acceptance 15%"
+    }
+   ],
+   "id": "pjm_iras_rule_compliance_pathway_split",
+   "kind": "text",
+   "name": "PJM IRAS rule compliance pathway split",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "capacity-addition 40% / backstop procurement 45% / curtailment acceptance 15%"
+  },
+  {
+   "as_of": "2027-06-30",
+   "history": [
+    {
+     "cause": "Per GE Vernova statement, reservations above 125 GW entering mid-2027; tracked as firm backlog indicator.",
+     "round": 3,
+     "source": "arbiter",
+     "value": 128.0
+    }
+   ],
+   "id": "ge_vernova_gas_turbine_slot_reservations",
+   "kind": "numeric",
+   "name": "GE Vernova gas turbine slot reservations",
+   "provenance": "arbiter",
+   "unit": "GW",
+   "value": 128.0
+  },
+  {
+   "as_of": "2027-09-30",
+   "history": [
+    {
+     "cause": "AWS coalition move initiates structured talks for 2028+ slots at locked pricing; no agreement yet.",
+     "round": 4,
+     "source": "arbiter",
+     "value": "negotiations opened; terms not finalized"
+    },
+    {
+     "cause": "AWS statement says framework negotiation concluded; GE Vernova confirms formal negotiations. Treat as signed framework, deliveries still ahead.",
+     "round": 5,
+     "source": "arbiter",
+     "value": "framework agreement concluded; definitive multi-year supply contract signed with staged deliveries from 2028"
+    }
+   ],
+   "id": "aws_ge_vernova_multi_year_turbine_supply_talks_status",
+   "kind": "text",
+   "name": "AWS–GE Vernova multi-year turbine supply talks status",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "framework agreement concluded; definitive multi-year supply contract signed with staged deliveries from 2028"
+  },
+  {
+   "as_of": "2027-09-30",
+   "history": [
+    {
+     "cause": "Signed long-lead nuclear PPAs for 2029-2030 energization; small relative to gas fleet but first firm commitments.",
+     "round": 4,
+     "source": "arbiter",
+     "value": 2.5
+    }
+   ],
+   "id": "microsoft_nuclear_ppa_portfolio_secured_capacity",
+   "kind": "numeric",
+   "name": "Microsoft nuclear PPA portfolio secured capacity",
+   "provenance": "arbiter",
+   "unit": "GW",
+   "value": 2.5
+  },
+  {
+   "as_of": "2027-12-31",
+   "history": [
+    {
+     "cause": "$25B earlier in year plus $30B Q4 issuance, >4x oversubscribed — debt-funded AI capex now material.",
+     "round": 5,
+     "source": "arbiter",
+     "value": 55.0
+    }
+   ],
+   "id": "alphabet_bond_issuance_2027_cumulative",
+   "kind": "numeric",
+   "name": "Alphabet bond issuance (2027 cumulative)",
+   "provenance": "arbiter",
+   "unit": "billion USD",
+   "value": 55.0
+  },
+  {
+   "as_of": "2027-12-31",
+   "history": [
+    {
+     "cause": "Transformer lead times (134 weeks) and PJM protocol implementation delay some capacity; currently below the 5 GW threshold but trending up.",
+     "round": 5,
+     "source": "arbiter",
+     "value": 4.2
+    },
+    {
+     "cause": "IRAS compliance friction (curtailment-acceptance and backstop pathways) pushes a modest increment of PJM-area projects past 2028 despite expedited track progress.",
+     "round": 7,
+     "source": "arbiter",
+     "value": 4.8
+    },
+    {
+     "cause": "First expedited-track GIAs executed and Dominion tranche energized on time; modest reduction in deferred capacity, still above 4 GW.",
+     "round": 8,
+     "source": "arbiter",
+     "value": 4.2
+    },
+    {
+     "cause": "Delayed PJM-area projects under IRAS curtailment/backstop pathways could push total US grid-delayed capacity above 5 GW into 2029",
+     "round": 9,
+     "source": "effect",
+     "value": 5.5
+    }
+   ],
+   "id": "us_datacenter_capacity_delayed_into_2028_by_grid_constraints",
+   "kind": "numeric",
+   "name": "US datacenter capacity delayed into 2028 by grid constraints",
+   "provenance": "effect",
+   "unit": "GW",
+   "value": 5.5
+  },
+  {
+   "as_of": "2028-03-31",
+   "history": [
+    {
+     "cause": "Forward-year guidance now distinct from 2027 execution.",
+     "round": 6,
+     "source": "arbiter",
+     "value": 780.0
+    }
+   ],
+   "id": "four_hyperscaler_combined_capex_guidance_2028",
+   "kind": "numeric",
+   "name": "four_hyperscaler_combined_capex_guidance_2028",
+   "provenance": "arbiter",
+   "unit": "billion USD",
+   "value": 780.0
+  },
+  {
+   "as_of": "2028-03-31",
+   "history": [
+    {
+     "cause": "565 TWh vs ~480 TWh base; IEA preliminary estimate confirms sub-20% growth.",
+     "round": 6,
+     "source": "arbiter",
+     "value": 18.0
+    }
+   ],
+   "id": "global_datacenter_electricity_growth_2027_yoy",
+   "kind": "numeric",
+   "name": "global_datacenter_electricity_growth_2027_yoy",
+   "provenance": "arbiter",
+   "unit": "percent",
+   "value": 18.0
+  },
+  {
+   "as_of": "2028-06-30",
+   "history": [
+    {
+     "cause": "IEA Electricity 2028 report establishes a tracked forward baseline the world must now reference.",
+     "round": 7,
+     "source": "arbiter",
+     "value": "660-680 TWh projected for 2028, central path toward ~950 TWh by 2030"
+    }
+   ],
+   "id": "iea_2028_datacenter_consumption_outlook",
+   "kind": "text",
+   "name": "iea_2028_datacenter_consumption_outlook",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "660-680 TWh projected for 2028, central path toward ~950 TWh by 2030"
+  },
+  {
+   "as_of": "2028-06-30",
+   "history": [
+    {
+     "cause": "Alphabet completed $30B issuance this quarter; cumulative debt funding now a tracked fact anchoring capex guidance credibility.",
+     "round": 7,
+     "source": "arbiter",
+     "value": 55.0
+    }
+   ],
+   "id": "alphabet_2027_2028_cumulative_debt_funding",
+   "kind": "numeric",
+   "name": "alphabet_2027_2028_cumulative_debt_funding",
+   "provenance": "arbiter",
+   "unit": "billion USD",
+   "value": 55.0
+  },
+  {
+   "as_of": "2028-09-30",
+   "history": [
+    {
+     "cause": "GE Vernova stated contracted gas capacity of 116 GW, distinct from 128 GW slot reservations.",
+     "round": 8,
+     "source": "arbiter",
+     "value": 116.0
+    }
+   ],
+   "id": "ge_vernova_gas_capacity_under_contract",
+   "kind": "numeric",
+   "name": "GE Vernova gas capacity under contract",
+   "provenance": "arbiter",
+   "unit": "GW",
+   "value": 116.0
+  },
+  {
+   "as_of": "2028-09-30",
+   "history": [
+    {
+     "cause": "Coalition offer from NVIDIA remains pending; must be tracked until settled.",
+     "round": 8,
+     "source": "arbiter",
+     "value": "offer open, unanswered"
+    },
+    {
+     "cause": "Microsoft formally accepted NVIDIA's offer; agreement now binding.",
+     "round": 9,
+     "source": "arbiter",
+     "value": "framework accepted; prioritized Blackwell/Rubin allocation through 2029 with multi-quarter demand visibility and delivery-energization co-scheduling"
+    }
+   ],
+   "id": "nvidia_microsoft_supply_framework_status",
+   "kind": "text",
+   "name": "NVIDIA-Microsoft supply framework status",
+   "provenance": "arbiter",
+   "unit": "",
+   "value": "framework accepted; prioritized Blackwell/Rubin allocation through 2029 with multi-quarter demand visibility and delivery-energization co-scheduling"
+  },
+  {
+   "as_of": "2028-12-31",
+   "history": [
+    {
+     "cause": "PJM expedited track and AWS turbine deliveries hold delays below 2028's 5.5 GW, but transformer lead times keep a meaningful queue slipping into 2029.",
+     "round": 9,
+     "source": "arbiter",
+     "value": 4.5
+    }
+   ],
+   "id": "us_datacenter_capacity_delayed_into_2029_by_grid_constraints",
+   "kind": "numeric",
+   "name": "us_datacenter_capacity_delayed_into_2029_by_grid_constraints",
+   "provenance": "arbiter",
+   "unit": "GW",
+   "value": 4.5
+  }
+ ]
+}
