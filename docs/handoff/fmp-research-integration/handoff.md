@@ -1,8 +1,8 @@
 # Handoff.md
 
 **Last Updated:** 2026-10-27 (Asia/Shanghai)
-**Status:** In Progress
-**Current Focus:** Official FMP MCP client, automatic deep research integration, and reusable skill.
+**Status:** Complete
+**Current Focus:** Delivered official FMP integration; running-app adoption remains a separate operation.
 
 ## 1) Request & Context
 The user requested study of FMP documentation and MCP, a Codex skill, and automatic data/news retrieval by DeepResearchForecast's research agent. They explicitly selected FMP's official MCP server. Work is isolated on codex/fmp-research-skill, based on main 0d4488815c6164eb3f920f928c9e1f9ffc1b63bb. The dirty primary checkout is preserved. The credential supplied in chat will not be copied into source, logs, or configuration. Local replacement configuration is pending.
@@ -25,7 +25,7 @@ Follow [PLANS.md](PLANS.md). Parallel owners will have disjoint client, runtime 
 - [x] Implement bounded client; client96 and live three-capability checks passed.
 - [x] Wire and verify actual research consumers; runtime31, deployment26 and composed acceptance passed.
 - [x] Create/install skill and validate behavior; skill8 and independent forward-test closure recorded.
-- [ ] Independent review and scoped delivery.
+- [x] Independent review and scoped delivery; all feature findings closed and source verified on remote main.
 
 ## 5) Findings, Decisions, Assumptions
 Official endpoint is https://financialmodelingprep.com/mcp with apikey authentication. Tool names must come from live tools/list, not community camelCase names. Existing official-data MCP hub is stdio and serves statistical data; FMP receives its own bounded research evidence path. Current FMP snapshots cannot establish historical point-in-time availability.
@@ -81,3 +81,8 @@ Implementation, documentation, installed skill, source-aware research capture an
 
 ### Next-session prompt
 Read this handoff and `verification.json`. The FMP feature is implemented with the official endpoint only. Check the recorded delivery ref and current local service/active-run state before adopting main in the running application. Preserve the dirty primary checkout. Do not refresh sealed research or infer full live-model/native-runtime acceptance from the offline gates. Investigate the separately recorded report-baseline fixture only if that follow-up is requested.
+
+### Main-branch delivery
+Implementation commit `2de6eca8ce85f2f89f6b8c3cc3e6e963c95f4255` was pushed atomically and without force to both `legacy/main` and `legacy/codex/fmp-research-skill`; `git ls-remote` independently confirmed both refs. It is a fast-forward from the inspected main base, preserving the preceding history. This closing documentation commit records that result; the final delivered ref is in the private `final-delivery.json` receipt.
+
+The Codex skill is installed, the official MCP credential has passed bounded live checks, and new research runs from the updated code automatically expose and use FMP when relevant. The already running primary application was not restarted or switched from its existing dirty checkout. No paid model run, saved forecast replacement or production-data mutation was performed.

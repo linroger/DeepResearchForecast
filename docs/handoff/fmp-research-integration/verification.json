@@ -80,5 +80,14 @@
     ],
     "chart_child_blocked_font_reads": 18,
     "network_attempts_in_offline_gate": 0
+  },
+  "delivery": {
+    "implementation_commit": "2de6eca8ce85f2f89f6b8c3cc3e6e963c95f4255",
+    "remote_refs": [
+      "legacy/main",
+      "legacy/codex/fmp-research-skill"
+    ],
+    "verified_by": "git ls-remote after atomic non-forced push",
+    "running_app_adopted": false
   }
 }
