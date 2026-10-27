@@ -29,15 +29,15 @@
       >{{ translationButtonLabel }}</button>
       <span v-if="translationFeedback" class="report-lang-feedback" aria-live="polite">{{ translationFeedback }}</span>
       <span v-if="coverageFeedback" class="report-lang-feedback" role="status">{{ coverageFeedback }}</span>
-      <a
-        class="edit-btn"
-        :href="researchPdfHref"
-        target="_blank"
-        rel="noopener"
-        :class="{ disabled: pdfDisabled }"
-        :aria-disabled="pdfDisabled"
-        @click="onPdfClick"
-      >{{ L('下载 PDF', 'Download PDF') }}</a>
+      <button
+        type="button"
+        class="edit-btn pdf-btn"
+        :disabled="pdfDisabled || pdfExport.busy"
+        :aria-busy="pdfExport.busy"
+        @click="downloadPdf"
+      >{{ pdfExportLabel(pdfExport, L) }}</button>
+      <span v-if="pdfExport.busy" class="report-lang-feedback" role="status">{{ pdfExportLabel(pdfExport, L) }}</span>
+      <span v-if="pdfExport.error" class="report-lang-feedback" role="alert">{{ pdfExport.error.message }}</span>
     </div>
     <!-- Segmented tab toggle -->
     <div class="tabs" role="tablist">
@@ -349,8 +349,10 @@ import { renderMarkdown } from '../../utils/markdown'
 import { L as appL, locale } from '../../i18n'
 import {
   editDossier, researchChartUrl, getArtifact,
-  requestResearchTranslation, getResearchTranslation, researchPdfUrl,
+  requestResearchTranslation, getResearchTranslation,
+  startResearchPdfExport, getResearchPdfExport, researchPdfExportDownloadUrl,
 } from '../../api/research'
+import { createResearchPdfExport, initialPdfExportState, pdfExportLabel } from '../../utils/researchPdfExport'
 import { detectTranslationTarget } from '../../utils/researchTranslation'
 import { datasetManifestRows, distinctSeriesNames } from '../../utils/officialData'
 import { saveTextFile } from '../../utils/saveTextFile'
@@ -387,6 +389,14 @@ const displayDossier = computed(() => {
   return translated ? { ...props.dossier, ...translated } : props.dossier
 })
 const researchLangCache = ref({})   // { lang: translated markdown }
+const pdfExport = ref(initialPdfExportState())
+const pdfController = createResearchPdfExport({
+  identity: () => ({ kind: 'dossier', resourceId: props.pipelineId, lang: activeReportLang.value }),
+  startJob: (id, options) => startResearchPdfExport(id.resourceId, id.lang, options),
+  getJob: (id, jobId, options) => getResearchPdfExport(id.resourceId, jobId, options),
+  downloadUrl: (id, jobId, options) => researchPdfExportDownloadUrl(id.resourceId, jobId, options),
+  onChange: state => { pdfExport.value = state }, L,
+})
 const reportLangLoading = ref(false)
 const translationBusy = ref(false)
 const translationStatus = ref('')   // '' | generating | available | failed | unavailable
@@ -648,13 +658,9 @@ const pdfDisabled = computed(() => {
   return false
 })
 
-const researchPdfHref = computed(() => {
-  if (pdfDisabled.value) return 'javascript:void(0)'
-  return researchPdfUrl(props.pipelineId, activeReportLang.value || undefined)
-})
-
-function onPdfClick(event) {
-  if (pdfDisabled.value) event.preventDefault()
+function downloadPdf() {
+  if (pdfDisabled.value || !hasReport.value || editing.value) return
+  return pdfController.start({ retry: pdfExport.value.error?.retryable === true })
 }
 
 async function loadResearchTranslation(lang, { trigger = false } = {}) {
@@ -760,6 +766,7 @@ async function generateResearchTranslation() {
 
 function switchReportLang(lang) {
   if (lang !== null && lang !== targetLang.value) return
+  pdfController.cancel()
   researchLangVersion += 1
   stopTranslationPolling()
   translationPollAttempts = 0
@@ -778,6 +785,7 @@ function switchReportLang(lang) {
 watch(
   () => [props.pipelineId, JSON.stringify(props.dossier || {})],
   () => {
+    pdfController.cancel()
     researchLangVersion += 1
     stopTranslationPolling()
     translationPollAttempts = 0
@@ -794,7 +802,8 @@ watch(
   { flush: 'sync' },
 )
 
-onBeforeUnmount(() => { researchLangVersion += 1; stopTranslationPolling() })
+watch([reportMarkdown, activeReportLang, editing], () => pdfController.cancel(), { flush: 'sync' })
+onBeforeUnmount(() => { pdfController.cancel(); researchLangVersion += 1; stopTranslationPolling() })
 
 // ---- L22: official-data datasets (handoff data/datasets.json) -------------
 // Requested through the research artifact endpoint only when the pipeline status

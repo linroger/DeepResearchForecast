@@ -1,0 +1,4 @@
+interface:
+  display_name: "Equity Research PDF"
+  short_description: "Source-preserving English and Mandarin report export"
+  default_prompt: "Use $equity-research-pdf to export this complete report in English and Mandarin, reconcile the source, and review both versions before enabling downloads."

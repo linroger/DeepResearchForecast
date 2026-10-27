@@ -23,6 +23,9 @@ camel-ai==0.2.78
 
 # ============= 文件处理 =============
 PyMuPDF>=1.24.0
+reportlab==4.5.1
+pypdf>=6.4,<7
+Pillow>=10.3,<11
 # 编码检测（支持非UTF-8编码的文本文件）
 charset-normalizer>=3.0.0
 chardet>=5.0.0

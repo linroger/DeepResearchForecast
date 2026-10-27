@@ -16,7 +16,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
       - name: Ruff lint (F/E9)
-        run: uvx ruff check --select F,E9 --ignore F401,F841,F541 backend/app backend/scripts deerflow_bridge
+        run: uvx ruff check --target-version py312 --select F,E9 --ignore F401,F841,F541 backend/app backend/scripts deerflow_bridge
       - name: .env.example <-> Config drift
         run: python3 backend/scripts/check_env_drift.py --strict
 
@@ -29,6 +29,10 @@ jobs:
         uses: astral-sh/setup-uv@v5
       - name: Set up Python 3.12
         run: uv python install 3.12
+      - name: Install native PDF test fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fonts-dejavu-core fonts-arphic-uming
       # Install only the light deps the offline tests need (pytest + python-dotenv);
       # the full sim/graph stack is not required for the pure-function golden tests.
       - name: Run telemetry/security/atomic/dates golden tests
@@ -36,6 +40,11 @@ jobs:
           uv venv --python 3.12
           uv pip install pytest python-dotenv
           cd backend && uv run pytest -q
+      - name: Guarded agent PDF export acceptance
+        run: |
+          backend/.venv/bin/python -I -S -B backend/scripts/main_offline_pytest.py \
+            --evidence-dir "$RUNNER_TEMP/research-pdf-export" -q \
+            backend/tests/test_research_pdf_*.py
 
   byte-compile:
     name: Byte-compile (syntax) all backend

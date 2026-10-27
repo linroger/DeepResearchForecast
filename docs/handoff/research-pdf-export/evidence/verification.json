@@ -1,0 +1,111 @@
+{
+  "schema": "research-pdf-integration-acceptance/v1",
+  "verified_at": "2026-10-27T05:11:30.732286+00:00",
+  "base_commit": "033e191fe78fcd7cf81dfc117e3264f3dc02f133",
+  "branch": "codex/research-pdf-export",
+  "production_source_files": 54,
+  "source_drift": [],
+  "checks": {
+    "backend_tests": 266,
+    "frontend_tests": 445,
+    "browser_cases": 8,
+    "browser_guard_tests": 31,
+    "frontend_build": "passed with bundle-size warning",
+    "ruff": "passed",
+    "env_drift": "passed",
+    "uv_lock": "consistent"
+  },
+  "live": {
+    "provider": "glm",
+    "planner": "glm-5.3",
+    "reviewer": "glm-5.3-flash",
+    "final_requests": 8,
+    "requests_across_both_smoke_runs": 16,
+    "cases": [
+      {
+        "kind": "dossier",
+        "language": "en",
+        "pages": 1,
+        "calls_used": 4,
+        "elapsed_seconds": 16.94,
+        "pdf_sha256": "27bd69d2b8701fd53ab67c7bb5dd0e86d976e5ce8c516d06f363134ff905e005",
+        "source_unchanged": true
+      },
+      {
+        "kind": "forecast",
+        "language": "zh-CN",
+        "pages": 1,
+        "calls_used": 4,
+        "elapsed_seconds": 12.75,
+        "pdf_sha256": "d5d9532a436092203152f9e3a833551ee31c867e6130365f6f71f7fc3bdcafe4",
+        "source_unchanged": true
+      }
+    ]
+  },
+  "native": {
+    "forecast": {
+      "pages": 38,
+      "components": 363,
+      "pdf_sha256": "5dfb7ef3c1f2835f17f196876329d606c6f8f3b5b22a4a34b883ffc73e168d71",
+      "all_checks_passed": true,
+      "visual_page_differences": []
+    },
+    "dossier": {
+      "pages": 30,
+      "components": 212,
+      "pdf_sha256": "ce3021fefc93b76083cb4cf96688bbffe2a2317324dd8064e6c1d19d08163cec",
+      "all_checks_passed": true,
+      "visual_page_differences": []
+    }
+  },
+  "receipts": {
+    "backend": {
+      "path": "/Users/rogerlin/Documents/Codex/evidence/research-pdf-export-20261026/acceptance-20261027/backend-delivery/completed.json",
+      "sha256": "20282509cae198ae6fc9023df5c14de2128ae592ed684ddfd3a3a9f33a77b220",
+      "original_path": "/private/tmp/research-pdf-delivery-gate-20261027/completed.json"
+    },
+    "browser": {
+      "path": "/Users/rogerlin/Documents/Codex/evidence/research-pdf-export-20261026/acceptance-20261027/browser-final-ui/receipt.json",
+      "sha256": "143863aea83f947af6fe5e20b2d12b38b155ff40b9d2ae029cd6ddde7ac5629f",
+      "original_path": "/private/tmp/research-pdf-browser-final-ui-20261027/receipt.json"
+    },
+    "browser_server": {
+      "path": "/Users/rogerlin/Documents/Codex/evidence/research-pdf-export-20261026/acceptance-20261027/browser-final-server/completed.json",
+      "sha256": "2cd7b2139e59af4f9b6c995e5ebccd0bf2398bf75c705422117c54cec4702bd2",
+      "original_path": "/private/tmp/research-pdf-browser-final-server-20261027/completed.json"
+    },
+    "live": {
+      "path": "/Users/rogerlin/Documents/Codex/evidence/research-pdf-export-20261026/live-final-20261027/live-summary.json",
+      "sha256": "5871c4597602bb0fa843d845f59162d1df72bfde0e1c3f53c481258c36d43ff7"
+    },
+    "live_boundary": {
+      "path": "/Users/rogerlin/Documents/Codex/evidence/research-pdf-export-20261026/live-final-20261027/completed.json",
+      "sha256": "7e934f0a183f016170db9678e8c006567e37faf95f7e256bb2559c0b7e59b3f6"
+    },
+    "native": {
+      "path": "/Users/rogerlin/Documents/Codex/evidence/research-pdf-export-20261026/native-results/final-20261027/receipt.json",
+      "sha256": "b9b3259d5aae85c00e2feb3129f18d2c5f1ff1e71da94c6e7a228ab4c63f0ade"
+    },
+    "budget": {
+      "path": "/Users/rogerlin/Documents/Codex/evidence/research-pdf-export-20261026/native-results/current-budget-check-20261027.json",
+      "sha256": "95114d29298e7daf3c24296a5804a77bee5247b3ab15b596b9fcbc2372f25f35"
+    }
+  },
+  "scope": {
+    "shared_services_restarted": false,
+    "canonical_reports_modified": false,
+    "main_merged": false,
+    "production_deployed": false
+  },
+  "limits": [
+    "Live provider acceptance covers two fictional one-page reports; long-report content/layout acceptance is native and model-free.",
+    "Source preservation and automated review do not certify the financial conclusions.",
+    "Unsupported required rich structures and failed reviews stop export rather than dropping content."
+  ],
+  "wheel": {
+    "path": "/Users/rogerlin/Documents/Codex/evidence/research-pdf-export-20261026/acceptance-20261027/mirofish_backend-0.1.0-py3-none-any.whl",
+    "sha256": "a6ec7cdc50cdf08aa9b53ea980890a0869a2ac543bd41efbe69621c5783f0853",
+    "runtime_files_matched": 39,
+    "skill_files_included": 31
+  }
+}

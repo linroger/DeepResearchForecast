@@ -215,6 +215,21 @@ export function researchPdfUrl(pipelineId, lang) {
   return apiUrl(lang ? `${base}?lang=${encodeURIComponent(lang)}` : base)
 }
 
+const researchPdfExportPath = pipelineId => `/api/research/${encodeURIComponent(pipelineId)}/dossier/pdf-export`
+
+export function startResearchPdfExport(pipelineId, lang = null, { retry = false, signal } = {}) {
+  return service.post(researchPdfExportPath(pipelineId), { lang, ...(retry ? { retry: true } : {}) }, { signal, timeout: 30000 })
+}
+
+export function getResearchPdfExport(pipelineId, jobId, { signal } = {}) {
+  return service.get(`${researchPdfExportPath(pipelineId)}/${encodeURIComponent(jobId)}`, { signal, timeout: 30000 })
+}
+
+export function researchPdfExportDownloadUrl(pipelineId, jobId, { relative = false } = {}) {
+  const path = `${researchPdfExportPath(pipelineId)}/${encodeURIComponent(jobId)}/download`
+  return relative ? path : apiUrl(path)
+}
+
 /**
  * i8/MON-1：手动触发一轮市场判定监测（后台子进程 `run --all-recent`）。
  * 后端自带在飞去重：202 {started:true}=已启动；409 {inflight:true}=上一轮仍在运行。

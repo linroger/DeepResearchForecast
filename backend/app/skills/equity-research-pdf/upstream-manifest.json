@@ -1,0 +1,21 @@
+{
+  "schema": "vendored-skill/v1",
+  "upstream": "installed equity-research-pdf",
+  "captured": "2026-10-26",
+  "files": {
+    "SKILL.md": "85cb432fb10b13647dcc8fc6b09e40ba15c0c3caa7ae6877fc04fddaef32311e",
+    "agents/openai.yaml": "e6206b0db43b3651f95e942c6983b4fc37de41bee813691a6267dc1839945288",
+    "assets/example/chart.en.png": "a6b635ebac01bc4c3efd1405823ad89ee22c61216641491e830acc8617568845",
+    "assets/example/chart.zh-CN.png": "4e87b4b2da4c6dd4bf1599438685d7799b9d7723b3490889d449c20933947721",
+    "assets/example/reconciliation.md": "9bb170af6fa90fb4caef03175e8bc708ba4fd0ceb0cbcf0a11cf24ec3f271bc3",
+    "assets/example/report.json": "788bf72baad2c90ab49dca0020aa9ed60e3ec93c3a2f661179b256bd08b43321",
+    "assets/example/source.md": "6455bd63f0e8c535642231c18cf5dbe42f3a1e3b196ae153f66b9b424b24028b",
+    "references/layout-and-review.md": "b9ecdbd99dccddc64839c80c8e1d576a9ff7504fe4d4f8014ae5d52bf84ca66c",
+    "references/report-schema.md": "d5ed58dcb0111d3da54ab28e12a8e99481cb14d3214144b07cff43bb326be8b9",
+    "references/source-reconciliation.md": "a1bf1c5c3fdab20e45be29259208bab970791708a37381773b1b0b0d52bdd785",
+    "requirements.txt": "5c8491692705e7e9b11b62ba2ecb2db007ae37a19d0f14416f8dc3011a7a7482",
+    "scripts/export_report.py": "c83fd3d349d3677cd1cf3bd470b4b3ea60ac3ac3476150a6c5324003d5bd1595",
+    "scripts/make_example.py": "798efd1d949f130af0b45edae85c6d425f1e135ecc7bd874dd5a97feefb6e871",
+    "scripts/preview.py": "b142b1914f636ff92d8f5f9686a5642f7c10e1c3cbc302ab17bd93c9e9b83e1c"
+  }
+}

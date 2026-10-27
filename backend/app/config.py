@@ -242,6 +242,25 @@ class Config:
     # geometry margin 2.5cm、--toc），失败回退 markdown→HTML→PyMuPDF Story。按成稿 mtime 缓存。
     # 默认开；关闭=端点 404（degrade-safe）。
     REPORT_PDF_EXPORT = os.environ.get('REPORT_PDF_EXPORT', 'True').strip().lower() == 'true'
+    # Agent-backed, resource-scoped research and forecast PDF export. A compatible
+    # image-capable reviewer is required; reads never launch provider work.
+    RESEARCH_PDF_EXPORT_ENABLED = os.environ.get('RESEARCH_PDF_EXPORT_ENABLED', 'true').strip().lower() == 'true'
+    RESEARCH_PDF_MAX_CONCURRENT = int(os.environ.get('RESEARCH_PDF_MAX_CONCURRENT', '2'))
+    RESEARCH_PDF_MAX_CALLS = int(os.environ.get('RESEARCH_PDF_MAX_CALLS', '96'))
+    RESEARCH_PDF_TIMEOUT_SECONDS = int(os.environ.get('RESEARCH_PDF_TIMEOUT_SECONDS', '900'))
+    RESEARCH_PDF_CALL_TIMEOUT_SECONDS = float(os.environ.get('RESEARCH_PDF_CALL_TIMEOUT_SECONDS', '90'))
+    RESEARCH_PDF_MAX_OUTPUT_TOKENS = int(os.environ.get('RESEARCH_PDF_MAX_OUTPUT_TOKENS', '8192'))
+    RESEARCH_PDF_MAX_SOURCE_CHARS = int(os.environ.get('RESEARCH_PDF_MAX_SOURCE_CHARS', '500000'))
+    RESEARCH_PDF_BATCH_CHARS = int(os.environ.get('RESEARCH_PDF_BATCH_CHARS', '12000'))
+    RESEARCH_PDF_MAX_PAGES = int(os.environ.get('RESEARCH_PDF_MAX_PAGES', '80'))
+    RESEARCH_PDF_MAX_IMAGE_BYTES = int(os.environ.get('RESEARCH_PDF_MAX_IMAGE_BYTES', '8388608'))
+    RESEARCH_PDF_MODEL = os.environ.get('RESEARCH_PDF_MODEL', '')
+    RESEARCH_PDF_MODEL_API = os.environ.get('RESEARCH_PDF_MODEL_API', 'chat_completions')
+    RESEARCH_PDF_REVIEW_PROVIDER = os.environ.get('RESEARCH_PDF_REVIEW_PROVIDER', '')
+    RESEARCH_PDF_REVIEW_MODEL = os.environ.get('RESEARCH_PDF_REVIEW_MODEL', '')
+    RESEARCH_PDF_REVIEW_BASE_URL = os.environ.get('RESEARCH_PDF_REVIEW_BASE_URL', '')
+    RESEARCH_PDF_REVIEW_API_KEY = os.environ.get('RESEARCH_PDF_REVIEW_API_KEY', '')
+    RESEARCH_PDF_REVIEW_API = os.environ.get('RESEARCH_PDF_REVIEW_API', '')
     # PDF-1：单次 pandoc 构建超时秒数（防挂死；超时即回退 PyMuPDF）。
     REPORT_PDF_TIMEOUT = int(os.environ.get('REPORT_PDF_TIMEOUT', '180') or '180')
     # —— WAVE10：无缝引用（[S12] 记号 → 参考来源附录 / 悬空修复 / 译文对账 / PDF 脚注）——

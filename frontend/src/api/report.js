@@ -126,6 +126,21 @@ export const reportPdfUrl = (reportId, lang) => {
   return apiUrl(lang ? `${path}?lang=${encodeURIComponent(lang)}` : path)
 }
 
+const reportPdfExportPath = reportId => `/api/report/${encodeURIComponent(reportId)}/pdf-export`
+
+export function startReportPdfExport(reportId, lang = null, { retry = false, signal } = {}) {
+  return service.post(reportPdfExportPath(reportId), { lang, ...(retry ? { retry: true } : {}) }, { signal, timeout: 30000 })
+}
+
+export function getReportPdfExport(reportId, jobId, { signal } = {}) {
+  return service.get(`${reportPdfExportPath(reportId)}/${encodeURIComponent(jobId)}`, { signal, timeout: 30000 })
+}
+
+export function reportPdfExportDownloadUrl(reportId, jobId, { relative = false } = {}) {
+  const path = `${reportPdfExportPath(reportId)}/${encodeURIComponent(jobId)}/download`
+  return relative ? path : apiUrl(path)
+}
+
 /**
  * FORECAST-DASH：获取报告的机器可读结构化预测对象（第一方报告 API）。
  * 返回 { success, data: { report_id, simulation_id, forecast, available, localization } }；

@@ -1,3 +1,5 @@
+> Active PDF export integration: [approved plan](docs/handoff/research-pdf-export/PLANS.md) and [current handoff](docs/handoff/research-pdf-export/handoff.md), on codex/research-pdf-export from main.
+
 > Current root correction: [typed forecast tasks, atomic arbiter transactions and parsed grounding](docs/handoff/root-workflow-contracts/handoff.md). Final1431-case source and1630-case peer-runtime gates passed; the backend is active and both authorized pipelines resumed with retained-stage proof.
 
 > Current run repair: [forecast horizon, arbiter and translation contracts](docs/handoff/run-horizon-arbiter-translation/handoff.md). Work is isolated from the shared application checkout; saved run artifacts remain historical.

@@ -1,3 +1,5 @@
+> Active PDF export integration: [approved plan](docs/handoff/research-pdf-export/PLANS.md) and [current handoff](docs/handoff/research-pdf-export/handoff.md), on codex/research-pdf-export from main.
+
 # Active proposal: reflexive world simulation
 
 The current branch proposal is [docs/handoff/reflexive-world-simulation/PLANS.md](docs/handoff/reflexive-world-simulation/PLANS.md). It includes the actor/world contracts and cross-domain acceptance scenarios. Status: independent review passed; awaiting user plan approval before application implementation. The completed earlier main-branch plan is preserved below.

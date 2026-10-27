@@ -1,3 +1,4 @@
+import * as researchPdfExport from '../src/utils/researchPdfExport.js'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -56,7 +57,7 @@ async function render({ sourceLang = 'en', official = lang => OFFICIAL[lang] } =
     vue,
     '../../api/report': api,
     './BinaryForecastTable.vue': { default: table },
-    '../../utils/markdown': markdown,
+    '../../utils/markdown': markdown, '../../utils/researchPdfExport': researchPdfExport,
     '../../utils/vizManifest': vizManifest,
     '../../utils/reportLanguages': reportLanguages,
     '../../utils/officialData': officialData,

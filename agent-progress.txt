@@ -730,3 +730,11 @@ Recovered Claude S0–S4 and completed the simulation record/provenance boundary
 2026-10-23T09:20:04.062620+00:00 — codex/research-grounded-main-merge — User authorized main integration. Resolved both histories, preserved target task/recovery/translation/arbiter contracts and source research/provenance workflows. Lifecycle revocation and calendar terminal-token seams corrected. Final backend2296/2296, frontend382/build, independent review approved,572sourcehashes verified, primary84files+index preserved. Evidence: docs/handoff/research-grounded-main-merge/. Non-forced publication follows.
 
 2026-10-23T09:23:15.552497+00:00 — Main delivery verified: cacb7dae combines approved source53fc9283 with main dac62ef6;2b4129f9 includes latest upstream LICENSE31a424d0. Atomic non-forced push updated main and codex/research-grounded-main-merge. Backend2296/frontend382/build/independent review accepted; primary84files and index preserved. No runtime restart.
+
+### 2026-10-26T09:17:29.398146+00:00 — codex/research-pdf-export
+
+User approved the agent-backed PDF export integration plan. Parent owns immutable source adapters, persistent jobs, resource-scoped APIs, config/dependencies and integration; separate workers own frontend, skill renderer adapter and model/agent execution. The first guarded lifecycle/API gate passed11cases. Frontendworker reports445unitcases andproductionbuild; combined/native/browser acceptance is still pending. A private backend environment was provisioned from declared dependencies; Pillow stays10.3-compatible with camel-ai instead of forcing the standalone12.3pin. Originalsharedcheckout/services/savedreports remain outside this work.
+
+### 2026-10-27T05:15:21.852181+00:00 — codex/research-pdf-export
+
+Completed feature_agent_research_pdf_export. BothoriginalPDFbuttons nowstartscoped persistentagent jobs usingthepackagedskill andselectedsource/language. Finalacceptance:266backendcases,445frontendcases/build,31browserguardcases,8actualbrowsercases;2liveGLM/Flashsamplespassedwith4calls each;38-pageforecast/30-pagedossier nativeoutputs retainedall68reviewedpagepixels. Scopedlint,envdriftandlock/wheel checks pass. Onlycommit/pushremains; no mainmerge/shareddeployment. See docs/handoff/research-pdf-export/verification.md.

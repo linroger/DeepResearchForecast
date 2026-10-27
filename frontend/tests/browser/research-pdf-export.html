@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Research PDF browser acceptance</title>
+    <style>
+      body { margin: 0; background: #faf9f6; color: #171717; font-family: sans-serif; }
+      .harness-controls { padding: 12px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #aaa; }
+      .harness-controls select, .harness-controls button { padding: 6px; }
+      #subject { min-height: 600px; }
+      .harness-error { padding: 16px; color: #a00; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/tests/browser/research-pdf-export-app.js"></script>
+  </body>
+</html>

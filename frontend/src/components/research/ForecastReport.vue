@@ -130,13 +130,15 @@
             <span v-if="translationIssueMessage" class="translation-feedback translation-error" role="alert">
               {{ translationIssueMessage }}
             </span>
-            <button class="markdown-btn" type="button" :disabled="Boolean(exportBusy) || langLoading" @click="downloadArtifact('md')">
+            <button class="markdown-btn" type="button" :disabled="Boolean(exportBusy) || pdfExport.busy || langLoading" @click="downloadArtifact('md')">
               {{ exportBusy === 'md' ? L('导出中…','Exporting…') : L('下载 Markdown','Download Markdown') }}
             </button>
             <!-- PDF-1：下载当前视图对应的 PDF（原文或所选语种）。 -->
-            <button class="pdf-btn" type="button" :disabled="Boolean(exportBusy) || langLoading" @click="downloadArtifact('pdf')">
-              {{ exportBusy === 'pdf' ? L('导出中…','Exporting…') : L('下载 PDF','Download PDF') }}
+            <button class="pdf-btn" type="button" :disabled="Boolean(exportBusy) || pdfExport.busy || langLoading" :aria-busy="pdfExport.busy" @click="downloadArtifact('pdf')">
+              {{ pdfExportLabel(pdfExport, L) }}
             </button>
+            <span v-if="pdfExport.busy" class="translation-feedback" role="status">{{ pdfExportLabel(pdfExport, L) }}</span>
+            <span v-if="pdfExport.error" class="translation-feedback translation-error" role="alert">{{ pdfExport.error.message }}</span>
             <span v-if="exportError" class="translation-feedback translation-error" role="alert">{{ exportError }}</span>
             <button class="copy-btn" type="button" @click="copyMarkdown">
               {{ copied ? L('已复制','Copied') : L('复制 Markdown','Copy Markdown') }}
@@ -358,8 +360,10 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, defineAsyncComponent 
 import {
   getReport, getVizManifest, getSectionsPartial,
   getReportTranslationMd, requestReportTranslation, getReportTranslationStatus,
-  reportMarkdownUrl, reportPdfUrl, reportAssetUrl, getForecast, getReportOfficialData
+  reportMarkdownUrl, reportAssetUrl, getForecast, getReportOfficialData,
+  startReportPdfExport, getReportPdfExport, reportPdfExportDownloadUrl,
 } from '../../api/report'
+import { createResearchPdfExport, initialPdfExportState, pdfExportLabel } from '../../utils/researchPdfExport'
 import BinaryForecastTable from './BinaryForecastTable.vue'
 import { renderMarkdown, extractHeadings, parseMarkedBlock } from '../../utils/markdown'
 import {
@@ -373,7 +377,6 @@ import {
 import {
   createLatestRequestGate,
   downloadFilenameFromDisposition,
-  hasPdfMagic,
   normalizeReportTranslations,
   reportLanguageOptions,
   reportTranslationAction,
@@ -447,6 +450,14 @@ const translationMessage = ref('')
 const translationError = ref('')
 const exportBusy = ref('')
 const exportError = ref('')
+const pdfExport = ref(initialPdfExportState())
+const pdfController = createResearchPdfExport({
+  identity: () => ({ kind: 'forecast', resourceId: props.reportId, lang: activeLang.value }),
+  startJob: (id, options) => startReportPdfExport(id.resourceId, id.lang, options),
+  getJob: (id, jobId, options) => getReportPdfExport(id.resourceId, jobId, options),
+  downloadUrl: (id, jobId, options) => reportPdfExportDownloadUrl(id.resourceId, jobId, options),
+  onChange: state => { pdfExport.value = state }, L,
+})
 // PROGRESSIVE：生成期章节增量 [{index,title,status,content_md}]。
 const partialSections = ref([])
 
@@ -1066,12 +1077,10 @@ async function generateTranslation(force = false) {
   }
 }
 
-// ---------- Markdown / PDF：当前视图对应的发布工件直链 ----------
+// Markdown keeps its direct download; PDF uses the resource-scoped export job.
 const markdownHref = computed(() => reportMarkdownUrl(props.reportId, activeLang.value || undefined))
-// ---------- PDF-1：当前视图对应的 PDF 直链 ----------
-const pdfHref = computed(() => reportPdfUrl(props.reportId, activeLang.value || undefined))
-
 function cancelExportRequest() {
+  pdfController.cancel()
   exportRequestGate.cancel()
   exportBusy.value = ''
   exportError.value = ''
@@ -1080,19 +1089,22 @@ function cancelExportRequest() {
 async function downloadArtifact(kind) {
   const reportId = props.reportId
   const lang = activeLang.value || null
-  if (!reportId || exportBusy.value || langLoading.value) return
+  if (!reportId || exportBusy.value || pdfExport.value.busy || langLoading.value) return
+  if (kind === 'pdf') {
+    exportError.value = ''
+    return pdfController.start({ retry: pdfExport.value.error?.retryable === true })
+  }
   const request = exportRequestGate.begin()
   exportBusy.value = kind
   exportError.value = ''
-  const extension = kind === 'pdf' ? 'pdf' : 'md'
-  const fallback = `${reportId}${lang ? `.${lang}` : ''}.${extension}`
-  const href = kind === 'pdf' ? pdfHref.value : markdownHref.value
+  const fallback = `${reportId}${lang ? `.${lang}` : ''}.md`
+  const href = markdownHref.value
   const ownsCurrentExport = () => exportRequestGate.isCurrent(request)
     && reportId === props.reportId
     && lang === (activeLang.value || null)
   try {
     const response = await fetch(href, {
-      headers: { Accept: kind === 'pdf' ? 'application/pdf' : 'text/markdown' },
+      headers: { Accept: 'text/markdown' },
       signal: request.signal,
     })
     if (!ownsCurrentExport()) return
@@ -1105,16 +1117,13 @@ async function downloadArtifact(kind) {
       throw new Error(message)
     }
     const bytes = new Uint8Array(await response.arrayBuffer())
-    if (kind === 'pdf' && !hasPdfMagic(bytes)) {
-      throw new Error(L('服务器返回的文件不是有效 PDF','Server returned an invalid PDF'))
-    }
     if (!ownsCurrentExport()) return
     const filename = downloadFilenameFromDisposition(
       response.headers.get('content-disposition'),
       fallback,
     )
     const blob = new Blob([bytes], {
-      type: kind === 'pdf' ? 'application/pdf' : 'text/markdown;charset=utf-8',
+      type: 'text/markdown;charset=utf-8',
     })
     const objectUrl = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
@@ -1553,6 +1562,7 @@ async function copyMarkdown() {
 
 onMounted(load)
 watch(() => props.reportId, load, { flush: 'sync' })
+watch([currentMd, activeLang], () => pdfController.cancel(), { flush: 'sync' })
 // 切换语种（原文 ⇄ 译文）时按需拉取该语种的仪表盘文本；已缓存则不重复请求。
 watch(viewLang, lang => {
   const key = String(lang || '')

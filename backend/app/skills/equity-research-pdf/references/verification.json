@@ -1,0 +1,221 @@
+{
+  "schema": "research-pdf-renderer-verification/v1",
+  "created_at": "2026-10-26T09:20:14.794963+00:00",
+  "source_sha256": {
+    "backend/app/services/research_pdf/renderer.py": "5030d9f8b4e4633631177fb5403152629fc8eff976e1a323b55490cd8e3b378d",
+    "backend/app/skills/equity-research-pdf/scripts/export_report.py": "4c57c7572489f1c1bf162abfb04d1886ad7b6b48894b3dd6ff1b825156e04857",
+    "backend/tests/test_research_pdf_renderer.py": "5d592335ab199e749cb8081a5810cf47eb00fc57dcf362d0ec49cc02b0019e88",
+    "backend/tests/fixtures/research_pdf_full.md": "f70a1471cec9abf5c54995920a5ed4e57e7c29dba0d6566510f30893ecff2193"
+  },
+  "dependencies": {
+    "reportlab": "4.5.1",
+    "Pillow": "10.3.0",
+    "PyMuPDF": "1.28.2",
+    "pypdf": "6.20.0",
+    "mistune": "3.3.4"
+  },
+  "guarded_tests": {
+    "count": 20,
+    "result": "passed",
+    "elapsed_seconds": 10.92,
+    "evidence_dir": "/private/tmp/research-pdf-renderer-native-20261026-final",
+    "receipt": {
+      "schema": "main-offline/v1",
+      "pid": 3988,
+      "status": "completed",
+      "exit_code": 0,
+      "boundary": "CPython audit hooks; not an OS sandbox",
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "blocked:external_read": 2
+      },
+      "source_sha256": {
+        "/Users/rogerlin/.codex/worktrees/research-pdf-export/DeepResearchForecast/backend/scripts/main_offline_pytest.py": "5046cf820fa468d8e8ffb2e3fdade1d20fca2f0bd56ee15eabdff51c223c02be",
+        "/Users/rogerlin/.codex/worktrees/research-pdf-export/DeepResearchForecast/backend/tests/test_research_pdf_renderer.py": "5d592335ab199e749cb8081a5810cf47eb00fc57dcf362d0ec49cc02b0019e88",
+        "/Users/rogerlin/.codex/worktrees/research-pdf-export/DeepResearchForecast/backend/app/config.py": "e9f4ad84c124a6c90eede69eb414d7e4c70fb8541a52257a7b5bf22d8af1a2f2",
+        "/Users/rogerlin/.codex/worktrees/research-pdf-export/DeepResearchForecast/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19"
+      },
+      "contained_library_probes": {},
+      "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+      "source_drift": [],
+      "allowed_scripts": {},
+      "children": {},
+      "identity_preserved": true
+    }
+  },
+  "upstream_regressions": {
+    "count": 34,
+    "result": "passed",
+    "elapsed_seconds": 23.127,
+    "boundary": "private standalone package tests; no app imports or providers",
+    "source": "standalone test_export.py and test_review_regressions.py against active vendored scripts"
+  },
+  "upstream_manifest": {
+    "files": 14,
+    "hashes_verified": true
+  },
+  "independent_review": {
+    "agent": "Arendt",
+    "result": "all reproduced findings fixed; final numbered-heading fix independently rechecked",
+    "reviewed_source_sha256": {
+      "backend/app/services/research_pdf/renderer.py": "5030d9f8b4e4633631177fb5403152629fc8eff976e1a323b55490cd8e3b378d",
+      "backend/app/skills/equity-research-pdf/scripts/export_report.py": "4c57c7572489f1c1bf162abfb04d1886ad7b6b48894b3dd6ff1b825156e04857",
+      "backend/tests/test_research_pdf_renderer.py": "5d592335ab199e749cb8081a5810cf47eb00fc57dcf362d0ec49cc02b0019e88"
+    },
+    "cjk_probe_combinations": 12,
+    "global_reportlab_state_unchanged": true
+  },
+  "limits": [
+    "No live provider acceptance or application/UI acceptance claimed.",
+    "Required unsupported diagrams, equations, raw HTML and uncaptured images fail explicitly.",
+    "Rendering does not set source, semantic, visual or manual review approval flags."
+  ],
+  "followups": [
+    {
+      "created_at": "2026-10-26T09:36:58.498117+00:00",
+      "issue": "Figure title outside KeepTogether could be separated from pixels/caption/attribution on a page boundary.",
+      "change": "Place the title inside the one complete figure KeepTogether; preserve every QA condition.",
+      "source_sha256": {
+        "backend/app/skills/equity-research-pdf/scripts/export_report.py": "ea3804f074702b5adc389fcd3441931c614e989a0cc8fd598d2fefd25df57ec7"
+      },
+      "guarded_tests": {
+        "passed": 21,
+        "evidence_dir": "/private/tmp/research-pdf-native-agent-figure-fixed-20261026",
+        "elapsed_seconds": 10.48
+      },
+      "before_after": {
+        "before": {
+          "pdf_sha256": "0ab7ec5cfbc6774e24879f1176c50065257cbc18bc8d594b8d847e6a200cac6e",
+          "title_pages": [
+            1
+          ],
+          "figure_pages": [
+            2
+          ],
+          "qa_exists": false,
+          "repair_generation_exists": true
+        },
+        "after": {
+          "pdf_sha256": "c87df7b0fdeffa7d18fac58c253877c7764cf64d7901702548f2c89a8163a01c",
+          "title_pages": [
+            2
+          ],
+          "figure_pages": [
+            2
+          ],
+          "qa_exists": true,
+          "repair_generation_exists": false
+        }
+      },
+      "agent_test_modified": false,
+      "upstream_regressions": {
+        "passed": 34,
+        "elapsed_seconds": 24.074,
+        "boundary": "Private standalone package tests on deployed backend versions; no application bootstrap or provider calls."
+      }
+    },
+    {
+      "kind": "full_saved_report_native_acceptance",
+      "private_receipt_path": "/Users/rogerlin/Documents/Codex/evidence/research-pdf-export-20261026/native-results/native-acceptance.json",
+      "private_receipt_sha256": "2d0e871493a78ead9bca0f88b29edbf6d067ca4f74d627b03d291c9bf96bb8e0",
+      "implementation_sha256": {
+        "backend/app/services/research_pdf/renderer.py": "674ff3594bbe9ba9c05973a98d728d2abfbf2214200b907ab41374fe14d239da",
+        "backend/app/skills/equity-research-pdf/scripts/export_report.py": "e4c8ca061e2b687d89a07be5cb3d4ce6f1d0567d3e2241ba5fdbfb1d9475f386"
+      },
+      "cases": {
+        "forecast": {
+          "source_markdown_sha256": "80cc65b0c26514388e9761d9addb0c4420aa9dfd42c64ad0bb74803664a0d4c6",
+          "source_bytes": 81207,
+          "table_count": 9,
+          "table_cells": 392,
+          "figures": 6,
+          "component_count": 363,
+          "text_components": 749,
+          "inline_links_checked": 149,
+          "pdf_sha256": "54d5ff267d8fef52f97f7105adc9339b64c1c4ea10adf4b0bd1829c7811fe866",
+          "pages": 38,
+          "input_copies_unchanged": true
+        },
+        "dossier": {
+          "source_markdown_sha256": "3095b47486b8f9bc17b2518b0ceae21f7c2fa6e26eb554cf89fca5a89376262a",
+          "source_bytes": 62651,
+          "table_count": 16,
+          "table_cells": 374,
+          "figures": 4,
+          "component_count": 212,
+          "text_components": 574,
+          "inline_links_checked": 410,
+          "pdf_sha256": "ad1b124c510a776dbbf02d9afe349f7b574dc93510d4ecf7f6228b93054973be",
+          "pages": 30,
+          "input_copies_unchanged": true
+        }
+      },
+      "visual_pages_covered": 68,
+      "focused_companion_checks": [
+        {
+          "case": "reuse",
+          "status": "passed",
+          "figure_occurrences": 1,
+          "derived": false
+        },
+        {
+          "case": "derive",
+          "status": "passed",
+          "figure_occurrences": 1,
+          "derived": true
+        },
+        {
+          "case": "adjacency",
+          "status": "passed",
+          "figure_occurrences": 1,
+          "derived": false
+        },
+        {
+          "case": "unbound",
+          "status": "expected_refusal",
+          "code": "pdf_chart_binding_missing"
+        },
+        {
+          "case": "changed",
+          "status": "expected_refusal",
+          "code": "pdf_source_changed"
+        }
+      ],
+      "limits": [
+        "Full source/PDF artifacts remain private outside Git.",
+        "Native/developer QA only; no provider, UI/API, publication or deployment acceptance."
+      ]
+    },
+    {
+      "kind": "native_page_review_final_freeze",
+      "status": "complete",
+      "private_receipt_path": "/Users/rogerlin/Documents/Codex/evidence/research-pdf-export-20261026/native-results/native-acceptance.final.json",
+      "private_receipt_sha256": "ec7aea69ea38ff670e97debb6b68e3e97576708f79a41a5110da103257586a2b",
+      "previous_private_receipt_sha256": "2d0e871493a78ead9bca0f88b29edbf6d067ca4f74d627b03d291c9bf96bb8e0",
+      "visual_pages_covered": 68,
+      "pending_pages": [],
+      "pdf_bytes_unchanged": true,
+      "implementation_bytes_unchanged": true,
+      "no_tests_or_provider_calls_run": true
+    }
+  ],
+  "blocked_library_probe_annotation": {
+    "classification": "blocked_optional_reportlab_user_configuration_probes",
+    "attempts": 2,
+    "blocked": 2,
+    "allowed": 0,
+    "paths": [
+      "<IDENTITY>/.reportlab_mods",
+      "<IDENTITY>/.reportlab_settings"
+    ],
+    "raw_event_name": "blocked:external_read",
+    "evidence_path": "/private/tmp/research-pdf-renderer-native-20261026-final/completed.json",
+    "evidence_sha256": "5fea027a311080485e23bd47e74b7cf969aa4669c6fd770bc7b3ccf568f12c03",
+    "raw_events_preserved": true,
+    "guard_policy_changed": false,
+    "HOME_changed": false,
+    "note": "These are denied library read attempts, not zero attempts. The native rendering run used a private package boundary; this annotation describes the separately recorded guarded renderer run."
+  }
+}

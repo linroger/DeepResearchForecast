@@ -1146,10 +1146,16 @@ flowchart LR
 **导出。**
 - Markdown 下载。
 - 另一种语言的版本。
-- **PDF**：使用 pandoc + XeLaTeX 构建，自动探测 CJK 字体，并按内容缓存。报告未通过发布门时返回 `409`；PDF 导出被关闭或构建失败时返回 `503`。
+- **PDF 按钮**：启动后台排版智能体，实际加载仓库内的 `equity-research-pdf` 技能。研究档案与预测报告分别导出各自完整的已保存正文，使用当前选定语种，采用机构研报样式，并执行精确组件校验及逐页视觉审核。界面显示进度，仅下载通过检查的 PDF。原报告及现有译文保持不变，导出不会生成另一种语言。只有来源、图表、技能、渲染器和模型策略指纹一致时，才复用已审核的导出结果。
 - **执行简报**与**摘要**：均为确定性生成，不调用 LLM。
 
 所有导出都只能经发布门获取。智能体日志（`/agent-log`、`/agent-log/stream`）遵循同样的规则：报告生成结束但未通过发布门时，其中的章节草稿正文、LLM 原始响应与 ReACT 思考会被隐去（`draft_withheld: true`）；报告仍在生成时，日志照常实时推送。
+
+新的 PDF 任务只由显式 POST `/api/research/<pipeline_id>/dossier/pdf-export` 或 `/api/report/<report_id>/pdf-export` 启动；限定到相应资源的状态查询与下载 GET 不会调用模型。“原文”也可能已经是中文，下载前仍会重新检查现有发布与翻译准入条件。原同步 PDF 地址继续作为兼容接口保留；新按钮在智能体失败时不会悄悄回退到旧渲染器。
+
+排版与逐页审核使用已配置的模型凭据。官方 BigModel 接口上的 `glm-5.3` 只处理文本，因此该组合的页面审核器默认使用同一接口和 Key 上的 `glm-5.3-flash`；显式设置的 `RESEARCH_PDF_REVIEW_MODEL` 优先。其他配置使用指定模型，并必须通过图像理解探测。主提供方为 CLI 时，需要明确配置 HTTP 视觉审核器，该审核器同时承担导出排版规划；主研究模型设置不变。[GLM 模态说明](https://docs.bigmodel.cn/cn/guide/models/text/glm-5.3)、[Flash 图像输入说明](https://docs.bigmodel.cn/cn/guide/models/vlm/glm-5.3-flash)。
+
+请安装后端声明的依赖，并提供可嵌入的 TrueType 字体。`EQUITY_PDF_LATIN_FONT`、`EQUITY_PDF_LATIN_BOLD`、`EQUITY_PDF_CJK_FONT`、`EQUITY_PDF_CJK_BOLD` 与 `EQUITY_PDF_MONO_FONT` 可指定本地字体路径。应用原生渲染器不依赖桌面技能目录。已捕获的 HTML 图表链接可指向 PDF 内与来源绑定的静态图，同时保留原交互地址；不会执行 HTML。无法支持的必需图示、公式、HTML，或缺失的图像与字体，会返回明确错误，不会下载不完整文件。智能体审核属于自动化证据，不等同于人工认证，也不证明研究结论的事实准确性。详见[导出流程与验收记录](docs/handoff/research-pdf-export/handoff.md)。
 
 ### 运行结束之后：集成、账本与监测
 
@@ -1320,7 +1326,7 @@ flowchart TB
 | **一个 LLM** | 已登录的本地 `claude` 或 `codex` CLI，或 `openai`、`kimi`、`minimax`、`deepseek`、`qwen`、`glm` 其中之一的 API Key。见[模型提供方](#模型提供方)。 |
 | **磁盘空间** | 需要几 GB，用于两个 venv、约 470 MB 的多语言向量模型（首次构建图谱时下载）以及运行产物。`npm run doctor -- --deep` 在剩余空间低于 2 GB 时报错，低于 5 GB 时警告。 |
 | **可选：搜索/抓取 Key** | `FIRECRAWL_API_KEY`（推荐）、`SERPER_API_KEY`、`TAVILY_API_KEY`、`EXA_API_KEY`。都不配置时，研究使用免 Key 的 DuckDuckGo 搜索与 Jina Reader。 |
-| **可选：pandoc + XeLaTeX** | PDF 导出需要。中文 PDF 还需要 CJK 字体，例如 Noto Sans CJK SC、Source Han Sans SC 或 PingFang SC。 |
+| **可选：pandoc + XeLaTeX** | 旧版直接 PDF 接口及相关兼容导出使用。新的智能体 PDF 按钮使用后端 Python 渲染依赖与可嵌入的 TrueType/CJK 字体。 |
 
 ---
 
@@ -1586,6 +1592,13 @@ NewsAPI 公布的 Developer 方案目前有 24 小时文章延迟、一个月历
 | `FORECAST_MARKET_ANCHORING` | `true` | 把二元预测与判定标准等价的 Polymarket 市场匹配 |
 | `REPORT_VISUALIZER` | `true` | 渲染图表 |
 | `REPORT_PDF_EXPORT` | `true` | 启用 PDF 接口 |
+| `RESEARCH_PDF_EXPORT_ENABLED` | `true` | 启用两个报告按钮的智能体 PDF 导出流程 |
+| `RESEARCH_PDF_MODEL` | （当前模型） | 导出排版规划模型；来源内容不可改写 |
+| `RESEARCH_PDF_REVIEW_MODEL` | （当前模型；官方 GLM-5.3 默认使用 GLM-5.3-Flash） | 视觉页面审核器；实际图像理解能力会被验证 |
+| `RESEARCH_PDF_REVIEW_PROVIDER` · `RESEARCH_PDF_REVIEW_BASE_URL` · `RESEARCH_PDF_REVIEW_API_KEY` | （同提供方凭据） | 显式审核路由；切换提供方须完整配置该提供方 |
+| `RESEARCH_PDF_MAX_CALLS` · `RESEARCH_PDF_MAX_CONCURRENT` | `96` · `2` | 模型请求次数与并发导出任务上限；轮询不调用模型 |
+| `RESEARCH_PDF_TIMEOUT_SECONDS` · `RESEARCH_PDF_CALL_TIMEOUT_SECONDS` | `900` · `90` | 任务与单次模型请求时限；不会自动重放结果未知的请求 |
+| `RESEARCH_PDF_MAX_PAGES` · `RESEARCH_PDF_BATCH_CHARS` | `80` · `12000` | 完整逐页审核与来源分批上限；超限明确拒绝，不截断内容 |
 | `N_FORECAST_SEEDS` · `ENSEMBLE_SEED_CONCURRENCY` | `1` · `2` | 多种子敏感性侧车 |
 
 **服务与运维**
@@ -1987,7 +2000,7 @@ DeepResearchForecast/                # 仓库：linroger/DeepResearchForecast
 | **研究阶段超时** | 预算随深度而定（quick 约 23 分钟，standard 3 小时，deep 9 小时）。可调大 `DEERFLOW_RESEARCH_TIMEOUT` 或降低深度。超时的证据轨 2 或 3 会被抢救回来；证据轨 1 超时则本阶段失败，请恢复运行。 |
 | **崩溃或重启后立即恢复，却返回 `409`** | 这次运行看起来仍有归属：它的心跳还不到 120 秒。等待两分钟再恢复。 |
 | **报告为 FAILED /「不可发布」** | `GET /api/report/<id>` 会列出发布问题，`final_audit.json` 中有详情。恢复这条管线即可重新生成报告。 |
-| **下载 PDF 返回 `503`** | PDF 导出被关闭（`REPORT_PDF_EXPORT=false`），或缺少 pandoc / XeLaTeX / CJK 字体。请安装 pandoc 与带 `xelatex` 的 TeX 发行版。 |
+| **PDF 下载失败** | 请查看导出错误码与任务阶段。智能体导出需要启用 PDF 设置、安装声明的 Python 依赖、提供覆盖所用字符的可嵌入字体，并配置兼容的视觉审核器；来源失效或审核未完成会阻止下载。只有兼容的旧版直接 PDF 接口需要 pandoc/XeLaTeX 来渲染富 Markdown。 |
 | **研究档案显示「已封存 · 只读」，无法编辑** | 报告的确切字节已在别处被绑定：多轨研究契约（`research_contract_manifest.json` 及评审对正文的绑定），或封存的 `actor-intelligence/v1` 角色阵容。原地编辑会让「继续」在其上重新运行综合，或在行动者接收校验处失败，因此「编辑」按钮被这个标记取代，`PUT /dossier` 也会返回 `409`。如需修改研究，请用修订后的问题重新发起一次运行。未封存运行的修改会被保留：保存时会刷新 `handoff/manifest.json`，「继续」会复用修改后的研究。 |
 | **需要停止一次长时间运行** | 点击**取消**，或调用 `POST /api/research/<id>/cancel`。研究子进程约 1 秒内停止，模拟约 5 秒内停止。 |
 

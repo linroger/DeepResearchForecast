@@ -203,6 +203,8 @@ def create_app(config_class=Config):
     app.register_blueprint(report_bp, url_prefix='/api/report')
     app.register_blueprint(research_bp, url_prefix='/api/research')
     app.register_blueprint(settings_bp, url_prefix='/api/settings')
+    from .api.research_pdf import research_pdf_bp
+    app.register_blueprint(research_pdf_bp, url_prefix='/api')
 
     # 稳定版程序化 API 表面 /api/v1（EXECPLAN2 I-9-5）。可选降级：默认 **不注册**，
     # 仅当 Config.API_V1_ENABLED 为真时挂载，未开启则本机 SPA 与现有路由行为完全不变。

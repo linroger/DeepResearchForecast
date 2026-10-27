@@ -1,3 +1,4 @@
+import * as researchPdfExport from '../src/utils/researchPdfExport.js'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -51,7 +52,7 @@ function dossier(t, { artifactNames = ['datasets'], getArtifact } = {}) {
   }
   const component = createComponent({
     vue,
-    '../../utils/markdown': markdown,
+    '../../utils/markdown': markdown, '../../utils/researchPdfExport': researchPdfExport,
     '../../i18n': i18n,
     '../../api/research': api,
     '../../utils/researchTranslation': researchTranslation,
@@ -171,7 +172,7 @@ test('every series file control has its own accessible name (EN and ZH)', async 
     i18n.locale.value = locale
     const component = build({
       vue,
-      '../../utils/markdown': markdown,
+      '../../utils/markdown': markdown, '../../utils/researchPdfExport': researchPdfExport,
       '../../i18n': i18n,
       '../../api/research': {
         editDossier: () => { throw new Error('Unexpected API call') },

@@ -1,3 +1,4 @@
+import * as researchPdfExport from '../src/utils/researchPdfExport.js'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -64,7 +65,7 @@ function dossier(t, { get, post } = {}) {
   }
   const component = createComponent({
     vue,
-    '../../utils/markdown': markdown,
+    '../../utils/markdown': markdown, '../../utils/researchPdfExport': researchPdfExport,
     '../../i18n': i18n,
     '../../api/research': api,
     '../../utils/researchTranslation': researchTranslation,
@@ -110,7 +111,8 @@ test('GET body loads the available translation and preserves cache/source toggli
   assert.equal(h.state.reportMarkdown.value, '# 中文译文\n\n正文。')
   assert.match(h.state.renderedReport.value, /中文译文/)
   assert.equal(h.state.pdfDisabled.value, false)
-  assert.equal(h.state.researchPdfHref.value, '/api/research/pipe_A/dossier/pdf?lang=zh')
+  assert.equal(typeof h.state.downloadPdf, 'function')
+  assert.equal(h.state.pdfExport.value.busy, false)
   assert.equal(h.state.showGenerateTranslation.value, false)
   assert.equal(h.state.reportLangLoading.value, false)
   assert.equal(h.timers.size, 0)

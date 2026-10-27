@@ -55,6 +55,9 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pydantic>=2.0.0",
     "mistune>=3.3.4,<4",
+    "reportlab==4.5.1",
+    "pypdf>=6.4,<7",
+    "pillow>=10.3,<11",
 ]
 
 [project.optional-dependencies]

@@ -415,5 +415,20 @@
       "Reject misleading probability-lift claims from diagnostic-only or unequal-cost comparisons."
     ],
     "passes": true
+  },
+  {
+    "id": "feature_agent_research_pdf_export",
+    "category": "report-export",
+    "description": "Existing deep-research and forecast PDF buttons run the versioned equity-research-pdf skill through a bounded source-preserving formatting and page-review agent, then download only verified selected-language artifacts.",
+    "steps": [
+      "Start from codex/research-pdf-export based on main.",
+      "Click each original report PDF control and observe its own resource-scoped background job.",
+      "Verify source/translation admission and immutable complete component/asset snapshots.",
+      "Prove the agent consumes the actual skill and full source, invokes the real renderer, and reviews every page without text-only fallback or fabricated approvals.",
+      "Validate exact report/language PDF bytes, figures, tables, links and fonts; reject stale sources, incomplete reviews, corrupted output and duplicate work.",
+      "Exercise retry/interruption/cancellation and late UI responses; preserve canonical sources and prior valid exports.",
+      "Pass guarded backend, frontend, native PDF, independent review and browser gates; record separately any live-provider capability result."
+    ],
+    "passes": true
   }
 ]

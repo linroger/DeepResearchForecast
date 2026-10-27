@@ -1,3 +1,4 @@
+import * as researchPdfExport from '../src/utils/researchPdfExport.js'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import * as vue from 'vue'
@@ -67,7 +68,7 @@ function dossierHarness(t, { get, post, source = dossierPayload(), unmountCallba
   i18n.locale.value = 'en'
   const calls = []
   const lifecycleVue = unmountCallbacks ? { ...integrationVue, onBeforeUnmount: callback => unmountCallbacks.push(callback) } : integrationVue
-  const component = buildDossier({ vue: lifecycleVue, '../../i18n': i18n, '../../utils/markdown': markdown,
+  const component = buildDossier({ vue: lifecycleVue, '../../i18n': i18n, '../../utils/markdown': markdown, '../../utils/researchPdfExport': researchPdfExport,
     '../../utils/officialData': officialData, '../../utils/researchTranslation': researchTranslation,
     '../../utils/saveTextFile': { saveTextFile: fail }, '../../api/research': {
       editDossier: fail, getArtifact: fail, researchChartUrl: () => '', researchPdfUrl: (id, lang) => `/research/${id}${lang ? `.${lang}` : ''}.pdf`,
@@ -164,7 +165,7 @@ function reportHarness(t, { getMd, getForecast, getReport, requestTranslation, u
   i18n.locale.value = 'en'
   const requests = []
   const lifecycleVue = unmountCallbacks ? { ...integrationVue, onBeforeUnmount: callback => unmountCallbacks.push(callback) } : integrationVue
-  const component = buildReport({ vue: lifecycleVue, '../../i18n': i18n, '../../utils/markdown': markdown,
+  const component = buildReport({ vue: lifecycleVue, '../../i18n': i18n, '../../utils/markdown': markdown, '../../utils/researchPdfExport': researchPdfExport,
     '../../utils/reportLanguages': reportLanguages, '../../utils/officialData': officialData, '../../utils/vizManifest': vizManifest,
     '../../utils/saveTextFile': { saveTextFile: fail }, './BinaryForecastTable.vue': { default: buildTable({ vue, '../../i18n': i18n, '../../utils/binaryForecasts': binaryForecasts }) },
     '../../api/report': { getReport: getReport || (async id => ({ data: reportMeta(id) })), getVizManifest: async () => ({ data: [] }),

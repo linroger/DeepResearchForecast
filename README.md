@@ -1146,10 +1146,16 @@ Visual Annex (charts no section claimed) · How to Verify · References
 **Exports.**
 - Markdown download.
 - The language variant.
-- **PDF**, built with pandoc + XeLaTeX with the CJK font auto-detected, and cached by content. It returns `409` if the report is not publishable and `503` if PDF export is disabled or fails.
+- **PDF buttons** run a background formatting agent using the repository-owned `equity-research-pdf` skill. Each button exports its own complete saved research or forecast report in the selected language, with institutional research styling, exact component checks and an image-capable review of every page. The interface shows progress and downloads only the verified PDF. Source reports and existing translations are preserved; export does not generate the other language. Matching reviewed exports are reused by source, asset, skill, renderer and model-policy fingerprints.
 - An **executive brief** and a **digest**, both deterministic with no LLM.
 
 Every export is served only through the publication gate. The agent log (`/agent-log`, `/agent-log/stream`) follows the same rule: once a report has finished without passing the gate, its draft section text, raw LLM responses and ReACT thoughts are withheld (`draft_withheld: true`); while it is still generating, the log streams live.
+
+The new PDF jobs start only on explicit POSTs to `/api/research/<pipeline_id>/dossier/pdf-export` or `/api/report/<report_id>/pdf-export`; resource-scoped status/download GETs never invoke a model. Original-language selection may already be Mandarin. Existing publication/translation admission is checked again before download. The legacy synchronous PDF URLs remain compatibility readers/renderers; the updated buttons do not silently fall back to them after an agent failure.
+
+PDF formatting and page review use configured model credentials. For `glm-5.3` on the official BigModel endpoint, the page reviewer defaults to `glm-5.3-flash` on the same endpoint/key because the research model is text-only; an explicit `RESEARCH_PDF_REVIEW_MODEL` wins. Other routes use their configured model and must pass the image-understanding probe. A CLI primary requires an explicitly configured HTTP reviewer, which also handles export planning; the main research model setting is unchanged. [GLM modality documentation](https://docs.bigmodel.cn/cn/guide/models/text/glm-5.3), [Flash image-input documentation](https://docs.bigmodel.cn/cn/guide/models/vlm/glm-5.3-flash).
+
+Install the backend's declared dependencies and supply embeddable TrueType fonts. `EQUITY_PDF_LATIN_FONT`, `EQUITY_PDF_LATIN_BOLD`, `EQUITY_PDF_CJK_FONT`, `EQUITY_PDF_CJK_BOLD` and `EQUITY_PDF_MONO_FONT` override local font paths. The native application renderer needs no desktop skill folder. Captured HTML chart companions can link to their source-bound static figure inside the PDF while retaining the original destination; HTML is never executed. Unsupported required diagrams/equations/HTML or unavailable images/fonts produce an actionable error instead of an incomplete download. Agent review is automated evidence, not human certification or verification of the research's factual conclusions. See the [export workflow and acceptance record](docs/handoff/research-pdf-export/handoff.md).
 
 ### After the run: ensembles, ledgers and monitoring
 
@@ -1320,7 +1326,7 @@ With `REPORT_PUBLISH_GATE=true` (the default), *epistemic* problems also block p
 | **One LLM** | Either a logged-in local `claude` or `codex` CLI, or an API key for `openai`, `kimi`, `minimax`, `deepseek`, `qwen` or `glm`. See [Model providers](#model-providers). |
 | **Disk space** | A few GB for the two venvs, the ~470 MB multilingual embedding model (downloaded on the first graph build) and run artifacts. `npm run doctor -- --deep` fails below 2 GB free and warns below 5 GB. |
 | **Optional: search/fetch keys** | `FIRECRAWL_API_KEY` (recommended), `SERPER_API_KEY`, `TAVILY_API_KEY`, `EXA_API_KEY`. Without them, research uses keyless DuckDuckGo search and the Jina Reader. |
-| **Optional: pandoc + XeLaTeX** | Needed for PDF export. Chinese PDFs also need a CJK font such as Noto Sans CJK SC, Source Han Sans SC or PingFang SC. |
+| **Optional: pandoc + XeLaTeX** | Used by legacy direct PDF routes and related compatibility exports. The new agent-backed PDF buttons use the declared Python renderer dependencies and embeddable TrueType/CJK fonts. |
 
 ---
 
@@ -1586,6 +1592,13 @@ Provider credentials are optional environment inputs, passed only to the relevan
 | `FORECAST_MARKET_ANCHORING` | `true` | Match binaries to resolution-equivalent Polymarket markets |
 | `REPORT_VISUALIZER` | `true` | Render charts |
 | `REPORT_PDF_EXPORT` | `true` | Enable the PDF endpoints |
+| `RESEARCH_PDF_EXPORT_ENABLED` | `true` | Enable the two agent-backed PDF button workflows |
+| `RESEARCH_PDF_MODEL` | *(current model)* | Export planning model; source content remains immutable |
+| `RESEARCH_PDF_REVIEW_MODEL` | *(current model; official GLM-5.3 uses GLM-5.3-Flash)* | Image-capable page reviewer; actual image comprehension is checked |
+| `RESEARCH_PDF_REVIEW_PROVIDER` · `RESEARCH_PDF_REVIEW_BASE_URL` · `RESEARCH_PDF_REVIEW_API_KEY` | *(same-provider credentials)* | Explicit reviewer route; another provider requires its own complete configuration |
+| `RESEARCH_PDF_MAX_CALLS` · `RESEARCH_PDF_MAX_CONCURRENT` | `96` · `2` | Bounded model requests and concurrent export jobs; polls make no model calls |
+| `RESEARCH_PDF_TIMEOUT_SECONDS` · `RESEARCH_PDF_CALL_TIMEOUT_SECONDS` | `900` · `90` | Job and individual model-request time allowances; unknown dispatch outcomes are not replayed automatically |
+| `RESEARCH_PDF_MAX_PAGES` · `RESEARCH_PDF_BATCH_CHARS` | `80` · `12000` | Complete page-review and source-batch limits; excess work is refused, never truncated |
 | `N_FORECAST_SEEDS` · `ENSEMBLE_SEED_CONCURRENCY` | `1` · `2` | Multi-seed sensitivity sidecar |
 
 **Server and operations**
@@ -1987,7 +2000,7 @@ Generated and gitignored: `.env`, `deer-flow/`, `deer-flow-2.0.0/`, `backend/upl
 | **The research stage times out** | Budgets depend on depth (quick ≈ 23 min, standard 3 h, deep 9 h). Raise `DEERFLOW_RESEARCH_TIMEOUT` or lower the depth. A timed-out lane 2 or 3 is salvaged; a timed-out lane 1 fails the stage, so resume the run. |
 | **Resume returns `409` right after a crash or restart** | The run still looks owned: its heartbeat is less than 120 s old. Wait two minutes and resume again. |
 | **The report is FAILED / "not publishable"** | `GET /api/report/<id>` lists the publication issues, and `final_audit.json` has the details. Resume the pipeline to regenerate the report. |
-| **The PDF download returns `503`** | PDF export is disabled (`REPORT_PDF_EXPORT=false`), or pandoc / XeLaTeX / a CJK font is missing. Install pandoc and a TeX distribution with `xelatex`. |
+| **The PDF download fails** | Check the returned export code and current job phase. Agent exports require enabled PDF settings, declared Python dependencies, covering embeddable fonts and a compatible image reviewer; missing/stale source admission or incomplete review blocks download. Only the legacy direct PDF routes require pandoc/XeLaTeX for rich Markdown. |
 | **The dossier shows "Sealed · read-only" and can't be edited** | The report's exact bytes are bound elsewhere: by the multi-lane research contract (`research_contract_manifest.json` and the judge's prose binding) or by a sealed `actor-intelligence/v1` cast. An in-place edit would make Continue re-run synthesis over it or fail actor reception, so the Edit button is replaced by this badge and `PUT /dossier` returns `409`. To change the research, start a new run with a refined question. Edits to unsealed runs are kept: saving refreshes `handoff/manifest.json`, so Continue reuses the edited research. |
 | **I need to stop a long run** | Click **Cancel** or call `POST /api/research/<id>/cancel`. Research subprocesses stop within about 1 s and the simulation within about 5 s. |
 

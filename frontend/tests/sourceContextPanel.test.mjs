@@ -1,3 +1,4 @@
+import * as researchPdfExport from '../src/utils/researchPdfExport.js'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -184,7 +185,7 @@ const unexpected = name => () => { throw new Error(`Unexpected API call: ${name}
 async function renderDossier(context, lang = 'en') {
   return withLocale(lang, async () => {
     const component = buildDossier({
-      vue: integrationVue(), '../../i18n': i18n, '../../utils/markdown': markdown,
+      vue: integrationVue(), '../../i18n': i18n, '../../utils/markdown': markdown, '../../utils/researchPdfExport': researchPdfExport,
       '../../utils/researchTranslation': researchTranslation, '../../utils/officialData': officialData,
       '../../utils/saveTextFile': { saveTextFile: unexpected('saveTextFile') },
       '../../api/research': {
@@ -200,7 +201,7 @@ async function renderReport(context, lang = 'en', { markdownContent = '# Report\
   return withLocale(lang, async () => {
     const calls = []
     const component = buildReport({
-      vue: integrationVue(), '../../i18n': i18n, '../../utils/markdown': markdown,
+      vue: integrationVue(), '../../i18n': i18n, '../../utils/markdown': markdown, '../../utils/researchPdfExport': researchPdfExport,
       '../../utils/reportLanguages': reportLanguages, '../../utils/officialData': officialData,
       '../../utils/vizManifest': vizManifest, '../../utils/saveTextFile': { saveTextFile: unexpected('saveTextFile') },
       './BinaryForecastTable.vue': { default: buildTable({ vue, '../../i18n': i18n, '../../utils/binaryForecasts': binaryForecasts }) },
