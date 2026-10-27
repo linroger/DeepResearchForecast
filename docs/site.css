@@ -101,7 +101,9 @@ a { color: inherit; }
 
 .run-top { display: flex; justify-content: space-between; gap: 10px; }
 .run-status { font-family: var(--mono); font-size: .64rem; font-weight: 700; text-transform: uppercase; color: #16a34a; letter-spacing: .5px; }
+.run-date { font-family: var(--mono); font-size: .64rem; color: #999; }
 .run-lang { font-family: var(--mono); font-size: .64rem; color: #999; }
+.viewer-prompt #run-date { display: inline-block; font-family: var(--mono); font-size: .64rem; color: #555; background: #fff; border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; margin: 0 0 4px 8px; }
 
 .run-card h3 { margin: 2px 0 0; font-size: 1.05rem; line-height: 1.35; }
 .run-prompt { margin: 0; font-size: .8rem; color: #666; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

@@ -1,0 +1,696 @@
+{
+ "entity_types": [
+  {
+   "name": "Person",
+   "description": "Individual decision-makers: president, PM, ministers, party leaders",
+   "attributes": [
+    {
+     "name": "role_title",
+     "type": "text",
+     "description": "Official position (e.g., Prime Minister, President)"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence on forecast outcome"
+    },
+    {
+     "name": "bloc_affiliation",
+     "type": "text",
+     "description": "Political bloc the person belongs to"
+    }
+   ],
+   "examples": [
+    "Emmanuel Macron",
+    "Sébastien Lecornu",
+    "Marine Le Pen",
+    "Gérald Darmanin"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Named individuals whose decisions (49.3, censure, emergency powers, candidacy) causally affect the forecast",
+   "anti_examples": [
+    "Pollsters",
+    "Journalists",
+    "Analysts quoted in reports"
+   ],
+   "agency_class": "individual_leader",
+   "levers": [
+    "Engage Article 49.3",
+    "Appoint a technocratic PM",
+    "Declare a state of emergency",
+    "Table a censure motion",
+    "Announce candidacy"
+   ]
+  },
+  {
+   "name": "Government",
+   "description": "Executive bodies, ministries and state institutions of France",
+   "attributes": [
+    {
+     "name": "branch",
+     "type": "text",
+     "description": "executive / interior / finance / judiciary / statistics"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "Jurisdiction (France, EU)"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "examples": [
+    "French National Assembly",
+    "Ministère de l'Intérieur",
+    "Conseil constitutionnel",
+    "European Commission",
+    "INSEE"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "arbiter",
+   "selection_rule": "State organs and institutions with formal decision or adjudication power (legislature, ministries, courts, EU bodies)",
+   "anti_examples": [
+    "News outlets covering the crisis",
+    "Think tanks"
+   ],
+   "agency_class": "sovereign_government",
+   "levers": [
+    "Schedule budget votes",
+    "Impose or lift curfews",
+    "Rule on election legality",
+    "Publish deficit estimates",
+    "Activate EDP steps"
+   ]
+  },
+  {
+   "name": "Organization",
+   "description": "Non-state actors: insurers, banks, central bank, rating agencies",
+   "attributes": [
+    {
+     "name": "sector",
+     "type": "text",
+     "description": "insurance / banking / ratings / markets"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "France / EU / global"
+    }
+   ],
+   "examples": [
+    "France Assureurs",
+    "CCR",
+    "Scor",
+    "Banque de France",
+    "Moody's",
+    "BNP Paribas"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 2,
+   "role_class": "stakeholder",
+   "selection_rule": "Real non-state organizations whose actions (loss estimates, ratings, market commentary) shift fiscal/market outcomes",
+   "anti_examples": [
+    "Abstract concepts like 'market sentiment'",
+    "Newspapers merely reporting events"
+   ],
+   "agency_class": "financial_institution",
+   "levers": [
+    "Publish insured-loss estimates",
+    "Downgrade sovereign or bank ratings",
+    "Adjust sovereign bond purchases",
+    "Declare catastrophe events"
+   ]
+  },
+  {
+   "name": "PoliticalParty",
+   "description": "Parties and electoral blocs competing in the 2027 election",
+   "attributes": [
+    {
+     "name": "bloc_alignment",
+     "type": "text",
+     "description": "far-right / left / centre-right / centre"
+    },
+    {
+     "name": "seat_count",
+     "type": "text",
+     "description": "Assembly seats held (if known)"
+    },
+    {
+     "name": "poll_standing",
+     "type": "text",
+     "description": "Current first-round polling range"
+    }
+   ],
+   "examples": [
+    "Rassemblement National",
+    "Nouveau Front Populaire",
+    "Les Républicains",
+    "Ensemble pour la République",
+    "Parti Socialiste"
+   ],
+   "archetype": "collective",
+   "simulation_tier": 1,
+   "role_class": "stakeholder",
+   "selection_rule": "Named parties or coalitions whose votes decide censure and whose candidates contest April 2027",
+   "anti_examples": [
+    "Voter demographics",
+    "'The left' as an abstract category without a named bloc"
+   ],
+   "agency_class": "political_party",
+   "levers": [
+    "Vote or abstain on censure",
+    "Table budget amendments",
+    "Endorse or reject the PLF",
+    "Nominate a presidential candidate"
+   ]
+  },
+  {
+   "name": "FiscalInstrument",
+   "description": "Trackable fiscal objects: budget bills, deficit procedures, deficit targets",
+   "attributes": [
+    {
+     "name": "instrument_type",
+     "type": "text",
+     "description": "budget bill / EDP / deficit target / special law"
+    },
+    {
+     "name": "status",
+     "type": "text",
+     "description": "pending / rejected / enacted via 49.3 / lapsed"
+    },
+    {
+     "name": "deadline",
+     "type": "text",
+     "description": "Key resolution date (e.g., 31 Dec 2026)"
+    }
+   ],
+   "examples": [
+    "PLF 2027",
+    "Loi de finances 2026",
+    "EU Excessive Deficit Procedure - France",
+    "2026 deficit target of 5.4% GDP"
+   ],
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Concrete fiscal texts, procedures or numeric targets whose resolution the forecast scores",
+   "anti_examples": [
+    "'Austerity' as an abstract concept",
+    "General debt levels without an attached instrument"
+   ],
+   "role_class_note": "passive object tracked by simulation"
+  },
+  {
+   "name": "PublicOrderEvent",
+   "description": "Riot episodes, curfews and emergency-measure declarations",
+   "attributes": [
+    {
+     "name": "event_type",
+     "type": "text",
+     "description": "riot / curfew / state of emergency / protest"
+    },
+    {
+     "name": "severity",
+     "type": "text",
+     "description": "Scale indicators: arrests, looted shops, insured losses"
+    },
+    {
+     "name": "start_date",
+     "type": "text",
+     "description": "Onset date"
+    }
+   ],
+   "examples": [
+    "October 2026 riots",
+    "Targeted curfews of 19 October 2026",
+    "2023 Nahel riots",
+    "1955 State of Emergency Act declaration option"
+   ],
+   "archetype": "event",
+   "simulation_tier": 2,
+   "role_class": "stakeholder",
+   "selection_rule": "Dated episodes or measures of unrest and public-order response",
+   "anti_examples": [
+    "'Social tension' as a mood",
+    "Isolated unverified social-media claims"
+   ],
+   "role_class_note": "event node driving scenario branching"
+  },
+  {
+   "name": "MarketAsset",
+   "description": "Traded assets and market series the forecast prices",
+   "attributes": [
+    {
+     "name": "asset_class",
+     "type": "text",
+     "description": "sovereign bond / equity index / bank stock"
+    },
+    {
+     "name": "current_level",
+     "type": "text",
+     "description": "Latest reading (e.g., 150.8 bps spread)"
+    },
+    {
+     "name": "stress_reference",
+     "type": "text",
+     "description": "Reference levels (1-yr range, 2011 peak)"
+    }
+   ],
+   "examples": [
+    "10-year OAT-Bund spread",
+    "CAC 40",
+    "French 10-year OAT yield",
+    "BNP Paribas shares"
+   ],
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Specific priceable series with objective resolution criteria in the forecast",
+   "anti_examples": [
+    "'Market confidence'",
+    "Unspecified bond indices"
+   ],
+   "role_class_note": "passive object, priced by simulation"
+  },
+  {
+   "name": "InformationSource",
+   "description": "Passive sources: pollsters, media, statistical publishers cited as evidence",
+   "attributes": [
+    {
+     "name": "source_type",
+     "type": "text",
+     "description": "pollster / media / statistical agency / rating note"
+    },
+    {
+     "name": "reliability",
+     "type": "text",
+     "description": "tier 1 official / tier 3 press relay"
+    }
+   ],
+   "examples": [
+    "Odoxa",
+    "Elabe",
+    "Morningstar",
+    "Le Monde",
+    "Reuters"
+   ],
+   "archetype": "source",
+   "simulation_tier": 3,
+   "role_class": "amplifier",
+   "selection_rule": "Entities that only report, poll or estimate; they do not decide outcomes",
+   "anti_examples": [
+    "European Commission (a decision-maker, typed Government)",
+    "A court ruling body"
+   ],
+   "role_class_note": "context tier; never a simulated decision agent"
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "OPPOSES",
+   "description": "Actor antagonism: censure, rejection, criticism",
+   "source_targets": [
+    {
+     "source": "PoliticalParty",
+     "target": "Government"
+    },
+    {
+     "source": "PoliticalParty",
+     "target": "PoliticalParty"
+    },
+    {
+     "source": "Person",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "negative"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low intensity of opposition"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "When antagonism began"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "source opposes / moves against target (e.g., NFP tables censure against the Government)"
+  },
+  {
+   "name": "ALLY_OF",
+   "description": "Support or tacit abstention alignment between actors",
+   "source_targets": [
+    {
+     "source": "PoliticalParty",
+     "target": "PoliticalParty"
+    },
+    {
+     "source": "PoliticalParty",
+     "target": "Government"
+    },
+    {
+     "source": "Person",
+     "target": "PoliticalParty"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "alignment_type",
+     "type": "text",
+     "description": "coalition / tactical abstention / endorsement"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "source supports or abstains to benefit target"
+  },
+  {
+   "name": "REGULATES",
+   "description": "Institutional oversight: EU EDP, constitutional review, ratings",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "FiscalInstrument"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "mechanism",
+     "type": "text",
+     "description": "EDP / constitutional review / rating action"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "binding / advisory"
+    },
+    {
+     "name": "deadline",
+     "type": "text",
+     "description": "Next action date"
+    }
+   ],
+   "family": "governance",
+   "valence": "directional",
+   "direction_semantics": "source oversees, rules on or disciplines target (Commission regulates France's deficit path)"
+  },
+  {
+   "name": "TRIGGERS",
+   "description": "Causal trigger: unrest or votes precipitating political/market moves",
+   "source_targets": [
+    {
+     "source": "PublicOrderEvent",
+     "target": "MarketAsset"
+    },
+    {
+     "source": "PublicOrderEvent",
+     "target": "Government"
+    },
+    {
+     "source": "PublicOrderEvent",
+     "target": "PoliticalParty"
+    },
+    {
+     "source": "Government",
+     "target": "PublicOrderEvent"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "positive/negative effect on target"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "days/weeks until effect"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low magnitude"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source event precipitates change in target (riots trigger spread widening, curfews trigger de-escalation)"
+  },
+  {
+   "name": "CAUSES",
+   "description": "Causal mechanism: fiscal slippage or censure driving outcomes",
+   "source_targets": [
+    {
+     "source": "FiscalInstrument",
+     "target": "MarketAsset"
+    },
+    {
+     "source": "Government",
+     "target": "FiscalInstrument"
+    },
+    {
+     "source": "PoliticalParty",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "direction of effect"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "transmission delay"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source causally produces change in target (budget slippage causes spread widening; censure causes government fall)"
+  },
+  {
+   "name": "INFLUENCES",
+   "description": "General influence of actors on polls, markets or events",
+   "source_targets": [
+    {
+     "source": "Person",
+     "target": "PoliticalParty"
+    },
+    {
+     "source": "Organization",
+     "target": "MarketAsset"
+    },
+    {
+     "source": "InformationSource",
+     "target": "PoliticalParty"
+    },
+    {
+     "source": "Government",
+     "target": "MarketAsset"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/negative/neutral"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "channel",
+     "type": "text",
+     "description": "polling / ratings / communication"
+    }
+   ],
+   "family": "influence",
+   "valence": "directional",
+   "direction_semantics": "source shapes target's standing or level (Le Pen influences RN polling; Moody's influences OAT pricing)"
+  },
+  {
+   "name": "COMPETES_WITH",
+   "description": "Electoral competition between parties or candidates",
+   "source_targets": [
+    {
+     "source": "PoliticalParty",
+     "target": "PoliticalParty"
+    },
+    {
+     "source": "Person",
+     "target": "Person"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "arena",
+     "type": "text",
+     "description": "presidential first round / runoff / budget vote"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "closeness of contest"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Rivalry onset"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "source contests the same electorate or vote as target"
+  },
+  {
+   "name": "DEPENDS_ON",
+   "description": "Dependency: government survival or market pricing on other actors",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "PoliticalParty"
+    },
+    {
+     "source": "FiscalInstrument",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "criticality",
+     "type": "text",
+     "description": "high/medium/low — how essential the dependency is"
+    },
+    {
+     "name": "fallback",
+     "type": "text",
+     "description": "Option if dependency fails (49.3, special law)"
+    }
+   ],
+   "family": "dependency",
+   "valence": "directional",
+   "direction_semantics": "source's survival or enactment depends on target's votes or support (Lecornu cabinet depends on PS abstention)"
+  },
+  {
+   "name": "REPORTS_ON",
+   "description": "Information sources reporting on actors, events or instruments",
+   "source_targets": [
+    {
+     "source": "InformationSource",
+     "target": "PublicOrderEvent"
+    },
+    {
+     "source": "InformationSource",
+     "target": "PoliticalParty"
+    },
+    {
+     "source": "InformationSource",
+     "target": "FiscalInstrument"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "reliability",
+     "type": "text",
+     "description": "tier 1/2/3"
+    },
+    {
+     "name": "publication_date",
+     "type": "text",
+     "description": "Date of report"
+    }
+   ],
+   "family": "information",
+   "valence": "neutral",
+   "direction_semantics": "source publishes claims about target; no causal agency attributed"
+  },
+  {
+   "name": "CONSTRAINS",
+   "description": "Legal or procedural constraint on outcomes",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "FiscalInstrument"
+    },
+    {
+     "source": "Government",
+     "target": "PublicOrderEvent"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "mechanism",
+     "type": "text",
+     "description": "constitutional article / organic law / EDP rule"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "binding / soft"
+    },
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "restrictive or enabling direction"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source legally or procedurally restricts target's options (constitution constrains election postponement; 289-vote rule constrains censure)"
+  }
+ ],
+ "analysis_summary": "该预测问题横跨法国财政（PLF 2027、49.3、EDP、赤字5.5%阈值）、政府存续（不信任动议289票门槛、技术官僚内阁）、公共秩序（2026年10月骚乱及再发风险）、选举（2027年4月首轮，RN领先32.5-38%）与市场（OAT-Bund利差150.8bps、CAC 40、银行评级）五个相互传导的维度。本体以 seed 类型 Person/Government/Organization 为骨架，新增 PoliticalParty（关键少数派系算术：RN 122席、PS弃权20票边际）、FiscalInstrument（预算案与EDP等可判定客体）、PublicOrderEvent（骚乱这一摆动变量）、MarketAsset（可定价的市场序列）、InformationSource（民调机构/媒体为 tier-3 被动来源）。边类型复用 OPPOSES/ALLY_OF/REGULATES/COMPETES_WITH/DEPENDS_ON 并新增 TRIGGERS/CAUSES/CONSTRAINS 因果与治理边，携带 sign/lag/strength 属性以刻画骚乱→安全显著性→RN得票、赤字滑移→利差走阔等传导链，服务多智能体推演。"
+}

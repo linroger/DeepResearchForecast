@@ -1,0 +1,1013 @@
+{
+ "nodes": [
+  {
+   "id": "f651c7de-e4ff-4684-be79-ac5ee7ce0a81",
+   "name": "Kamoa-Kakula Phase 4",
+   "labels": [
+    "MineProject"
+   ],
+   "summary": "Ivanhoe operates Kamoa-Kakula Phase 4, a duplicate 6.5 Mt/a concentrator ramping toward ~500 kt/a reported from 2028; the study in the life-of-mine plan was due end-Q1 2026 and Phase 4 is excluded from 2026–27 guidance."
+  },
+  {
+   "id": "ee17ff2f-00a4-41a7-8927-218167817954",
+   "name": "Cochilco",
+   "labels": [
+    "ForecastingSource"
+   ],
+   "summary": "Cochilco forecasts Chilean production (including Codelco) at 5.27 Mt in 2026, rising +5.2% in 2027 (roughly +280 kt/yr); Chilean Jan–Jul 2026 output was 2.88 Mt, −7% y/y, a 15-year low for the period per Cochilco data.\nEl Teniente (Codelco) suffered an accident in September 2026 that temporarily compounded concentrate disruption, per data reflected in Cochilco-linked reporting.\nICSG's October 2026 forecast (refined output +3.4% in 2027, mines +3.1%, usage +2.5%) is complemented by a Cochilco-projected 5.2% Chile rebound as part of the supply-catches-up scenario evidence.\nCochilco raised its 20"
+  },
+  {
+   "id": "e24f2d3f-cc15-400b-95dd-6ec69eac2c42",
+   "name": "First Quantum Minerals",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Canadian miner awaiting a restart framework with Panama; no scope, timing or legal structure set as of the as-of date.\nSmelter concentrate supply into 2027 depends on ICSG's projected 3.1% mine growth, which rests on a Cobre Panama restart; CSPT smelter discipline is the binding uncertainty on refined supply\nFirst Quantum operates Cobre Panama, whose pre-shutdown scale was ~330 kt/yr (~1% of world mine supply, figure unconfirmed); on 30 September 2026 a government commission recommended opening negotiations to reopen the mine while financing an orderly closure, with no scope, timing or legal s"
+  },
+  {
+   "id": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "name": "Chinese copper smelters (CSPT, Jiangxi Copper, Tongling)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "CSPT member smelters negotiating the annual TC/RC benchmark with Antofagasta; refined growth slowed to a projected 3–3.4% in 2026, the lowest since at least 2000 versus 10.4% in 2025, squeezed by nega"
+  },
+  {
+   "id": "d4abea10-f4b7-4af4-929c-a2d5fec3513d",
+   "name": "IEA",
+   "labels": [
+    "ForecastingSource"
+   ],
+   "summary": "Crux cited IEA data showing spot TCs around −$126.80/t at end-June 2026, consistent with the SMM Imported Copper Concentrate Index collapse"
+  },
+  {
+   "id": "bea25ce6-a322-4698-9901-006da8244295",
+   "name": "Oilchem",
+   "labels": [
+    "ForecastingSource"
+   ],
+   "summary": "Oilchem reported that acid prices fell 11% in September 2026, affecting the SMM China smelting acid index which had hit 1,665 yuan/mt, up 83.7% from the start of 2026."
+  },
+  {
+   "id": "bde49518-7272-4a1c-8742-6b7c10b3de8c",
+   "name": "Mirador Phase II",
+   "labels": [
+    "MineProject"
+   ],
+   "summary": "Peru Ministry of Mines reported Peru produced 2.77 Mt in 2025 and ran at 218,232 t in June 2026 versus 226,096 t in May; separately, Ecuador's Mirador Phase II has capacity above 200,000 t/y copper with Mirador North adding 60,000 t/d milling for $653m — Peru's permit reform targets ~1 Mt/yr additional copper only by 2031–32.\nMirador copper mine expansion in Ecuador is set to be expanded with Chinese involvement, with Ecuador expected to approve the expansion (Mirador is operated by a Chinese consortium, not First Quantum); source articles report expansion approval pending"
+  },
+  {
+   "id": "b8ac901b-81e2-413f-b397-7f38ba58f4a2",
+   "name": "Government",
+   "labels": [
+    "Organization"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "b3ba9983-cce5-40de-9a75-c44515869272",
+   "name": "Project Vault",
+   "labels": [],
+   "summary": "Project Vault is a Chinese state copper stockpiling/buying program running to approximately $12 billion, cited as state-buying evidence supporting the 'Supercycle breakout' copper price scenario (15% probability).\nSRB / Project Vault tenders with confirmed purchases by December 2027 would signal a Supercycle breakout scenario."
+  },
+  {
+   "id": "b30dad79-2e17-4bcd-9e12-7f31cf522d86",
+   "name": "QB2",
+   "labels": [
+    "MineProject"
+   ],
+   "summary": "Chinese smelter refined output (CSPT) depends on concentrate supply from mines and projects such as QB2; smelter discipline is the binding uncertainty on refined supply.\nTeck operates Quebrada Blanca 2, whose 2027 guidance was cut to 240–275 kt from 280–310 kt (≈ −60 kt/yr) due to a tailings constraint, per Reuters 8 October 2025 (cut unconfirmed on Teck's own release).\nReuters reported on 8 October 2025 that Teck's Quebrada Blanca 2 2027 guidance was cut to 240–275 kt from 280–310 kt due to a tailings constraint.\nTeck operates the QB (Quebrada Blanca) mine; per an unconfirmed October 8, 2025 "
+  },
+  {
+   "id": "acf86b2a-80e8-426e-bb86-6c5f8d0e9a1a",
+   "name": "Kamoa-Kakula P3 ramp",
+   "labels": [
+    "MineProject"
+   ],
+   "summary": "Ivanhoe operates the Kamoa-Kakula P3 ramp, with 2027 guidance of 500–540 kt vs 380–420 kt in 2026 (≈ +120 kt/yr at midpoints), per company guidance dated 3 December 2025; mining rate rises to 10 Mt/a in 2027 to fill the Phase 3 concentrator.\nProject 95 lifts Kamoa-Kakula P1/2 recovery to ~95% from Q2 2026, supporting the Kamoa-Kakula ramp.\nIvanhoe Mines owns and operates Kamoa-Kakula, announcing 2026 and 2027 copper production guidance and reporting 76,401 tonnes produced in Q3 2026\nCochilco raised its 2026 copper price forecast and cut its 2026 copper production forecast amid Chilean mine woe"
+  },
+  {
+   "id": "ac26278f-5fa4-4881-b011-1b4e094a92da",
+   "name": "Ivanhoe Mines",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "DRC miner; Project 95 lifts Phase 1/2 recovery to ~95% from Q2 2026; Q3 2026 output 76,401 t; Phase 4 (~500 kt/a reported) ramps toward 2028 and is excluded from 2026–27 guidance.\nCSPT smelter refined output depends on concentrate supply, with 2027 projections resting on Kamoa-Kakula ramp-up among other mine projects\nIvanhoe operates the Kamoa-Kakula P3 ramp, with 2027 guidance of 500–540 kt vs 380–420 kt in 2026 (≈ +120 kt/yr at midpoints), per company guidance dated 3 December 2025; mining rate rises to 10 Mt/a in 2027 to fill the Phase 3 concentrator.\nIvanhoe operates Kamoa-Kakula Phase 4, "
+  },
+  {
+   "id": "a68699d3-7336-43aa-a36c-fe9b092d223d",
+   "name": "LME",
+   "labels": [
+    "ExchangeMarket"
+   ],
+   "summary": "LME is the exchange setting the Grade A copper cash settlement price (USD/tonne), used as the forecast target for 31 December 2027; its December 2027 prompt traded at $14,650/t on 14 October 2026 against cash of $14,751/t. LME copper stocks stood at 229,650 t on 14 October 2026 (Westmetall prints 273,750 t on 23 October), far below COMEX warehouse holdings of over 714,000 t (~70% of visible global stocks); combined exchange cover was near 0.4 months of ICSG's expected 2026 world refined consumption of 28.59 Mt.\nWestmetall's table prints LME stocks of 273,750 tonnes for October 23, 2026.\nSectio"
+  },
+  {
+   "id": "a64fa9d9-38d6-43c0-8fe9-567303d3bcbc",
+   "name": "Novaex",
+   "labels": [
+    "ForecastingSource"
+   ],
+   "summary": "Novaex cited the SMM weekly imported concentrate index of −$231.68/dmt (30 September 2026), a spot TC indicator.\nNovaex reported the SMM imported-concentrate weekly index reading of −$231.68/dmt on 30 September 2026, citing SMM."
+  },
+  {
+   "id": "a5285311-76c4-4458-9ddd-5f6402f1ef11",
+   "name": "China State Reserve Bureau",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Chinese state stockpiler; price inquiries reported March 2025; outright buying at $14,473/t would run against the 2021 auction pattern.\nSRB buying is cited as a potential driver of a supercycle breakout regime pushing copper above $18,000, implying state stockpiling in copper markets."
+  },
+  {
+   "id": "a4ecf5b1-072f-41cd-9cf5-40c1a553c5e9",
+   "name": "COMEX-approved US warehouse copper stocks",
+   "labels": [
+    "MarketIndicator"
+   ],
+   "summary": "Wood Mackenzie's Charles Cooper estimated roughly 100,000 t of copper still due to arrive in the US through October 2026."
+  },
+  {
+   "id": "9c93171e-1963-4e75-b2c7-dc21fa761317",
+   "name": "Asia Copper Week",
+   "labels": [],
+   "summary": "Asia Copper Week is scheduled for 17–19 November 2026, when the 2027 copper concentrate treatment charge benchmark is due to be settled.\nCSPT smelters will set their 2027 output policy after Asia Copper Week (November 17–19, 2026), a decision that discriminates the 'Squeeze persists' scenario (40%)."
+  },
+  {
+   "id": "9b0f9066-93ba-4bff-9f8c-8b0d60f903d8",
+   "name": "Zijin Tianfeng",
+   "labels": [
+    "ForecastingSource"
+   ],
+   "summary": "Zijin Tianfeng and Wood Mackenzie see 2026 Chinese smelter output growth of only 3–3.4%, the lowest since at least 2000, against the CSPT's partial compliance with its November 2025 pledge to cut primary smelting output by more than 10% in 2026."
+  },
+  {
+   "id": "96a16925-309f-47b9-9f73-850d81788097",
+   "name": "Peru Ministry of Mines",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Peru Ministry of Mines reported Peru produced 2.77 Mt in 2025 and ran at 218,232 t in June 2026 versus 226,096 t in May; separately, Ecuador's Mirador Phase II has capacity above 200,000 t/y copper with Mirador North adding 60,000 t/d milling for $653m — Peru's permit reform targets ~1 Mt/yr additional copper only by 2031–32."
+  },
+  {
+   "id": "95cda85a-acdd-49ca-be0d-12052bdd1c26",
+   "name": "El Teniente",
+   "labels": [
+    "MineProject"
+   ],
+   "summary": "El Teniente (Codelco) suffered an accident in September 2026 that temporarily compounded concentrate disruption, per data reflected in Cochilco-linked reporting.\nCodelco operates the El Teniente mine, which suffered an accident in September 2026."
+  },
+  {
+   "id": "94a55ecc-369d-4730-b216-d3af7c01adc4",
+   "name": "SMM imported concentrate index",
+   "labels": [
+    "MarketIndicator"
+   ],
+   "summary": "SMM's imported concentrate index stood at −$231.68/dmt on 30 September 2026, with smelters effectively paying for feed, constraining smelters including CSPT members\nThe SMM Imported Copper Concentrate Index broke −$100/dmt for the first time on 15 May 2026 at −$102.84/dmt, after the 2026 benchmark settled at $0/t TC and 0.0¢/lb RC\nCrux cited IEA data showing spot TCs around −$126.80/t at end-June 2026, consistent with the SMM Imported Copper Concentrate Index collapse\nCrux, citing IEA, reported spot treatment charges around −$126.80/t at end-June 2026 amid the SMM concentrate index collapse\nFa"
+  },
+  {
+   "id": "8ac9c740-05bf-477c-b415-9cc027590fb6",
+   "name": "Cobre Panama",
+   "labels": [
+    "MineProject"
+   ],
+   "summary": "The Cobre Panama restart timeline constrains refined copper market balances (LME-priced copper), relevant to whether supply catches up and prices ease toward $11,000–13,000.\nFirst Quantum operates Cobre Panama, whose pre-shutdown scale was ~330 kt/yr (~1% of world mine supply, figure unconfirmed); on 30 September 2026 a government commission recommended opening negotiations to reopen the mine while financing an orderly closure, with no scope, timing or legal structure set.\nICSG's 2027 balance projection of a surplus (Supply catches up scenario, 30%) rests on the Cobre Panama restart plus proje"
+  },
+  {
+   "id": "7efea659-2a89-47b1-877a-f136c9a3cd22",
+   "name": "Government of China (NDRC/MIIT)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Chinese industrial policymakers whose actions simultaneously tighten concentrate, scrap and byproduct outlet conditions for smelters.\nChina suspended sulphuric acid exports for eight months from May 2026 and its tax crackdown shrank scrap feed, tightening both feed streams for CSPT smelters.\nThe US and China could together hold 71% of global copper inventories within a year, with COMEX warehouses holding more than 714,000 t and LME stocks at 229,650 t in mid-October 2026; the marginal stockpiling bid sits in Washington."
+  },
+  {
+   "id": "7d2d2577-d83f-4464-8b3c-fe64306e2029",
+   "name": "Section 232",
+   "labels": [
+    "TradePolicyInstrument"
+   ],
+   "summary": "The Section 232 US copper tariff timeline, with its sunset falling exactly on the forecast date, constrains the COMEX market including its overhang.\nProclamation 10962 imposed 50% Section 232 copper tariffs effective July 30, 2025 (Federal Register August 5, 2025); effective April 6, 2026 rates became 50% on semi-finished copper products and 25% on copper-intensive derivatives (10% if at least 95% US-sourced content).\nSection 232 tariffs dislocated metal into US warehouses, with COMEX-approved US warehouses holding roughly 70% of visible global copper stocks after inventories rose nearly 750% "
+  },
+  {
+   "id": "7b441725-eebc-4825-8ed2-268e5ad652f9",
+   "name": "2027 Antofagasta–Jiangxi benchmark TC/RC settlement",
+   "labels": [
+    "MarketIndicator"
+   ],
+   "summary": "Antofagasta negotiated the 2026 annual copper TC/RC benchmark at $0/t TC and 0.0¢/lb RC with Jiangxi/Tongling, versus $21.25/t and 2.125¢/lb for 2025\nThe SMM Imported Copper Concentrate Index broke −$100/dmt for the first time on 15 May 2026 at −$102.84/dmt, after the 2026 benchmark settled at $0/t TC and 0.0¢/lb RC\nThe 2026 rally in copper was concentrate-scarcity, tariff-dislocation and expectations driven rather than refined-deficit driven, marked by record price against modest realized surplus and the benchmark TC settling at $0/t\nCRU reports a drift to index-linked terms after provisional"
+  },
+  {
+   "id": "777c4b38-62e4-4d84-b096-82a3d96dd2f6",
+   "name": "LME Grade A copper cash settlement",
+   "labels": [
+    "MarketIndicator"
+   ],
+   "summary": "ICSG cut its 2026 mine-production growth forecast to 1.3% and projects 3.1% for 2027, resting on a Cobre Panama restart plus Kamoa-Kakula and QB2 ramps, affecting copper market outlook\nGoldman dates the record copper price at $13,387/t on 6 January 2026, influencing price expectations\nCOMEX warehouses held more than 714,000 t on 14 October 2026, roughly 70% of visible global stocks, against LME stocks of 229,650 t, influencing copper price formation\nWestmetall prints LME stocks of 273,750 t on 23 October 2026\nLME cash copper averaged $14,566/t in October 2026 month-to-date, up from $13,089 in "
+  },
+  {
+   "id": "77400799-58b7-43ab-a73c-e7d67e509767",
+   "name": "ICSG",
+   "labels": [
+    "ForecastingSource"
+   ],
+   "summary": "ICSG cut its 2026 mine-production growth forecast to 1.3% and projects 3.1% for 2027, resting on a Cobre Panama restart plus Kamoa-Kakula and QB2 ramps, affecting copper market outlook\nICSG's October 2026 round cut 2026 mine production growth to 1.3% (from 1.6% in April) while projecting 3.1% for 2027, expecting primary electrolytic refined output to decline in 2026 due to scarce concentrate — factors influencing the global copper price\nThe Oregon Group publishes a reading of ICSG tables showing expected 2026 world refined consumption of 28.59 Mt and ICSG October 14, 2026 forecasts of a 104,00"
+  },
+  {
+   "id": "5d037960-993b-4f10-bba5-4e4b4d4e52c6",
+   "name": "Reuters",
+   "labels": [
+    "ForecastingSource"
+   ],
+   "summary": "Reuters reported on 8 October 2025 that Teck's Quebrada Blanca 2 2027 guidance was cut to 240–275 kt from 280–310 kt due to a tailings constraint.\nReuters published a report on 8 October 2025 that Teck Resources cut copper production guidance at its flagship Chilean mine QB\nReuters reported on 30 September 2026 that a Panama commission recommended reopening the First Quantum mine to fund a phased/orderly closure"
+  },
+  {
+   "id": "5b54da34-e657-48b9-be7e-e8d81dc64e28",
+   "name": "Organization",
+   "labels": [
+    "Organization"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "5b231f56-1810-40ec-a900-79ed49a92478",
+   "name": "J.P. Morgan",
+   "labels": [
+    "ForecastingSource"
+   ],
+   "summary": "J.P. Morgan forecasts copper at $14,800/t in Q4 2026, reported by October 2026, shaping market expectations for copper price formation."
+  },
+  {
+   "id": "5b136e65-c765-4e28-ae9f-df0406d67e9e",
+   "name": "SMM China smelting acid index",
+   "labels": [
+    "MarketIndicator"
+   ],
+   "summary": "Oilchem reported that acid prices fell 11% in September 2026, affecting the SMM China smelting acid index which had hit 1,665 yuan/mt, up 83.7% from the start of 2026.\nByproduct economics cushioned CSPT smelters against negative TCs as the SMM China smelting acid index hit 1,665 yuan/mt, up 83.7% from the start of 2026, though that cushion eroded as acid prices fell 11% in September 2026."
+  },
+  {
+   "id": "56f287ed-f3cd-418b-ad65-b1b5024af603",
+   "name": "COMEX–LME spread",
+   "labels": [
+    "MarketIndicator"
+   ],
+   "summary": "Section 232 tariffs drove the COMEX–LME spread from over $3,000/t in July 2025 to about $310/t by mid-October 2026 as the arbitrage largely closed.\nThe COMEX–LME spread narrowed to about $310/t by mid-October 2026 from over $3,000/t in July 2025, while COMEX warehouses held more than 714,000 t, roughly 70% of visible global stocks.\nTariff policy under the Annex III floating-tariff framework drives the COMEX–LME spread; re-widening above $1,000/t would signal tariff re-escalation supporting a supercycle breakout, while the spread sat at ~$310/t in mid-October 2026."
+  },
+  {
+   "id": "508189a9-8e11-433a-81c5-800b5e934a21",
+   "name": "Annex III",
+   "labels": [
+    "TradePolicyInstrument"
+   ],
+   "summary": "The Annex III US tariff sunset on December 31, 2027 falls exactly on the forecast settlement date, with a COMEX–LME spread of ~$310/t meaning arb unwind could hit COMEX stocks; a re-widening above $1,000/t would signal tariff re-escalation.\nThe Annex III tariff sunset on December 31, 2027 is expected to trigger an arb unwind affecting LME market dynamics on the settlement date.\nThe Annex III floating-tariff framework, sunsetting on December 31, 2027, together with US Commerce/USTR rolling tariff additions, constrains the COMEX premium and could trigger the 'Supercycle breakout' scenario (15%)."
+  },
+  {
+   "id": "46bbbcff-5aed-4c0a-bad1-00cdc1115796",
+   "name": "Annex III floating-tariff framework",
+   "labels": [
+    "TradePolicyInstrument"
+   ],
+   "summary": "A temporary floating-tariff framework (Annex III) under Section 232 runs through December 31, 2027, keeping tariff-driven dislocation of copper into COMEX US warehouses in place, with the expiry landing exactly on the forecast horizon.\nThe Annex III floating-tariff framework constrains the LME market and sunsets on December 31, 2027, exactly when the LME Dec-2027 prompt (anchored at $14,650/t on 14 Oct 2026) settles.\nTariff policy under the Annex III floating-tariff framework drives the COMEX–LME spread; re-widening above $1,000/t would signal tariff re-escalation supporting a supercycle break"
+  },
+  {
+   "id": "3e367436-5353-41ae-b0f8-7fff56d40b54",
+   "name": "Government of Panama",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Holds the legal authority over the mine's fate; no scope, timing or legal structure set.\nPanama's government decision on the scope and timing of the Cobre Panama restart (operated by First Quantum) discriminates the 'Supply catches up' scenario (30%)."
+  },
+  {
+   "id": "3a732899-c690-430d-8e89-6e152881e9d7",
+   "name": "Wood Mackenzie",
+   "labels": [
+    "ForecastingSource"
+   ],
+   "summary": "Wood Mackenzie's Charles Cooper estimated roughly 100,000 t of copper still due to arrive in the US through October 2026."
+  },
+  {
+   "id": "3a07ee96-0d27-4fe2-8162-b5a481387eb5",
+   "name": "US Commerce",
+   "labels": [
+    "Government"
+   ],
+   "summary": "US Commerce holds the rolling Section 232 copper tariff lever alongside USTR, with no fixed deadline for rolling additions. Proclamation 10962 imposed 50% Section 232 copper tariffs effective July 30, 2025 (Federal Register August 5, 2025). Effective April 6, 2026, rates became 50% on semi-finished copper products and 25% on copper-intensive derivatives (10% if at least 95% of content is US-sourced). A temporary floating-tariff framework (Annex III) runs through December 31, 2027, an expiry landing exactly on the copper forecast horizon."
+  },
+  {
+   "id": "36bc4345-257c-41c6-8906-0176deef5b31",
+   "name": "COMEX",
+   "labels": [
+    "ExchangeMarket"
+   ],
+   "summary": "COMEX warehouses held more than 714,000 t on 14 October 2026 — roughly 70% of visible global copper stocks — after inventories rose nearly 750% since February 2025, against LME stocks of 229,650 t; the US and China could together hold 71% of global inventories within a year. Tariff-dislocated metal is stranded in US warehouses, coexisting with ex-US tightness. The COMEX–LME spread narrowed from over $3,000/t in July 2025 to about $310/t by mid-October 2026; a re-widening above $1,000/t signals tariff re-escalation (Supercycle breakout, 15%), while a draw below ~300,000 t pre-expiry frees stran"
+  },
+  {
+   "id": "2e77f33d-4971-43b1-b549-1a3ed3d72b2d",
+   "name": "Crux",
+   "labels": [
+    "ForecastingSource"
+   ],
+   "summary": "Crux, citing IEA, reported spot treatment charges around −$126.80/t at end-June 2026 amid the SMM concentrate index collapse\nCrux Investor published analysis that Chinese smelters pay miners for copper concentrate as mine supply becomes the key constraint"
+  },
+  {
+   "id": "2beca0a3-ffc2-42af-906a-c58d2088bcdc",
+   "name": "The Oregon Group",
+   "labels": [
+    "ForecastingSource"
+   ],
+   "summary": "The Oregon Group reported Fastmarkets' spot TC assessment of −US$272.20/t on 9 October 2026."
+  },
+  {
+   "id": "2aff9b72-ec18-4876-9a63-9577ed1f43b8",
+   "name": "SMM weekly spot TCs",
+   "labels": [
+    "MarketIndicator"
+   ],
+   "summary": "SMM publishes weekly spot TCs; persistence below zero versus recovery toward zero is a leading indicator separating the Squeeze-persists from the Supply-catches-up regime.\nICSG will revise its 3.1% mine-growth projection in spring 2027, a leading indicator to watch.\nFastmarkets assessed the spot TC at −US$272.20/t on 9 October 2026, as reported by The Oregon Group.\nThe Oregon Group reported Fastmarkets' spot TC assessment of −US$272.20/t on 9 October 2026.\nCRU noted the spot-minus-contract TC gap averaged $12 over 2000–2023 versus roughly $90 in 2024–25.\nDeeply negative spot TCs constrained CS"
+  },
+  {
+   "id": "27103710-012e-43f3-b542-2aa176ec2eb0",
+   "name": "CRU",
+   "labels": [
+    "ForecastingSource"
+   ],
+   "summary": "CRU's weekly assessment opened at −$124/t in April 2026, tracking the collapse in the SMM Imported Copper Concentrate Index\nCRU noted the spot-minus-contract TC gap averaged $12 over 2000–2023 versus roughly $90 in 2024–25.\nCRU's data-centre copper demand path (~260,000 t in 2025 rising above 650,000 t by 2030) and ICSG's +2.5% usage growth act as brakes against demand-recession drawdowns like the ~64% (2008) and ~26% (2022) analogues."
+  },
+  {
+   "id": "26f408b5-49a2-4683-8aa2-66d080b54c48",
+   "name": "United States",
+   "labels": [
+    "Government"
+   ],
+   "summary": "The United States (with the marginal stockpiling bid in Washington) could together with China hold 71% of global copper inventories within a year; COMEX stocks were above 714,000 t in mid-October 2026."
+  },
+  {
+   "id": "1b79b932-e83d-42ce-b896-780b205acc44",
+   "name": "spot treatment charges",
+   "labels": [
+    "MarketIndicator"
+   ],
+   "summary": "Fastmarkets assessed spot TCs at −$272.20/t on 2026-10-09.\nSpot TCs at −$272.20/t (2026-10-09) and the SMM weekly index at −$231.68/dmt cap Chinese refined growth at 3–3.4% in 2026, consistent with ICSG's forecast of a 368,000 t surplus in 2027 that need not break the tight regime if metal stays stranded in the US."
+  },
+  {
+   "id": "1a720406-8c75-4eec-8e96-cb95034465aa",
+   "name": "SRB",
+   "labels": [
+    "Government"
+   ],
+   "summary": "China's State Reserve Bureau, whose copper stockpiling is a potential upside catalyst: SRB buying is cited as a driver of the 15%-probability Supercycle breakout scenario pushing copper above $18,000. At copper prices of 14,473 USD/t (2026-09), outright Chinese SRB buying would run counter to its 2021 pattern, and the marginal stockpiling bid currently sits in Washington; reports suggest the US and China could together hold 71% of global copper inventories within a year.\nSRB / Project Vault tenders with confirmed purchases by December 2027 would signal a Supercycle breakout scenario."
+  },
+  {
+   "id": "0fa0a2c8-7552-49b7-bfdd-d1804f8f64ec",
+   "name": "Teck Resources",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Canadian miner whose QB2 ramp in Chile underperformed; the cut is unconfirmed on Teck's own release.\nCSPT smelter refined output depends on concentrate supply, with 2027 projections resting on the QB2 ramp-up among other mine projects\nTeck operates Quebrada Blanca 2, whose 2027 guidance was cut to 240–275 kt from 280–310 kt (≈ −60 kt/yr) due to a tailings constraint, per Reuters 8 October 2025 (cut unconfirmed on Teck's own release).\nTeck operates the QB (Quebrada Blanca) mine; per an unconfirmed October 8, 2025 Reuters report, Teck cut QB guidance to 200,000–235,000 t (2026) and 240,000–275,0"
+  },
+  {
+   "id": "0d7c67af-f79c-4676-bc46-70e246812972",
+   "name": "Codelco",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Chilean state copper company; Chilean ore grades fell 13% over four years, a structural subtraction offsetting the projected 2027 rebound.\nCochilco forecasts Chilean production (including Codelco) at 5.27 Mt in 2026, rising +5.2% in 2027 (roughly +280 kt/yr); Chilean Jan–Jul 2026 output was 2.88 Mt, −7% y/y, a 15-year low for the period per Cochilco data.\nCodelco operates the El Teniente mine, which suffered an accident in September 2026."
+  },
+  {
+   "id": "0b871fd1-1587-4daf-8341-2ff82a902cd3",
+   "name": "Antofagasta plc",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Chilean copper miner whose January 2026 settlement with Jiangxi/Tongling at $0/t TC and 0.0¢/lb RC was the lowest ever recorded; CRU reports a drift to index-linked terms.\nAntofagasta and Jiangxi are parties to the 2027 benchmark TC/RC settlement negotiation, whose window opens weeks after the as-of date of 2026-10-24.\nAntofagasta and Jiangxi/Tongling settled the 2026 annual copper TC/RC benchmark at $0/t TC and 0.0¢/lb RC in January 2026, the lowest ever recorded\nAntofagasta and Jiangxi/Tongling settled the 2026 annual copper TC/RC benchmark at $0/t TC and 0.0¢/lb RC in January 2026, the lowe"
+  },
+  {
+   "id": "0a819038-5b84-4841-ae86-70369ec4b033",
+   "name": "Project 95",
+   "labels": [
+    "MineProject"
+   ],
+   "summary": "Project 95 lifts Kamoa-Kakula P1/2 recovery to ~95% from Q2 2026, supporting the Kamoa-Kakula ramp."
+  },
+  {
+   "id": "0a6bcaaf-e540-4adb-840d-9b89623a0325",
+   "name": "SMM",
+   "labels": [
+    "ForecastingSource"
+   ],
+   "summary": "SMM publishes weekly spot TCs; persistence below zero versus recovery toward zero is a leading indicator separating the Squeeze-persists from the Supply-catches-up regime.\nSMM publishes the imported-concentrate weekly index, which read −$231.68/dmt on 30 September 2026 (per Novaex citing SMM), after first breaking −$100 at −$102.84/dmt on 15 May 2026.\nShanghai Metals Market (SMM) publishes copper concentrate TC assessments, reporting TCs breaking through negative triple digits amid smelter challenges"
+  },
+  {
+   "id": "069bc72f-7965-4320-8139-92c2aead1452",
+   "name": "CME copper CVOL",
+   "labels": [
+    "MarketIndicator"
+   ],
+   "summary": "Macro regime signposts: VIX at 19.03 on 22 October 2026 (below its April 2025 peak of 31.9662) and CME copper CVOL at 24.1306 were monitored jointly; equity stress plus contracting Chinese demand would confirm a Demand recession scenario.\nCME publishes the copper CVOL index, which read 24.1306, giving a risk-neutral implied P90 near $19,500 on the $14,650 LME December 2027 prompt."
+  },
+  {
+   "id": "0341cd9f-ff28-44ff-9912-ce28094c2ffa",
+   "name": "Fastmarkets",
+   "labels": [
+    "ForecastingSource"
+   ],
+   "summary": "Fastmarkets assessed spot treatment charges at −$272.20/t on 9 October 2026, below the SMM index print of −$231.68/dmt on 30 September 2026\nFastmarkets assessed the spot TC at −US$272.20/t on 9 October 2026, as reported by The Oregon Group.\nFastmarkets assessed spot TCs at −$272.20/t on 2026-10-09.\nFastmarkets publishes insights on Freeport copper concentrate contracts for 2026 discussed at LME Week"
+  }
+ ],
+ "links": [
+  {
+   "source": "3e367436-5353-41ae-b0f8-7fff56d40b54",
+   "target": "e24f2d3f-cc15-400b-95dd-6ec69eac2c42",
+   "name": "REGULATES",
+   "fact": "Panama's government decision on the scope and timing of the Cobre Panama restart (operated by First Quantum) discriminates the 'Supply catches up' scenario (30%)."
+  },
+  {
+   "source": "2e77f33d-4971-43b1-b549-1a3ed3d72b2d",
+   "target": "94a55ecc-369d-4730-b216-d3af7c01adc4",
+   "name": "PUBLISHES",
+   "fact": "Crux Investor published analysis that Chinese smelters pay miners for copper concentrate as mine supply becomes the key constraint"
+  },
+  {
+   "source": "36bc4345-257c-41c6-8906-0176deef5b31",
+   "target": "7d2d2577-d83f-4464-8b3c-fe64306e2029",
+   "name": "CONSTRAINS",
+   "fact": "The Section 232 US copper tariff timeline, with its sunset falling exactly on the forecast date, constrains the COMEX market including its overhang."
+  },
+  {
+   "source": "a5285311-76c4-4458-9ddd-5f6402f1ef11",
+   "target": "a5285311-76c4-4458-9ddd-5f6402f1ef11",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "China State Reserve Bureau 亦称 SRB"
+  },
+  {
+   "source": "5d037960-993b-4f10-bba5-4e4b4d4e52c6",
+   "target": "0fa0a2c8-7552-49b7-bfdd-d1804f8f64ec",
+   "name": "PUBLISHES",
+   "fact": "Reuters published a report on 8 October 2025 that Teck Resources cut copper production guidance at its flagship Chilean mine QB"
+  },
+  {
+   "source": "2beca0a3-ffc2-42af-906a-c58d2088bcdc",
+   "target": "77400799-58b7-43ab-a73c-e7d67e509767",
+   "name": "PUBLISHES",
+   "fact": "The Oregon Group publishes a reading of ICSG tables showing expected 2026 world refined consumption of 28.59 Mt and ICSG October 14, 2026 forecasts of a 104,000 t surplus in 2026 and 368,000 t in 2027."
+  },
+  {
+   "source": "3a732899-c690-430d-8e89-6e152881e9d7",
+   "target": "a4ecf5b1-072f-41cd-9cf5-40c1a553c5e9",
+   "name": "PUBLISHES",
+   "fact": "Wood Mackenzie's Charles Cooper estimated roughly 100,000 t of copper still due to arrive in the US through October 2026."
+  },
+  {
+   "source": "e24f2d3f-cc15-400b-95dd-6ec69eac2c42",
+   "target": "5b54da34-e657-48b9-be7e-e8d81dc64e28",
+   "name": "IS_A",
+   "fact": "Owner of Cobre Panama (~330 kt/yr pre-shutdown scale, unconfirmed), the largest single 2027 supply swing；- 角色定位: Owner of Cobre Panama (~330 kt/yr pre-shutdown scale, unconfirmed), the largest single 2027 supply swing；- 立场: Seeking restart after Panama's commission recommended negotiations on 30 Sep 2026；- 影响力: high；- 目标/动机: Restart Cobre Panama；Recover asset value；- 约束: Panamanian government appr"
+  },
+  {
+   "source": "a64fa9d9-38d6-43c0-8fe9-567303d3bcbc",
+   "target": "94a55ecc-369d-4730-b216-d3af7c01adc4",
+   "name": "PUBLISHES",
+   "fact": "Novaex reported the SMM imported-concentrate weekly index reading of −$231.68/dmt on 30 September 2026, citing SMM."
+  },
+  {
+   "source": "77400799-58b7-43ab-a73c-e7d67e509767",
+   "target": "777c4b38-62e4-4d84-b096-82a3d96dd2f6",
+   "name": "PUBLISHES",
+   "fact": "ICSG cut its 2026 mine-production growth forecast to 1.3% and projects 3.1% for 2027, resting on a Cobre Panama restart plus Kamoa-Kakula and QB2 ramps, affecting copper market outlook"
+  },
+  {
+   "source": "0b871fd1-1587-4daf-8341-2ff82a902cd3",
+   "target": "7b441725-eebc-4825-8ed2-268e5ad652f9",
+   "name": "NEGOTIATES_BENCHMARK_WITH",
+   "fact": "Antofagasta negotiated the 2026 annual copper TC/RC benchmark at $0/t TC and 0.0¢/lb RC with Jiangxi/Tongling, versus $21.25/t and 2.125¢/lb for 2025"
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "9b0f9066-93ba-4bff-9f8c-8b0d60f903d8",
+   "name": "INFLUENCES",
+   "fact": "Zijin Tianfeng and Wood Mackenzie see 2026 Chinese smelter output growth of only 3–3.4%, the lowest since at least 2000, against the CSPT's partial compliance with its November 2025 pledge to cut primary smelting output by more than 10% in 2026."
+  },
+  {
+   "source": "ac26278f-5fa4-4881-b011-1b4e094a92da",
+   "target": "acf86b2a-80e8-426e-bb86-6c5f8d0e9a1a",
+   "name": "OPERATES",
+   "fact": "Ivanhoe Mines owns and operates Kamoa-Kakula, announcing 2026 and 2027 copper production guidance and reporting 76,401 tonnes produced in Q3 2026"
+  },
+  {
+   "source": "36bc4345-257c-41c6-8906-0176deef5b31",
+   "target": "777c4b38-62e4-4d84-b096-82a3d96dd2f6",
+   "name": "INFLUENCES",
+   "fact": "COMEX warehouses held more than 714,000 t on 14 October 2026, roughly 70% of visible global stocks, against LME stocks of 229,650 t, influencing copper price formation"
+  },
+  {
+   "source": "0a819038-5b84-4841-ae86-70369ec4b033",
+   "target": "acf86b2a-80e8-426e-bb86-6c5f8d0e9a1a",
+   "name": "SUPPORTS_RAMP_OF",
+   "fact": "Project 95 lifts Kamoa-Kakula P1/2 recovery to ~95% from Q2 2026, supporting the Kamoa-Kakula ramp."
+  },
+  {
+   "source": "a68699d3-7336-43aa-a36c-fe9b092d223d",
+   "target": "508189a9-8e11-433a-81c5-800b5e934a21",
+   "name": "CONSTRAINS",
+   "fact": "The Annex III tariff sunset on December 31, 2027 is expected to trigger an arb unwind affecting LME market dynamics on the settlement date."
+  },
+  {
+   "source": "0a6bcaaf-e540-4adb-840d-9b89623a0325",
+   "target": "94a55ecc-369d-4730-b216-d3af7c01adc4",
+   "name": "PUBLISHES",
+   "fact": "Shanghai Metals Market (SMM) publishes copper concentrate TC assessments, reporting TCs breaking through negative triple digits amid smelter challenges"
+  },
+  {
+   "source": "3a07ee96-0d27-4fe2-8162-b5a481387eb5",
+   "target": "36bc4345-257c-41c6-8906-0176deef5b31",
+   "name": "INFLUENCES",
+   "fact": "US Commerce, alongside USTR, can make rolling tariff additions to the Section 232 copper tariff regime, influencing the COMEX premium and the 'Supercycle breakout' scenario (15%)."
+  },
+  {
+   "source": "0a6bcaaf-e540-4adb-840d-9b89623a0325",
+   "target": "94a55ecc-369d-4730-b216-d3af7c01adc4",
+   "name": "PUBLISHES",
+   "fact": "SMM publishes the imported-concentrate weekly index, which read −$231.68/dmt on 30 September 2026 (per Novaex citing SMM), after first breaking −$100 at −$102.84/dmt on 15 May 2026."
+  },
+  {
+   "source": "0fa0a2c8-7552-49b7-bfdd-d1804f8f64ec",
+   "target": "b30dad79-2e17-4bcd-9e12-7f31cf522d86",
+   "name": "OPERATES",
+   "fact": "Teck operates Quebrada Blanca 2, whose 2027 guidance was cut to 240–275 kt from 280–310 kt (≈ −60 kt/yr) due to a tailings constraint, per Reuters 8 October 2025 (cut unconfirmed on Teck's own release)."
+  },
+  {
+   "source": "3e367436-5353-41ae-b0f8-7fff56d40b54",
+   "target": "b8ac901b-81e2-413f-b397-7f38ba58f4a2",
+   "name": "IS_A",
+   "fact": "Approves or blocks the Cobre Panama restart；- 角色定位: Approves or blocks the Cobre Panama restart；- 立场: Commission recommended opening negotiations on 30 Sep 2026 while financing an orderly closure；- 影响力: high；- 目标/动机: Fiscal revenue and political stability；Orderly resolution of the mine standoff；- 约束: Domestic opposition to the mine；Legal complexity of any restart structure；- 资源/能力: Sovereign appro"
+  },
+  {
+   "source": "77400799-58b7-43ab-a73c-e7d67e509767",
+   "target": "ee17ff2f-00a4-41a7-8927-218167817954",
+   "name": "PUBLISHES",
+   "fact": "ICSG's October 2026 forecast (refined output +3.4% in 2027, mines +3.1%, usage +2.5%) is complemented by a Cochilco-projected 5.2% Chile rebound as part of the supply-catches-up scenario evidence."
+  },
+  {
+   "source": "26f408b5-49a2-4683-8aa2-66d080b54c48",
+   "target": "36bc4345-257c-41c6-8906-0176deef5b31",
+   "name": "STOCKPILES_AT",
+   "fact": "The United States (with the marginal stockpiling bid in Washington) could together with China hold 71% of global copper inventories within a year; COMEX stocks were above 714,000 t in mid-October 2026."
+  },
+  {
+   "source": "a68699d3-7336-43aa-a36c-fe9b092d223d",
+   "target": "777c4b38-62e4-4d84-b096-82a3d96dd2f6",
+   "name": "PUBLISHES",
+   "fact": "LME cash copper averaged $14,566/t in October 2026 month-to-date, up from $13,089 in January 2026, while COMEX-linked US copper costs hit a record $15,057/t."
+  },
+  {
+   "source": "1a720406-8c75-4eec-8e96-cb95034465aa",
+   "target": "b3ba9983-cce5-40de-9a75-c44515869272",
+   "name": "STOCKPILES_AT",
+   "fact": "SRB / Project Vault tenders with confirmed purchases by December 2027 would signal a Supercycle breakout scenario."
+  },
+  {
+   "source": "e24f2d3f-cc15-400b-95dd-6ec69eac2c42",
+   "target": "bde49518-7272-4a1c-8742-6b7c10b3de8c",
+   "name": "OPERATES",
+   "fact": "Mirador copper mine expansion in Ecuador is set to be expanded with Chinese involvement, with Ecuador expected to approve the expansion (Mirador is operated by a Chinese consortium, not First Quantum); source articles report expansion approval pending"
+  },
+  {
+   "source": "36bc4345-257c-41c6-8906-0176deef5b31",
+   "target": "069bc72f-7965-4320-8139-92c2aead1452",
+   "name": "PUBLISHES",
+   "fact": "CME publishes the copper CVOL index, which read 24.1306, giving a risk-neutral implied P90 near $19,500 on the $14,650 LME December 2027 prompt."
+  },
+  {
+   "source": "a68699d3-7336-43aa-a36c-fe9b092d223d",
+   "target": "8ac9c740-05bf-477c-b415-9cc027590fb6",
+   "name": "CONSTRAINS",
+   "fact": "The Cobre Panama restart timeline constrains refined copper market balances (LME-priced copper), relevant to whether supply catches up and prices ease toward $11,000–13,000."
+  },
+  {
+   "source": "0341cd9f-ff28-44ff-9912-ce28094c2ffa",
+   "target": "94a55ecc-369d-4730-b216-d3af7c01adc4",
+   "name": "PUBLISHES",
+   "fact": "Fastmarkets assessed spot treatment charges at −$272.20/t on 9 October 2026, below the SMM index print of −$231.68/dmt on 30 September 2026"
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "5b136e65-c765-4e28-ae9f-df0406d67e9e",
+   "name": "CONSTRAINS",
+   "fact": "Byproduct economics cushioned CSPT smelters against negative TCs as the SMM China smelting acid index hit 1,665 yuan/mt, up 83.7% from the start of 2026, though that cushion eroded as acid prices fell 11% in September 2026."
+  },
+  {
+   "source": "7d2d2577-d83f-4464-8b3c-fe64306e2029",
+   "target": "56f287ed-f3cd-418b-ad65-b1b5024af603",
+   "name": "CAUSES",
+   "fact": "Section 232 tariffs drove the COMEX–LME spread from over $3,000/t in July 2025 to about $310/t by mid-October 2026 as the arbitrage largely closed."
+  },
+  {
+   "source": "ac26278f-5fa4-4881-b011-1b4e094a92da",
+   "target": "acf86b2a-80e8-426e-bb86-6c5f8d0e9a1a",
+   "name": "OPERATES",
+   "fact": "Ivanhoe operates the Kamoa-Kakula P3 ramp, with 2027 guidance of 500–540 kt vs 380–420 kt in 2026 (≈ +120 kt/yr at midpoints), per company guidance dated 3 December 2025; mining rate rises to 10 Mt/a in 2027 to fill the Phase 3 concentrator."
+  },
+  {
+   "source": "a68699d3-7336-43aa-a36c-fe9b092d223d",
+   "target": "36bc4345-257c-41c6-8906-0176deef5b31",
+   "name": "INFLUENCES",
+   "fact": "Release of the COMEX overhang versus LME draws and the cash-3M backwardation is a leading indicator to watch for refined copper price direction."
+  },
+  {
+   "source": "2e77f33d-4971-43b1-b549-1a3ed3d72b2d",
+   "target": "94a55ecc-369d-4730-b216-d3af7c01adc4",
+   "name": "PUBLISHES",
+   "fact": "Crux, citing IEA, reported spot treatment charges around −$126.80/t at end-June 2026 amid the SMM concentrate index collapse"
+  },
+  {
+   "source": "46bbbcff-5aed-4c0a-bad1-00cdc1115796",
+   "target": "56f287ed-f3cd-418b-ad65-b1b5024af603",
+   "name": "CAUSES",
+   "fact": "Tariff policy under the Annex III floating-tariff framework drives the COMEX–LME spread; re-widening above $1,000/t would signal tariff re-escalation supporting a supercycle breakout, while the spread sat at ~$310/t in mid-October 2026."
+  },
+  {
+   "source": "36bc4345-257c-41c6-8906-0176deef5b31",
+   "target": "a68699d3-7336-43aa-a36c-fe9b092d223d",
+   "name": "CONSTRAINS",
+   "fact": "COMEX warehouses hold ~70% of visible stocks versus LME stocks of 229,650 t, stranding metal in the US and keeping ex-US refined tight."
+  },
+  {
+   "source": "0b871fd1-1587-4daf-8341-2ff82a902cd3",
+   "target": "5b54da34-e657-48b9-be7e-e8d81dc64e28",
+   "name": "IS_A",
+   "fact": "Miner and counterparty to the annual TC/RC benchmark settlement with Chinese smelters；- 角色定位: Miner and counterparty to the annual TC/RC benchmark settlement with Chinese smelters；- 立场: Shifted provisionally mid-2026 toward index-linked pricing; benchmark talks resume 17–19 Nov 2026；- 影响力: high；- 目标/动机: Maximize treatment-charge-free revenue；Move pricing to indices；- 约束: Concentrate market scarcit"
+  },
+  {
+   "source": "508189a9-8e11-433a-81c5-800b5e934a21",
+   "target": "36bc4345-257c-41c6-8906-0176deef5b31",
+   "name": "CONSTRAINS",
+   "fact": "The Annex III floating-tariff framework, sunsetting on December 31, 2027, together with US Commerce/USTR rolling tariff additions, constrains the COMEX premium and could trigger the 'Supercycle breakout' scenario (15%)."
+  },
+  {
+   "source": "7efea659-2a89-47b1-877a-f136c9a3cd22",
+   "target": "7efea659-2a89-47b1-877a-f136c9a3cd22",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Government of China (NDRC/MIIT) 亦称 MIIT"
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "ac26278f-5fa4-4881-b011-1b4e094a92da",
+   "name": "DEPENDS_ON",
+   "fact": "CSPT smelter refined output depends on concentrate supply, with 2027 projections resting on Kamoa-Kakula ramp-up among other mine projects"
+  },
+  {
+   "source": "a64fa9d9-38d6-43c0-8fe9-567303d3bcbc",
+   "target": "2aff9b72-ec18-4876-9a63-9577ed1f43b8",
+   "name": "PUBLISHES",
+   "fact": "Novaex cited the SMM weekly imported concentrate index of −$231.68/dmt (30 September 2026), a spot TC indicator."
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "9c93171e-1963-4e75-b2c7-dc21fa761317",
+   "name": "DECIDES_AT",
+   "fact": "CSPT smelters will set their 2027 output policy after Asia Copper Week (November 17–19, 2026), a decision that discriminates the 'Squeeze persists' scenario (40%)."
+  },
+  {
+   "source": "e24f2d3f-cc15-400b-95dd-6ec69eac2c42",
+   "target": "8ac9c740-05bf-477c-b415-9cc027590fb6",
+   "name": "OPERATES",
+   "fact": "First Quantum operates Cobre Panama, whose pre-shutdown scale was ~330 kt/yr (~1% of world mine supply, figure unconfirmed); on 30 September 2026 a government commission recommended opening negotiations to reopen the mine while financing an orderly closure, with no scope, timing or legal structure set."
+  },
+  {
+   "source": "36bc4345-257c-41c6-8906-0176deef5b31",
+   "target": "56f287ed-f3cd-418b-ad65-b1b5024af603",
+   "name": "PUBLISHES",
+   "fact": "The COMEX–LME spread narrowed to about $310/t by mid-October 2026 from over $3,000/t in July 2025, while COMEX warehouses held more than 714,000 t, roughly 70% of visible global stocks."
+  },
+  {
+   "source": "ac26278f-5fa4-4881-b011-1b4e094a92da",
+   "target": "f651c7de-e4ff-4684-be79-ac5ee7ce0a81",
+   "name": "OPERATES",
+   "fact": "Ivanhoe operates Kamoa-Kakula Phase 4, a duplicate 6.5 Mt/a concentrator ramping toward ~500 kt/a reported from 2028; the study in the life-of-mine plan was due end-Q1 2026 and Phase 4 is excluded from 2026–27 guidance."
+  },
+  {
+   "source": "2beca0a3-ffc2-42af-906a-c58d2088bcdc",
+   "target": "2aff9b72-ec18-4876-9a63-9577ed1f43b8",
+   "name": "PUBLISHES",
+   "fact": "The Oregon Group reported Fastmarkets' spot TC assessment of −US$272.20/t on 9 October 2026."
+  },
+  {
+   "source": "bea25ce6-a322-4698-9901-006da8244295",
+   "target": "5b136e65-c765-4e28-ae9f-df0406d67e9e",
+   "name": "PUBLISHES",
+   "fact": "Oilchem reported that acid prices fell 11% in September 2026, affecting the SMM China smelting acid index which had hit 1,665 yuan/mt, up 83.7% from the start of 2026."
+  },
+  {
+   "source": "7efea659-2a89-47b1-877a-f136c9a3cd22",
+   "target": "7efea659-2a89-47b1-877a-f136c9a3cd22",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Government of China (NDRC/MIIT) 亦称 NDRC"
+  },
+  {
+   "source": "46bbbcff-5aed-4c0a-bad1-00cdc1115796",
+   "target": "a68699d3-7336-43aa-a36c-fe9b092d223d",
+   "name": "CONSTRAINS",
+   "fact": "The Annex III floating-tariff framework constrains the LME market and sunsets on December 31, 2027, exactly when the LME Dec-2027 prompt (anchored at $14,650/t on 14 Oct 2026) settles."
+  },
+  {
+   "source": "0341cd9f-ff28-44ff-9912-ce28094c2ffa",
+   "target": "1b79b932-e83d-42ce-b896-780b205acc44",
+   "name": "PUBLISHES",
+   "fact": "Fastmarkets assessed spot TCs at −$272.20/t on 2026-10-09."
+  },
+  {
+   "source": "ee17ff2f-00a4-41a7-8927-218167817954",
+   "target": "0d7c67af-f79c-4676-bc46-70e246812972",
+   "name": "FORECASTS_OUTPUT_OF",
+   "fact": "Cochilco forecasts Chilean production (including Codelco) at 5.27 Mt in 2026, rising +5.2% in 2027 (roughly +280 kt/yr); Chilean Jan–Jul 2026 output was 2.88 Mt, −7% y/y, a 15-year low for the period per Cochilco data."
+  },
+  {
+   "source": "46bbbcff-5aed-4c0a-bad1-00cdc1115796",
+   "target": "36bc4345-257c-41c6-8906-0176deef5b31",
+   "name": "CONSTRAINS",
+   "fact": "A temporary floating-tariff framework (Annex III) under Section 232 runs through December 31, 2027, keeping tariff-driven dislocation of copper into COMEX US warehouses in place, with the expiry landing exactly on the forecast horizon."
+  },
+  {
+   "source": "27103710-012e-43f3-b542-2aa176ec2eb0",
+   "target": "7b441725-eebc-4825-8ed2-268e5ad652f9",
+   "name": "INFLUENCES",
+   "fact": "CRU reports a drift to index-linked terms after provisional mid-year settlements, ahead of the 2027 benchmark decided around Asia Copper Week (November 17–19, 2026)."
+  },
+  {
+   "source": "5b231f56-1810-40ec-a900-79ed49a92478",
+   "target": "36bc4345-257c-41c6-8906-0176deef5b31",
+   "name": "INFLUENCES",
+   "fact": "J.P. Morgan forecasts copper at $14,800/t in Q4 2026, reported by October 2026, shaping market expectations for copper price formation."
+  },
+  {
+   "source": "27103710-012e-43f3-b542-2aa176ec2eb0",
+   "target": "94a55ecc-369d-4730-b216-d3af7c01adc4",
+   "name": "PUBLISHES",
+   "fact": "CRU's weekly assessment opened at −$124/t in April 2026, tracking the collapse in the SMM Imported Copper Concentrate Index"
+  },
+  {
+   "source": "0d7c67af-f79c-4676-bc46-70e246812972",
+   "target": "95cda85a-acdd-49ca-be0d-12052bdd1c26",
+   "name": "OPERATES",
+   "fact": "Codelco operates the El Teniente mine, which suffered an accident in September 2026."
+  },
+  {
+   "source": "ee17ff2f-00a4-41a7-8927-218167817954",
+   "target": "acf86b2a-80e8-426e-bb86-6c5f8d0e9a1a",
+   "name": "PUBLISHES",
+   "fact": "Cochilco raised its 2026 copper price forecast and cut its 2026 copper production forecast amid Chilean mine woes"
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "0b871fd1-1587-4daf-8341-2ff82a902cd3",
+   "name": "NEGOTIATES_BENCHMARK_WITH",
+   "fact": "Antofagasta and Jiangxi are negotiating the 2027 TC benchmark, with the outcome (whether $0, negative, or index-linked) decided at Asia Copper Week on November 17–19, 2026, discriminating the depth of the concentrate shortage."
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "2aff9b72-ec18-4876-9a63-9577ed1f43b8",
+   "name": "CONSTRAINS",
+   "fact": "Deeply negative spot TCs constrained CSPT smelters, but Chinese refined output still grew 4% year on year in January–August 2026 despite the CSPT November 2025 pledge to cut 2026 output by 10%."
+  },
+  {
+   "source": "27103710-012e-43f3-b542-2aa176ec2eb0",
+   "target": "77400799-58b7-43ab-a73c-e7d67e509767",
+   "name": "INFLUENCES",
+   "fact": "CRU's data-centre copper demand path (~260,000 t in 2025 rising above 650,000 t by 2030) and ICSG's +2.5% usage growth act as brakes against demand-recession drawdowns like the ~64% (2008) and ~26% (2022) analogues."
+  },
+  {
+   "source": "e24f2d3f-cc15-400b-95dd-6ec69eac2c42",
+   "target": "e24f2d3f-cc15-400b-95dd-6ec69eac2c42",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "First Quantum Minerals 亦称 FQM"
+  },
+  {
+   "source": "3a732899-c690-430d-8e89-6e152881e9d7",
+   "target": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "name": "INFLUENCES",
+   "fact": "Wood Mackenzie and Zijin Tianfeng forecast 2026 Chinese refined output growth of only 3–3.4%, the lowest since at least 2000 versus 10.4% in 2025, despite the CSPT's November 2025 pledge to cut primary output by more than 10%."
+  },
+  {
+   "source": "0d7c67af-f79c-4676-bc46-70e246812972",
+   "target": "5b54da34-e657-48b9-be7e-e8d81dc64e28",
+   "name": "IS_A",
+   "fact": "State miner central to the Chilean output recovery or further decline (Chile forecast 5.27 Mt in 2026, +5.2% in 2027 per Cochilco)；- 角色定位: State miner central to the Chilean output recovery or further decline (Chile forecast 5.27 Mt in 2026, +5.2% in 2027 per Cochilco)；- 立场: Recovering from a 15-year-low Jan–Jul 2026 period (Chile −7% y/y); El Teniente suffered a September 2026 accident；- 影响力: hig"
+  },
+  {
+   "source": "7d2d2577-d83f-4464-8b3c-fe64306e2029",
+   "target": "36bc4345-257c-41c6-8906-0176deef5b31",
+   "name": "CONSTRAINS",
+   "fact": "Section 232 tariffs dislocated metal into US warehouses, with COMEX-approved US warehouses holding roughly 70% of visible global copper stocks after inventories rose nearly 750% since February 2025 to more than 714,000 tonnes as of October 14, 2026."
+  },
+  {
+   "source": "a5285311-76c4-4458-9ddd-5f6402f1ef11",
+   "target": "b8ac901b-81e2-413f-b397-7f38ba58f4a2",
+   "name": "IS_A",
+   "fact": "Discretionary stockpiler whose buying or releases absorb surplus or tighten deficits；- 角色定位: Discretionary stockpiler whose buying or releases absorb surplus or tighten deficits；- 立场: No confirmed buying at record prices; CNIA recommended expanding reserves in Feb 2026; 2021 precedent was countercyclical releases (20,000–30,000 t batches)；- 影响力: high；- 目标/动机: Strategic resource security；Countercyc"
+  },
+  {
+   "source": "7efea659-2a89-47b1-877a-f136c9a3cd22",
+   "target": "b8ac901b-81e2-413f-b397-7f38ba58f4a2",
+   "name": "IS_A",
+   "fact": "Sets smelter capacity policy, scrap-tax enforcement and stockpile decisions；- 角色定位: Sets smelter capacity policy, scrap-tax enforcement and stockpile decisions；- 立场: Supporting capacity discipline via CSPT; eight-month sulphuric-acid export suspension since May 2026; scrap-tax crackdown tightening secondary feed；- 影响力: high；- 目标/动机: Orderly smelter sector；Resource security；Trade leverage；- 约束: Emp"
+  },
+  {
+   "source": "36bc4345-257c-41c6-8906-0176deef5b31",
+   "target": "a5285311-76c4-4458-9ddd-5f6402f1ef11",
+   "name": "STOCKPILES_AT",
+   "fact": "SRB buying is cited as a potential driver of a supercycle breakout regime pushing copper above $18,000, implying state stockpiling in copper markets."
+  },
+  {
+   "source": "0fa0a2c8-7552-49b7-bfdd-d1804f8f64ec",
+   "target": "5b54da34-e657-48b9-be7e-e8d81dc64e28",
+   "name": "IS_A",
+   "fact": "Operator of Quebrada Blanca 2, a named increment with revised guidance；- 角色定位: Operator of Quebrada Blanca 2, a named increment with revised guidance；- 立场: QB 2027 guidance cut to 240,000–275,000 t (Reuters, 8 Oct 2025) on a tailings constraint — ≈ −60 kt/yr vs prior plan；- 影响力: medium；- 目标/动机: Stabilize QB2 output；Resolve tailings constraint；- 约束: Tailings capacity；Chilean permitting/operational "
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "0b871fd1-1587-4daf-8341-2ff82a902cd3",
+   "name": "NEGOTIATES_BENCHMARK_WITH",
+   "fact": "Antofagasta and Jiangxi are parties to the 2027 benchmark TC/RC settlement negotiation, whose window opens weeks after the as-of date of 2026-10-24."
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "0b871fd1-1587-4daf-8341-2ff82a902cd3",
+   "name": "NEGOTIATES_BENCHMARK_WITH",
+   "fact": "The 2027 benchmark between Chinese smelters (CSPT) and Antofagasta is due to be decided around Asia Copper Week, November 17–19, 2026, with CRU reporting a drift to index-linked terms after provisional mid-year settlements."
+  },
+  {
+   "source": "ac26278f-5fa4-4881-b011-1b4e094a92da",
+   "target": "5b54da34-e657-48b9-be7e-e8d81dc64e28",
+   "name": "IS_A",
+   "fact": "Operator of Kamoa-Kakula, a large named 2027 supply increment (guidance 500,000–540,000 t vs 380,000–420,000 t in 2026)；- 角色定位: Operator of Kamoa-Kakula, a large named 2027 supply increment (guidance 500,000–540,000 t vs 380,000–420,000 t in 2026)；- 立场: Delivering Phase 3 ramp; mining rate to 10 Mt/a in 2027；- 影响力: medium；- 目标/动机: Hit 2027 guidance of 500,000–540,000 t；Advance Phase 4；- 约束: Power "
+  },
+  {
+   "source": "77400799-58b7-43ab-a73c-e7d67e509767",
+   "target": "8ac9c740-05bf-477c-b415-9cc027590fb6",
+   "name": "INFLUENCES",
+   "fact": "ICSG's 2027 balance projection of a surplus (Supply catches up scenario, 30%) rests on the Cobre Panama restart plus project ramp-ups and Chinese capacity discipline easing prices toward $11,000–13,000."
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "0b871fd1-1587-4daf-8341-2ff82a902cd3",
+   "name": "NEGOTIATES_BENCHMARK_WITH",
+   "fact": "The 2026 Antofagasta–Chinese smelters benchmark settled at $0/t TC and 0 cents/lb RC in January 2026, the lowest ever recorded, negotiated between Antofagasta and Chinese smelters including the CSPT."
+  },
+  {
+   "source": "5d037960-993b-4f10-bba5-4e4b4d4e52c6",
+   "target": "e24f2d3f-cc15-400b-95dd-6ec69eac2c42",
+   "name": "PUBLISHES",
+   "fact": "Reuters reported on 30 September 2026 that a Panama commission recommended reopening the First Quantum mine to fund a phased/orderly closure"
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "1b79b932-e83d-42ce-b896-780b205acc44",
+   "name": "CONSTRAINS",
+   "fact": "Spot TCs at −$272.20/t (2026-10-09) and the SMM weekly index at −$231.68/dmt cap Chinese refined growth at 3–3.4% in 2026, consistent with ICSG's forecast of a 368,000 t surplus in 2027 that need not break the tight regime if metal stays stranded in the US."
+  },
+  {
+   "source": "94a55ecc-369d-4730-b216-d3af7c01adc4",
+   "target": "7b441725-eebc-4825-8ed2-268e5ad652f9",
+   "name": "CONSTRAINS",
+   "fact": "The SMM Imported Copper Concentrate Index broke −$100/dmt for the first time on 15 May 2026 at −$102.84/dmt, after the 2026 benchmark settled at $0/t TC and 0.0¢/lb RC"
+  },
+  {
+   "source": "27103710-012e-43f3-b542-2aa176ec2eb0",
+   "target": "2aff9b72-ec18-4876-9a63-9577ed1f43b8",
+   "name": "PUBLISHES",
+   "fact": "CRU noted the spot-minus-contract TC gap averaged $12 over 2000–2023 versus roughly $90 in 2024–25."
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "e24f2d3f-cc15-400b-95dd-6ec69eac2c42",
+   "name": "DEPENDS_ON",
+   "fact": "Smelter concentrate supply into 2027 depends on ICSG's projected 3.1% mine growth, which rests on a Cobre Panama restart; CSPT smelter discipline is the binding uncertainty on refined supply"
+  },
+  {
+   "source": "94a55ecc-369d-4730-b216-d3af7c01adc4",
+   "target": "7b441725-eebc-4825-8ed2-268e5ad652f9",
+   "name": "CAUSES",
+   "fact": "The 2026 rally in copper was concentrate-scarcity, tariff-dislocation and expectations driven rather than refined-deficit driven, marked by record price against modest realized surplus and the benchmark TC settling at $0/t"
+  },
+  {
+   "source": "ee17ff2f-00a4-41a7-8927-218167817954",
+   "target": "95cda85a-acdd-49ca-be0d-12052bdd1c26",
+   "name": "TRACKS_OUTPUT_OF",
+   "fact": "El Teniente (Codelco) suffered an accident in September 2026 that temporarily compounded concentrate disruption, per data reflected in Cochilco-linked reporting."
+  },
+  {
+   "source": "96a16925-309f-47b9-9f73-850d81788097",
+   "target": "bde49518-7272-4a1c-8742-6b7c10b3de8c",
+   "name": "REGULATES",
+   "fact": "Peru Ministry of Mines reported Peru produced 2.77 Mt in 2025 and ran at 218,232 t in June 2026 versus 226,096 t in May; separately, Ecuador's Mirador Phase II has capacity above 200,000 t/y copper with Mirador North adding 60,000 t/d milling for $653m — Peru's permit reform targets ~1 Mt/yr additional copper only by 2031–32."
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "0b871fd1-1587-4daf-8341-2ff82a902cd3",
+   "name": "NEGOTIATES_BENCHMARK_WITH",
+   "fact": "Antofagasta and Jiangxi/Tongling settled the 2026 annual copper TC/RC benchmark at $0/t TC and 0.0¢/lb RC in January 2026, the lowest ever recorded"
+  },
+  {
+   "source": "0fa0a2c8-7552-49b7-bfdd-d1804f8f64ec",
+   "target": "b30dad79-2e17-4bcd-9e12-7f31cf522d86",
+   "name": "OPERATES",
+   "fact": "Teck operates the QB (Quebrada Blanca) mine; per an unconfirmed October 8, 2025 Reuters report, Teck cut QB guidance to 200,000–235,000 t (2026) and 240,000–275,000 t (2027) on a tailings issue."
+  },
+  {
+   "source": "7efea659-2a89-47b1-877a-f136c9a3cd22",
+   "target": "36bc4345-257c-41c6-8906-0176deef5b31",
+   "name": "STOCKPILES_AT",
+   "fact": "The US and China could together hold 71% of global copper inventories within a year, with COMEX warehouses holding more than 714,000 t and LME stocks at 229,650 t in mid-October 2026; the marginal stockpiling bid sits in Washington."
+  },
+  {
+   "source": "508189a9-8e11-433a-81c5-800b5e934a21",
+   "target": "36bc4345-257c-41c6-8906-0176deef5b31",
+   "name": "CONSTRAINS",
+   "fact": "The Annex III US tariff sunset on December 31, 2027 falls exactly on the forecast settlement date, with a COMEX–LME spread of ~$310/t meaning arb unwind could hit COMEX stocks; a re-widening above $1,000/t would signal tariff re-escalation."
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "7efea659-2a89-47b1-877a-f136c9a3cd22",
+   "name": "REGULATES",
+   "fact": "China suspended sulphuric acid exports for eight months from May 2026 and its tax crackdown shrank scrap feed, tightening both feed streams for CSPT smelters."
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "0fa0a2c8-7552-49b7-bfdd-d1804f8f64ec",
+   "name": "DEPENDS_ON",
+   "fact": "CSPT smelter refined output depends on concentrate supply, with 2027 projections resting on the QB2 ramp-up among other mine projects"
+  },
+  {
+   "source": "0fa0a2c8-7552-49b7-bfdd-d1804f8f64ec",
+   "target": "0fa0a2c8-7552-49b7-bfdd-d1804f8f64ec",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Teck Resources 亦称 Teck"
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "0b871fd1-1587-4daf-8341-2ff82a902cd3",
+   "name": "NEGOTIATES_BENCHMARK_WITH",
+   "fact": "Antofagasta and Jiangxi/Tongling settled the 2026 annual copper TC/RC benchmark at $0/t TC and 0.0¢/lb RC in January 2026, the lowest ever recorded"
+  },
+  {
+   "source": "7d2d2577-d83f-4464-8b3c-fe64306e2029",
+   "target": "a68699d3-7336-43aa-a36c-fe9b092d223d",
+   "name": "CONSTRAINS",
+   "fact": "Section 232 tariff-dislocated metal stranded in US warehouses keeps ex-US (LME) market tight despite recorded surpluses."
+  },
+  {
+   "source": "0341cd9f-ff28-44ff-9912-ce28094c2ffa",
+   "target": "2aff9b72-ec18-4876-9a63-9577ed1f43b8",
+   "name": "PUBLISHES",
+   "fact": "Fastmarkets assessed the spot TC at −US$272.20/t on 9 October 2026, as reported by The Oregon Group."
+  },
+  {
+   "source": "77400799-58b7-43ab-a73c-e7d67e509767",
+   "target": "2aff9b72-ec18-4876-9a63-9577ed1f43b8",
+   "name": "PUBLISHES",
+   "fact": "ICSG will revise its 3.1% mine-growth projection in spring 2027, a leading indicator to watch."
+  },
+  {
+   "source": "d4abea10-f4b7-4af4-929c-a2d5fec3513d",
+   "target": "94a55ecc-369d-4730-b216-d3af7c01adc4",
+   "name": "PUBLISHES",
+   "fact": "Crux cited IEA data showing spot TCs around −$126.80/t at end-June 2026, consistent with the SMM Imported Copper Concentrate Index collapse"
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "b30dad79-2e17-4bcd-9e12-7f31cf522d86",
+   "name": "DEPENDS_ON",
+   "fact": "Chinese smelter refined output (CSPT) depends on concentrate supply from mines and projects such as QB2; smelter discipline is the binding uncertainty on refined supply."
+  },
+  {
+   "source": "5d037960-993b-4f10-bba5-4e4b4d4e52c6",
+   "target": "b30dad79-2e17-4bcd-9e12-7f31cf522d86",
+   "name": "PUBLISHES",
+   "fact": "Reuters reported on 8 October 2025 that Teck's Quebrada Blanca 2 2027 guidance was cut to 240–275 kt from 280–310 kt due to a tailings constraint."
+  },
+  {
+   "source": "77400799-58b7-43ab-a73c-e7d67e509767",
+   "target": "94a55ecc-369d-4730-b216-d3af7c01adc4",
+   "name": "INFLUENCES",
+   "fact": "ICSG's October 2026 forecast sees the global refined copper surplus widening in 2027, influencing market expectations around concentrate treatment charges"
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "94a55ecc-369d-4730-b216-d3af7c01adc4",
+   "name": "CONSTRAINS",
+   "fact": "SMM's imported concentrate index stood at −$231.68/dmt on 30 September 2026, with smelters effectively paying for feed, constraining smelters including CSPT members"
+  },
+  {
+   "source": "0a6bcaaf-e540-4adb-840d-9b89623a0325",
+   "target": "2aff9b72-ec18-4876-9a63-9577ed1f43b8",
+   "name": "PUBLISHES",
+   "fact": "SMM publishes weekly spot TCs; persistence below zero versus recovery toward zero is a leading indicator separating the Squeeze-persists from the Supply-catches-up regime."
+  },
+  {
+   "source": "e0e586ab-4e57-465e-a9ec-be5dd57428d2",
+   "target": "5b54da34-e657-48b9-be7e-e8d81dc64e28",
+   "name": "IS_A",
+   "fact": "Refined copper producers holding the binding constraint: output-cut decisions under negative TCs set 2027 refined supply；- 角色定位: Refined copper producers holding the binding constraint: output-cut decisions under negative TCs set 2027 refined supply；- 立场: Pledged >10% primary output cut for 2026 (Nov 2025) but output up 4% y/y Jan–Aug 2026; Q4 2026 maintenance of ~80,000 t scheduled；- 影响力: high；- "
+  }
+ ],
+ "graph_id": "mirofish_e77b02ef5fd94de3"
+}

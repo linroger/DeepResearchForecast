@@ -1,0 +1,80 @@
+{
+ "pipeline_id": "pipe_39914a6cd39c",
+ "report_id": "report_0a989386784b",
+ "simulation_id": "sim_06de440f5bea",
+ "graph_id": "mirofish_27f84f8acb854e87",
+ "status": "completed",
+ "prompt": "Forecast global AI datacenter capital expenditure and electricity demand for calendar year 2027: total hyperscaler capex with a 70% confidence interval, whether global datacenter electricity consumption growth exceeds 20 percent year-over-year, and the probability that grid interconnection constraints delay more than 5 gigawatts of planned US datacenter capacity into 2028. Cover the four major hyperscalers capex guidance, IEA and EIA demand outlooks, and power procurement bottlenecks.",
+ "created_at": "2026-10-20T18:02:23.363398+00:00",
+ "mode": "full",
+ "rounds": 9,
+ "personas": 14,
+ "has_actors": true,
+ "research_log": {
+  "line_count": 329,
+  "source_count": 1,
+  "complete": true,
+  "event_fidelity": "summarized_progress_events"
+ },
+ "dossier_assets": [
+  "research-charts/data_fred_dpcerl1q225sbea_c25f95a72f99834b.png",
+  "research-charts/data_usgov_eia_electricity_sales_us_com_6cfeae3c8d37fb43.png",
+  "research-charts/data_usgov_eia_electricity_sales_us_com_yoy_93025409efc61892.png",
+  "research-charts/data_usgov_eia_electricity_sales_va_com_yoy_17cf5d90bbaeb7ad.png",
+  "research-charts/data_wb_imf_weo_ngdp_rpch_usa_cc01f5d58301f87f.png",
+  "research-charts/timeline.png",
+  "research-charts/timeline.html"
+ ],
+ "report_assets": [
+  "charts/binary_forecast_dotplot.png",
+  "charts/official_indicators.png",
+  "charts/official_series_lrcfpdtkbbaebrad.png",
+  "charts/official_series_tnkmpoktefcqlstm.png",
+  "charts/scenario_probabilities.png",
+  "charts/worldstate_trajectory.png",
+  "charts/metric_trajectories.png",
+  "charts/timeline_lanes.png"
+ ],
+ "dossier_languages": {
+  "en": "dossier.md"
+ },
+ "report_languages": {
+  "en": "report.md",
+  "zh": "report.zh.md"
+ },
+ "artifact_sha256": {
+  "research_log.txt": "15c53feff1f0d1447e381399c73f75ee87a6ff5281f27e401504d3bd71a864c8",
+  "dossier.md": "8ff2a8c8218742711cabe225931f5792c0a50140c7e3a0b1703147f25dcd5634",
+  "actors.json": "f3e441aab0d69c048e503ce38852afc5eb9b79e935a4bbcfbd985d929de56f14",
+  "sources.json": "baee9e686ab3552513d90df300d261ff8f9c6cc9bbabc8eb15a3e3870258e4fd",
+  "ontology.json": "cf5bd9c18a5680441a0d1d7ad1e8e31831b2e930fd54de6bbc2bb11513d005c1",
+  "graph.json": "c7724b4681e0195532838d64e6e49ac090cf6fa11ccdab5eaa9a66546570c43f",
+  "forum.json": "5e08a9139410319b2a15e4ca4883cd08d602e3f19e27651bbad57cd95f606333",
+  "report.md": "64e59b7956b969150a6d0946c6b0be1a4aa84f466932a60a2418119337a6e0cb",
+  "report.zh.md": "e1800c548ac2620877f1b1e0655ddcffd0e111e2f6161b8c1e5adcad75c70753",
+  "research-charts/data_fred_dpcerl1q225sbea_c25f95a72f99834b.png": "f16c59cb977d2f4450efad61ebe9de713b25cbc4aad5ec7a537a432bb23922ee",
+  "research-charts/data_usgov_eia_electricity_sales_us_com_6cfeae3c8d37fb43.png": "c48e6fb7f73b4da7ef8892f571fec165b509ab6a47d908283d8746abf434b7e1",
+  "research-charts/data_usgov_eia_electricity_sales_us_com_yoy_93025409efc61892.png": "7b4ecaf2f68f68b1be0a70fc130232ebde8ab222b70b9decc006dca007d64ef5",
+  "research-charts/data_usgov_eia_electricity_sales_va_com_yoy_17cf5d90bbaeb7ad.png": "055667b2c82beb7297d8e8d06838a1701761154558797379443b87e53cac7296",
+  "research-charts/data_wb_imf_weo_ngdp_rpch_usa_cc01f5d58301f87f.png": "c6b34f00feee10d4d38802af4be73d240b4a60820d05a5b644d0a67e98664fbe",
+  "research-charts/timeline.png": "a7cba6d05d84b4d823ffd54f4524635426691012e67154d6978d8bdc928da3f7",
+  "research-charts/timeline.html": "47b215f6b9b9e6487cab431ad91a98c2d13708dbd5654ad9e49de85a22baf01b",
+  "charts/binary_forecast_dotplot.png": "1450aee0a97c63c5c62d41aaa3d55a901361f080fbcd5f42a3986e7881ab9c94",
+  "charts/official_indicators.png": "a8be952f413d85ac053119b5ecbfed3ae914ade847ee992ec916ffc06ac6b5df",
+  "charts/official_series_lrcfpdtkbbaebrad.png": "bb8ea9fca02b1fa12a899998e6e7a7509e196a94ebc72ba879f466cb4baa66db",
+  "charts/official_series_tnkmpoktefcqlstm.png": "e01b3bbf1fcda18bdf7aa4f5b1a732207a1372742d33ce560068d7f7f240f9c2",
+  "charts/scenario_probabilities.png": "763b06292e47476a990ffad0584fd97b651531f5371e2540179b27ce234a371b",
+  "charts/worldstate_trajectory.png": "4eb97a5a5fb5884103dd61675884e41e1160032b9fcbd656c6e80bc781d0613e",
+  "charts/metric_trajectories.png": "4e953fb00e91cdadfb780947618befd2a6106c4d9fbe2f9c49919900c96e8cbf",
+  "charts/timeline_lanes.png": "9b56d9a2e2308b1db41fed45166de74f4c3ec2d9e7745b51251a9b72ce50d972"
+ },
+ "publication": {
+  "hard_passed": true,
+  "publish_passed": true,
+  "scenario_contract_valid": true,
+  "citation_coverage": 0.877,
+  "semantic_citations_passed": true,
+  "markdown_sha256": "cb3c9fd190a4e6ed1ffa61eb2b0021147a4121faf848bc8ad6ae2ea952ceff8c",
+  "forecast_sha256": "49045ce2cb4e268a448c9682e7e541b1fb5742e360df9784527dbeb5e996aab5"
+ }
+}

@@ -1,0 +1,70 @@
+{
+ "pipeline_id": "pipe_9d9b84efcd3d",
+ "report_id": "report_38afe0543859",
+ "simulation_id": "sim_2a4f7d0e73de",
+ "graph_id": "mirofish_6e4ca51b51d441c8",
+ "status": "completed",
+ "prompt": "Forecast the impact on the cybersecurity industry of the continued development of ever-more-powerful AI models, including both closed source and open source models out to the end of 2027. Take into consideration the recent string of attacks carried out by rogue AI agents from frontier labs, such as the HuggingFace attack, in which an open sourced Chinese model was used to defend the cyberattack by a swarm of OpenAI rogue agents that had escaped from its sandbox during a test, the PHP2Shell vulnerability, etc. Model how the cybersecurity industry will evolve as frontier AI models with increasingly powerful cyber capabilities are developed and deployed. Forecast the growth of the market size of this industry, and the growth of the leading companies in this space.",
+ "created_at": "2026-10-26T09:21:43.166546+00:00",
+ "mode": "full",
+ "rounds": 14,
+ "personas": 15,
+ "has_actors": true,
+ "research_log": {
+  "line_count": 405,
+  "source_count": 1,
+  "complete": true,
+  "event_fidelity": "summarized_progress_events"
+ },
+ "dossier_assets": [
+  "research-charts/timeline.png",
+  "research-charts/timeline.html",
+  "research-charts/metric_trajectories.png",
+  "research-charts/metric_trajectories.html"
+ ],
+ "report_assets": [
+  "charts/binary_forecast_dotplot.png",
+  "charts/scenario_probabilities.png",
+  "charts/metric_trajectories.png",
+  "charts/regional_comparison.png",
+  "charts/timeline_lanes.png",
+  "charts/worldstate_trajectory.png",
+  "charts/world_variables.png"
+ ],
+ "dossier_languages": {
+  "en": "dossier.md"
+ },
+ "report_languages": {
+  "en": "report.md"
+ },
+ "artifact_sha256": {
+  "research_log.txt": "15cfccb0fa7a1115aeb3f1166393414e2f5ebc0ef41006341d2d841aeb61d158",
+  "dossier.md": "a0b8302bcb1d4629d8dca84cc37f989ae5c6e8a5c5396f29b7598302b15b708c",
+  "actors.json": "522cb0eab27816e82cb1fe3c0e0d41a9a476a752a3dcf71318079a2ca8429784",
+  "sources.json": "d8d0cfaa5df86f09e5afad4f2d890c3c154c2c61269dbc3a20bd6bf80551931f",
+  "ontology.json": "fbbd3ee8e299df72e05b78a9b3c2f49b5acc3c41ad9a75138209f2d846576f29",
+  "graph.json": "f0e3cd3286ca343c0b5fe59e277e6e820fa54932e78ff7cc19e5804e865a53e5",
+  "forum.json": "d36df383efe5ae8872fb533b10ae7af0f7e1162780c74b10cea57e88b1a92f18",
+  "report.md": "60d4459ecd90128cd893d33fa6989c19bcc925cd50c478ba8d80fd0e2abdbfaf",
+  "research-charts/timeline.png": "8f56dd4e0dc987add7037f17a943bf4d13d7db15fe6898d7ea77864d1e637735",
+  "research-charts/timeline.html": "5fe099a04d904badf122acad6e749aea8013f92fd8c7e70c601e01327e22cc87",
+  "research-charts/metric_trajectories.png": "829721819f5b6047dac539175e7c14e256cfbb47bc0e63e32925fe93f9a2d3b6",
+  "research-charts/metric_trajectories.html": "2b5bcd578831ce860b7f55dd6fae5d1e2d1bea151bb5bdb8e544d8409ee3e89f",
+  "charts/binary_forecast_dotplot.png": "020071efbdd96fce408e891745f7a8c32b011c4e3ba76eae64abd674cad6db6a",
+  "charts/scenario_probabilities.png": "da989b27c8196e5259a507313fae8df746ce0ddbf924a343b27a03712a559b86",
+  "charts/metric_trajectories.png": "63ea3f3df8f2453b5c2e11fd41a9729a1f241f051097501f616bbb7e074ffa87",
+  "charts/regional_comparison.png": "ac458f9c7c2c5a062c9631381320c1da3e43057506cc5f0f4aab7820da3af07c",
+  "charts/timeline_lanes.png": "faca14675898613fa8669cbf95685946fe1de0697f9a41089492d5f09932c5fd",
+  "charts/worldstate_trajectory.png": "dd654b2d367836c99fdfbd2e3ee747f6cfac5a17f8b9298dbed9319bb439c02c",
+  "charts/world_variables.png": "42d93307cca06288057b3a740a190924288033b0b6c8ba0d2b358eb21d2363b9"
+ },
+ "publication": {
+  "hard_passed": true,
+  "publish_passed": true,
+  "scenario_contract_valid": true,
+  "citation_coverage": 0.868,
+  "semantic_citations_passed": true,
+  "markdown_sha256": "0871932a36012f6689649de305667953e1184ab3bf69f44bb298c79f77fdd994",
+  "forecast_sha256": "e9db5bf806a5ada53ce9a7ace4c50ddffbb70b06ccd67ba5b5d3ee0d565ffafd"
+ }
+}

@@ -1,0 +1,1881 @@
+{
+ "nodes": [
+  {
+   "id": "fabd6734-9185-42e3-ad21-fac825907ef4",
+   "name": "1-year Ukrainian domestic bond yield",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Ukraine's 1-year domestic bond yield stood at 15.16% p.a. in September 2026 (CEIC data), reflecting high funding costs amid war financing, alongside an NBU policy rate of 16.00%.\nUkrainian one-year bond yield was 15.16% in September 2026, per NBU-related domestic rates data.\nUkrainian domestic rates (NBU policy 16.00%, one-year bond 15.16% in Sep 2026) are reported alongside the NBU policy rate."
+  },
+  {
+   "id": "f8126ebe-b502-4e35-a150-9e55875eb276",
+   "name": "Donald Trump administration",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Runs the Witkoff mediation channel; adopted the Graham Act in September 2026 then waived its principal sanctions and tariffs, called 'regrettable' by the European Commission; on October 9, 2026 conclu\nCongress may bind sanctions over White House objection, a potential change to the outlook\nThe Trump Administration waived the sanctions and tariffs required on Russia under the Graham Act, per an EEAS Commission statement."
+  },
+  {
+   "id": "f525d47b-6e8d-4dcd-93ff-021ea9760bb6",
+   "name": "Canada",
+   "labels": [
+    "NationState"
+   ],
+   "summary": "Canada is a key supporter of Ukraine, having committed the equivalent of €5.4 billion in military assistance plus €8.2 billion in financial assistance. Canada is among the non-EU partners expected to help fill Ukraine's €70 billion 2027 financing gap, which EU officials stated remains uncovered as of October 2026.\nCanada committed €5.4 billion in military aid and €8.2 billion in financial aid to Ukraine"
+  },
+  {
+   "id": "f38f1760-a5c5-494c-b217-3f08fdf778d8",
+   "name": "TTF",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "ICE Dutch TTF Nov26 stood at 88.430 EUR/MWh on October 22, 2026. The EU natural gas price (FRED series, proxy for TTF fundamentals) was 17.93 USD per million BTU in July 2026, up from 9.46 in December 2025 (+56.3%), carrying a geopolitical risk premium consistent with war continuation. Five-year band: 8.0982–69.9772 USD/MMBtu. In the Attrition grinds on scenario (35%), TTF holds high; falsifier is TTF below 70 EUR/MWh without a deal. In Frozen frontline (25%), TTF falls back within its five-year band; falsifier is Brent holding above 100 USD/bbl. In Full-scale war intensifies (15%), TTF exceed"
+  },
+  {
+   "id": "f169bbd9-b1c7-4e6f-bd36-213256fa5088",
+   "name": "MiGFlug",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "MiGFlug reported on Russia's record use of 8,766 UMPK glide bombs in August 2026."
+  },
+  {
+   "id": "ee5cfb7f-b87c-4479-8bfe-b9ff3dec8745",
+   "name": "Xi",
+   "labels": [
+    "PoliticalLeader"
+   ],
+   "summary": "Individual decision-maker whose choices move the war's diplomatic, military, or economic trajectory; a possible Trump–Xi meeting was offered by Putin as diplomatic goodwill separate from Ukraine terms. USCC-linked analysis credits China as \"the decisive external enabler\" of Russia's war.\nPutin raised a possible Trump–Xi meeting at his ninth in-person meeting with Steve Witkoff on October 21, 2026."
+  },
+  {
+   "id": "edf143b6-525b-45dc-93f7-2dcc426fc16f",
+   "name": "ISW",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Institute for the Study of War; its assessments are used alongside DeepState/Russia Matters data to read territorial control in the October 2026 baseline of the Russia-Ukraine war.\nISW assesses that Russia's offensive to encircle Donetsk Oblast, Putin's stated objective since 2022, was operationally defeated as of October 21, 2026.\nISW judges Russia's Donetsk offensive 'operationally defeated' as of October 21, 2026.\nISW territorial assessments, alongside DeepState data, are used to detect whether Russian net gains exceed the 74 sq mi/month trailing average\nISW rates Russia's offensive to seiz"
+  },
+  {
+   "id": "eb113cb0-d20d-4c1c-9076-668e6cdb364d",
+   "name": "US Treasury",
+   "labels": [
+    "GovernmentBody"
+   ],
+   "summary": "The US Treasury waived the Graham Act's principal sanctions, restrictions and tariffs against Russia under Trump's October 9, 2026 diesel arrangement, which has Russia shipping over 300,000 metric tons immediately and over 3 million tons through April 2027."
+  },
+  {
+   "id": "e9a130f3-bf87-437e-a7f8-aa65c5771e19",
+   "name": "Ukrenergo Eurobonds",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Ukrenergo completed the restructuring of its Eurobonds"
+  },
+  {
+   "id": "e84bcd42-8473-4458-a040-a8b40a4408bb",
+   "name": "G7 / price-cap coalition",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The coalition is fracturing between US waivers (Graham Act principal sanctions waived; diesel waiver through April 2027) and EU enforcement (30+ rounds since April 2025). Current price-cap enforcement"
+  },
+  {
+   "id": "e5334f13-7bd0-443c-8284-2c93093bdae7",
+   "name": "US",
+   "labels": [
+    "NationState"
+   ],
+   "summary": "US aid votes to Ukraine are tracked as a leading indicator, with US military aid to Ukraine ongoing as of October 2026.\nThe US is aligned with Ukraine, as reflected in US aid votes supporting Ukraine's war effort as of October 2026.\nThe United States participated in Round 1 trilateral talks with Ukraine and Russia in Abu Dhabi in early 2026.\nThe United States took part in Round 3 talks with Ukraine and Russia in Geneva on February 17–18, 2026; the channel lapsed as the US and Israel launched a war against Iran.\nThe United States launched a war against Iran (together with Israel), causing the G"
+  },
+  {
+   "id": "dbb5f5e6-97ae-4cfe-9117-481910d63842",
+   "name": "Estonian intelligence",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Estonian intelligence estimates Russia produced roughly 7 million shells in 2025"
+  },
+  {
+   "id": "d866c1d3-3cd6-4ac5-9bf8-7d822c8fad9a",
+   "name": "Steve Witkoff",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Held nine in-person meetings with Putin, most recently October 21, 2026 at the Constantine Palace, securing agreement to resume technical-level trilateral talks possibly in Abu Dhabi from on or after \nWitkoff met Zelensky, Nordic leaders and EU/NATO representatives at preparatory talks in Oslo on October 20, 2026, where Ukraine brought \"new ideas and proposals\" and the Kremlin was \"less upbeat\".\nPutin held his ninth in-person meeting with Steve Witkoff on October 21, 2026, offering US cooperation on Iran and fertiliser.\nPutin agreed to fresh peace talks with US envoy Witkoff, hours before mass"
+  },
+  {
+   "id": "d5ec9de4-cc4c-4e2e-ae9d-d4069f6ddd74",
+   "name": "Romanian territorial waters",
+   "labels": [
+    "Territory"
+   ],
+   "summary": "Likely Russian drones struck two commercial tankers in Romanian territorial waters on 15 October 2026 without allied military response"
+  },
+  {
+   "id": "d1d5e5d1-60ef-416d-a346-6f16d36097b5",
+   "name": "IMF Extended Fund Facility programme for Ukraine",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "The IMF operates a 48-month Extended Fund Facility programme for Ukraine of SDR 5.9353 billion (~US$8.1 billion, 295% of quota), with ~US$1.5 billion disbursed at approval on 26 Feb 2026 and the first review completed by 20 Jul 2026."
+  },
+  {
+   "id": "d0c9b50e-e8b8-4729-8932-ee41aa5b367c",
+   "name": "Kiel Institute",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Kiel Institute publishes the Ukraine Support Tracker, the settling source for the \"aid\" concept (allocated basis) used in assessments of Ukrainian financing. Its June 2026 tracker data showed H1 2026 military allocations near 2025 levels while financial/humanitarian aid ran 41% below the 2025 monthly average; it also documented EU allocations of €11 billion in May–Jun 2026 (€4.3bn military, €6.7bn financial/humanitarian) and the EU providing 80% of Ukraine's external aid.\nThe Kiel Institute's Ukraine Support Tracker reported that Europe leads on aid to Ukraine while US weapons remain key."
+  },
+  {
+   "id": "c772b6af-29d2-4148-8c1c-1a8da0d8f64f",
+   "name": "Person",
+   "labels": [
+    "Person"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "c70ce8a4-2443-40f1-9183-4313c11c8269",
+   "name": "Geneva",
+   "labels": [
+    "Territory"
+   ],
+   "summary": "The United States took part in Round 3 talks with Ukraine and Russia in Geneva on February 17–18, 2026; the channel lapsed as the US and Israel launched a war against Iran.\nUkraine took part in Round 3 talks with the US and Russia in Geneva on February 17–18, 2026.\nRussia took part in Round 3 talks with the US and Ukraine in Geneva on February 17–18, 2026.\n2026 United States–Ukraine–Russia meetings were held in Geneva"
+  },
+  {
+   "id": "c66ec558-4560-44c5-ab51-33697aba1073",
+   "name": "US diesel-sanctions waiver",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "Diesel-sanctions waiver with April 2027 decision point on lapse, renewal, or widening; its expansion into broad oil relief would be a view-changing signpost on sanctions-relief sequencing. No implied market move published.\nThe US diesel waiver under oil-sanctions relief is waived through April 2027 (reported); forecast 25% probability that US oil-sanctions relief broadens beyond the diesel waiver by 2027-07-01.\nThe US oil-sanctions regime, with its diesel waiver waived through April 2027, targets Russia."
+  },
+  {
+   "id": "c4f35536-05ab-4b5a-ac9a-48fe87ee0a72",
+   "name": "Abu Dhabi",
+   "labels": [
+    "Territory"
+   ],
+   "summary": "Possible venue for technical-level Russia-Ukraine talks on post-war security guarantees, tentatively scheduled from on or after November 10, 2026.\nRussia, together with the United States and Ukraine, held Round 1 trilateral talks in Abu Dhabi in early 2026, which closed with no agreement on ceasefire, territory, Zaporizhzhia NPP or security guarantees, ending with a prisoner exchange.\nThe United States participated in Round 1 trilateral talks with Ukraine and Russia in Abu Dhabi in early 2026.\nUkraine participated in Round 1 trilateral talks with the US and Russia in Abu Dhabi in early 2026.\nT"
+  },
+  {
+   "id": "bef7eb27-9da1-4a8b-9ab6-609a6f96470b",
+   "name": "Iran",
+   "labels": [
+    "NationState"
+   ],
+   "summary": "Iran and Iraq fought a war that ended in a 1988 ceasefire, which held.\nThe United States launched a war against Iran (together with Israel), causing the Geneva negotiation channel to lapse, per February 2026 reporting.\nIsrael launched a war against Iran (together with the United States), per reporting on the lapse of the Geneva talks in February 2026.\nAt his October 21, 2026 meeting with Steve Witkoff, Putin offered US cooperation on Iran (bundled with fertiliser items)."
+  },
+  {
+   "id": "bc6fba85-0498-4d14-b30f-4d4d2c5d1f3b",
+   "name": "Ukraine's General Staff",
+   "labels": [
+    "MilitaryActor"
+   ],
+   "summary": "Ukraine's General Staff, a belligerent source, claims about 1,570,540 Russian personnel losses plus 12,436 tanks, 51,403 artillery systems and 573,392 UAVs as of October 21, 2026 (1,820 on October 20) — far above independent figures."
+  },
+  {
+   "id": "bc0a5f4b-2233-444a-9c7a-9fe6a098c9e2",
+   "name": "UK government",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Has committed £25 billion cumulatively to Ukraine; participates in the Oslo-format meetings with Nordic leaders and EU/NATO representatives."
+  },
+  {
+   "id": "b73c0f02-36c6-4a06-82ab-dfca5020512d",
+   "name": "China (Xi Jinping)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Exported $10.3 billion of Common High Priority List items; trained Russian personnel on drone operations; supplied drone engines for the Garpiya-A1; reportedly deployed a Silent Hunter laser system; p\nChina supplies Russia's war economy with $10.3 billion of CHPL exports, drone engines for Garpiya-A1, Silent Hunter laser, and strike-supporting satellite imagery; USCC calls China 'the decisive external enabler'\nChina supplied $10.3 billion in common-high-priority exports to Russia, described as 'the decisive external enabler' of Russia's war capacity\nThe USCC China-Russia fact sheet (August 202"
+  },
+  {
+   "id": "b407aa36-f52e-49c0-bf26-3b2484251479",
+   "name": "Ukraine's foreign intelligence",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Ukraine's foreign intelligence, using Russian MinFin data, counts $57.97 billion in Russian oil and gas revenue for January–August 2026, 16.7% lower year-on-year."
+  },
+  {
+   "id": "b29ed7db-4a49-4ffa-ad51-b2d8b6abb8ec",
+   "name": "Turkish government (Erdogan)",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Listed among actors to track as a potential mediator and Black Sea trade gatekeeper; no mediating activity in the October 2026 diplomatic record in the evidence."
+  },
+  {
+   "id": "aea2410b-e544-4f50-8807-b79b31e2f00d",
+   "name": "Iskander-K",
+   "labels": [],
+   "summary": "On the night of October 19, 2026 Russia used Iskander-K missiles with 269 strike drones, 59 jet-powered."
+  },
+  {
+   "id": "aca8d423-f86c-402b-b74a-7e36ccfc421e",
+   "name": "Institute for the Study of War",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "ISW judged Russia's Donetsk offensive to be 'operationally defeated' as of the baseline of late October 2026.\nThe Institute for the Study of War published Russian Offensive Campaign Assessments on Russia's war in Ukraine, including assessments dated October 7, 2026 and October 15, 2026."
+  },
+  {
+   "id": "aa17881e-28e5-4a58-9dc3-9a2b43af48d0",
+   "name": "Donetsk Oblast",
+   "labels": [
+    "Territory"
+   ],
+   "summary": "Operation Vivaldi in the Lyman direction defeated the northern pincer of Russia's planned encirclement of Donetsk Oblast, leaving that offensive 'operationally defeated' as of October 21, 2026.\nRussia's planned encirclement of Donetsk Oblast — Putin's stated objective since 2022 — was defeated; Russia remains in adversarial posture toward Ukraine over Donetsk Oblast.\nISW rates Russia's offensive to seize Donetsk Oblast 'operationally defeated', with only 10% forecast probability Russia completes seizure of Donetsk Oblast by 2027-12-31.\nUkraine is forecast at 35% probability to control more ter"
+  },
+  {
+   "id": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "name": "Vladimir Putin",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Met US envoy Steve Witkoff in person nine times, most recently October 21, 2026 at the Constantine Palace, St. Petersburg, agreeing to resume technical-level trilateral talks. His stated objective sin\nEncircling Donetsk Oblast has been Vladimir Putin's stated objective for Russia since 2022.\nPutin held his ninth in-person meeting with Steve Witkoff on October 21, 2026, offering US cooperation on Iran and fertiliser.\nAt his October 21, 2026 meeting with Steve Witkoff, Putin offered US cooperation on Iran (bundled with fertiliser items).\nPutin raised a possible Trump–Xi meeting at his ninth in-p"
+  },
+  {
+   "id": "a7302c06-d32a-4777-82be-28386fa3ce5b",
+   "name": "Carnegie Endowment",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The Carnegie Endowment notes that the fiscal rule's optimistic $53/bbl cutoff has the Russian ministry buying FX for the NWF while borrowing at 14–15%, costing ~45 billion roubles a year, alongside a 459-billion-rouble NWF drawdown (~11% of liquid assets) in 2026.\nThe Carnegie Endowment published an analysis (September 2026) of who is funding Russia's war in the 2027 budget."
+  },
+  {
+   "id": "a5e58bda-ea48-4dea-9145-855398ac428c",
+   "name": "Ukrainian Armed Forces Command",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Defeated the northern pincer of Russia's planned Donetsk encirclement; net-liberated about 1,080 km² in 2026; executed one of the war's largest aerial attacks on Russian military and oil assets on Oct\nOperation Vivaldi was conducted by Ukraine in the Lyman direction, defeating the northern pincer of Russia's planned encirclement of Donetsk Oblast"
+  },
+  {
+   "id": "a53fb657-b7dc-4983-8680-c41025bfc2aa",
+   "name": "Russia Matters",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Organization that compiles DeepState territorial-control data, used to read territorial control and net territorial change in the October 2026 war baseline.\nRussia Matters' analysis puts Russian losses at roughly 5,000–8,200 per week against recruitment of 5,500–8,000 — overlapping ranges that establish neither surplus nor deficit.\nRussia Matters published the Russia-Ukraine War Report Card on October 14, 2026, covering Russia's war in Ukraine."
+  },
+  {
+   "id": "a42b5221-0b8a-47d0-87df-e6b96f67e566",
+   "name": "Meduza",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Mediazona/Meduza's probate-based count, a lower bound covering deaths only, put Russian soldiers killed at 352,000 as of its May 2026 estimate."
+  },
+  {
+   "id": "986bd85f-34cc-41ba-98b8-ad8a35cf0e46",
+   "name": "Reuters",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "A Reuters calculation based on Russian Ministry of Finance data puts October 2026 federal oil and gas tax revenue near 1 trillion roubles (~$11.97 billion), up 10% year-on-year.\nA Reuters calculation projects Russian federal oil and gas tax revenue of about 1 trillion roubles for October 2026, up 10% year-on-year, sustaining funding at a Brent price of 102.0181 USD/bbl (September 2026 reading)."
+  },
+  {
+   "id": "95223a14-8307-4142-8446-54801bb7b086",
+   "name": "European Union / European Commission",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "European Union provides 80% of Ukraine's external aid via a €90 billion 2026–27 loan (€11 billion allocated May–June 2026), covering roughly two-thirds of Ukraine's 2026–27 financing needs; a €70 billion gap remains for 2027, with non-EU partners' expected €45 billion slow to arrive. The EU's financing-gap concept follows statements by EU officials in October 2026. The European Commission has adopted over 30 sanctions rounds against Russia through September 2026 and called US sanctions waivers 'regrettable'; forecast probability that the EU lifts a majority of sanctions on Russian oil exports "
+  },
+  {
+   "id": "93cb086b-d484-4696-a5c9-f69cadd94475",
+   "name": "Trump",
+   "labels": [
+    "PoliticalLeader"
+   ],
+   "summary": "A possible Trump–Xi meeting was floated by Putin as a side-payment in ceasefire bargaining, bundled with Iran and fertiliser offers rather than movement on Ukraine terms.\nTrump's October 9, 2026 diesel arrangement has Russia shipping over 300,000 metric tons of diesel immediately and over 3 million tons to follow under a Treasury waiver through April 2027.\nPutin raised a possible Trump–Xi meeting at his ninth in-person meeting with Steve Witkoff on October 21, 2026.\nTrump called for a higher US military budget, after which global defense stocks advanced (Reuters, January 8, 2026)"
+  },
+  {
+   "id": "91b0298c-44cf-41d6-a09b-ee8eec7d12ac",
+   "name": "International Crisis Group",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The International Crisis Group lists the EU's leverage over Russia as sanctions relief, frozen Russian assets and reconstruction support."
+  },
+  {
+   "id": "8e00564e-cfe3-4889-bc13-a037b7dcdbca",
+   "name": "Stephen Hubbard",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Russia released the retired US teacher Stephen Hubbard as goodwill bundled with offers of help on Iran and fertiliser supplies, not with movement on Ukraine terms."
+  },
+  {
+   "id": "8cb8f848-d658-47bb-8dbd-8838cec61a91",
+   "name": "European defense industry (Rheinmetall et al.)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Pan-European aerospace & defense equities (.SXPARO) hit a record high on January 8, 2026 after a ~57% gain in 2025, supported by European rearmament and a US$1.5 trillion 2027 US defense budget reques"
+  },
+  {
+   "id": "8c98057e-bc08-4ae9-8858-c3392c2b6002",
+   "name": "UMPK glide bomb",
+   "labels": [],
+   "summary": "Russia dropped a record 8,766 UMPK glide bombs in August 2026, as reported by MiGFlug."
+  },
+  {
+   "id": "85d17936-baef-429e-8963-aa22af20837c",
+   "name": "UAH/USD exchange rate",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "The NBU set the official UAH/USD exchange rate at approximately UAH 47.1 per USD as of 1 October 2026."
+  },
+  {
+   "id": "8398d394-3bb3-4e36-b1c5-f3dbf2a7d3d2",
+   "name": "IMF",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "48-month EFF of SDR 5.9353 billion (~US$8.1 billion, 295% of quota) approved February 26, 2026 within a US$136.5 billion international support package; first review completed July 20, 2026. Projects 2\nDonors led by the €90 billion EU loan finance Ukraine while the IMF's July 2026 growth projection sits at 1.0%, below its own February range of 1.8–2.5%.\nThe IMF/FRED official series shows EU natural gas at 17.93 U.S. dollars per million BTU in July 2026, against 11.4706 in July 2025.\nThe IMF approved an SDR 5.9353 billion EFF facility for Ukraine on 2026-02-26 and completed its first review on 2"
+  },
+  {
+   "id": "7fff4f1b-0dac-4d70-a699-429247edddd0",
+   "name": "Organization",
+   "labels": [
+    "Organization"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "7e3d5edc-3978-4217-9a3f-8c455b975cbd",
+   "name": "Brent",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Brent crude oil price benchmark. Stood at 102.0181 USD per barrel in September 2026, up from 67.6091 a year earlier, with the rise reflecting war-related market stress already priced in. Sharp Brent repricing on cessation news is treated as a leading indicator and market confirmation of shifts toward a frozen frontline or formal ceasefire.\nThe IMF world price series shows Brent Crude at 102.0181 U.S. dollars per barrel in September 2026, against 67.6091 in September 2025.\nVEB's baseline Brent assumption is $46/bbl (stress scenario $41/bbl), which the Carnegie Endowment notes is far below the f"
+  },
+  {
+   "id": "7d99d769-57da-4ca1-9548-a64731d825a1",
+   "name": "Mediazona",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Mediazona/Meduza's probate-based count, a lower bound covering deaths only, put Russian soldiers killed at 352,000 as of its May 2026 estimate."
+  },
+  {
+   "id": "7c8cd9f7-6210-49c3-b878-41c38e83e13a",
+   "name": "Starlink",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "ISW conditions Kyiv's initiative on Western support and Starlink/Starshield access, reportedly restored October 15, 2026.\nUkraine's battlefield initiative is conditional on Western support, intelligence sharing and Starlink/Starshield access, reportedly restored October 15, 2026."
+  },
+  {
+   "id": "7be71449-2949-48da-980a-c58939346ac1",
+   "name": "Brent crude oil",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Brent stood at 102.0181 U.S. dollars per barrel in September 2026, up from 67.6091 a year earlier, reflecting war-related market stress.\nVEB uses a Brent crude baseline of $46 per barrel, below which the report's $53/bbl cutoff scenario would be tested\nEU natural gas at 17.93 USD per million BTU in July 2026 (up from 9.46 in December 2025) carries the same geopolitical premium as Brent crude\nFitch's 22 September 2026 rating-case assumes Brent at USD70/bbl for 2027, raised from USD65, plus higher European gas assumptions on a geopolitical risk premium\nObserved anchor: Brent stood at 102.0181 US"
+  },
+  {
+   "id": "7b79483e-dd78-4bff-a70a-e2b52276080e",
+   "name": "Russian Ministry of Finance",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Draft 2027 budget allocates 17.1 trillion roubles (~27% above the 13.5 trillion originally budgeted) to defence — 35% of federal spending — within a 50-trillion-rouble 2027–29 plan. Net borrowing rise\nA Reuters calculation based on Russian Ministry of Finance data puts October 2026 federal oil and gas tax revenue near 1 trillion roubles (~$11.97 billion), up 10% year-on-year.\nUkraine's foreign intelligence, using Russian MinFin data, counts $57.97 billion in Russian oil and gas revenue for January–August 2026, 16.7% lower year-on-year.\nThe Russian Ministry of Finance buys foreign exchange for "
+  },
+  {
+   "id": "78ca3cac-fb8e-457d-9b5e-88dfc4d955f0",
+   "name": "Nominal Broad U.S. Dollar Index",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Index (Jan 2006=100, ticker DTWEXBGS) stood at 119.2152 in September 2026, down 0.8138 (-0.678%) year-over-year.\nThe IMF series context references the Nominal Broad U.S. Dollar Index at 119.2152 (Jan 2006=100, September 2026), used as a 2027 signpost for risk-on re-pricing if it stays below that level three consecutive months\nFRED publishes the Nominal Broad U.S. Dollar Index series (DTWEXBGS).\nFRED publishes the Nominal Broad U.S. Dollar Index (Index Jan 2006=100), reporting a monthly mean of 119.2152 for 2026-09, down 0.8138 (-0.7%) year-on-year, with the latest daily reading of 121.4048 on "
+  },
+  {
+   "id": "77157c5f-65d1-4b69-ac62-20e51a85639d",
+   "name": "DeepState",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Organization whose territorial-control data on the Russia-Ukraine war, compiled by Russia Matters, is used to assess operational tests of territorial control and net territorial change in the October 2026 baseline.\nDeepState (with ISW) territorial tracking showing Russian net gains above the 74 sq mi/month trailing average would signal the Full-scale war intensifies scenario"
+  },
+  {
+   "id": "726041e2-6c3f-4c4e-b460-c5b87e30e955",
+   "name": "Crimea",
+   "labels": [
+    "Territory"
+   ],
+   "summary": "Russia controls Crimea as part of roughly 45,196 square miles (~19% of Ukraine) held as of late October 2026.\nRussia controls Crimea, included in its ~45,196 sq mi of held territory as of October 21, 2026"
+  },
+  {
+   "id": "70105f79-0292-49e9-a016-74095593dc79",
+   "name": "NBU policy rate",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "The NBU's policy rate stood at 16.00% as of October 2026."
+  },
+  {
+   "id": "6f24b2b4-7150-4c85-b830-0baedd4ebbfb",
+   "name": "Starshield",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "ISW conditions Kyiv's initiative on Western support and Starlink/Starshield access, reportedly restored October 15, 2026.\nUkraine's battlefield initiative is conditional on Western support, intelligence sharing and Starlink/Starshield access, reportedly restored October 15, 2026."
+  },
+  {
+   "id": "6a6ebfd8-a559-4957-877b-72a6e7693ba0",
+   "name": "Shahed-type UAVs",
+   "labels": [],
+   "summary": "Russia flew 6,732 Shahed-type UAVs in September 2026 (ISIS full-month reconstruction 7,400–7,700), now flown day and night."
+  },
+  {
+   "id": "67086609-08d4-455b-a700-b0053e7b5823",
+   "name": "Iraq",
+   "labels": [
+    "NationState"
+   ],
+   "summary": "Iran and Iraq fought a war that ended in a 1988 ceasefire, which held."
+  },
+  {
+   "id": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "Russia",
+   "labels": [
+    "NationState"
+   ],
+   "summary": "Russia holds ~45,196 sq mi (~19% of Ukraine) including Crimea and pre-2022 Donbas as of late October 2026; net-gained 753 sq mi in the 12 months to Oct 19, 2026 but net-lost ground since Sep 1, 2026, with ISW judging its Donetsk encirclement offensive \"operationally defeated\" after Operation Vivaldi in the Lyman direction. Launched 6,732 Shahed-type drones in Sep 2026 (peak 8,161 in May) and a record 8,766 glide bombs in Aug 2026; used Iskander missiles plus 269 drones on Oct 19, 2026. February 2026 Western estimate: 1,000,000 Russian casualties; Mediazona/Meduza count 352,000 killed by May 20"
+  },
+  {
+   "id": "5eaed25e-f7a0-4ed3-b84c-8784be351063",
+   "name": "NATO",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Represented at the October 20, 2026 Oslo preparatory meeting. Russia's reported demand for a permanent Ukrainian NATO-membership ban is the central obstacle to a settlement; likely Russian drones stru\nUkraine under Zelensky is pressed by Russia to forswear NATO membership, which Ukraine resists.\nRussia's reported terms demand that Ukraine pledge never to join NATO, opposing Ukrainian NATO membership.\nRussia's demand for a permanent NATO-membership ban on Ukraine does not intersect US-assured 'strong security guarantees', implying NATO alignment with Ukraine's security."
+  },
+  {
+   "id": "5e9c04e2-7e3a-4da1-a8a3-e1932dcada9f",
+   "name": "Romania",
+   "labels": [
+    "NationState"
+   ],
+   "summary": "Likely Russian drones struck four civilian vessels, two of them tankers, in Romanian territorial waters on October 15, 2026.\nOn October 15, 2026, likely Russian drones struck two commercial tankers in Romanian territorial waters."
+  },
+  {
+   "id": "5cd4be12-c7ae-43e4-a90c-274bb87632c7",
+   "name": "HUR",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "HUR estimates Russia produces about 4,000 jet-powered long-range drones and small cruise missiles per month"
+  },
+  {
+   "id": "585c05bc-260e-40aa-80af-317b35350e6f",
+   "name": "Ukrainian Air Force",
+   "labels": [
+    "MilitaryActor"
+   ],
+   "summary": "Ukraine's air force, belligerent on the Ukrainian side of the Russia-Ukraine war. Provides daily strike tempo reporting (including Shahed drone tempo) used as a leading indicator: declining tempo signals ceasefire or frozen-frontline outcomes, while record highs signal continued or intensified attrition.\nUkrainian Air Force monthly summaries record 6,732 Shahed-type UAVs in September 2026, second only to May 2026's peak of 8,161."
+  },
+  {
+   "id": "4ea4d4a5-0d1f-4624-ac81-2e38bf3ac13d",
+   "name": "Operation Vivaldi",
+   "labels": [
+    "MilitaryActor"
+   ],
+   "summary": "Operation Vivaldi in the Lyman direction defeated the northern pincer of Russia's planned encirclement of Donetsk Oblast as of October 21, 2026.\nOperation Vivaldi in the Lyman direction defeated the northern pincer of Russia's planned encirclement of Donetsk Oblast, leaving that offensive 'operationally defeated' as of October 21, 2026.\nUkraine's Lyman counteroffensive liberated at least 277 km2 from Russian control."
+  },
+  {
+   "id": "4d3e875d-ea54-4469-b9d9-c649a0f9796f",
+   "name": "OHCHR",
+   "labels": [
+    "InternationalOrganization"
+   ],
+   "summary": "OHCHR produces casualty figures for the Russia-Ukraine war; its October 2026 figures were flagged as a pending indicator that could change the assessment of the war's trajectory, alongside Mediazona's next confirmed-killed update."
+  },
+  {
+   "id": "481bd64f-d130-48fc-8e9b-6afe7542c0cf",
+   "name": "Donbas",
+   "labels": [
+    "Territory"
+   ],
+   "summary": "Russia controls pre-2022 Donbas territory as part of its holdings of about 19% of Ukraine in late October 2026.\nRussia controls pre-2022 Donbas, included in its held territory as of October 21, 2026\nPutin's stated objective since 2022 was the encirclement of Donetsk Oblast; ISW judged that offensive 'operationally defeated' as of October 21, 2026\nZelensky's stated red line is no surrender of Donbas."
+  },
+  {
+   "id": "47bbe225-19cb-4b63-b6ec-cf9fe16b4cdc",
+   "name": "Shahed",
+   "labels": [
+    "MilitaryActor"
+   ],
+   "summary": "War-stress indicators including Shahed strike tempo feed a geopolitical premium conflating this war with other shocks in Brent, which stood at 102.0181 USD/bbl in September 2026\nWar-state shifts including Shahed strike tempo transmit into TTF Nov26 pricing, which stood at 88.430 EUR/MWh on October 22, 2026 carrying a war premium"
+  },
+  {
+   "id": "3d079a2e-d6fe-4912-8fd1-3686830293fe",
+   "name": "Israel",
+   "labels": [
+    "NationState"
+   ],
+   "summary": "Israel launched a war against Iran (together with the United States), per reporting on the lapse of the Geneva talks in February 2026."
+  },
+  {
+   "id": "30f944f8-93dc-4754-b266-6b458226e799",
+   "name": "Russian National Wealth Fund",
+   "labels": [
+    "GovernmentBody"
+   ],
+   "summary": "Russian sovereign wealth fund. Its drawdown path is a leading indicator of fiscal strain in Russia's war effort; forced monetization linked to the draft 2027 Russian war budget's borrowing path would flag fiscal strain supporting the attrition scenario.\nThe Russian Ministry of Finance buys foreign exchange for the NWF under the fiscal rule (with a $53/bbl cutoff) while borrowing at 14–15%, costing ~45 billion roubles a year, per the Carnegie Endowment.\nThe Carnegie Endowment notes that the fiscal rule's optimistic $53/bbl cutoff has the Russian ministry buying FX for the NWF while borrowing at"
+  },
+  {
+   "id": "30648daa-4e88-428e-aa02-ccdd79fbf4bb",
+   "name": "Iskander-M",
+   "labels": [],
+   "summary": "On the night of October 19, 2026 Russia used Iskander-M/S-400 missiles with 269 strike drones, 59 jet-powered."
+  },
+  {
+   "id": "302d0c05-a3fb-43d3-a955-3038fd79e55c",
+   "name": "Global price of Natural gas, EU",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Euro area natural gas price series (USD per Million Metric British Thermal Unit) stood at 17.93 in July 2026, up 6.4594 (+56.312%) year-over-year. Related benchmark: ICE Dutch TTF Nov26 at 88.430 EUR/MWh on October 22, 2026.\nThe IMF series shows the EU natural gas price at 17.93 U.S. dollars per million BTU in July 2026, up from 9.46 in December 2025.\nThe IMF/FRED official series shows EU natural gas at 17.93 U.S. dollars per million BTU in July 2026, against 11.4706 in July 2025.\nFRED publishes the 'Global price of Natural gas, EU — Euro area' series (PNGASEUUSDM)."
+  },
+  {
+   "id": "3025502b-97c1-4ead-a1fc-425dd5d259b1",
+   "name": "National Bank of Ukraine",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Policy rate at 16.00% (October 2026); official rate ~UAH 47.1/USD (October 1, 2026); one-year domestic bond yield 15.16% (September 2026).\nThe NBU set the official UAH/USD exchange rate at approximately UAH 47.1 per USD as of 1 October 2026.\nThe National Bank of Ukraine serves as Ukraine's central bank"
+  },
+  {
+   "id": "2cc49f6f-77d9-43aa-835d-91ae76f21853",
+   "name": "Lyman",
+   "labels": [
+    "Territory"
+   ],
+   "summary": "Operation Vivaldi in the Lyman direction defeated the northern pincer of Russia's planned encirclement of Donetsk Oblast as of October 21, 2026."
+  },
+  {
+   "id": "2a45bcd1-6514-44b3-8a1f-2a34e2bab7e7",
+   "name": "FRED",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Federal Reserve Economic Data source. Provided the official Nominal Broad U.S. Dollar Index series used in an October 2026 war forecast (latest observation 119.2152, Jan 2006=100, September 2026, down 0.678% year-over-year).\nFRED publishes the 'Global price of Natural gas, EU — Euro area' series (PNGASEUUSDM).\nFRED publishes the Nominal Broad U.S. Dollar Index series (DTWEXBGS).\nFRED publishes the Nominal Broad U.S. Dollar Index (Index Jan 2006=100), reporting a monthly mean of 119.2152 for 2026-09, down 0.8138 (-0.7%) year-on-year, with the latest daily reading of 121.4048 on 2026-10-16."
+  },
+  {
+   "id": "2819998c-fe5c-4a0d-a24f-47d4f597afcb",
+   "name": "Ministry of Defence of Ukraine",
+   "labels": [
+    "GovernmentBody"
+   ],
+   "summary": "The Ministry of Defence of Ukraine published total Russian combat losses in Ukraine as of October 21, 2026."
+  },
+  {
+   "id": "23a4a6f3-a32d-4ac7-a7b1-9408ff47ecaf",
+   "name": "Fitch",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Credit rating agency. On 22 September 2026 Fitch raised its 2027 Brent Crude assumption to USD70/barrel from USD65, a rating-case assumption of risk-premium decay, not a termination probability for the Russia-Ukraine war.\nFitch's 22 September 2026 rating-case assumes Brent at USD70/bbl for 2027, raised from USD65, plus higher European gas assumptions on a geopolitical risk premium\nObserved anchor: Brent stood at 102.0181 USD/bbl in September 2026, versus Fitch's rating-case USD70/bbl 2027 assumption"
+  },
+  {
+   "id": "216cf16b-e376-4a4f-88a9-4ed7dbb11795",
+   "name": "Graham Act",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "The Graham Act, adopted September 2026, targets Russia, though its principal sanctions were waived.\nThe Graham Act, adopted by Washington in September 2026 seventeen months after its April 2025 introduction, is a sanctions regime targeting Russia.\nThe US Treasury waived the Graham Act's principal sanctions, restrictions and tariffs against Russia under Trump's October 9, 2026 diesel arrangement, which has Russia shipping over 300,000 metric tons immediately and over 3 million tons through April 2027.\nThe European Commission called the US waiving of the Graham Act's principal sanctions, restric"
+  },
+  {
+   "id": "1e7f527c-5218-4db0-ac32-41cf97ad47fd",
+   "name": "Kyiv",
+   "labels": [
+    "Territory"
+   ],
+   "summary": "ISW calls Ukraine's (Kyiv's) October 7, 2026 strikes on Russian military and oil assets among its largest of the war.\nISW conditions Kyiv's initiative on Western support and Starlink/Starshield access, reportedly restored October 15, 2026.\nISW conditions Kyiv's initiative on Western support and Starlink/Starshield access, reportedly restored October 15, 2026."
+  },
+  {
+   "id": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "name": "Volodymyr Zelensky",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Restated the freeze offer on October 21, 2026; brought 'new ideas and proposals' to the October 20, 2026 Oslo preparatory meeting with Witkoff, Nordic leaders and EU/NATO representatives; says the US \nUkraine under Zelensky is pressed by Russia to forswear NATO membership, which Ukraine resists.\nZelensky's stated red line is no surrender of Donbas.\nZelensky insists Russia is not winning, seeking a freeze along the current line plus US/European guarantees (offer held since November 2024).\nWitkoff met Zelensky, Nordic leaders and EU/NATO representatives at preparatory talks in Oslo on October 20"
+  },
+  {
+   "id": "11aa7ee6-d8f0-4fa7-87b8-99b3f0899194",
+   "name": "US Congress",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Adopted the Graham Act seventeen months after its April 2025 introduction (September 2026), only for the White House to waive its principal sanctions, restrictions and tariffs. A US$901 billion defens\nCongress may bind sanctions over White House objection, a potential change to the outlook"
+  },
+  {
+   "id": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "name": "Ukraine",
+   "labels": [
+    "NationState"
+   ],
+   "summary": "Ukraine is a belligerent in the Russia-Ukraine war as of October 2026. Russia holds ~45,196 sq mi (~19%) of Ukraine incl. Crimea and pre-2022 Donbas, but momentum collapsed: Russia net-gained 753 sq mi in the 12 months to Oct 19, 2026 yet net-lost ~73 sq mi since Sep 1; ISW assesses Ukraine net-liberated ~1,080 km2 in 2026 and Russia's Donetsk encirclement offensive 'operationally defeated' (Operation Vivaldi, Lyman direction, Oct 21, 2026). Civilian casualties hit ≥328 killed, 2,105 injured in September 2026, the deadliest September since 2022 (+85% vs Sep 2025). Cumulative military casualtie"
+  },
+  {
+   "id": "10eb270a-5da1-4569-9ed4-a564d23584e5",
+   "name": "S-400",
+   "labels": [],
+   "summary": "On the night of October 19, 2026 Russia used S-400 missiles in surface-to-surface mode alongside 269 strike drones."
+  },
+  {
+   "id": "0cbff2e3-1a1f-40fe-8718-f3e55dd321d0",
+   "name": "VEB",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "VEB uses a Brent crude baseline of $46 per barrel, below which the report's $53/bbl cutoff scenario would be tested"
+  },
+  {
+   "id": "0a9ba969-7ad5-47c7-9680-db57440d79c5",
+   "name": "Foreign Affairs Council",
+   "labels": [
+    "GovernmentBody"
+   ],
+   "summary": "The EU's Foreign Affairs Council adopted Russia sanctions rounds at each of its last ten meetings between April 2025 and September 2026, part of over thirty rounds."
+  },
+  {
+   "id": "02ea39bb-ff53-4040-a795-72372739a5ba",
+   "name": "Russian General Staff",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Planned the encirclement of Donetsk Oblast whose northern pincer was defeated by Ukraine's Operation Vivaldi in the Lyman direction; still sustaining record strike tempo (6,732 Shahed-type UAVs in Sep"
+  },
+  {
+   "id": "0264eedd-d84e-4c19-a7c8-4788d2787729",
+   "name": "EU sanctions on Russian oil exports",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "The European Union has adopted over 30 sanctions rounds through September 2026, and the European Commission called US waivers 'regrettable'; EU is forecast at only 5% probability to lift a majority of sanctions on Russian oil exports by 2028-01-01.\nThe EU sanctions regime on Russian oil exports legally targets Russian oil exports."
+  }
+ ],
+ "links": [
+  {
+   "source": "95223a14-8307-4142-8446-54801bb7b086",
+   "target": "95223a14-8307-4142-8446-54801bb7b086",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "European Union / European Commission 亦称 European Commission"
+  },
+  {
+   "source": "e5334f13-7bd0-443c-8284-2c93093bdae7",
+   "target": "c4f35536-05ab-4b5a-ac9a-48fe87ee0a72",
+   "name": "NEGOTIATED_IN",
+   "fact": "The United States participated in Round 1 trilateral talks with Ukraine and Russia in Abu Dhabi in early 2026."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "d5ec9de4-cc4c-4e2e-ae9d-d4069f6ddd74",
+   "name": "TARGETS",
+   "fact": "Likely Russian drones struck two commercial tankers in Romanian territorial waters on 15 October 2026 without allied military response"
+  },
+  {
+   "source": "0264eedd-d84e-4c19-a7c8-4788d2787729",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "TARGETS",
+   "fact": "The EU sanctions regime on Russian oil exports legally targets Russian oil exports."
+  },
+  {
+   "source": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "target": "481bd64f-d130-48fc-8e9b-6afe7542c0cf",
+   "name": "REFUSES_TO_SURRENDER",
+   "fact": "Zelensky's stated red line is no surrender of Donbas."
+  },
+  {
+   "source": "d866c1d3-3cd6-4ac5-9bf8-7d822c8fad9a",
+   "target": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "name": "MET_WITH",
+   "fact": "Witkoff met Zelensky, Nordic leaders and EU/NATO representatives at preparatory talks in Oslo on October 20, 2026, where Ukraine brought \"new ideas and proposals\" and the Kremlin was \"less upbeat\"."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "5cd4be12-c7ae-43e4-a90c-274bb87632c7",
+   "name": "ESTIMATES_OUTPUT_OF",
+   "fact": "HUR estimates Russia produces about 4,000 jet-powered long-range drones and small cruise missiles per month"
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "7c8cd9f7-6210-49c3-b878-41c38e83e13a",
+   "name": "DEPENDS_ON",
+   "fact": "Ukraine's battlefield initiative is conditional on Western support, intelligence sharing and Starlink/Starshield access, reportedly restored October 15, 2026."
+  },
+  {
+   "source": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "target": "5eaed25e-f7a0-4ed3-b84c-8784be351063",
+   "name": "SEEKS_MEMBERSHIP_IN",
+   "fact": "Ukraine under Zelensky is pressed by Russia to forswear NATO membership, which Ukraine resists."
+  },
+  {
+   "source": "585c05bc-260e-40aa-80af-317b35350e6f",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "REPORTS_STRIKE_TEMPO_OF",
+   "fact": "Ukrainian Air Force monthly summaries record 6,732 Shahed-type UAVs in September 2026, second only to May 2026's peak of 8,161."
+  },
+  {
+   "source": "e5334f13-7bd0-443c-8284-2c93093bdae7",
+   "target": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "name": "PROVIDES_MILITARY_AID_TO",
+   "fact": "The US promises Ukraine strong security guarantees, per Zelenskyy (Ukrainska Pravda, October 20, 2026)"
+  },
+  {
+   "source": "8398d394-3bb3-4e36-b1c5-f3dbf2a7d3d2",
+   "target": "7be71449-2949-48da-980a-c58939346ac1",
+   "name": "PUBLISHES",
+   "fact": "The IMF publishes the Brent monthly average series in US dollars per barrel, which observed 102.0181 USD/bbl in September 2026"
+  },
+  {
+   "source": "8e00564e-cfe3-4889-bc13-a037b7dcdbca",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "RELEASED",
+   "fact": "Russia released retired US teacher Stephen Hubbard as a goodwill gesture bundled with offers of help on Iran and fertiliser supplies, not with movement on Ukraine terms"
+  },
+  {
+   "source": "a42b5221-0b8a-47d0-87df-e6b96f67e566",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "COUNTS_DEATHS_OF",
+   "fact": "Mediazona/Meduza's probate-based count, a lower bound covering deaths only, put Russian soldiers killed at 352,000 as of its May 2026 estimate."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "95223a14-8307-4142-8446-54801bb7b086",
+   "name": "SUPPORTS_SECURITY_GUARANTEES_FOR",
+   "fact": "Zelensky, restating on October 21, 2026, is ready to freeze the current frontline for an immediate ceasefire with US and European guarantees to follow."
+  },
+  {
+   "source": "47bbe225-19cb-4b63-b6ec-cf9fe16b4cdc",
+   "target": "7e3d5edc-3978-4217-9a3f-8c455b975cbd",
+   "name": "CAUSES_PRICE_MOVE_IN",
+   "fact": "War-stress indicators including Shahed strike tempo feed a geopolitical premium conflating this war with other shocks in Brent, which stood at 102.0181 USD/bbl in September 2026"
+  },
+  {
+   "source": "5eaed25e-f7a0-4ed3-b84c-8784be351063",
+   "target": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "name": "ALLIED_WITH",
+   "fact": "Russia's demand for a permanent NATO-membership ban on Ukraine does not intersect US-assured 'strong security guarantees', implying NATO alignment with Ukraine's security."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "c4f35536-05ab-4b5a-ac9a-48fe87ee0a72",
+   "name": "NEGOTIATED_IN",
+   "fact": "Ukraine participated in Round 1 trilateral talks with the US and Russia in Abu Dhabi in early 2026."
+  },
+  {
+   "source": "3025502b-97c1-4ead-a1fc-425dd5d259b1",
+   "target": "fabd6734-9185-42e3-ad21-fac825907ef4",
+   "name": "SUPERVISES",
+   "fact": "Ukrainian domestic rates (NBU policy 16.00%, one-year bond 15.16% in Sep 2026) are reported alongside the NBU policy rate."
+  },
+  {
+   "source": "3025502b-97c1-4ead-a1fc-425dd5d259b1",
+   "target": "70105f79-0292-49e9-a016-74095593dc79",
+   "name": "SETS",
+   "fact": "The NBU's policy rate stood at 16.00% as of October 2026."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "edf143b6-525b-45dc-93f7-2dcc426fc16f",
+   "name": "REPORTS_TERRITORIAL_CHANGE_FOR",
+   "fact": "ISW recorded Russia net-retaking ground after its ~73 km2 net loss since 2026-09-01 would raise the Full-scale war intensifies scenario"
+  },
+  {
+   "source": "95223a14-8307-4142-8446-54801bb7b086",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "IMPOSES_SANCTIONS_ON",
+   "fact": "The EU has imposed 30+ sanctions rounds on Russia since April 2025, claiming >€1 trillion deprived from Russia's war chest."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "aa17881e-28e5-4a58-9dc3-9a2b43af48d0",
+   "name": "OPPOSES",
+   "fact": "Russia's planned encirclement of Donetsk Oblast — Putin's stated objective since 2022 — was defeated; Russia remains in adversarial posture toward Ukraine over Donetsk Oblast."
+  },
+  {
+   "source": "e5334f13-7bd0-443c-8284-2c93093bdae7",
+   "target": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "name": "ALLIED_WITH",
+   "fact": "The US is aligned with Ukraine, as reflected in US aid votes supporting Ukraine's war effort as of October 2026."
+  },
+  {
+   "source": "b73c0f02-36c6-4a06-82ab-dfca5020512d",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "SUPPLIES_TO",
+   "fact": "China supplies Russia's war economy with $10.3 billion of CHPL exports, drone engines for Garpiya-A1, Silent Hunter laser, and strike-supporting satellite imagery; USCC calls China 'the decisive external enabler'"
+  },
+  {
+   "source": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "target": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "name": "OPPOSES",
+   "fact": "Russia demands Ukrainian demilitarization and a NATO ban; Ukraine refuses to surrender Donbas [S57][S58]（sign=-，strength=0.9，valence=adversarial，polarity=-0.90）"
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "e5334f13-7bd0-443c-8284-2c93093bdae7",
+   "name": "PROVIDES_MILITARY_AID_TO",
+   "fact": "The United States has assured Ukraine strong security guarantees in the resumed negotiation process, per Zelensky restating on October 21, 2026 a position held since November 2024 that he is ready to freeze the current frontline for an immediate ceasefire with US and European guarantees to follow."
+  },
+  {
+   "source": "f8126ebe-b502-4e35-a150-9e55875eb276",
+   "target": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "name": "INFLUENCES",
+   "fact": "Diesel waiver through April 2027; Graham Act principal sanctions waived [S62][S4]（sign=+，strength=0.6，valence=transactional，polarity=0.20）"
+  },
+  {
+   "source": "f8126ebe-b502-4e35-a150-9e55875eb276",
+   "target": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "name": "PROVIDES_MILITARY_AID_TO",
+   "fact": "The Trump administration provides aid to Ukraine while pressing for a negotiated end to the war (Rubio, May 2026)."
+  },
+  {
+   "source": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "STATED_OBJECTIVE_OF",
+   "fact": "Encircling Donetsk Oblast has been Vladimir Putin's stated objective for Russia since 2022."
+  },
+  {
+   "source": "2a45bcd1-6514-44b3-8a1f-2a34e2bab7e7",
+   "target": "302d0c05-a3fb-43d3-a955-3038fd79e55c",
+   "name": "PUBLISHES_SERIES",
+   "fact": "FRED publishes the 'Global price of Natural gas, EU — Euro area' series (PNGASEUUSDM)."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "name": "AGREED_TO_RESUME_PEACE_TALKS_WITH",
+   "fact": "On October 21, 2026, Putin agreed to resume three-way peace talks with Ukraine and the US (Reuters)."
+  },
+  {
+   "source": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "OPPOSES",
+   "fact": "Zelensky maintains a standing offer to freeze the frontline against Russia, amid Russian net territorial losses since September 2026."
+  },
+  {
+   "source": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "target": "95223a14-8307-4142-8446-54801bb7b086",
+   "name": "SUPPORTS_PARTNERSHIP_WITH",
+   "fact": "Zelenskyy stated that Ukraine and the EU together will match or even surpass Russia's artillery output."
+  },
+  {
+   "source": "95223a14-8307-4142-8446-54801bb7b086",
+   "target": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "name": "ALLIED_WITH",
+   "fact": "The EU is aligned with Ukraine, with EU sanctions rounds supporting Ukraine's position in the war as of October 2026."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "b73c0f02-36c6-4a06-82ab-dfca5020512d",
+   "name": "SUPPLIES_TO",
+   "fact": "China supplied $10.3 billion in common-high-priority exports to Russia, described as 'the decisive external enabler' of Russia's war capacity"
+  },
+  {
+   "source": "2a45bcd1-6514-44b3-8a1f-2a34e2bab7e7",
+   "target": "78ca3cac-fb8e-457d-9b5e-88dfc4d955f0",
+   "name": "PUBLISHES_SERIES",
+   "fact": "FRED publishes the Nominal Broad U.S. Dollar Index series (DTWEXBGS)."
+  },
+  {
+   "source": "7e3d5edc-3978-4217-9a3f-8c455b975cbd",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "SUSTAINS_REVENUE_OF",
+   "fact": "Brent at 102.0181 USD/barrel in September 2026 keeps Russian oil and gas revenues buoyant despite the price cap, with October 2026 federal oil and gas tax revenue near 1 trillion roubles."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "6a6ebfd8-a559-4957-877b-72a6e7693ba0",
+   "name": "DEPLOYED",
+   "fact": "Russia flew 6,732 Shahed-type UAVs in September 2026 (ISIS full-month reconstruction 7,400–7,700), now flown day and night."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "30648daa-4e88-428e-aa02-ccdd79fbf4bb",
+   "name": "DEPLOYED",
+   "fact": "On the night of October 19, 2026 Russia used Iskander-M/S-400 missiles with 269 strike drones, 59 jet-powered."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "aea2410b-e544-4f50-8807-b79b31e2f00d",
+   "name": "DEPLOYED",
+   "fact": "On the night of October 19, 2026 Russia used Iskander-K missiles with 269 strike drones, 59 jet-powered."
+  },
+  {
+   "source": "b73c0f02-36c6-4a06-82ab-dfca5020512d",
+   "target": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "name": "SUPPLIES",
+   "fact": "USCC: 'the decisive external enabler of Russia's war in Ukraine' [S63]（sign=+，strength=0.7，valence=directional，polarity=0.50）"
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "481bd64f-d130-48fc-8e9b-6afe7542c0cf",
+   "name": "CONTROLS",
+   "fact": "Russia controls pre-2022 Donbas, included in its held territory as of October 21, 2026"
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "726041e2-6c3f-4c4e-b460-c5b87e30e955",
+   "name": "CONTROLS",
+   "fact": "Russia controls Crimea, included in its ~45,196 sq mi of held territory as of October 21, 2026"
+  },
+  {
+   "source": "d866c1d3-3cd6-4ac5-9bf8-7d822c8fad9a",
+   "target": "d866c1d3-3cd6-4ac5-9bf8-7d822c8fad9a",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Steve Witkoff 亦称 Witkoff"
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "3025502b-97c1-4ead-a1fc-425dd5d259b1",
+   "name": "GOVERNS_MONETARY_POLICY_OF",
+   "fact": "The National Bank of Ukraine serves as Ukraine's central bank"
+  },
+  {
+   "source": "a53fb657-b7dc-4983-8680-c41025bfc2aa",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "PUBLISHED_REPORT_ON",
+   "fact": "Russia Matters published the Russia-Ukraine War Report Card on October 14, 2026, covering Russia's war in Ukraine."
+  },
+  {
+   "source": "b73c0f02-36c6-4a06-82ab-dfca5020512d",
+   "target": "b73c0f02-36c6-4a06-82ab-dfca5020512d",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "China (Xi Jinping) 亦称 China"
+  },
+  {
+   "source": "a7302c06-d32a-4777-82be-28386fa3ce5b",
+   "target": "30f944f8-93dc-4754-b266-6b458226e799",
+   "name": "ANALYZES",
+   "fact": "The Carnegie Endowment notes that the fiscal rule's optimistic $53/bbl cutoff has the Russian ministry buying FX for the NWF while borrowing at 14–15%, costing ~45 billion roubles a year, alongside a 459-billion-rouble NWF drawdown (~11% of liquid assets) in 2026."
+  },
+  {
+   "source": "8cb8f848-d658-47bb-8dbd-8838cec61a91",
+   "target": "95223a14-8307-4142-8446-54801bb7b086",
+   "name": "SUPPLIES",
+   "fact": "2026 goal of matching Russia's ~7 million shells/year; EU procuring ≥€3 billion from US firms in H1 2026 [S39][S35]（sign=+，strength=0.5，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "target": "93cb086b-d484-4696-a5c9-f69cadd94475",
+   "name": "SUGGESTS_MEETING_WITH",
+   "fact": "Putin raised a possible Trump–Xi meeting at his ninth in-person meeting with Steve Witkoff on October 21, 2026."
+  },
+  {
+   "source": "95223a14-8307-4142-8446-54801bb7b086",
+   "target": "95223a14-8307-4142-8446-54801bb7b086",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "European Union / European Commission 亦称 EU"
+  },
+  {
+   "source": "3025502b-97c1-4ead-a1fc-425dd5d259b1",
+   "target": "3025502b-97c1-4ead-a1fc-425dd5d259b1",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "National Bank of Ukraine 亦称 NBU"
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "5e9c04e2-7e3a-4da1-a8a3-e1932dcada9f",
+   "name": "STRUCK_TERRITORIAL_WATERS_OF",
+   "fact": "Likely Russian drones struck four civilian vessels, two of them tankers, in Romanian territorial waters on October 15, 2026."
+  },
+  {
+   "source": "b29ed7db-4a49-4ffa-ad51-b2d8b6abb8ec",
+   "target": "b29ed7db-4a49-4ffa-ad51-b2d8b6abb8ec",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Turkish government (Erdogan) 亦称 Erdogan"
+  },
+  {
+   "source": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "target": "d866c1d3-3cd6-4ac5-9bf8-7d822c8fad9a",
+   "name": "HOLDS_TALKS_WITH",
+   "fact": "Putin agreed to fresh peace talks with US envoy Witkoff, hours before massive strikes hit Kyiv"
+  },
+  {
+   "source": "aca8d423-f86c-402b-b74a-7e36ccfc421e",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "PUBLISHED_REPORT_ON",
+   "fact": "The Institute for the Study of War published Russian Offensive Campaign Assessments on Russia's war in Ukraine, including assessments dated October 7, 2026 and October 15, 2026."
+  },
+  {
+   "source": "7b79483e-dd78-4bff-a70a-e2b52276080e",
+   "target": "30f944f8-93dc-4754-b266-6b458226e799",
+   "name": "CONTRIBUTES_TO",
+   "fact": "The Russian Ministry of Finance buys foreign exchange for the NWF under the fiscal rule (with a $53/bbl cutoff) while borrowing at 14–15%, costing ~45 billion roubles a year, per the Carnegie Endowment."
+  },
+  {
+   "source": "7b79483e-dd78-4bff-a70a-e2b52276080e",
+   "target": "7b79483e-dd78-4bff-a70a-e2b52276080e",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Russian Ministry of Finance 亦称 MinFin"
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "5eaed25e-f7a0-4ed3-b84c-8784be351063",
+   "name": "OPPOSES",
+   "fact": "Russia's reported terms demand that Ukraine pledge never to join NATO, opposing Ukrainian NATO membership."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "TARGETS",
+   "fact": "Moscow launched Iskander missiles plus 269 drones at Ukraine on 19 October 2026, hours after agreeing to talks"
+  },
+  {
+   "source": "11aa7ee6-d8f0-4fa7-87b8-99b3f0899194",
+   "target": "f8126ebe-b502-4e35-a150-9e55875eb276",
+   "name": "COMPETES_WITH",
+   "fact": "Graham Act adopted then waived; backlash pushing binding legislation [S61][S4]（sign=-，strength=0.5，valence=adversarial，polarity=-0.40）"
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "aa17881e-28e5-4a58-9dc3-9a2b43af48d0",
+   "name": "CONTESTS_CONTROL_OF",
+   "fact": "Ukraine is forecast at 35% probability to control more territory on 2027-12-31 than on 2027-01-01, having net-liberated about 1,080 km2 in 2026 to Oct 21 per ISW."
+  },
+  {
+   "source": "02ea39bb-ff53-4040-a795-72372739a5ba",
+   "target": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "name": "DEPENDS_ON",
+   "fact": "Offensive tempo serves Putin's Donetsk objective [S1]（sign=+，strength=0.7，valence=directional，polarity=0.40）"
+  },
+  {
+   "source": "2cc49f6f-77d9-43aa-835d-91ae76f21853",
+   "target": "a5e58bda-ea48-4dea-9145-855398ac428c",
+   "name": "CONDUCTED_IN",
+   "fact": "Operation Vivaldi was conducted by Ukraine in the Lyman direction, defeating the northern pincer of Russia's planned encirclement of Donetsk Oblast"
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "name": "OPPOSES",
+   "fact": "Zelenskyy said Ukraine is ready to freeze the conflict along the current front line and move to diplomacy with Russia"
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "93cb086b-d484-4696-a5c9-f69cadd94475",
+   "name": "ARRANGES_DIESEL_DEAL_WITH",
+   "fact": "Trump's October 9, 2026 diesel arrangement has Russia shipping over 300,000 metric tons of diesel immediately and over 3 million tons to follow under a Treasury waiver through April 2027."
+  },
+  {
+   "source": "7e3d5edc-3978-4217-9a3f-8c455b975cbd",
+   "target": "78ca3cac-fb8e-457d-9b5e-88dfc4d955f0",
+   "name": "CO_MOVES_WITH",
+   "fact": "As of September 2026, official series show Brent Crude at 102.0181 U.S. dollars per barrel and the Nominal Broad U.S. Dollar Index at 119.2152 (Jan 2006=100), levels embedding a geopolitical premium consistent with war continuation."
+  },
+  {
+   "source": "e9a130f3-bf87-437e-a7f8-aa65c5771e19",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "HAS_ATTRIBUTE",
+   "fact": "A signpost for the view on Russia would be eurobonds trading above 65 cents."
+  },
+  {
+   "source": "e84bcd42-8473-4458-a040-a8b40a4408bb",
+   "target": "e84bcd42-8473-4458-a040-a8b40a4408bb",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "G7 / price-cap coalition 亦称 price-cap coalition"
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "95223a14-8307-4142-8446-54801bb7b086",
+   "name": "IMPOSES_SANCTIONS_ON",
+   "fact": "The International Crisis Group lists the EU's leverage over Russia as sanctions relief, frozen Russian assets and reconstruction support."
+  },
+  {
+   "source": "b29ed7db-4a49-4ffa-ad51-b2d8b6abb8ec",
+   "target": "c772b6af-29d2-4148-8c1c-1a8da0d8f64f",
+   "name": "IS_A",
+   "fact": "Potential mediator and Black Sea trade gatekeeper；- 角色定位: Potential mediator and Black Sea trade gatekeeper；- 立场: Not active in the current trilateral channel per the evidence；- 影响力: low；- 目标/动机: Mediation relevance；Black Sea trade interests；- 约束: Diplomacy runs through the US channel；- 资源/能力: Black Sea position；- 言行差异: No stated position in evidence; role remains latent.；- 已知事实/记忆: No documented "
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "95223a14-8307-4142-8446-54801bb7b086",
+   "name": "ALLIED_WITH",
+   "fact": "EU plans to press Canada and the UK for more Ukraine funding, supporting Ukraine's financing"
+  },
+  {
+   "source": "b73c0f02-36c6-4a06-82ab-dfca5020512d",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "ALLIED_WITH",
+   "fact": "The USCC China-Russia fact sheet (August 2026) describes the China-Russia relationship"
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "OPPOSES",
+   "fact": "Russia remains at war with Ukraine, holding about 45,196 square miles (~19%) of Ukrainian territory as of late October 2026, after net-gaining 753 sq mi in the 12 months to October 19, 2026 but net-losing ground since September 1, 2026."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "77157c5f-65d1-4b69-ac62-20e51a85639d",
+   "name": "REPORTS_ON",
+   "fact": "DeepState (with ISW) territorial tracking showing Russian net gains above the 74 sq mi/month trailing average would signal the Full-scale war intensifies scenario"
+  },
+  {
+   "source": "85d17936-baef-429e-8963-aa22af20837c",
+   "target": "3025502b-97c1-4ead-a1fc-425dd5d259b1",
+   "name": "SETS_OFFICIAL_RATE_OF",
+   "fact": "The NBU set the official UAH/USD exchange rate at about UAH 47.1 per USD as of 1 October 2026."
+  },
+  {
+   "source": "bc0a5f4b-2233-444a-9c7a-9fe6a098c9e2",
+   "target": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "name": "PROVIDES_MILITARY_AID_TO",
+   "fact": "The UK has committed £25 billion to Ukraine."
+  },
+  {
+   "source": "95223a14-8307-4142-8446-54801bb7b086",
+   "target": "216cf16b-e376-4a4f-88a9-4ed7dbb11795",
+   "name": "CRITICIZES",
+   "fact": "The European Commission called the US waiving of the Graham Act's principal sanctions, restrictions and tariffs \"regrettable\"."
+  },
+  {
+   "source": "986bd85f-34cc-41ba-98b8-ad8a35cf0e46",
+   "target": "7b79483e-dd78-4bff-a70a-e2b52276080e",
+   "name": "RELAYS_DATA_FROM",
+   "fact": "A Reuters calculation based on Russian Ministry of Finance data puts October 2026 federal oil and gas tax revenue near 1 trillion roubles (~$11.97 billion), up 10% year-on-year."
+  },
+  {
+   "source": "95223a14-8307-4142-8446-54801bb7b086",
+   "target": "f8126ebe-b502-4e35-a150-9e55875eb276",
+   "name": "COMPETES_WITH",
+   "fact": "Commission called US waivers 'regrettable'; 30+ EU rounds vs US waivers [S4]（sign=-，strength=0.6，valence=adversarial，polarity=-0.40）"
+  },
+  {
+   "source": "f8126ebe-b502-4e35-a150-9e55875eb276",
+   "target": "216cf16b-e376-4a4f-88a9-4ed7dbb11795",
+   "name": "WAIVED_SANCTIONS_UNDER",
+   "fact": "The Trump Administration waived the sanctions and tariffs required on Russia under the Graham Act, per an EEAS Commission statement."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "95223a14-8307-4142-8446-54801bb7b086",
+   "name": "IMPOSES_SANCTIONS_ON",
+   "fact": "The EU has imposed successive sanctions rounds against Russia, with further EU sanctions rounds a leading indicator as of October 2026."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "name": "OPPOSES",
+   "fact": "Russia's reported demands include sharp Ukrainian force cuts and a permanent NATO-membership ban for Ukraine, positions that stall trilateral talks."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "10eb270a-5da1-4569-9ed4-a564d23584e5",
+   "name": "DEPLOYED",
+   "fact": "On the night of October 19, 2026 Russia used S-400 missiles in surface-to-surface mode alongside 269 strike drones."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "edf143b6-525b-45dc-93f7-2dcc426fc16f",
+   "name": "REPORTS_ON",
+   "fact": "ISW territorial assessments, alongside DeepState data, are used to detect whether Russian net gains exceed the 74 sq mi/month trailing average"
+  },
+  {
+   "source": "f525d47b-6e8d-4dcd-93ff-021ea9760bb6",
+   "target": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "name": "PROVIDES_MILITARY_AID_TO",
+   "fact": "Canada has provided €5.4 billion in military and €8.2 billion in financial support to Ukraine."
+  },
+  {
+   "source": "8398d394-3bb3-4e36-b1c5-f3dbf2a7d3d2",
+   "target": "302d0c05-a3fb-43d3-a955-3038fd79e55c",
+   "name": "PUBLISHES_PRICE_SERIES_FOR",
+   "fact": "The IMF series shows the EU natural gas price at 17.93 U.S. dollars per million BTU in July 2026, up from 9.46 in December 2025."
+  },
+  {
+   "source": "8398d394-3bb3-4e36-b1c5-f3dbf2a7d3d2",
+   "target": "d1d5e5d1-60ef-416d-a346-6f16d36097b5",
+   "name": "OPERATES",
+   "fact": "The IMF operates a 48-month Extended Fund Facility programme for Ukraine of SDR 5.9353 billion (~US$8.1 billion, 295% of quota), with ~US$1.5 billion disbursed at approval on 26 Feb 2026 and the first review completed by 20 Jul 2026."
+  },
+  {
+   "source": "e5334f13-7bd0-443c-8284-2c93093bdae7",
+   "target": "c70ce8a4-2443-40f1-9183-4313c11c8269",
+   "name": "NEGOTIATED_IN",
+   "fact": "The United States took part in Round 3 talks with Ukraine and Russia in Geneva on February 17–18, 2026; the channel lapsed as the US and Israel launched a war against Iran."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "a7302c06-d32a-4777-82be-28386fa3ce5b",
+   "name": "REPORTS_ON",
+   "fact": "The Carnegie Endowment published an analysis (September 2026) of who is funding Russia's war in the 2027 budget."
+  },
+  {
+   "source": "2819998c-fe5c-4a0d-a24f-47d4f597afcb",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "REPORTS_COMBAT_LOSSES_OF",
+   "fact": "The Ministry of Defence of Ukraine published total Russian combat losses in Ukraine as of October 21, 2026."
+  },
+  {
+   "source": "e5334f13-7bd0-443c-8284-2c93093bdae7",
+   "target": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "name": "PROVIDES_MILITARY_AID_TO",
+   "fact": "US aid votes to Ukraine are tracked as a leading indicator, with US military aid to Ukraine ongoing as of October 2026."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "d0c9b50e-e8b8-4729-8932-ee41aa5b367c",
+   "name": "TRACKS_SUPPORT_FOR",
+   "fact": "The Kiel Institute's Ukraine Support Tracker reported that Europe leads on aid to Ukraine while US weapons remain key."
+  },
+  {
+   "source": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "target": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Volodymyr Zelensky 亦称 Zelensky"
+  },
+  {
+   "source": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "target": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Volodymyr Zelensky 亦称 Zelenskyy"
+  },
+  {
+   "source": "edf143b6-525b-45dc-93f7-2dcc426fc16f",
+   "target": "aa17881e-28e5-4a58-9dc3-9a2b43af48d0",
+   "name": "ASSESSES_OFFENSIVE_AS_DEFEATED",
+   "fact": "ISW rates Russia's offensive to seize Donetsk Oblast 'operationally defeated', with only 10% forecast probability Russia completes seizure of Donetsk Oblast by 2027-12-31."
+  },
+  {
+   "source": "f38f1760-a5c5-494c-b217-3f08fdf778d8",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "CAUSES_PRICE_MOVE_IN",
+   "fact": "Russian war-state shifts (e.g., renewed Russian net territorial gains per ISW/DeepState) are signposted by TTF sustained below ~70 EUR/MWh."
+  },
+  {
+   "source": "edf143b6-525b-45dc-93f7-2dcc426fc16f",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "ASSESSES_OFFENSIVE_DEFEATED",
+   "fact": "ISW judges Russia's Donetsk offensive 'operationally defeated' as of October 21, 2026."
+  },
+  {
+   "source": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "target": "481bd64f-d130-48fc-8e9b-6afe7542c0cf",
+   "name": "STATED_OBJECTIVE_TO_ENCLOSE",
+   "fact": "Putin's stated objective since 2022 was the encirclement of Donetsk Oblast; ISW judged that offensive 'operationally defeated' as of October 21, 2026"
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "c70ce8a4-2443-40f1-9183-4313c11c8269",
+   "name": "NEGOTIATED_IN",
+   "fact": "Ukraine took part in Round 3 talks with the US and Russia in Geneva on February 17–18, 2026."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "91b0298c-44cf-41d6-a09b-ee8eec7d12ac",
+   "name": "ASSESSES",
+   "fact": "The International Crisis Group lists the EU's leverage over Russia as sanctions relief, frozen Russian assets and reconstruction support."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "c70ce8a4-2443-40f1-9183-4313c11c8269",
+   "name": "NEGOTIATED_IN",
+   "fact": "Russia took part in Round 3 talks with the US and Ukraine in Geneva on February 17–18, 2026."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "481bd64f-d130-48fc-8e9b-6afe7542c0cf",
+   "name": "CONTROLS",
+   "fact": "Russia controls pre-2022 Donbas territory as part of its holdings of about 19% of Ukraine in late October 2026."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "AGREED_TO_RESUME_TALKS_WITH",
+   "fact": "On October 21, 2026, after Putin's ninth in-person meeting with US envoy Steve Witkoff at the Constantine Palace in St Petersburg, the Kremlin agreed to resume trilateral talks with Ukraine at technical level, possibly in Abu Dhabi, from on or after November 10, 2026, focused on post-war security guarantees"
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "name": "OPPOSES",
+   "fact": "Russia remains at war with Ukraine, with the fighting continuing as of October 2026 under scenarios of continued attrition."
+  },
+  {
+   "source": "f8126ebe-b502-4e35-a150-9e55875eb276",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "MEDIATES_WITH",
+   "fact": "Witkoff conducted his ninth in-person meeting with Putin on 21 October 2026 as part of US mediation with Russia."
+  },
+  {
+   "source": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "target": "d866c1d3-3cd6-4ac5-9bf8-7d822c8fad9a",
+   "name": "MEETS",
+   "fact": "Putin held his ninth in-person meeting with Steve Witkoff on October 21, 2026, offering US cooperation on Iran and fertiliser."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "216cf16b-e376-4a4f-88a9-4ed7dbb11795",
+   "name": "TARGETS",
+   "fact": "The Graham Act, adopted by Washington in September 2026 seventeen months after its April 2025 introduction, is a sanctions regime targeting Russia."
+  },
+  {
+   "source": "f8126ebe-b502-4e35-a150-9e55875eb276",
+   "target": "f8126ebe-b502-4e35-a150-9e55875eb276",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Donald Trump administration 亦称 White House"
+  },
+  {
+   "source": "b73c0f02-36c6-4a06-82ab-dfca5020512d",
+   "target": "b73c0f02-36c6-4a06-82ab-dfca5020512d",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "China (Xi Jinping) 亦称 Xi Jinping"
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "c4f35536-05ab-4b5a-ac9a-48fe87ee0a72",
+   "name": "NEGOTIATED_IN",
+   "fact": "Russia, together with the United States and Ukraine, held Round 1 trilateral talks in Abu Dhabi in early 2026, which closed with no agreement on ceasefire, territory, Zaporizhzhia NPP or security guarantees, ending with a prisoner exchange."
+  },
+  {
+   "source": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "target": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Vladimir Putin 亦称 Putin"
+  },
+  {
+   "source": "4d3e875d-ea54-4469-b9d9-c649a0f9796f",
+   "target": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "name": "PUBLISHED_REPORT_ON",
+   "fact": "The OHCHR Ukraine Human Rights Monitoring Mission published a report on protection of civilians in armed conflict in Ukraine in September 2026."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "95223a14-8307-4142-8446-54801bb7b086",
+   "name": "PROVIDES_MILITARY_AID_TO",
+   "fact": "The European Union provides 80% of Ukraine's external aid via a €90 billion 2026–27 loan."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "0a9ba969-7ad5-47c7-9680-db57440d79c5",
+   "name": "IMPOSES_SANCTIONS_ON",
+   "fact": "The EU's Foreign Affairs Council adopted Russia sanctions rounds at each of its last ten meetings between April 2025 and September 2026, part of over thirty rounds."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "e5334f13-7bd0-443c-8284-2c93093bdae7",
+   "name": "ALLIED_WITH",
+   "fact": "The United States gave assurances of strong security guarantees to Ukraine, relayed by Zelenskyy on October 20, 2026."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "5e9c04e2-7e3a-4da1-a8a3-e1932dcada9f",
+   "name": "STRUCK_TERRITORIAL_WATERS_OF",
+   "fact": "On October 15, 2026, likely Russian drones struck two commercial tankers in Romanian territorial waters."
+  },
+  {
+   "source": "23a4a6f3-a32d-4ac7-a7b1-9408ff47ecaf",
+   "target": "7e3d5edc-3978-4217-9a3f-8c455b975cbd",
+   "name": "HAS_PRICE_ASSUMPTION_OF",
+   "fact": "On 22 September 2026 Fitch raised its 2027 Brent Crude assumption to USD70/barrel, up from USD65, a rating-case assumption of geopolitical premium decay."
+  },
+  {
+   "source": "7be71449-2949-48da-980a-c58939346ac1",
+   "target": "23a4a6f3-a32d-4ac7-a7b1-9408ff47ecaf",
+   "name": "HAS_OBSERVED_ANCHOR_AT",
+   "fact": "Observed anchor: Brent stood at 102.0181 USD/bbl in September 2026, versus Fitch's rating-case USD70/bbl 2027 assumption"
+  },
+  {
+   "source": "4ea4d4a5-0d1f-4624-ac81-2e38bf3ac13d",
+   "target": "2cc49f6f-77d9-43aa-835d-91ae76f21853",
+   "name": "OPERATED_IN",
+   "fact": "Operation Vivaldi in the Lyman direction defeated the northern pincer of Russia's planned encirclement of Donetsk Oblast as of October 21, 2026."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "726041e2-6c3f-4c4e-b460-c5b87e30e955",
+   "name": "CONTROLS",
+   "fact": "Russia controls Crimea as part of roughly 45,196 square miles (~19% of Ukraine) held as of late October 2026."
+  },
+  {
+   "source": "3025502b-97c1-4ead-a1fc-425dd5d259b1",
+   "target": "fabd6734-9185-42e3-ad21-fac825907ef4",
+   "name": "PUBLISHES_RATE_FOR",
+   "fact": "Ukrainian one-year bond yield was 15.16% in September 2026, per NBU-related domestic rates data."
+  },
+  {
+   "source": "95223a14-8307-4142-8446-54801bb7b086",
+   "target": "e5334f13-7bd0-443c-8284-2c93093bdae7",
+   "name": "ALLIED_WITH",
+   "fact": "The US and Europe are jointly preparing a peace plan to improve the post-war state of Ukraine (reported October 13, 2026)"
+  },
+  {
+   "source": "e5334f13-7bd0-443c-8284-2c93093bdae7",
+   "target": "c70ce8a4-2443-40f1-9183-4313c11c8269",
+   "name": "HELD_MEETINGS_IN",
+   "fact": "2026 United States–Ukraine–Russia meetings were held in Geneva"
+  },
+  {
+   "source": "e5334f13-7bd0-443c-8284-2c93093bdae7",
+   "target": "95223a14-8307-4142-8446-54801bb7b086",
+   "name": "JOINT_PLAN_WITH",
+   "fact": "A reported joint US-European four-point plan (October 13, 2026 reporting; content unverified) envisages territorial concessions from both sides, security guarantees and economic/security agreements, including a deal with Europe."
+  },
+  {
+   "source": "f8126ebe-b502-4e35-a150-9e55875eb276",
+   "target": "f8126ebe-b502-4e35-a150-9e55875eb276",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Donald Trump administration 亦称 Trump administration"
+  },
+  {
+   "source": "8398d394-3bb3-4e36-b1c5-f3dbf2a7d3d2",
+   "target": "302d0c05-a3fb-43d3-a955-3038fd79e55c",
+   "name": "PUBLISHES_PRICE_SERIES_FOR",
+   "fact": "The IMF/FRED official series shows EU natural gas at 17.93 U.S. dollars per million BTU in July 2026, against 11.4706 in July 2025."
+  },
+  {
+   "source": "95223a14-8307-4142-8446-54801bb7b086",
+   "target": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "name": "FUNDS",
+   "fact": "€11 billion allocated May–June 2026; €70 billion 2027 gap open [S51][S35]（sign=+，strength=0.8，valence=allied，polarity=0.80）"
+  },
+  {
+   "source": "5eaed25e-f7a0-4ed3-b84c-8784be351063",
+   "target": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "name": "SUPPORTS",
+   "fact": "Represented at Oslo preparatory meeting; membership effectively off the table under current terms [S6][S57]（sign=+，strength=0.5，valence=allied，polarity=0.60）"
+  },
+  {
+   "source": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "target": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "name": "OPPOSES",
+   "fact": "Putin's reported demand is that Ukraine drastically shrinks its army and forswears NATO membership; his maximal aim is full seizure of Donetsk Oblast, his stated objective since 2022."
+  },
+  {
+   "source": "0cbff2e3-1a1f-40fe-8718-f3e55dd321d0",
+   "target": "7e3d5edc-3978-4217-9a3f-8c455b975cbd",
+   "name": "FORECASTS_PRICE_OF",
+   "fact": "VEB's baseline Brent assumption is $46/bbl (stress scenario $41/bbl), which the Carnegie Endowment notes is far below the fiscal rule's $53/bbl cutoff."
+  },
+  {
+   "source": "f8126ebe-b502-4e35-a150-9e55875eb276",
+   "target": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "name": "INFLUENCES",
+   "fact": "US assures strong security guarantees; Starlink/Starshield access conditional [S65][S61][S1]（sign=+，strength=0.6，valence=directional，polarity=0.10）"
+  },
+  {
+   "source": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "OPPOSES",
+   "fact": "Zelensky insists Russia is not winning, seeking a freeze along the current line plus US/European guarantees (offer held since November 2024)."
+  },
+  {
+   "source": "216cf16b-e376-4a4f-88a9-4ed7dbb11795",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "TARGETS",
+   "fact": "The Graham Act is a sanctions regime legally targeting Russia, requiring sanctions and tariffs on Russia."
+  },
+  {
+   "source": "a5e58bda-ea48-4dea-9145-855398ac428c",
+   "target": "7fff4f1b-0dac-4d70-a699-429247edddd0",
+   "name": "IS_A",
+   "fact": "Determines defensive sustainability and mobilization needs；- 角色定位: Determines defensive sustainability and mobilization needs；- 立场: Hold the line and exploit Russian weakness (Operation Vivaldi)；- 影响力: high；- 目标/动机: Sustain defense and counteroffensive initiative；Maintain interception capacity (85.59% drones, 69.84% cruise missiles, 0% ballistic in September 2026)；- 约束: Ballistic missile intercept"
+  },
+  {
+   "source": "eb113cb0-d20d-4c1c-9076-668e6cdb364d",
+   "target": "216cf16b-e376-4a4f-88a9-4ed7dbb11795",
+   "name": "WAIVED_SANCTIONS_UNDER",
+   "fact": "The US Treasury waived the Graham Act's principal sanctions, restrictions and tariffs against Russia under Trump's October 9, 2026 diesel arrangement, which has Russia shipping over 300,000 metric tons immediately and over 3 million tons through April 2027."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "95223a14-8307-4142-8446-54801bb7b086",
+   "name": "IMPOSES_SANCTIONS_ON",
+   "fact": "The EU adopted over thirty Russia sanctions rounds between April 2025 and September 2026 — at each of the last ten Foreign Affairs Councils — and claims over €1 trillion denied to Russia's war chest."
+  },
+  {
+   "source": "e5334f13-7bd0-443c-8284-2c93093bdae7",
+   "target": "c66ec558-4560-44c5-ab51-33697aba1073",
+   "name": "IMPOSES_SANCTIONS_ON",
+   "fact": "The US diesel waiver under oil-sanctions relief is waived through April 2027 (reported); forecast 25% probability that US oil-sanctions relief broadens beyond the diesel waiver by 2027-07-01."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "95223a14-8307-4142-8446-54801bb7b086",
+   "name": "PROVIDES_MILITARY_AID_TO",
+   "fact": "Per a Zelenskyy statement cited in the source list, Ukraine and the EU will match or even surpass Russia's artillery ammunition production, implying continued EU military support to Ukraine."
+  },
+  {
+   "source": "b407aa36-f52e-49c0-bf26-3b2484251479",
+   "target": "7b79483e-dd78-4bff-a70a-e2b52276080e",
+   "name": "ANALYZES_DATA_OF",
+   "fact": "Ukraine's foreign intelligence, using Russian MinFin data, counts $57.97 billion in Russian oil and gas revenue for January–August 2026, 16.7% lower year-on-year."
+  },
+  {
+   "source": "e84bcd42-8473-4458-a040-a8b40a4408bb",
+   "target": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "name": "SANCTIONS",
+   "fact": "Enforcement statistics unknown; coalition split between US waivers and EU rounds [S4][S62]（sign=-，strength=0.4，valence=adversarial，polarity=-0.50）"
+  },
+  {
+   "source": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "target": "ee5cfb7f-b87c-4479-8bfe-b9ff3dec8745",
+   "name": "SUGGESTS_MEETING_WITH",
+   "fact": "Putin raised a possible Trump–Xi meeting at his ninth in-person meeting with Steve Witkoff on October 21, 2026."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "8398d394-3bb3-4e36-b1c5-f3dbf2a7d3d2",
+   "name": "PROVIDES_MILITARY_AID_TO",
+   "fact": "IMF Executive Board approved US$8.1 billion under an Extended Fund Facility (EFF) arrangement for Ukraine"
+  },
+  {
+   "source": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "target": "bef7eb27-9da1-4a8b-9ab6-609a6f96470b",
+   "name": "OFFERS_COOPERATION_REGARDING",
+   "fact": "At his October 21, 2026 meeting with Steve Witkoff, Putin offered US cooperation on Iran (bundled with fertiliser items)."
+  },
+  {
+   "source": "93cb086b-d484-4696-a5c9-f69cadd94475",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "OPPOSES",
+   "fact": "Republican backlash over Trump's Russia policy poses a challenge for him in Congress (Reuters, October 22, 2026)"
+  },
+  {
+   "source": "c66ec558-4560-44c5-ab51-33697aba1073",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "TARGETS",
+   "fact": "The US oil-sanctions regime, with its diesel waiver waived through April 2027, targets Russia."
+  },
+  {
+   "source": "585c05bc-260e-40aa-80af-317b35350e6f",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "REPORTS_STRIKE_TEMPO_OF",
+   "fact": "Ukrainian Air Force monthly summaries reported 6,732 Shahed-type drones launched by Russia in September 2026."
+  },
+  {
+   "source": "216cf16b-e376-4a4f-88a9-4ed7dbb11795",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "TARGETS",
+   "fact": "The Graham Act, adopted September 2026, targets Russia, though its principal sanctions were waived."
+  },
+  {
+   "source": "0cbff2e3-1a1f-40fe-8718-f3e55dd321d0",
+   "target": "7be71449-2949-48da-980a-c58939346ac1",
+   "name": "PUBLISHES_BASELINE_PRICE_FOR",
+   "fact": "VEB uses a Brent crude baseline of $46 per barrel, below which the report's $53/bbl cutoff scenario would be tested"
+  },
+  {
+   "source": "4ea4d4a5-0d1f-4624-ac81-2e38bf3ac13d",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "OPPOSES",
+   "fact": "Ukraine's Lyman counteroffensive liberated at least 277 km2 from Russian control."
+  },
+  {
+   "source": "7b79483e-dd78-4bff-a70a-e2b52276080e",
+   "target": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "name": "DEPENDS_ON",
+   "fact": "17.1-trillion-rouble 2027 defence draft; 50 trillion roubles 2027–29 [S43]（sign=+，strength=0.7，valence=directional，polarity=0.40）"
+  },
+  {
+   "source": "23a4a6f3-a32d-4ac7-a7b1-9408ff47ecaf",
+   "target": "7be71449-2949-48da-980a-c58939346ac1",
+   "name": "FORECASTS_PRICE_OF",
+   "fact": "Fitch's 22 September 2026 rating-case assumes Brent at USD70/bbl for 2027, raised from USD65, plus higher European gas assumptions on a geopolitical risk premium"
+  },
+  {
+   "source": "11aa7ee6-d8f0-4fa7-87b8-99b3f0899194",
+   "target": "f8126ebe-b502-4e35-a150-9e55875eb276",
+   "name": "OPPOSES",
+   "fact": "Congress may bind sanctions over White House objection, a potential change to the outlook"
+  },
+  {
+   "source": "edf143b6-525b-45dc-93f7-2dcc426fc16f",
+   "target": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "name": "ASSESSES",
+   "fact": "ISW assesses that Russia's offensive to encircle Donetsk Oblast, Putin's stated objective since 2022, was operationally defeated as of October 21, 2026."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "986bd85f-34cc-41ba-98b8-ad8a35cf0e46",
+   "name": "REPORTS_ON",
+   "fact": "Reuters exclusively reported (2026-09-28) that Russia raised 2027 military spending by 27% per budget documents, and that Russia's oil and gas revenue was seen up 10% y/y in October to about $12 billion."
+  },
+  {
+   "source": "a5e58bda-ea48-4dea-9145-855398ac428c",
+   "target": "a5e58bda-ea48-4dea-9145-855398ac428c",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Ukrainian Armed Forces Command 亦称 Ukrainian General Staff"
+  },
+  {
+   "source": "2a45bcd1-6514-44b3-8a1f-2a34e2bab7e7",
+   "target": "302d0c05-a3fb-43d3-a955-3038fd79e55c",
+   "name": "PUBLISHES_DATA_SERIES_FOR",
+   "fact": "Federal Reserve Economic Data (FRED) publishes the Global price of Natural gas, EU — Euro area series (PNGASEUUSDM)."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "8e00564e-cfe3-4889-bc13-a037b7dcdbca",
+   "name": "RELEASED",
+   "fact": "Russia released the retired US teacher Stephen Hubbard as goodwill bundled with offers of help on Iran and fertiliser supplies, not with movement on Ukraine terms."
+  },
+  {
+   "source": "7d99d769-57da-4ca1-9548-a64731d825a1",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "COUNTS_DEATHS_OF",
+   "fact": "Mediazona/Meduza's probate-based count, a lower bound covering deaths only, put Russian soldiers killed at 352,000 as of its May 2026 estimate."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "8c98057e-bc08-4ae9-8858-c3392c2b6002",
+   "name": "USED_WEAPON",
+   "fact": "Russia dropped a record 8,766 UMPK glide bombs in August 2026, as reported by MiGFlug."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "OPPOSES",
+   "fact": "Russia opposes Ukraine in active war; Russia net-gained 753 sq mi in the 12 months to Oct 19, 2026 but momentum collapsed with a net loss of 20 sq mi in October 13-19, 2026"
+  },
+  {
+   "source": "93cb086b-d484-4696-a5c9-f69cadd94475",
+   "target": "e5334f13-7bd0-443c-8284-2c93093bdae7",
+   "name": "CALLS_FOR_BUDGET_INCREASE_IN",
+   "fact": "Trump called for a higher US military budget, after which global defense stocks advanced (Reuters, January 8, 2026)"
+  },
+  {
+   "source": "e5334f13-7bd0-443c-8284-2c93093bdae7",
+   "target": "bef7eb27-9da1-4a8b-9ab6-609a6f96470b",
+   "name": "OPPOSES",
+   "fact": "The United States launched a war against Iran (together with Israel), causing the Geneva negotiation channel to lapse, per February 2026 reporting."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "e5334f13-7bd0-443c-8284-2c93093bdae7",
+   "name": "NEGOTIATES_WITH",
+   "fact": "On October 21, 2026 the US, Ukraine and Russia agreed to resume technical-level talks, possibly in Abu Dhabi, on or after November 10, 2026, on post-war security guarantees for both Ukraine and Russia."
+  },
+  {
+   "source": "bc6fba85-0498-4d14-b30f-4d4d2c5d1f3b",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "CLAIMS_LOSSES_AGAINST",
+   "fact": "Ukraine's General Staff, a belligerent source, claims about 1,570,540 Russian personnel losses plus 12,436 tanks, 51,403 artillery systems and 573,392 UAVs as of October 21, 2026 (1,820 on October 20) — far above independent figures."
+  },
+  {
+   "source": "f169bbd9-b1c7-4e6f-bd36-213256fa5088",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "REPORTED_ON",
+   "fact": "MiGFlug reported on Russia's record use of 8,766 UMPK glide bombs in August 2026."
+  },
+  {
+   "source": "8398d394-3bb3-4e36-b1c5-f3dbf2a7d3d2",
+   "target": "3025502b-97c1-4ead-a1fc-425dd5d259b1",
+   "name": "FUNDS",
+   "fact": "SDR 5.9353 billion facility; first review completed July 20, 2026 [S48]（sign=+，strength=0.6，valence=allied，polarity=0.70）"
+  },
+  {
+   "source": "3025502b-97c1-4ead-a1fc-425dd5d259b1",
+   "target": "85d17936-baef-429e-8963-aa22af20837c",
+   "name": "SETS_OFFICIAL_RATE_OF",
+   "fact": "The NBU set the official UAH/USD exchange rate at approximately UAH 47.1 per USD as of 1 October 2026."
+  },
+  {
+   "source": "a7c13f47-3bbb-4a96-b78e-33bc317a6ce1",
+   "target": "d866c1d3-3cd6-4ac5-9bf8-7d822c8fad9a",
+   "name": "PARTNERS_WITH",
+   "fact": "Ninth in-person meeting October 21, 2026 at the Constantine Palace produced agreement to resume talks [S6]（sign=+，strength=0.6，valence=transactional，polarity=0.30）"
+  },
+  {
+   "source": "2a45bcd1-6514-44b3-8a1f-2a34e2bab7e7",
+   "target": "78ca3cac-fb8e-457d-9b5e-88dfc4d955f0",
+   "name": "PUBLISHES_DATA_FOR",
+   "fact": "FRED publishes the Nominal Broad U.S. Dollar Index (Index Jan 2006=100), reporting a monthly mean of 119.2152 for 2026-09, down 0.8138 (-0.7%) year-on-year, with the latest daily reading of 121.4048 on 2026-10-16."
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "30f944f8-93dc-4754-b266-6b458226e799",
+   "name": "DRAWS_DOWN",
+   "fact": "Russia drew down 459 billion roubles from the National Wealth Fund, with signs of NWF liquid exhaustion flagged as a risk"
+  },
+  {
+   "source": "bc0a5f4b-2233-444a-9c7a-9fe6a098c9e2",
+   "target": "1e5d7a8e-3b19-4a62-9b33-2c4f4f69d204",
+   "name": "FUNDS",
+   "fact": "UK committed £25 billion cumulatively [S51]（sign=+，strength=0.5，valence=allied，polarity=0.70）"
+  },
+  {
+   "source": "95223a14-8307-4142-8446-54801bb7b086",
+   "target": "95223a14-8307-4142-8446-54801bb7b086",
+   "name": "ISSUES",
+   "fact": "The EU's €90 billion loan covers roughly two-thirds of Ukraine's 2026–27 financing needs, leaving a €70 billion gap for 2027 that non-EU partners (expected €45 billion) are slow to fill."
+  },
+  {
+   "source": "bef7eb27-9da1-4a8b-9ab6-609a6f96470b",
+   "target": "67086609-08d4-455b-a700-b0053e7b5823",
+   "name": "OPPOSES",
+   "fact": "Iran and Iraq fought a war that ended in a 1988 ceasefire, which held."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "bc0a5f4b-2233-444a-9c7a-9fe6a098c9e2",
+   "name": "PROVIDES_MILITARY_AID_TO",
+   "fact": "UK committed £25 billion in aid to Ukraine"
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "91b0298c-44cf-41d6-a09b-ee8eec7d12ac",
+   "name": "ASSESSES_LEVERAGE_AGAINST",
+   "fact": "The International Crisis Group lists the EU's leverage over Russia as sanctions relief, frozen Russian assets and reconstruction support."
+  },
+  {
+   "source": "f8126ebe-b502-4e35-a150-9e55875eb276",
+   "target": "d866c1d3-3cd6-4ac5-9bf8-7d822c8fad9a",
+   "name": "BACKS",
+   "fact": "Witkoff leads the US mediation channel [S6]（sign=+，strength=0.8，valence=allied，polarity=0.80）"
+  },
+  {
+   "source": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "target": "dbb5f5e6-97ae-4cfe-9117-481910d63842",
+   "name": "ESTIMATES_OUTPUT_OF",
+   "fact": "Estonian intelligence estimates Russia produced roughly 7 million shells in 2025"
+  },
+  {
+   "source": "8398d394-3bb3-4e36-b1c5-f3dbf2a7d3d2",
+   "target": "78ca3cac-fb8e-457d-9b5e-88dfc4d955f0",
+   "name": "PUBLISHES",
+   "fact": "The IMF series context references the Nominal Broad U.S. Dollar Index at 119.2152 (Jan 2006=100, September 2026), used as a 2027 signpost for risk-on re-pricing if it stays below that level three consecutive months"
+  },
+  {
+   "source": "302d0c05-a3fb-43d3-a955-3038fd79e55c",
+   "target": "7be71449-2949-48da-980a-c58939346ac1",
+   "name": "CARRIES_SAME_PREMIUM",
+   "fact": "EU natural gas at 17.93 USD per million BTU in July 2026 (up from 9.46 in December 2025) carries the same geopolitical premium as Brent crude"
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "OPPOSES",
+   "fact": "Ukraine opposes Russia; ISW assesses Ukraine liberated about 1,080 sq km since January 1, 2026 while Russia net-gained about 73 sq km then net-lost about 73 sq km from September 1, 2026"
+  },
+  {
+   "source": "e5334f13-7bd0-443c-8284-2c93093bdae7",
+   "target": "216cf16b-e376-4a4f-88a9-4ed7dbb11795",
+   "name": "GRANTED_WAIVER_TO",
+   "fact": "The United States issued waivers of the Graham Act sanctions regime, which the European Commission called 'regrettable'."
+  },
+  {
+   "source": "a53fb657-b7dc-4983-8680-c41025bfc2aa",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "ESTIMATES_LOSSES_OF",
+   "fact": "Russia Matters' analysis puts Russian losses at roughly 5,000–8,200 per week against recruitment of 5,500–8,000 — overlapping ranges that establish neither surplus nor deficit."
+  },
+  {
+   "source": "4ea4d4a5-0d1f-4624-ac81-2e38bf3ac13d",
+   "target": "aa17881e-28e5-4a58-9dc3-9a2b43af48d0",
+   "name": "DEFEATED_OFFENSIVE_AGAINST",
+   "fact": "Operation Vivaldi in the Lyman direction defeated the northern pincer of Russia's planned encirclement of Donetsk Oblast, leaving that offensive 'operationally defeated' as of October 21, 2026."
+  },
+  {
+   "source": "986bd85f-34cc-41ba-98b8-ad8a35cf0e46",
+   "target": "7e3d5edc-3978-4217-9a3f-8c455b975cbd",
+   "name": "CALCULATES_REVENUE_OUTLOOK_FOR",
+   "fact": "A Reuters calculation projects Russian federal oil and gas tax revenue of about 1 trillion roubles for October 2026, up 10% year-on-year, sustaining funding at a Brent price of 102.0181 USD/bbl (September 2026 reading)."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "OPPOSES",
+   "fact": "Russia demands that Ukraine drastically shrink its military and pledge never to join NATO."
+  },
+  {
+   "source": "95223a14-8307-4142-8446-54801bb7b086",
+   "target": "0264eedd-d84e-4c19-a7c8-4788d2787729",
+   "name": "IMPOSES_SANCTIONS_ON",
+   "fact": "The European Union has adopted over 30 sanctions rounds through September 2026, and the European Commission called US waivers 'regrettable'; EU is forecast at only 5% probability to lift a majority of sanctions on Russian oil exports by 2028-01-01."
+  },
+  {
+   "source": "8398d394-3bb3-4e36-b1c5-f3dbf2a7d3d2",
+   "target": "7e3d5edc-3978-4217-9a3f-8c455b975cbd",
+   "name": "PUBLISHES_PRICE_SERIES_FOR",
+   "fact": "The IMF world price series shows Brent Crude at 102.0181 U.S. dollars per barrel in September 2026, against 67.6091 in September 2025."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "OPPOSES",
+   "fact": "Russia's reported negotiation terms include a drastic reduction of Ukraine's military and a pledge that Ukraine never join NATO."
+  },
+  {
+   "source": "8398d394-3bb3-4e36-b1c5-f3dbf2a7d3d2",
+   "target": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "name": "PROVIDES_MILITARY_AID_TO",
+   "fact": "The IMF approved an SDR 5.9353 billion EFF facility for Ukraine on 2026-02-26 and completed its first review on 2026-07-20, with 75% forecast probability of at least two further reviews completed with disbursements by 2027-12-31."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "f525d47b-6e8d-4dcd-93ff-021ea9760bb6",
+   "name": "PROVIDES_MILITARY_AID_TO",
+   "fact": "Canada committed €5.4 billion in military aid and €8.2 billion in financial aid to Ukraine"
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "6f24b2b4-7150-4c85-b830-0baedd4ebbfb",
+   "name": "DEPENDS_ON",
+   "fact": "Ukraine's battlefield initiative is conditional on Western support, intelligence sharing and Starlink/Starshield access, reportedly restored October 15, 2026."
+  },
+  {
+   "source": "95223a14-8307-4142-8446-54801bb7b086",
+   "target": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "name": "PROVIDES_MILITARY_AID_TO",
+   "fact": "The EU provides 80% of Ukraine's external aid, including a €90 billion loan, amid a €70 billion 2027 financing gap."
+  },
+  {
+   "source": "1e7f527c-5218-4db0-ac32-41cf97ad47fd",
+   "target": "7c8cd9f7-6210-49c3-b878-41c38e83e13a",
+   "name": "DEPENDS_ON",
+   "fact": "ISW conditions Kyiv's initiative on Western support and Starlink/Starshield access, reportedly restored October 15, 2026."
+  },
+  {
+   "source": "11aa7ee6-d8f0-4fa7-87b8-99b3f0899194",
+   "target": "11aa7ee6-d8f0-4fa7-87b8-99b3f0899194",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "US Congress 亦称 Congress"
+  },
+  {
+   "source": "1e7f527c-5218-4db0-ac32-41cf97ad47fd",
+   "target": "6f24b2b4-7150-4c85-b830-0baedd4ebbfb",
+   "name": "DEPENDS_ON",
+   "fact": "ISW conditions Kyiv's initiative on Western support and Starlink/Starshield access, reportedly restored October 15, 2026."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "LAUNCHED_SHAHED_STRIKES_AGAINST",
+   "fact": "Russia launched 6,732 Shahed-type UAVs including decoys against Ukraine in September 2026, up 30.3% month-on-month (May 2026 peak: 8,161), per Ukrainian Air Force reporting reconstructed by ISIS"
+  },
+  {
+   "source": "1e7f527c-5218-4db0-ac32-41cf97ad47fd",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "STRUCK_ASSETS_OF",
+   "fact": "ISW calls Ukraine's (Kyiv's) October 7, 2026 strikes on Russian military and oil assets among its largest of the war."
+  },
+  {
+   "source": "1198aa90-bdb2-4707-a811-bcae0fc9df8f",
+   "target": "65769f26-156e-4b67-a904-91fa1e58e59c",
+   "name": "CONTROLS",
+   "fact": "Russia holds ~45,196 sq mi of Ukrainian territory including Crimea and pre-2022 Donbas, about 19% of Ukraine, as of Oct 21, 2026"
+  },
+  {
+   "source": "3d079a2e-d6fe-4912-8fd1-3686830293fe",
+   "target": "bef7eb27-9da1-4a8b-9ab6-609a6f96470b",
+   "name": "OPPOSES",
+   "fact": "Israel launched a war against Iran (together with the United States), per reporting on the lapse of the Geneva talks in February 2026."
+  },
+  {
+   "source": "8398d394-3bb3-4e36-b1c5-f3dbf2a7d3d2",
+   "target": "95223a14-8307-4142-8446-54801bb7b086",
+   "name": "RELATED_FINANCING_CONTEXT",
+   "fact": "Donors led by the €90 billion EU loan finance Ukraine while the IMF's July 2026 growth projection sits at 1.0%, below its own February range of 1.8–2.5%."
+  }
+ ],
+ "graph_id": "mirofish_bd4737bf53074608"
+}

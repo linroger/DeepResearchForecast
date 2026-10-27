@@ -1,0 +1,579 @@
+{
+ "entity_types": [
+  {
+   "name": "Government",
+   "description": "EU member-state or third-country government acting through Council votes and diplomacy",
+   "attributes": [
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "Country/e polity governed"
+    },
+    {
+     "name": "council_vote_2024",
+     "type": "text",
+     "description": "Position in 4 Oct 2024 Council vote: in favour/against/abstain"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence over outcome"
+    }
+   ],
+   "examples": [
+    "German government",
+    "French government"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "stakeholder",
+   "selection_rule": "Sovereign governments or state ministries whose votes/diplomacy causally affect the tariff outcome",
+   "anti_examples": [
+    "European Commission (an EU institution, not a member-state government)",
+    "WTO secretariat"
+   ],
+   "agency_class": "sovereign_government",
+   "levers": [
+    "Cast Council vote on trade measures",
+    "Joint letters pressing Commission for new instruments",
+    "Grant or withhold bilateral support for settlements"
+   ]
+  },
+  {
+   "name": "Organization",
+   "description": "Firms, associations, institutions and adjudicatory bodies central to the dispute",
+   "attributes": [
+    {
+     "name": "sector",
+     "type": "text",
+     "description": "Industry/sector, e.g. automotive, trade administration, judiciary"
+    },
+    {
+     "name": "role",
+     "type": "text",
+     "description": "Functional role: OEM, regulator, arbitrator, association"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence over outcome"
+    }
+   ],
+   "examples": [
+    "European Commission (DG TRADE)",
+    "WTO DS630 panel",
+    "Volkswagen Group",
+    "BYD",
+    "SAIC Group",
+    "Geely Group",
+    "Tesla (Shanghai)",
+    "VDA",
+    "ACEA",
+    "China Ministry of Commerce (MOFCOM)"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Any corporate, institutional or adjudicatory body whose decisions causally affect duties, undertakings, litigation or retaliation",
+   "anti_examples": [
+    "Reuters (media source)",
+    "Rhodium Group (research source)",
+    "Eurostat (statistics office)"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "Submit or withdraw price-undertaking offer",
+    "Accept or refuse undertakings",
+    "Impose or calibrate retaliatory duties",
+    "Issue panel report"
+   ]
+  },
+  {
+   "name": "Person",
+   "description": "Named individual leaders acting in own decision capacity",
+   "attributes": [
+    {
+     "name": "full_name",
+     "type": "text",
+     "description": "Full official name"
+    },
+    {
+     "name": "office",
+     "type": "text",
+     "description": "Official position held"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence over outcome"
+    }
+   ],
+   "examples": [
+    "Maroš Šefčovič"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Named individuals with personal decision authority over negotiation or policy in this dispute",
+   "anti_examples": [
+    "WTO panel members (unnamed on record)",
+    "journalists and analysts"
+   ],
+   "agency_class": "individual_leader",
+   "levers": [
+    "Lead intergovernmental negotiation",
+    "Broker understandings such as the 9 October 2026 deal"
+   ]
+  },
+  {
+   "name": "Other",
+   "description": "Affected exporter groups targeted by retaliation measures",
+   "attributes": [
+    {
+     "name": "sector",
+     "type": "text",
+     "description": "Export sector, e.g. brandy, dairy, pork"
+    },
+    {
+     "name": "exposure",
+     "type": "text",
+     "description": "Duty rates or minimum-price regime currently applied"
+    }
+   ],
+   "examples": [
+    "Chinese brandy, dairy and pork exporters to China"
+   ],
+   "archetype": "collective",
+   "simulation_tier": 2,
+   "role_class": "stakeholder",
+   "selection_rule": "Aggregated exporter communities whose retaliation exposure constrains EU negotiating choices",
+   "anti_examples": [
+    "Individual companies (use Organization)",
+    "abstract 'retaliation risk' concept"
+   ],
+   "agency_class": "industry_coalition",
+   "levers": [
+    "Lobby home governments",
+    "Comply with or breach minimum-price undertakings"
+   ]
+  },
+  {
+   "name": "TradeDefenceInstrument",
+   "description": "Concrete EU or Chinese trade measures in force (duties, undertakings, safeguards)",
+   "attributes": [
+    {
+     "name": "legal_reference",
+     "type": "text",
+     "description": "Implementing act or ruling reference"
+    },
+    {
+     "name": "rate_range",
+     "type": "text",
+     "description": "Duty rates or minimum-price terms"
+    },
+    {
+     "name": "status",
+     "type": "text",
+     "description": "in_force / provisional / expired / withdrawn"
+    },
+    {
+     "name": "expiry_date",
+     "type": "text",
+     "description": "Scheduled expiry if any"
+    }
+   ],
+   "examples": [
+    "Implementing Regulation (EU) 2024/2754 (BEV countervailing duties)",
+    "Volkswagen (Anhui) undertaking (Decision (EU) 2026/328)",
+    "China brandy anti-dumping duties",
+    "EU hybrid safeguard (planned December 2026)"
+   ],
+   "archetype": "institution_rule",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Specific named legal instruments or measures whose state at 30 June 2027 defines the forecast outcomes",
+   "anti_examples": [
+    "abstract 'protectionism'",
+    "general WTO law"
+   ],
+   "selection_note": "Object being forecast; not an agent"
+  },
+  {
+   "name": "MarketSector",
+   "description": "Tracked product markets affected by the dispute",
+   "attributes": [
+    {
+     "name": "sector",
+     "type": "text",
+     "description": "Product category, e.g. BEV, PHEV, brandy"
+    },
+    {
+     "name": "trade_exposure",
+     "type": "text",
+     "description": "Key statistics: import values, shares, growth"
+    }
+   ],
+   "examples": [
+    "EU battery-electric vehicle imports",
+    "EU plug-in-hybrid imports",
+    "EU brandy exports to China"
+   ],
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Concrete product markets whose trade flows are tracked as evidence for substitution and retaliation",
+   "anti_examples": [
+    "abstract 'market sentiment'",
+    "individual firms"
+   ],
+   "selection_note": "Passive tracked object, not an agent"
+  },
+  {
+   "name": "Source",
+   "description": "Media, research and data providers cited as evidence",
+   "attributes": [
+    {
+     "name": "source_type",
+     "type": "text",
+     "description": "media / think-tank / statistical agency"
+    },
+    {
+     "name": "reliability_tier",
+     "type": "text",
+     "description": "tier 1 primary to tier 3 secondary"
+    }
+   ],
+   "examples": [
+    "Reuters",
+    "Rhodium Group",
+    "Eurostat",
+    "IEA",
+    "Bruegel"
+   ],
+   "archetype": "source",
+   "simulation_tier": 3,
+   "role_class": "amplifier",
+   "selection_rule": "Cited outlets and reports providing evidence; never simulated as decision-makers",
+   "anti_examples": [
+    "European Commission (party, not source)"
+   ]
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "REGULATES",
+   "description": "Authority imposes or administers trade measures on a firm or sector",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Organization",
+     "target": "Other"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "instrument",
+     "type": "text",
+     "description": "Legal act or measure through which regulation applies"
+    },
+    {
+     "name": "rate",
+     "type": "text",
+     "description": "Applicable duty rate or undertaking terms"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Date measure began applying"
+    }
+   ],
+   "family": "governance",
+   "valence": "directional",
+   "direction_semantics": "Source authority imposes/administers measures over target firm or exporter group"
+  },
+  {
+   "name": "PARTNERS_WITH",
+   "description": "Negotiating partnership between Commission and MOFCOM or commissioner",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Person",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "channel",
+     "type": "text",
+     "description": "e.g. minimum-price talks, 9 Oct 2026 understanding"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "When the partnership/talks began"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "Source negotiates jointly with target on undertakings or understandings"
+  },
+  {
+   "name": "OPPOSES",
+   "description": "Adversarial stance in negotiations or litigation",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "issue",
+     "type": "text",
+     "description": "Bone of contention, e.g. company-level carve-outs"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "negative/adversarial"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "Source contests target's position or measure"
+  },
+  {
+   "name": "SANCTIONS",
+   "description": "Imposes retaliatory duties or investigations on target exporters",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Other"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "measure",
+     "type": "text",
+     "description": "Retaliatory measure and rate"
+    },
+    {
+     "name": "calibration",
+     "type": "text",
+     "description": "calibrated/escalatory, e.g. final below provisional"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Date measure imposed"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "Source imposes retaliation measures against target's exporters"
+  },
+  {
+   "name": "CUSTOMER_OF",
+   "description": "Firm subject to authority's acceptance decisions (undertaking applicant)",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "arrangement",
+     "type": "text",
+     "description": "e.g. accepted undertaking, individual duty rate"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/neutral"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Date arrangement accepted"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "Source firm seeks or holds arrangements granted by target authority"
+  },
+  {
+   "name": "BACKS",
+   "description": "Government supports authority's policy position",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "policy",
+     "type": "text",
+     "description": "Policy backed, e.g. definitive duties"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Date of backing"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "Source government politically supports target's measures"
+  },
+  {
+   "name": "INFLUENCES",
+   "description": "Government or actor exerts pressure on Commission decisions",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "mechanism",
+     "type": "text",
+     "description": "Council vote, lobbying, joint letters"
+    },
+    {
+     "name": "direction",
+     "type": "text",
+     "description": "toward protection / toward settlement"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "influence",
+   "valence": "directional",
+   "direction_semantics": "Source pressures target's decision-making (e.g. Council over Commission)"
+  },
+  {
+   "name": "ALLY_OF",
+   "description": "Coalition alignment between governments",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "coalition",
+     "type": "text",
+     "description": "e.g. Franco-German trade-defence bloc"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Alignment start"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "Source and target act as coalition partners on trade policy"
+  },
+  {
+   "name": "SUPPORTS",
+   "description": "Association supports member firms' positions",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "Position advocated, e.g. against duties, for trade defence"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "Source association lobbies or advocates for target firms"
+  },
+  {
+   "name": "DEPENDS_ON",
+   "description": "Firms rely on home government for protection or market access",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "dependency_type",
+     "type": "text",
+     "description": "e.g. protective duties, China market access, retaliation exposure"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "dependency",
+   "valence": "directional",
+   "direction_semantics": "Source firm's interests depend on target government's actions"
+  }
+ ],
+ "analysis_summary": "该预测问题属于贸易政策/地缘经济领域：欧盟对华BEV反补贴税在2027年6月30日前维持、被价格承诺取代或被修改，以及中国是否报复欧盟汽车出口。核心决策者是欧委会（DG TRADE，独家接受承诺与复审权）、中国商务部（谈判对手+报复权）、德法两国政府（理事会政治地图）、WTO DS630专家组（裁决方）以及中欧车企（承诺申请方与报复暴露方）。本体保留阵容种子类型 Organization/Person/Government/Other，并新增三个领域类型：TradeDefenceInstrument（被预测的法律工具客体）、MarketSector（贸易流证据客体）和 Source（被引用媒体/智库，tier 3 被动信息源）。关系覆盖治理（REGULATES、DS630诉讼）、对抗（OPPOSES、SANCTIONS、TRIGGERS报复联动）、经济（CUSTOMER_OF、TARGETS）与因果传导（CAUSES税收→贸易替代效应），并附带 rate/status/lag/strength 等预测可用属性。"
+}

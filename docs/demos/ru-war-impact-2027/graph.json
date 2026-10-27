@@ -1,0 +1,3125 @@
+{
+ "nodes": [
+  {
+   "id": "ff37cd09-7032-4957-8835-d4fddcf6b543",
+   "name": "Canada",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Canada, counted among NATO European Allies and Canada in NATO spending figures, spent part of a combined total exceeding USD 571 billion in 2021 prices (2.3% of GDP) on defense in 2025; the group's 2026 spending was around USD 634 billion (2.53% of GDP) per June 2026 NATO figures, with the trajectory bound by The Hague pledge of 5% of GDP by 2035.\nNATO reported that core defense spending by Europe and Canada rose 11 percent in 2026, as tracked in NATO's Defence Investment of NATO Countries (2014-2026) data."
+  },
+  {
+   "id": "fa64be43-f04c-4eaa-b2cf-b804f4e072d8",
+   "name": "Volodymyr Zelensky",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Ukrainian president who on October 21, 2026 said 'Right now we have to freeze, and I think this is a real way to end this war', proposed ceasefires on food security, maritime activity and energy infra\nZelensky has stated openness to freezing the frontline, contributing to a 32% forecast probability of a frozen conflict (de facto ceasefire without signature) by end-2027.\nZelensky named NATO membership as one of three unagreed postwar security-guarantee options on October 22, 2026\nTold to stop striking Russian refineries, Zelensky said Ukraine would comply only if Russia reciprocated or the US p"
+  },
+  {
+   "id": "f6302ff5-a75e-4c78-ae04-24cf063b51b8",
+   "name": "SAFE loans",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "EU SAFE loans up to €150 billion supporting European rearmament in 2026–2027, alongside the EUR 90 billion EU Ukraine Support Loan; part of the EU fiscal floor under NATO's 2035-anchored pledge. European rearmament rises under every war end-state scenario via these instruments and German budgets.\nSAFE is one of the Readiness 2030 instruments (alongside EDIP) whose payments began mid-2026 and run through 2027.\nPayments slippage under the SAFE €150 billion envelope would weaken the Readiness 2030 layer through 2027."
+  },
+  {
+   "id": "f4651a7a-c691-4378-9cb3-57a6ad110bc9",
+   "name": "weekly US diesel prices",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Weekly US diesel prices rose from $3.48/gallon on January 5, 2026 to a $6.53/gallon peak on September 21, 2026, driving US sanctions-relief decisions ahead of the November 3 elections\nWeekly US diesel prices rose from $3.48/gallon on January 5, 2026 to a peak of $6.53/gallon on September 21, 2026, hurting Republicans ahead of the November 3 legislative elections\nWeekly US diesel prices peaked at $6.53/gallon on September 21, 2026, ahead of the November 3, 2026 US midterms, making the elections a test of the durability of the diesel waiver and relief track\nThe US diesel waiver, whose Treasury l"
+  },
+  {
+   "id": "f209d3ab-3fa8-4740-a8bc-5f7713bc8dc3",
+   "name": "GMK Center",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "GMK Center reports euro-area Q2 2026 GDP growth of 0.6% quarter on quarter as roughly 1.2% year on year"
+  },
+  {
+   "id": "ef335fe9-1137-4581-a4cb-da5b560c20c2",
+   "name": "USD",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "USD levels are defined by market quotes with the ECB reference fixing at 14:15 CET."
+  },
+  {
+   "id": "eb25dda0-5f97-485d-b32a-530b86ca3c82",
+   "name": "USCC",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "US-China Economic and Security Review Commission (USCC); source of the finding that China provides drone engines and training for Russia's Garpiya-A1 drone, part of the evidence that China sustains Russia's war economy below the secondary-sanctions threshold.\nThe US-China Commission assesses China aims to erode US sanctions primacy via its ~75% share of Common High Priority exports to Russia."
+  },
+  {
+   "id": "e79458d0-52f7-4cc6-a284-1c03462fa384",
+   "name": "National Wealth Fund",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "Russia finances its war effort partly through National Wealth Fund drawdown, leaving a thinning buffer as of late October 2026."
+  },
+  {
+   "id": "df6991f1-0e30-4b16-9742-1dd46913a484",
+   "name": "Macrotrends",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Macrotrends reported wheat at $7.10/bu on 22 October 2026, up 19.5% year on year."
+  },
+  {
+   "id": "dc22495f-af9a-47a1-a5c5-692c568e1b25",
+   "name": "German 2027 draft budget",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Reuters reported on July 6, 2026 that the German cabinet approved the 2027 draft budget, hiking defence and investment spending.\nThe German cabinet approved its 2027 draft budget on July 6, 2026, hiking defence and investment spending."
+  },
+  {
+   "id": "d949cc43-fc7a-4de7-a634-3e78ece9b1bc",
+   "name": "IISS",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "IISS estimates Germany's 2026 defense spending at EUR 119.7 billion including off-budget-inclusive totals, per figures circulating as of late October 2026."
+  },
+  {
+   "id": "d6427f08-d538-4780-8d73-048e95f2feab",
+   "name": "SWP Berlin",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "SWP Berlin publicly tracks nuclear signaling based on official Russian statements and exercises, supporting NATO-related analysis."
+  },
+  {
+   "id": "d59abba2-e793-40f8-922c-787d182c2fd1",
+   "name": "Hungarian central bank",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The Hungarian central bank's own fixing printed EUR 1 = 363.13 HUF, while the ECB reference rate on 22 October 2026 was EUR/HUF 366.43"
+  },
+  {
+   "id": "d2b888f7-761d-4fd6-b9cd-db6e2cc9e7ed",
+   "name": "Garpiya-A1",
+   "labels": [
+    "Other"
+   ],
+   "summary": "US Treasury sanctioned Chinese entities in 2024 for co-production of the Garpiya-A1 drone — the first US action on complete weapons systems."
+  },
+  {
+   "id": "d0c6871c-43a2-400a-9f28-6ed2fc6ec9df",
+   "name": "IMF",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The IMF provides the official Brent Crude (US dollars per barrel) price series shown in the report figure, with the latest observation up from a year earlier, near the top of the charted range (as of Sept 2026).\nThe IMF estimates US CPI at 2.73% for 2025 and projects 3.648% for 2026 and 2.835% for 2027\nThe IMF's September 2026 Brent monthly average was published at 102.0181 $/b, differing from the EIA's 114.1591 $/b reading.\nThe IMF monthly average gold price for September 2026 was 4,334.7467 $/oz, after a February 2026 peak of 5,014.645 and a July reading of 4,075.0968.\nThe IMF reported the E"
+  },
+  {
+   "id": "cd1e9918-0ec8-49e0-b046-1b5d7e3b7f30",
+   "name": "ECB main refinancing rate",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "The ECB main refinancing rate is 2.65% as of 2026-09-16, effective after a 25 basis point hike decided 10 September 2026. It was the ECB's second hike of 2026, after June's move to 2.25% from the 2.00% setting held March–May 2026. Market commentary (Morningstar) frames the September hike as likely the cycle's last; the ECB Council is not pre-committing to a rate path, citing Middle East conflict inflation pressure.\nThe European Central Bank sets its key interest rates, as documented on its official key ECB interest rates statistics page."
+  },
+  {
+   "id": "ccef93b8-0aaa-40db-bfeb-e053389d0e9c",
+   "name": "EU natural gas",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "EU natural gas was 25.494 USD per million metric British thermal unit in September 2026, a baseline reflecting the Middle East energy shock and the war; end-2027 ranges are scenario-priced, not market-implied.\nThe FRED database provides the official Global price of Natural gas, EU series shown in the report figure, with the latest observation up from a year earlier (as of Sept 2026).\nThe IMF reported the EU gas price at 25.494 $/MMBtu in September 2026, versus 11.003 $/MMBtu a year earlier.\nThe energy shock drives the headline–core inflation gap: the EU natural gas price stood at 25.494 US dol"
+  },
+  {
+   "id": "ca26acbb-4ad5-46ca-80d7-5f420edb455b",
+   "name": "Shadow-fleet operators and insurers",
+   "labels": [
+    "Other"
+   ],
+   "summary": "Russian crude keeps flowing with volumes flat: CREA counted crude at EUR 392 million/day and total fossil fuels at EUR 683 million/day in July 2026; Reuters reports the US administration is considerin\nThe US administration is considering lifting sanctions on some Russian shadow-fleet vessels to cut freight rates, as reported around October 14–15, 2026.\nIn the Frozen conflict scenario, shadow-fleet relief would remove strike premia and cut freight costs\nReuters reported on October 15, 2026 that the US is considering removing sanctions on some shadow-fleet vessels to cut freight rates."
+  },
+  {
+   "id": "c5af1a08-e78a-431d-9417-5e84074ee1f1",
+   "name": "ISW",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Institute for the Study of War; produces OSINT control assessments of territory held, used alongside DeepState data (compiled by Russia Matters) rather than belligerent claims. Three or more months of near-zero net territorial change in the DeepState/ISW series would confirm a Frozen conflict. Report readings run to October 21, 2026.\nISW assessed that Ukraine has 'operationally defeated' Russia's Donetsk offensive, with Russia net −73 sq km since Sept 1 and Ukraine liberating ~1,080 sq km since Jan 1 (as of Oct 21, 2026)\nISW assesses that Ukraine has liberated about 1,080 square kilometers sin"
+  },
+  {
+   "id": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "name": "European Central Bank",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Raised all three key rates by 25bp on 10 September 2026 (deposit 2.50%, MRO 2.65%, marginal lending 2.90%), its second hike of 2026 after June's move to 2.25%. Staff project headline HICP of 3.0% (202\nThe ECB set its Deposit Facility Rate for the Euro Area at 2.5% as of September 2026, up 0.5 pp year-on-year.\nECB staff project euro-area core inflation (excluding energy, food, alcohol and tobacco) at 2.5% in 2026, 2.6% in 2027 and 2.3% in 2028.\nECB staff project euro-area headline inflation averaging 3.0% in 2026, 2.5% in 2027 and 2.1% in 2028, with 2027–28 headline revised up from June.\nECB st"
+  },
+  {
+   "id": "c45a8636-59a0-4a38-8be9-334d0a260915",
+   "name": "Kerch Strait",
+   "labels": [],
+   "summary": "Unconfirmed reports state Russia halted Kerch Strait commercial transits on July 10, 2026."
+  },
+  {
+   "id": "c21036d3-079d-4d67-a35d-b44d29dc6335",
+   "name": "EU 20th sanctions package",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "The EU's 20th sanctions package sanctions 120 individuals, establishes the basis for a future maritime-services ban on Russian crude oil and petroleum products, adds further port-access bans, and per a law-firm summary adds 20 more Russian banks to a transaction ban (70 EU-excluded in total). The Council's adoption date could not be confirmed. It forms part of the EU's ratcheting sanctions track, diverging from unilateral pre-deal US relief.\nTrump's US sanctions-relief track (waiving the Graham act and licensing Russian diesel deliveries until April 2027) diverges from the EU's 20th sanctions "
+  },
+  {
+   "id": "bb6fa1a1-18e7-458f-be0b-acf887af27df",
+   "name": "US Treasury",
+   "labels": [
+    "Government"
+   ],
+   "summary": "US Treasury actions track the Russian oil price cap; any legally effective oil-cap waiver would reprice Russian supply.\nThe US Treasury issued a license suspending sanctions on Russian diesel deliveries until April 2027, a relief channel affecting refined-product pass-through."
+  },
+  {
+   "id": "ba952c0c-30e7-444b-b9c9-da9114bdf2b4",
+   "name": "IEA",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The IEA warns that a prolonged Strait of Hormuz disruption could render unavailable the vast majority of the world's spare production capacity, supporting Brent at $100–135/bbl under Active high-intensity war.\nA secondary summary of the IEA's September 2026 report put effective OPEC+ spare capacity at 0.22 mb/d, unverified against the IEA's own page, whose most recent verifiable figure is over 4 mb/d in Q4 2025\nBrent forecast bands under the Frozen conflict ($70–88/b) and Comprehensive peace settlement ($60–75/b) scenarios are informed by the IEA's projected 2027 supply rise of 7.7 mb/d.\nIEA a"
+  },
+  {
+   "id": "b9ac9e7e-87c8-4cd3-800a-0f25b2b8ff43",
+   "name": "EDIP",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "The EU underwrites EDIP with €1.5 billion in grants over 2025–27."
+  },
+  {
+   "id": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "Ukraine",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Ukraine remains at war with Russia with no written ceasefire as of October 23, 2026. Zelensky said on Fox News (Oct 21) Ukraine is ready to freeze the conflict along the current front line, called a ceasefire the minimum Ukraine expects, rejected surrendering Donbas, and proposed ceasefires on food security, maritime activity and energy infrastructure. On Oct 22 he named three unagreed guarantee options: NATO membership; direct US Article-5-style guarantees; or a European 'Coalition of the Willing' backed by Washington. ISW assesses Ukraine has liberated ~1,080 sq km since January 1, 2026 and "
+  },
+  {
+   "id": "b8fd2582-bbe0-46ae-b746-47be35417b88",
+   "name": "Witkoff",
+   "labels": [
+    "Person"
+   ],
+   "summary": "US envoy who met Zelensky and European/NATO representatives in Oslo on October 20, 2026, where proposals were tabled without text. Met Putin in St. Petersburg on October 21, 2026 — their ninth in-person meeting, lasting three hours; no text resulted, but US citizen Stephen Hubbard was released. Putin told Witkoff the Oslo proposals contained \"little that was useful.\"\nThe US mediation track, including the ninth in-person Witkoff–Putin meeting, could close the sequencing gap and raise odds of a formal armistice, with talks resuming around November 10 possibly in Abu Dhabi.\nUS envoy Witkoff met P"
+  },
+  {
+   "id": "b8e78443-b21d-4148-8714-c2a775e3bf88",
+   "name": "ECB staff projection",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "The 2.5% inflation threshold for 2027 equals the ECB staff projection for the 2027 average, and state-conditioned ranges place Reduced-intensity attrition wholly above it while Frozen conflict straddles it."
+  },
+  {
+   "id": "b8354b29-239c-4ac2-b154-4f7827005bad",
+   "name": "Eurostat",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "EU statistical office; source of official price and inflation series used as leading indicators alongside the ECB and BLS.\nEurostat's 16 October 2026 release reported euro-area headline HICP inflation of 3.8% year on year in September 2026, up from 3.2% in August and 2.2% a year earlier.\nMonthly Eurostat HICP releases track the headline–core gap, with euro-area core HICP sustained above the ECB staff's 2.6% 2027 core projection indicating second-round effects through the energy channel.\nEurostat publishes the year-on-year euro-area HICP rate used to read inflation pass-through.\nEurostat's firs"
+  },
+  {
+   "id": "b6cf85be-2805-4f81-8606-485a89c841cf",
+   "name": "Formal armistice",
+   "labels": [
+    "WarStateScenario"
+   ],
+   "summary": "War end-state scenario with 15% probability: sustained US mediation and mutual exhaustion produce a signed, monitored line. Durability judged over 12–24 months after signing; as of 23 October 2026 no written ceasefire or framework text exists.\nA written framework text from the post-November 10 trilateral talks would shift probability mass toward the Formal armistice scenario.\nA Formal armistice would sequence sanctions relief on the diesel-waiver precedent, with the ECB cutting below 2.00% and US headline CPI tracking the IMF's 2.835% for 2027\nNATO summit language in 2027 dating a membership p"
+  },
+  {
+   "id": "b66fb575-0f99-4711-8485-86bb197a9cce",
+   "name": "Patriots",
+   "labels": [],
+   "summary": "Told to stop striking Russian refineries, Zelensky said Ukraine would comply only if Russia reciprocated or the US provided more Patriot interceptors."
+  },
+  {
+   "id": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "name": "Vladimir Putin",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Russian president who told Witkoff the Oslo proposals contained 'little that was useful', ordered a fourth 2026 increase in authorized military strength (to 2,441,630, including 1,550,500 military per\nPutin offered to help Trump with Iran, linking the Ukraine track to wider US-Russia bargaining\nPutin warned Europe of war if peacekeeping troops are deployed to Ukraine (Washington Post, September 14, 2026)\nThe US mediation track, including the ninth in-person Witkoff–Putin meeting, could close the sequencing gap and raise odds of a formal armistice, with talks resuming around November 10 possibl"
+  },
+  {
+   "id": "b5ee2f22-3f05-4f81-937a-d0053a0c17d2",
+   "name": "NATO 2035-anchored defense pledge",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "As of late October 2026, Germany's national budget is a key layer of the committed European defense baseline resting on NATO's 2035-anchored pledge, alongside EU financing instruments, with a core budget line of €109 billion for 2027, a ministry budget of about €108 billion for 2026, and EUR 119.7 billion for 2026 including off-budget items per IISS.\nAs of late October 2026, EU financing instruments form one of the three layers of the committed European defense baseline alongside NATO's 2035-anchored pledge and national budgets, above all Germany's.\nNATO adopted the 5% pledge: 5% of GDP annual"
+  },
+  {
+   "id": "b51653e8-254a-41f6-9c0a-0d7d00ce3ffa",
+   "name": "CBOT wheat price",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Wheat is priced in CBOT USd/Bu as a settlement anchor for Ukrainian-asset repricing under each end-state.\nMacrotrends reported wheat at $7.10/bu on 22 October 2026, up 19.5% year on year."
+  },
+  {
+   "id": "ac2cedc7-3cba-48ab-93ab-b2179e77ee4e",
+   "name": "Readiness 2030",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "SAFE is one of the Readiness 2030 instruments (alongside EDIP) whose payments began mid-2026 and run through 2027.\nEDIP is one of the Readiness 2030 instruments running through 2027.\nPayments slippage under the SAFE €150 billion envelope would weaken the Readiness 2030 layer through 2027.\nNATO's alliance-wide front-loading of the 3.5% core defense-spending target underpins the Readiness 2030 spending path.\nThe Bundestag passed the core €109.7 billion 2027 defense ask intact, with a pending ask in Q4 2026–2027 that underpins European rearmament; a trim would cap the aggregate spending path unde"
+  },
+  {
+   "id": "abfc9654-0dfa-4ab5-b55c-209b8a1a2b8a",
+   "name": "EUR/RON exchange rate",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "The ECB reference rate for EUR/RON was 5.3450 on 22 Oct 2026."
+  },
+  {
+   "id": "a842115f-8af8-4aab-8162-cd9fe0b4caa9",
+   "name": "Ukrainian Ministry of Finance",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Ukraine's debt stood near 101% of GDP at end-2025; the IMF's anchor is below 68% of GDP; the EUR 90 billion EU Support Loan and planned €45 billion for 2027 frame the financing path, with leaders meet"
+  },
+  {
+   "id": "a820f8ea-6290-466c-916d-3a26fa994a7a",
+   "name": "Planned €45 billion EU Ukraine financing",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "Another €45 billion is planned from the EU for Ukraine's 2027 financing, per Reuters, against an estimated ~€70 billion funding gap; leaders are to discuss new financing — possibly another loan — at an EU summit on November 26-27, 2026. It follows the EUR 90 billion EU Ukraine Support Loan covering budgetary and defense needs in 2026-2027, which drove nearly EUR 11 billion of allocations in May-June 2026 (EUR 4.3 billion military, EUR 6.7 billion financial and humanitarian). The summit is a forecast catalyst: the €45 billion against the ~€70 billion gap shapes Ukraine's 2027 war financing.\nEU "
+  },
+  {
+   "id": "a7aeea12-7661-4ab7-9209-8601420c0b59",
+   "name": "Sachs-published framework",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "A non-official Sachs-published framework proposes that all sanctions be lifted and Russia's immobilized sovereign assets (about EUR 185 billion at Euroclear) be released in stages by December 31, 2027.\nThe non-official Sachs framework is the only retrieved full-relief text, proposing all sanctions on Russia lifted and immobilized Euroclear assets released in stages by December 31, 2027."
+  },
+  {
+   "id": "a7ada591-bdb2-44f8-82af-a95968706bfe",
+   "name": "EDIP",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "EDIP is one of the Readiness 2030 instruments running through 2027."
+  },
+  {
+   "id": "a62334ce-08ab-42aa-971c-1cc1c0ded4bb",
+   "name": "OPEC+",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Global supply rose 2.5 mb/d m/m to 102.3 mb/d in September 2026 on OPEC+ gains; the IEA projects 2027 supply up 7.7 mb/d. The IEA warns a prolonged Hormuz disruption 'could render unavailable the vast\nSaudi Arabia led OPEC+ supply gains of 2.1 mb/d in September 2026, contributing to global supply rising 2.5 mb/d m/m to 102.3 mb/d per the IEA October 2026 Oil Market Report.\nThe IEA October 2026 Oil Market Report records OPEC+ gains of 2.1 mb/d m/m, projects supply averaging 100.7 mb/d in 2026 and rising 7.7 mb/d in 2027.\nIEA evidence of rebuilt effective OPEC+ spare capacity, most of it Saudi-h"
+  },
+  {
+   "id": "a518768c-63e0-4f81-9b90-46529dfe4a2b",
+   "name": "Chinese government",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "China accounts for about 75% of Common High Priority goods exports to Russia and 43% of top-five importer revenues (EUR 7.7 billion, July 2026), per CREA; the US Treasury sanctioned Chinese entities f\nAbout 75% of exports of Common High Priority goods to Russia come from China.\nGarpiya drone co-production involving China was sanctioned in 2024, exposing China to secondary sanctions.\nChina's goal is keeping Russia anchored as a dependent partner and eroding US sanctions primacy, per the US-China Commission.\nThe US-China Commission assesses China aims to erode US sanctions primacy via its ~75% s"
+  },
+  {
+   "id": "a1a39c82-e915-4622-8446-bb358c6fc8ec",
+   "name": "UK government",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Grouped in the report with the EU and European allies: goals run from keeping financing Ukraine through 2027 to rearmament at 5% of GDP by 2035; the UK produced a January 2026 casualty estimate of 1,2"
+  },
+  {
+   "id": "9a8490a9-c243-46f3-8141-c1ade8a2c895",
+   "name": "Russian autumn 2026 conscription draft",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "Russia planned a 120,000-conscript autumn draft for 2026, plus a fourth increase in authorized strength and a directive to cut male regional-administration staff by 10–15%, maturing into potential new offensive capability under the Active high-intensity war scenario.\nThe Russian autumn draft of about 120,000 conscripts is a mobilization marker; overt general mobilization would shift forecast weight toward the Active high-intensity war scenario."
+  },
+  {
+   "id": "96350577-2a55-47a1-b655-c1a47363c432",
+   "name": "SAFE loans",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "SAFE loans are an EU defense-financing instrument of up to €150 billion, part of European rearmament that rises under every war end-state scenario, anchored on NATO's 2035 pledge (5% of GDP), EU instruments and German budgets. Germany's reported €109 billion core defense budget for 2027 complements the instrument; slippage in German or NATO defense budgets would weaken the rearmament floor.\nSAFE's up to €150 billion in EU-backed loans, together with the Hague pledge of 5% of GDP by 2035, bind the trajectory of European defence spending upward even under a Comprehensive peace settlement central"
+  },
+  {
+   "id": "91693ff5-6a34-45dc-8c9b-03a737193fdf",
+   "name": "euro-area core HICP",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Euro-area core HICP inflation was 2.5% change from year ago in September 2026 (source: Eurostat), a baseline already reflecting the Middle East energy shock and the Russia-Ukraine war.\nECB staff project euro-area core inflation (excluding energy, food, alcohol and tobacco) at 2.5% in 2026, 2.6% in 2027 and 2.3% in 2028.\nMonthly Eurostat HICP releases track the headline–core gap, with euro-area core HICP sustained above the ECB staff's 2.6% 2027 core projection indicating second-round effects through the energy channel.\nThe ECB Governing Council's 17–18 March and 9–10 June 2027 meetings with ne"
+  },
+  {
+   "id": "8f3d474f-ecf0-4c94-92f7-e615cf699c07",
+   "name": "Russia waivers",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "US sanctions waivers on Russia whose legally effective implementation would reprice Russian supply; Congress may vote to override them, and the vote record is a key indicator for Brent crude moving toward the lower band.\nUS sanctions waivers on Russia extending past April 2027 alongside EU adoption of the 20th package's maritime-services ban would harden transatlantic divergence between the US and EU policy tracks.\nThe US sanctions waiver (reported by WSJ) influenced Brent Dec-26 futures, which settled at $109.55 around 2026-10-19 after the waiver.\nUS sanctions relief (diesel-delivery suspensi"
+  },
+  {
+   "id": "8d267166-deec-4a4f-b744-85a2c45c702f",
+   "name": "Brent Dec-27 contract",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "The steep Brent backwardation (front month +4.742% on October 23 against +0.242% for Dec-27, quoted near $82) means the market prices substantial normalization by end-2027 — closer to Reduced-intensity attrition or Frozen conflict than to Active high-intensity war.\nThe Dec-27 Brent contract quoted near $82 with only +0.242% backwardation indicates the market already prices an end-2027 state closer to Frozen conflict (32%) or Reduced-intensity attrition (35%) than continued war."
+  },
+  {
+   "id": "8cd2ad70-e4a4-4607-a2e4-01ed0d361374",
+   "name": "Russian fiscal-rule oil price cutoff of $50 per barrel",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "Russia's fiscal rule sets a $50-per-barrel oil price cutoff; Brent settling below it would tighten Russia's 2027 financing squeeze."
+  },
+  {
+   "id": "8aa19148-d926-4a89-8240-cf3e3a6940a5",
+   "name": "ECB deposit facility rate",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Stood at 2.5% in September 2026, serving as a monetary policy baseline for the Russia-Ukraine war end-state forecast through 31 December 2027.\nThe ECB set its Deposit Facility Rate for the Euro Area at 2.5% as of September 2026, up 0.5 pp year-on-year.\nFRED publishes the official ECB Deposit Facility Rate for Euro Area series.\nThe ECB sets the deposit facility rate; ECB projection rounds fall in March and June 2027 per the official calendar.\nThe ECB's forecast paths condition the end-2027 ECB deposit rate between 1.50–1.75% (Comprehensive peace settlement) and 2.75–3.00% (Active high-intensity"
+  },
+  {
+   "id": "8a73aef2-3f71-4641-b0ba-46897a1c1d3b",
+   "name": "Abu Dhabi",
+   "labels": [],
+   "summary": "Hosted two of three trilateral Russia-Ukraine-US negotiation rounds in January and February 2026; no text resulted. Cited as possible venue for trilateral talks Russia agreed in principle to resume after November 10, 2026.\nTrilateral Russia-Ukraine-US talks, possibly held in Abu Dhabi, may convene on or after November 10, 2026, and would discriminate between a Formal armistice and continued attrition."
+  },
+  {
+   "id": "89bf3e7a-19af-4cc4-af94-4d3b914e4707",
+   "name": "Germany's 2027 core defense budget of €109 billion",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Germany's reported core defense budget for 2027 is €109 billion, part of European rearmament that rises under every war end-state scenario alongside NATO's 2035-anchored 5%-of-GDP pledge, EU instruments such as SAFE loans (up to €150 billion), and German budgets. Slippage in German or NATO defense budgets is flagged as a factor that would weaken the rearmament floor. Context baseline: German 10-year government bond yield stood at 3.47% in September 2026.\nThe German cabinet approved on 6 July 2026 a 2027 core defense budget of €109 billion (up from €82.2 billion in 2026) within a €555.4 billion"
+  },
+  {
+   "id": "875e8268-0eee-417b-8d85-dedc559d94ec",
+   "name": "Russian OFZ yields",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Russian OFZ yields forced above 16% would make financing Russia's binding constraint in sustaining the war.\nRussian OFZ yields forced above 16%, or liquid National Wealth Fund assets below one-tenth of GDP, are identified as thresholds that would make financing Russia's binding constraint."
+  },
+  {
+   "id": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "name": "United States",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Trump is pressing Kyiv to make a deal; Putin offered to help Trump with Iran, linking the Ukraine track to wider US–Russia bargaining. Trump announced a Russian diesel purchase deal on October 9, 2026, with a Treasury license suspending sanctions on Russian diesel deliveries until April 2027; he signed an executive order on October 16, 2026 waiving the Lindsey O. Graham Sanctioning Russia and Iran Act of 2026. Reuters reported October 14–15 that the administration is weighing lifting sanctions on some shadow-fleet vessels to cut freight rates. Drivers: weekly US diesel prices rose from $3.48/g"
+  },
+  {
+   "id": "7fdd371d-22e4-4c64-a2bf-b5d995136910",
+   "name": "EU summit on 2027 Ukraine financing",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "EU leaders scheduled to meet November 26–27, 2026 to discuss new financing for Ukraine in 2027, possibly another loan. Reuters reports another €45 billion planned from the EU for 2027 against an estimated ~€70 billion funding gap, on top of the EUR 90 billion EU Ukraine Support Loan covering 2026–2027. The summit is a signpost for war-sustainability scenarios; new financing would discriminate between war end-states.\nThe European Union convenes a summit on November 26–27, 2026 on 2027 Ukraine funding and the next EU budget, testing aid sustainability into 2027"
+  },
+  {
+   "id": "7fbaf028-d87d-42ee-b211-29c430132aac",
+   "name": "Russian fiscal strain",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "Russia's 2026 budget deficit is 3.2% of GDP; the 2027 security allocation is 21.4 trillion roubles, 44% of total spending (Sept 2026). Fiscal strain is a constraint favoring the Reduced-intensity attrition scenario (35%), limiting Russia's ability to sustain its late-October 2026 operational tempo into end-2027 even amid mobilization signals like convict contracts and the male staff-cut directive.\nRussian fiscal strain — with wartime deficit targets never met (2025: 0.5% target vs 2.6% outturn; 2026: 1.6% target vs 3.2% now) and 2027 borrowing rising 43% to 7.7 trillion roubles against a 5.5-t"
+  },
+  {
+   "id": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "Russia",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Russia remains at war with Ukraine with no written ceasefire or framework text as of October 23, 2026. Putin stated on October 23 that Russia is ready for three-way talks on security parameters of a final peace deal, not a 'short' ceasefire; Ushakov framed resumed talks as building a post-conflict security system for Russia and Ukraine. Peskov said Russia 'needs peace, not a ceasefire' (ISW assesses this rejects Ukraine's and Europe's proposals), and Putin told Witkoff the Oslo proposals contained 'little that was useful.' Russia agreed 'in principle' (Ushakov, Oct 21) to resume trilateral tal"
+  },
+  {
+   "id": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "name": "NATO",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "At The Hague, allies pledged 5% of GDP by 2035 (at least 3.5% core plus up to 1.5% broader) with annual incremental-path plans. European Allies and Canada spent more than USD 571 billion (2021 prices)\nNATO's 2035-anchored pledge underwrites European rearmament, which rises under every conflict state.\nNATO's PURL initiative is a NATO aid initiative under which US stockpiles supplied more than 90% of aid.\nPutin's stated red line is Western peacekeeping troops in Ukraine; he reportedly warned Europe of war if peacekeeping troops are deployed (September 14, 2026).\nUkraine's unagreed security-guara"
+  },
+  {
+   "id": "7d7dc820-8611-43e2-b38f-32204cec8087",
+   "name": "Russia 2027 military spending increase",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "Reuters exclusively reported that Russia raises 2027 military spending by 27%, per budget documents (2026-09-28)\nCarnegie Endowment analyzed who is funding Russia's war in the 2027 budget, including the 27% military spending increase and 21.4 trillion rouble security allocation"
+  },
+  {
+   "id": "7c2ee544-53f9-44ad-ac6f-295b08cfc35d",
+   "name": "US executive order of October 16, 2026 waiving Russia and Iran sanctions",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "Executive order signed by President Trump on October 16, 2026 waiving the newly passed \"Lindsey O. Graham Sanctioning Russia and Iran Act of 2026\". Part of a unilateral, pre-deal US sanctions-relief sequence alongside an October 9 Russian diesel purchase deal with a Treasury license suspending sanctions on Russian diesel deliveries until April 2027, driven by weekly US diesel prices rising from $3.48/gallon (January 5, 2026) to a $6.53/gallon peak (September 21, 2026) ahead of the November 3 elections.\nA potential Congress vote overriding the Russia sanctions waivers is an indicator of opposit"
+  },
+  {
+   "id": "7bbab5b1-dbb0-45a0-8de1-952b593dce61",
+   "name": "Pistorius",
+   "labels": [
+    "Person"
+   ],
+   "summary": "German Defence Minister Pistorius is asking parliament for nearly €140 billion (about $160 billion) for 2027 — €109.7 billion from the core ministry budget, a 32.7% increase over 2026, plus roughly €30 billion from other sources.\nDefense Minister Boris Pistorius has been visiting key German companies driving defence production, supporting Germany's defence build-up."
+  },
+  {
+   "id": "7b0c2168-4332-4780-abc9-23fc5ce4de98",
+   "name": "November 3, 2026 US midterms",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "The November 3, 2026 US midterms are the operative domestic driver of US Russia policy. Weekly US diesel prices rose from $3.48/gallon on January 5, 2026 to a $6.53/gallon peak on September 21, 2026, prompting Trump to sign an October 16 executive order waiving the 'Lindsey O. Graham Sanctioning Russia and Iran Act of 2026,' announce a Russian diesel purchase deal on October 9 (Treasury license suspending sanctions on Russian diesel deliveries until April 2027), and weigh lifting sanctions on some shadow-fleet vessels. The US has no documented red line beyond fuel cost before the midterms.\nWee"
+  },
+  {
+   "id": "7ad7203b-1644-4fd4-9ec1-201d9f013887",
+   "name": "Russian oil price cap",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "US Treasury actions track the Russian oil price cap; any legally effective oil-cap waiver would reprice Russian supply."
+  },
+  {
+   "id": "7551d21d-7d9a-4a70-8ba8-6679d987ff4d",
+   "name": "energy pass-through channel",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "The 27–28 Oct 2026 FOMC meeting outcome is a policy catalyst whose result (a hike versus an overwhelmingly expected hold) would signal whether the energy pass-through channel is persisting, tracking the Active high-intensity war scenario.\nThe ECB Governing Council's 3–4 February 2027 meeting signals would discriminate whether the energy pass-through channel persists: hold-or-hike signals pass-through persisting, while a cut signals de-escalation disinflation consistent with the Frozen conflict or Formal armistice scenarios.\nEnergy pass-through into US rates is the key question the October 27–2"
+  },
+  {
+   "id": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "name": "Brent",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "The US sanctions waiver (reported by WSJ) influenced Brent Dec-26 futures, which settled at $109.55 around 2026-10-19 after the waiver.\nThe EIA STEO October 2026 vintage forecasts Brent at $74/b for the 4Q27 average and $84/b for the 2027 average, against $96/b for 2026\nThe EIA/FRED Brent series over a 5-year window spans the 2022 invasion shock, the $62.5443/b trough of December 2025 and the 2026 Middle East shock, giving an empirical range of 62.5443–122.71 $/b\nUnder the Active high-intensity war scenario (15% weight), Brent is forecast at $100–135/bbl (spot $115.22 on 2026-10-20).\nUnder the"
+  },
+  {
+   "id": "73830d25-f62a-4865-9d8f-7bc71b2d3c5e",
+   "name": "CHF",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "CHF levels are defined by market quotes with the ECB reference fixing at 14:15 CET."
+  },
+  {
+   "id": "712bd998-6fe2-4085-bfe8-8c32208b4049",
+   "name": "World Bank Data360",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "World Bank Data360 is a data platform distributing IMF World Economic Outlook series, such as the US All Items Consumer Price Index (period average, percent change), which registered 2.73% change for 2025 (-0.223 pp yearly) with IMF WEO publisher projections of 3.648% for 2026 and 2.835% for 2027.\nWorld Bank Data360 is the source for the US All Items CPI, period average percent change of 2.952% in 2024 (−1.175 pp YoY)."
+  },
+  {
+   "id": "71112e7c-7807-4dad-a1fb-e7fbdb250a15",
+   "name": "Strait of Hormuz",
+   "labels": [],
+   "summary": "The IEA warns that a prolonged Strait of Hormuz disruption could render unavailable the vast majority of the world's spare production capacity, supporting Brent at $100–135/bbl under Active high-intensity war.\nSaudi Arabia's East-West pipeline offers 3–5 mb/d of bypass capacity around the Strait of Hormuz, per the IEA\nThe IEA maintains an official resource page on the Strait of Hormuz covering oil security and emergency response."
+  },
+  {
+   "id": "6bdb6ba1-bf00-4bbf-b4e7-c1d004001478",
+   "name": "North Sea Dated",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "The IEA October 2026 Oil Market Report puts North Sea Dated at a $116.89/bbl September average (+$26.17 m/m), trading around $134/bbl at report time."
+  },
+  {
+   "id": "6bdade6f-99a3-4a69-84d0-0842c30aefbf",
+   "name": "IMF World Economic Outlook",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The official All Items CPI (period average, percent change) for the United States is published by the IMF World Economic Outlook via World Bank Data360, with IMF WEO projections shown.\nThe IMF WEO series projects euro-area real GDP growth of 1.119% in 2026 and 1.208% in 2027 (after a 1.237% publisher estimate for 2025), below the ECB staff's 1.4% for 2027"
+  },
+  {
+   "id": "68dcb483-d510-45db-883a-ab1cdf017072",
+   "name": "US ban on enriched-uranium imports from Russia",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "Uranium prices stay supported under the Formal armistice scenario because the US banned enriched-uranium imports from Russia (then ~$1 billion a year) in May 2024, with a legislated ban running to 2028."
+  },
+  {
+   "id": "68240114-7725-4f60-8da6-cc3f0d476b97",
+   "name": "Washington Post",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Media organization that reported Putin's warning to Europe of war if peacekeeping troops are deployed to Ukraine (September 14, 2026), documenting Putin's stated red line against a Western presence in Ukraine.\nThe Washington Post reported on September 14, 2026 that Putin warned Europe of war if peacekeeping troops are deployed to Ukraine"
+  },
+  {
+   "id": "6765e8ca-e501-4505-b6c0-0eda7113ce20",
+   "name": "Russian Ministry of Defense",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Per Col. Gen. Yevgeny Burdinsky, the autumn 2026 draft plans about 120,000 conscripts; a July 2026 Duma law allows people with criminal convictions to sign military contracts during mobilization; Esto"
+  },
+  {
+   "id": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "name": "European Union",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The EU adopted a 20th sanctions package (120 individuals listed, basis laid for a future maritime-services ban on Russian crude and petroleum products, further port-access bans, 20 more banks excluded — 70 EU-excluded in total per a law-firm summary). It operates the EUR 90 billion EU Ukraine Support Loan for Ukraine's budgetary and defense needs in 2026–2027, driving nearly EUR 11 billion of allocations in May–June 2026 (EUR 4.3 billion military, EUR 6.7 billion financial and humanitarian), even as financial and humanitarian aid ran 41% below 2025 on a monthly average in H1 2026, per the Kiel"
+  },
+  {
+   "id": "5da8b2cd-507b-4f62-b286-f2aaf4294676",
+   "name": "Geneva",
+   "labels": [],
+   "summary": "Hosted a February 2026 trilateral Russia-Ukraine-US round that ended in impasse with no text.\nThe Geneva talks of February 2026 ended in impasse; a repeat failure of the next round is the causal path for the Active high-intensity war scenario (15%)."
+  },
+  {
+   "id": "5d13d3fd-1fe9-47b7-b60d-1c12b8a18aed",
+   "name": "EU maritime-services ban",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "The EU adopting or deferring the maritime-services ban (Council decision) is an indicator that could shift the outlook toward the Frozen conflict scenario (32% probability).\nThe EU 20th sanctions package creates the basis for a maritime-services ban on Russian crude oil\nThe EU maritime-services ban on Russian crude targets Russian oil; its adoption and enforcement would lift oil prices toward the escalation band.\nIn the Active high-intensity war scenario, a prospective EU maritime-services ban would tighten Russian crude and lift core inflation above the 2.6% 2027 ECB staff projection"
+  },
+  {
+   "id": "590cd364-f54d-4ae3-a694-41e545844d03",
+   "name": "Ukraine's defense minister",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Ukraine's defense minister reported 200,000 soldiers absent without leave and 2 million men evading draft notices, strain evidence supporting the Reduced-intensity attrition scenario (35%)."
+  },
+  {
+   "id": "57e3baa8-9cb6-4d5e-ba06-a4bcd91359f5",
+   "name": "All Items, Consumer price index (CPI), United States",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "US All Items CPI rose 2.73% (period average) in 2025, down 0.223 pp from prior year; BLS publisher projections: 3.648% for 2026 and 2.835% for 2027.\nThe IMF estimates US CPI at 2.73% for 2025 and projects 3.648% for 2026 and 2.835% for 2027\nThe official All Items CPI (period average, percent change) for the United States is published by the IMF World Economic Outlook via World Bank Data360, with IMF WEO projections shown.\nBureau of Labor Statistics figures showed CPI-U inflation of 3.7% for the twelve months to September 2026, after 3.4% in August.\nBLS publishes US CPI-U, used to read inflatio"
+  },
+  {
+   "id": "564d891a-56e6-417d-b874-9fa5dcec56b4",
+   "name": "OSINT net territorial change",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "OSINT net territorial change near-zero for three consecutive months in H1 2027 (Russia net −73 km2 since 1 Sep 2026) would raise the probability of the Frozen conflict — 32% scenario."
+  },
+  {
+   "id": "5635234e-87d1-48d4-b3f9-6ff1c76b86f7",
+   "name": "Organization",
+   "labels": [
+    "Organization"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "54e2ad30-cf22-44b1-9956-fab8709ee164",
+   "name": "Starshield",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Starshield disruptions contributed to a sharp deterioration in US–Ukraine relations over intelligence-sharing following the diesel deal; the October 20, 2026 Oslo meeting agreed to resolve these disruptions.\nRenewed disruption of Starshield access, which degrades Ukrainian interception and logistics, would shift weight toward the attrition war-state scenarios"
+  },
+  {
+   "id": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "name": "Frozen conflict",
+   "labels": [
+    "WarStateScenario"
+   ],
+   "summary": "War-state scenario defined by three or more months of near-zero territorial movement per DeepState/ISW series and a halt in long-range strikes. Brings a partial unwind of energy and safe-haven premia (Brent, TTF, gold).\nZelensky is ready to freeze the conflict along the current front line, an upward adjustment raising the Frozen conflict scenario probability to 32%."
+  },
+  {
+   "id": "5364df15-00d5-4f28-ac7d-3ccba0b376cb",
+   "name": "Comprehensive peace settlement",
+   "labels": [
+    "WarStateScenario"
+   ],
+   "summary": "War-state scenario in which Russian supply returns, TTF and gold premia unwind, and Ukrainian assets — GDP, restructuring terms, the hryvnia — reprice upward. Any signed negotiation text shifts weight toward this end-state."
+  },
+  {
+   "id": "52a07749-6f7a-4ab2-a7ae-279c8c1c08bd",
+   "name": "Garpiya drone co-production sanctions",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "Garpiya drone co-production between China and Russia was sanctioned in 2024."
+  },
+  {
+   "id": "4fbfbd48-308e-4a24-bea7-11750cd6fb26",
+   "name": "Russian government finance bloc",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Per Reuters and Carnegie: the oil-and-gas revenue estimate was cut to 7.6 trillion from 8.9 trillion roubles; borrowing of 5 trillion plus 459 billion roubles draws about 11% of the liquid National We"
+  },
+  {
+   "id": "4f7f6fad-5d2e-4af1-97b4-30bb3288d6fd",
+   "name": "Donbas",
+   "labels": [],
+   "summary": "Region whose surrender Zelensky rejected in an October 21, 2026 Fox News interview while proposing to freeze the conflict along the current front line.\nUkraine's red line is surrendering Donbas, per Zelensky."
+  },
+  {
+   "id": "4c9f4b64-19ac-463e-9ac2-3853355ccf11",
+   "name": "Euro-area headline HICP",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Eurostat released euro-area headline HICP at 3.8% y/y for September 2026 (release of 16 Oct 2026).\nEurostat publishes the year-on-year euro-area HICP rate used to read inflation pass-through.\nActive high-intensity war (15% probability) implies EA HICP of 3.0–3.5% and US CPI of 3.5–4.0% by end-2027\nFrozen conflict (32% probability) implies EA HICP of 2.0–2.4% and US CPI of 2.5–2.9% by end-2027\nUnder the Active high-intensity war scenario (15%), euro-area HICP y/y in Dec-2027 is forecast at 3.5–4.5% (3.8% in Sep-2026).\nUnder the Reduced-intensity attrition scenario (35%), euro-area HICP y/y in D"
+  },
+  {
+   "id": "4c704d2d-e9ea-4054-854a-f1e0f79462d1",
+   "name": "European Allies and Canada defense spending 2026",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "European Allies and Canada defense spending for 2026 is around USD 634 billion, 2.53% of GDP, with core spending up about 11% year over year (NATO defence-investment release, June 2026); the US spends USD 850 billion. 2025 level was more than USD 571 billion (2021 prices), 2.3% of combined GDP, up from 1.4% in 2014, a nearly 20% real rise over 2024. Figures sit within NATO's pledge of 5% of GDP by 2035 (at least 3.5% core plus up to 1.5% broader).\nThe 2035 Hague pledge anchors continued European defense spending even under a Comprehensive peace settlement, limiting near-term downside to the ag"
+  },
+  {
+   "id": "4b8c0b53-9c09-41b0-b4f3-a26d2efc11eb",
+   "name": "European Defence Fund",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "The EU supports the European Defence Fund with around €8.8 billion of funding."
+  },
+  {
+   "id": "48af2300-5ded-4e9f-9f86-a15b15e92805",
+   "name": "OSW",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "OSW (Centre for Eastern Studies) estimated Ukraine could scale foreign recruitment to 120,000–200,000 personnel [S70], a figure cited as a test of Kyiv's staying power."
+  },
+  {
+   "id": "440cc0c0-0ac2-488e-9b3c-92f8f07634c4",
+   "name": "Uranium",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Uranium price was 72.4744 US dollars per pound in 2026-09.\nUranium prices stay supported under the Formal armistice scenario because the US banned enriched-uranium imports from Russia (then ~$1 billion a year) in May 2024, with a legislated ban running to 2028."
+  },
+  {
+   "id": "42c179cd-3723-4e4f-9fb8-afb85b3b3e36",
+   "name": "2027 Ukraine funding gap",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "The EU's planned €45 billion for 2027 falls short of Ukraine's estimated ~€70 billion funding gap, per Reuters, keeping upward pressure on budgets."
+  },
+  {
+   "id": "427103e8-519f-423c-894a-b50756462d5e",
+   "name": "2026 Russian budget deficit",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "Russia's 2026 budget deficit is 3.2% of GDP (as of September 2026, verified from Russian sources). It reflects the strain of war spending, alongside a 2027 security allocation of 21.4 trillion roubles (44% of spending) and successive increases in authorized military strength.\nCarnegie notes that Russia's wartime deficit targets have never been met (2025: 0.5% targeted, 2.6% actual) and that the 2026 deficit estimate was raised to 3.2% of GDP from 1.6%\nRussia's 2026 fiscal deficit is 3.2% of GDP, with 2027 borrowing up 43%, weighing against the Active high-intensity war scenario (15%)."
+  },
+  {
+   "id": "425fd87b-fa30-4359-b2cf-0238cf3697e0",
+   "name": "gold",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Safe-haven asset with no end-2027 market-implied quantiles in evidence; ranges are scenario-priced. Gold premia partially unwind in a Frozen conflict as long-range strikes halt, and unwind under Formal armistice or Comprehensive peace settlement as Russian supply returns. A signed ceasefire or framework text would push gold down; Russian mobilization or strike-tempo surge would push it up."
+  },
+  {
+   "id": "41298df4-d267-403a-8f46-8b43d710226c",
+   "name": "Kiel Institute",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Research institute tracking Ukraine aid flows. Its data shows EU financial and humanitarian aid to Ukraine ran 41% below 2025 on a monthly average in H1 2026, despite the EUR 90 billion EU Ukraine Support Loan driving nearly EUR 11 billion in allocations in May–June 2026 (EUR 4.3 billion military, EUR 6.7 billion financial and humanitarian).\nThe Kiel Institute tracks and reports on the EUR 90 billion EU Support Loan for Ukraine's 2026–27 financing."
+  },
+  {
+   "id": "3ff99200-43fd-46cc-821b-d40fc9ef4eeb",
+   "name": "Lindsey O. Graham Sanctioning Russia and Iran Act of 2026",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "Trump signed an executive order on October 16, 2026 waiving the newly passed Lindsey O. Graham Sanctioning Russia and Iran Act of 2026\nTrump signed a waiver of the newly passed Graham Sanctioning Russia and Iran Act on October 16, 2026, granting sanctions relief unilaterally and pre-deal on a pre-midterm clock.\nThe US license suspending sanctions on Russian diesel deliveries until April 2027, alongside Trump's October 16, 2026 waiver of the Graham act, runs opposite to the EU's ratcheting 20th package contemplating a maritime-services ban on Russian crude\nUS sanctions relief waived the 'Lindse"
+  },
+  {
+   "id": "3f2623fe-b7b5-4074-bec2-d94212717967",
+   "name": "EU Council",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The EU Council maintains the EU maritime ban on Russian oil, which stays on the books under the reduced-intensity attrition scenario."
+  },
+  {
+   "id": "3efcdde9-783b-46ce-8928-2b8c63599831",
+   "name": "Middle East energy shock",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "The Middle East energy shock and the Russia-Ukraine war state are the two geopolitical channels inside the macro baseline fixed as of 23 October 2026, with the war state the central driver of the forecast\nThe Middle East energy shock is explicitly cited by the ECB as a driver inside the baseline."
+  },
+  {
+   "id": "3edd289c-c592-4473-ada5-dd06ef0abf2b",
+   "name": "Russia–Ukraine full front-line ceasefire or armistice by 1 Jul 2027",
+   "labels": [
+    "WarStateScenario"
+   ],
+   "summary": "Putin's stated stance favors a final-deal security framework rather than a 'short' ceasefire, weighing against a full front-line ceasefire or armistice being in force by 1 July 2027.\nEntry into force of any Russia–Ukraine full front-line ceasefire or armistice would be confirmed by ISW as the settling source."
+  },
+  {
+   "id": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "name": "Treasury license suspending US sanctions on Russian diesel deliveries",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "A US Treasury license suspends sanctions on Russian diesel deliveries until April 2027, following Trump's announced Russian diesel purchase deal on October 9, 2026. It exemplifies unilateral, pre-deal US sanctions relief that diverges from the EU's ratcheting 20th sanctions package. Driver: weekly US diesel prices rose from $3.48/gallon (Jan 5, 2026) to a $6.53/gallon peak (Sept 21, 2026) ahead of the Nov 3 midterms. The Nov 3 midterms test waiver durability; expiry is April 2027, with a lapse-or-extend decision then. Related: Trump's Oct 16, 2026 executive order waiving the Graham Act; US wei"
+  },
+  {
+   "id": "3cec7927-c423-4b35-be3a-cbdb7a9d20ef",
+   "name": "EU Ukraine Support Loan",
+   "labels": [
+    "SanctionsRegime"
+   ],
+   "summary": "EUR 90 billion EU loan supporting Ukraine; against it, Ukraine enters 2027 with a funding gap of around €70 billion, with another €45 billion planned from the EU per Reuters.\nThe EU operates the EUR 90 billion EU Ukraine Support Loan for Ukraine's budgetary and defense needs in 2026–2027, which drove nearly EUR 11 billion of allocations in May–June 2026 (EUR 4.3 billion military, EUR 6.7 billion financial and humanitarian).\nThe EU funds Ukraine through the EUR 90 billion EU Support Loan for 2026–27, with another €45 billion planned for 2027 against a gap of around €70 billion.\nThe Kiel Institu"
+  },
+  {
+   "id": "3b3c13fb-11a5-4034-ba5b-301e75088a1f",
+   "name": "Bundestag",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The Bundestag passed the core €109.7 billion 2027 defense ask intact, with a pending ask in Q4 2026–2027 that underpins European rearmament; a trim would cap the aggregate spending path under every war state."
+  },
+  {
+   "id": "3acc0ae0-d8d8-4d49-863b-1c3ce04961de",
+   "name": "Russia-Ukraine war",
+   "labels": [
+    "WarStateScenario"
+   ],
+   "summary": "The Middle East energy shock and the Russia-Ukraine war state are the two geopolitical channels inside the macro baseline fixed as of 23 October 2026, with the war state the central driver of the forecast"
+  },
+  {
+   "id": "37376ac6-2d7d-4987-a297-6e8e3a4efca5",
+   "name": "Coalition of the Willing",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Zelensky cited a European 'Coalition of the Willing' backed by Washington as a postwar security-guarantee option"
+  },
+  {
+   "id": "37059a7b-693e-4951-a172-1c44b70b77f8",
+   "name": "Trump",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Trump is pressing Kyiv to make a deal in the Russia-Ukraine war (October 2026). Putin has offered to help Trump with Iran, linking the negotiation track to wider US-Russia bargaining.\nTrump signed a waiver of the newly passed Graham Sanctioning Russia and Iran Act on October 16, 2026, granting sanctions relief unilaterally and pre-deal on a pre-midterm clock.\nTrump announced a Russian diesel purchase deal on October 9, 2026, backed by a Treasury license suspending US sanctions on Russian diesel deliveries until April 2027.\nTrump is pressing Kyiv and Zelensky to make a deal in the negotiations "
+  },
+  {
+   "id": "3177f32b-bf45-4dec-b381-607577434b47",
+   "name": "German government",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Per Reuters, the cabinet-approved July 2026 draft budget carries €555.4 billion of spending and €203.6 billion of borrowing; per Defense News, Pistorius asks parliament for nearly €140 billion (about \nGerman defense budgets support European rearmament; slippage in German or NATO defense budgets would weaken the rearmament floor.\nAs of late October 2026, Germany's national budget is a key layer of the committed European defense baseline resting on NATO's 2035-anchored pledge, alongside EU financing instruments, with a core budget line of €109 billion for 2027, a ministry budget of about €108 bi"
+  },
+  {
+   "id": "2a357d56-6ca7-462c-bf67-dc0631b2470c",
+   "name": "Nickel, US dollars per metric tonne, Unit prices — World",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "World nickel price was 16,323.8219 U.S. dollars per metric ton in September 2026, up 1,220.6383 (+8.082%) from the prior observation. Stored as a baseline market observation for the Russia-Ukraine war forecast horizon through end-2027.\nNickel is priced at 16323.8219 US dollars per metric ton on the IMF monthly series as of 2026-09.\nRussia accounts for about 10% of world nickel production (2022 baseline)."
+  },
+  {
+   "id": "29d90e5f-fee0-4de5-96fc-52b32da1f605",
+   "name": "EUR/PLN exchange rate",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "The ECB reference rate for EUR/PLN was 4.3695 on 22 Oct 2026."
+  },
+  {
+   "id": "29c2ca43-db8a-4b40-a405-7384a359f0b9",
+   "name": "EUR/HUF exchange rate",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "The ECB reference rate for EUR/HUF was 366.43 on 22 Oct 2026.\nThe Hungarian central bank's own fixing printed EUR 1 = 363.13 HUF, while the ECB reference rate on 22 October 2026 was EUR/HUF 366.43"
+  },
+  {
+   "id": "2816d366-aa47-4a89-b4f8-e88e6c556a06",
+   "name": "Ukrainian military command",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Under constraints of 880,000-900,000 personnel, 200,000 AWOL and an over-40 average soldier age, Ukrainian forces reached the Zherebets River (Brig. Gen. Andrii Biletskyi, Oct 19), retaking ~1,080 sq \nOSW (Centre for Eastern Studies) published a June 15, 2026 analysis, 'Ukrainian Armed Forces pin hopes on foreign recruits'."
+  },
+  {
+   "id": "27c9cadb-543e-45c2-adc6-0fa26e7ac288",
+   "name": "Euro-area headline HICP inflation",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Eurostat's 16 October 2026 release reported euro-area headline HICP inflation of 3.8% year on year in September 2026, up from 3.2% in August and 2.2% a year earlier.\nECB staff project euro-area headline inflation averaging 3.0% in 2026, 2.5% in 2027 and 2.1% in 2028, with 2027–28 headline revised up from June.\nThe energy shock drives the headline–core inflation gap: the EU natural gas price stood at 25.494 US dollars per MMBtu in September 2026, up 131.7% year on year, lifting headline HICP to 3.8% while core stayed at 2.5%.\nEurostat's flash release is the settling source for whether the euro-"
+  },
+  {
+   "id": "24eb2718-7e18-43a8-9dbd-2a5ecc747abf",
+   "name": "titanium sponge",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Russia holds an estimated 8.7% of titanium sponge production excluding US output, per USGS."
+  },
+  {
+   "id": "212f451d-7be1-43da-be0a-f7f43940ccec",
+   "name": "Saudi Arabia",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Saudi Arabia led OPEC+ supply gains of 2.1 mb/d in September 2026, contributing to global supply rising 2.5 mb/d m/m to 102.3 mb/d per the IEA October 2026 Oil Market Report."
+  },
+  {
+   "id": "1d69ebb5-cf41-484c-9e15-005036c65a19",
+   "name": "Federal Funds Target Range - Upper Limit — United States",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "US Federal Funds Target Range upper limit was 4% as of 2026-09.\nThe FOMC sets the federal funds target range upper limit; FOMC SEP rounds fall in March and September 2027 per the official calendar.\nThe Fed's forecast paths condition the end-2027 Fed upper limit rate between 3.25–3.50% (Comprehensive peace settlement) and 4.25–4.50% (Active high-intensity war)"
+  },
+  {
+   "id": "1ca71730-687e-4903-94f3-fb16ca3a9665",
+   "name": "Iran",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Putin has offered to help Trump with Iran, linking the Russia-Ukraine negotiation track to wider US-Russia bargaining (October 2026).\nThe US sought Russian help on Iran, offered by Putin as part of wider US-Russia bargaining."
+  },
+  {
+   "id": "1b345037-7ccb-4abb-bbcb-6989e0935af4",
+   "name": "BLS",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "US Bureau of Labor Statistics; source of official price and inflation series used as a leading indicator alongside Eurostat and the ECB.\nBureau of Labor Statistics figures showed CPI-U inflation of 3.7% for the twelve months to September 2026, after 3.4% in August.\nBLS publishes US CPI-U, used to read inflation pass-through."
+  },
+  {
+   "id": "1874bb9b-758d-47bd-b5c9-eabdfc4f498a",
+   "name": "FRED",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The FRED database provides the official Global price of Natural gas, EU series shown in the report figure, with the latest observation up from a year earlier (as of Sept 2026).\nFRED publishes the official ECB Deposit Facility Rate for Euro Area series.\nFRED provides the official Crude Oil Prices: Brent - Europe (World) series, with the latest observation up from a year earlier and near the top of the charted range\nBrent crude oil settles in US dollars per barrel on the EIA/FRED daily price series (115.22 dollars per barrel on 2026-10-20)."
+  },
+  {
+   "id": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "name": "Reduced-intensity attrition",
+   "labels": [
+    "WarStateScenario"
+   ],
+   "summary": "War-state scenario with forecast Brent $85–105/bbl, TTF €65–85/MWh, and Ukraine GDP growth 2–3%. Partial truces lapse and revive while the EU maritime-ban basis stays on the books.\nThe EU's 20th-package sanctions ratchet and new 2027 Ukraine funding loan (Nov 2026–H1 2027) support the Reduced-intensity attrition scenario (35%), with the Active high-intensity war scenario (15%) more likely if the €70 billion gap stays unfilled.\nRussian fiscal strain — with wartime deficit targets never met (2025: 0.5% target vs 2.6% outturn; 2026: 1.6% target vs 3.2% now) and 2027 borrowing rising 43% to 7.7 tr"
+  },
+  {
+   "id": "1771e1d2-0f16-4dba-b0f3-d8b5c45ba3bd",
+   "name": "Reuters",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "News agency cited as the source reporting that Ukraine enters 2027 with a funding gap of around €70 billion against another planned €45 billion from the EU.\nPer Reuters, investors overwhelmingly expect the FOMC's October 27–28, 2026 meeting to hold rates steady.\nReuters reported on July 6, 2026 that the German cabinet approved the 2027 draft budget, hiking defence and investment spending."
+  },
+  {
+   "id": "16fa977f-2a0d-4b92-a169-d25f0980514d",
+   "name": "Russian nuclear exercise May 2026 package",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "A repeat of the May 2026 Russian nuclear exercise package or a doctrine change (threshold for 2027) would shift weight toward the Active high-intensity war scenario (15% probability)\nRussia conducted nuclear signaling in May 2026, including an exercise, identified as a documented escalation hazard through 2027."
+  },
+  {
+   "id": "1399c52c-7561-407c-99fd-8d9b3ae323a6",
+   "name": "EU Ukraine Support Loan",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Per Reuters, around €70 billion is planned against another planned €45 billion from the EU on the EUR 90 billion EU Ukraine Support Loan."
+  },
+  {
+   "id": "13068664-f950-414e-bac4-0e617b0966ab",
+   "name": "TTF",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Dutch TTF gas benchmark priced in EUR/MWh. Reduced-intensity attrition scenario forecasts €65–85/MWh. TTF premia partially unwind in a Frozen conflict and fully unwind under Formal armistice or Comprehensive peace settlement as Russian supply returns. A signed ceasefire or framework text would push TTF down.\nTrading Economics reported TTF spot at €92.07/MWh on 2026-10-23, up 187.58% year-over-year.\nCME's TTF Jan-27 prior settle was about 87.3 EUR/MWh front; no Dec-27 quote exists on the exchange line and a reported Q4-27 strip near €66/MWh is unconfirmed\nTTF natural gas settles in EUR/MWh on I"
+  },
+  {
+   "id": "125fbacd-eb33-4107-a840-00f87284c19b",
+   "name": "Federal Reserve",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The FOMC's September minutes record Desk-survey respondents placing 'a considerable probability' on at least 25bp of additional firming by end-2026, with considerable uncertainty beyond, and note elev\nThe Fed's forecast paths condition the end-2027 Fed upper limit rate between 3.25–3.50% (Comprehensive peace settlement) and 4.25–4.50% (Active high-intensity war)\nUS CPI above the IMF's projected 2.835% for 2027 (with 2026 projected at 3.648%) is a monthly signpost for Federal Reserve path steepening in every war end-state.\nThe Federal Reserve publishes FOMC minutes, including the September 16, "
+  },
+  {
+   "id": "11e18204-36ae-4c2e-b9a7-94503a522140",
+   "name": "Institute for the Study of War",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Entry into force of any Russia–Ukraine full front-line ceasefire or armistice would be confirmed by ISW as the settling source.\nThe Institute for the Study of War published its Russian Offensive Campaign Assessment covering the Russia-Ukraine war on October 21, 2026."
+  },
+  {
+   "id": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "name": "Active high-intensity war",
+   "labels": [
+    "WarStateScenario"
+   ],
+   "summary": "War-state scenario with forecast Brent $100–135/bbl. The IEA warns a prolonged Hormuz disruption in this state \"could render unavailable the vast majority of the world's spare production capacity.\" A Russian mobilization wave or strike-tempo surge would shift weight toward this state.\nUnder the Active high-intensity war scenario (15% weight), Brent is forecast at $100–135/bbl (spot $115.22 on 2026-10-20).\nUnder the Active high-intensity war scenario (15%), TTF is forecast at €85–110/MWh (spot €92.07 on 2026-10-23).\nUnder the Active high-intensity war scenario (15%), gold is forecast at $4,600–"
+  },
+  {
+   "id": "0b972794-6726-4d15-b81e-1cdf149d9e7b",
+   "name": "Gross domestic product (GDP), Constant prices, Euro Area",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "Euro area real GDP grew 1.237% in 2025 (+0.07 pp); publisher projections: 1.119% for 2026 and 1.208% for 2027. Under the report's Reduced-intensity attrition scenario, Ukraine GDP growth is forecast at 2–3%.\nEurostat's second estimate showed euro-area real GDP grew +0.6% q/q in Q2 2026.\nECB staff project euro-area real GDP growth of 0.9% in 2026, 1.4% in 2027 and 1.5% in 2028, revised up on 'greater than expected resilience'\nThe IMF WEO series projects euro-area real GDP growth of 1.119% in 2026 and 1.208% in 2027 (after a 1.237% publisher estimate for 2025), below the ECB staff's 1.4% for 202"
+  },
+  {
+   "id": "09ae9388-3b41-4d75-95c1-99e20e6fff4f",
+   "name": "post-November 10 trilateral talks",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "A written framework text from the post-November 10 trilateral talks would shift probability mass toward the Formal armistice scenario.\nTrilateral Russia-Ukraine-US talks, possibly held in Abu Dhabi, may convene on or after November 10, 2026, and would discriminate between a Formal armistice and continued attrition.\nPutin agreed on October 21, 2026 to resume three-way peace talks with Ukraine and the US, and Putin and Zelenskyy backed three-way US peace talks on Ukraine.\nZelenskyy backed three-way US peace talks on Ukraine and named three postwar security guarantees for Ukraine (October 21–22, "
+  },
+  {
+   "id": "072b005a-7915-4117-a8b7-3c5598897737",
+   "name": "US administration",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The Trump administration signed an October 16, 2026 executive order waiving the Graham Sanctioning Russia and Iran Act of 2026, announced a Russian diesel purchase deal on October 9 with a Treasury li\nRussia and the United States held three trilateral negotiation rounds with Ukraine in Abu Dhabi (January 2026) and Abu Dhabi and Geneva (February 2026); the Geneva round ended in impasse with no text.\nThe United States and Ukraine participated with Russia in three trilateral rounds in Abu Dhabi (January 2026) and Abu Dhabi and Geneva (February 2026), which ended without any agreed text.\nAt an Osl"
+  },
+  {
+   "id": "066c84ea-d73f-4c13-bd0d-9a408f1aca12",
+   "name": "SCEEUS",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "SCEEUS assesses Russia holds a conventional, nuclear and hybrid escalation menu."
+  },
+  {
+   "id": "05be3009-3b59-4975-a340-efccdaeb88f4",
+   "name": "NATO's PURL initiative",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "NATO's PURL initiative is a NATO aid initiative under which US stockpiles supplied more than 90% of aid.\nUS stockpiles supplied more than 90% of aid under NATO's PURL initiative in H1 2026, underpinning European military aid to Ukraine."
+  },
+  {
+   "id": "04afe6d5-4609-44a6-8e70-f95f139fcedb",
+   "name": "European rearmament",
+   "labels": [
+    "MacroeconomicDriver"
+   ],
+   "summary": "NATO's 2035-anchored pledge underwrites European rearmament, which rises under every conflict state.\nGerman defense budgets support European rearmament; slippage in German or NATO defense budgets would weaken the rearmament floor."
+  }
+ ],
+ "links": [
+  {
+   "source": "df6991f1-0e30-4b16-9742-1dd46913a484",
+   "target": "b51653e8-254a-41f6-9c0a-0d7d00ce3ffa",
+   "name": "REPORTS",
+   "fact": "Macrotrends reported wheat at $7.10/bu on 22 October 2026, up 19.5% year on year."
+  },
+  {
+   "source": "425fd87b-fa30-4359-b2cf-0238cf3697e0",
+   "target": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Frozen conflict scenario (32%), gold is forecast at $3,900–4,500/oz."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "name": "OPPOSES",
+   "fact": "Russia currently rejects an energy-infrastructure ceasefire, stating it \"needs peace, not a ceasefire,\" keeping the product premium elevated for the EU."
+  },
+  {
+   "source": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "target": "b6cf85be-2805-4f81-8606-485a89c841cf",
+   "name": "INFLUENCES",
+   "fact": "NATO summit language in 2027 dating a membership pathway for Ukraine is a signpost that shifts weight toward the Formal armistice and Comprehensive peace settlement scenarios"
+  },
+  {
+   "source": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "target": "4c704d2d-e9ea-4054-854a-f1e0f79462d1",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Reduced-intensity attrition scenario (35%), European NATO defence spending in 2027 is forecast at $680–720 bn."
+  },
+  {
+   "source": "37059a7b-693e-4951-a172-1c44b70b77f8",
+   "target": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "name": "SUPPORTS",
+   "fact": "Trump announced a Russian diesel purchase deal on October 9, 2026, backed by a Treasury license suspending US sanctions on Russian diesel deliveries until April 2027."
+  },
+  {
+   "source": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "target": "5d13d3fd-1fe9-47b7-b60d-1c12b8a18aed",
+   "name": "INFLUENCES",
+   "fact": "Adoption of the EU maritime-services ban (currently only a basis) in the Apr–Dec 2027 window would raise the probability of the Reduced-intensity attrition — 35% scenario."
+  },
+  {
+   "source": "13068664-f950-414e-bac4-0e617b0966ab",
+   "target": "b6cf85be-2805-4f81-8606-485a89c841cf",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Formal armistice scenario (15%), TTF is forecast at €45–65/MWh."
+  },
+  {
+   "source": "8f3d474f-ecf0-4c94-92f7-e615cf699c07",
+   "target": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "name": "INFLUENCES",
+   "fact": "The US sanctions waiver (reported by WSJ) influenced Brent Dec-26 futures, which settled at $109.55 around 2026-10-19 after the waiver."
+  },
+  {
+   "source": "125fbacd-eb33-4107-a840-00f87284c19b",
+   "target": "1d69ebb5-cf41-484c-9e15-005036c65a19",
+   "name": "SETS",
+   "fact": "The FOMC sets the federal funds target range upper limit; FOMC SEP rounds fall in March and September 2027 per the official calendar."
+  },
+  {
+   "source": "8aa19148-d926-4a89-8240-cf3e3a6940a5",
+   "target": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Active high-intensity war scenario (15%), the ECB deposit rate on 31-Dec-2027 is forecast at 3.00–3.50% (2.5% on 2026-10-22)."
+  },
+  {
+   "source": "54e2ad30-cf22-44b1-9956-fab8709ee164",
+   "target": "7551d21d-7d9a-4a70-8ba8-6679d987ff4d",
+   "name": "INFLUENCES",
+   "fact": "Renewed disruption of Starshield access, which degrades Ukrainian interception and logistics, would shift weight toward the attrition war-state scenarios"
+  },
+  {
+   "source": "c5af1a08-e78a-431d-9417-5e84074ee1f1",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "SUPPORTS",
+   "fact": "ISW assesses that Ukraine has liberated about 1,080 square kilometers since January 1, 2026, and retaking 20 square miles on October 13–19, 2026, while Russia's four-week net gain fell from 37 square miles (to September 22, 2026) to 3 (to October 19)."
+  },
+  {
+   "source": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SANCTIONS",
+   "fact": "The US diesel license to April 2027 suspends US sanctions on Russian diesel deliveries, a pre-deal unilateral relief measure"
+  },
+  {
+   "source": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "target": "f4651a7a-c691-4378-9cb3-57a6ad110bc9",
+   "name": "INFLUENCES",
+   "fact": "The US diesel waiver, whose Treasury license suspends sanctions on Russian diesel deliveries, is set to expire in April 2027, affecting US diesel prices that peaked at $6.53/gallon on September 21, 2026"
+  },
+  {
+   "source": "3b3c13fb-11a5-4034-ba5b-301e75088a1f",
+   "target": "ac2cedc7-3cba-48ab-93ab-b2179e77ee4e",
+   "name": "BACKS",
+   "fact": "The Bundestag passed the core €109.7 billion 2027 defense ask intact, with a pending ask in Q4 2026–2027 that underpins European rearmament; a trim would cap the aggregate spending path under every war state."
+  },
+  {
+   "source": "a518768c-63e0-4f81-9b90-46529dfe4a2b",
+   "target": "4fbfbd48-308e-4a24-bea7-11750cd6fb26",
+   "name": "SUPPLIES",
+   "fact": "~75% of Common High Priority exports; 43% of top-five importer revenues (EUR 7.7 billion, July 2026) [S67][S62]（sign=+，strength=0.8，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "d0c6871c-43a2-400a-9f28-6ed2fc6ec9df",
+   "target": "ccef93b8-0aaa-40db-bfeb-e053389d0e9c",
+   "name": "MEASURED_AS",
+   "fact": "The IMF reported the EU gas price at 25.494 $/MMBtu in September 2026, versus 11.003 $/MMBtu a year earlier."
+  },
+  {
+   "source": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "target": "13068664-f950-414e-bac4-0e617b0966ab",
+   "name": "INFLUENCES",
+   "fact": "Under the Active high-intensity war scenario (15%), TTF is forecast at €85–115/MWh"
+  },
+  {
+   "source": "7b0c2168-4332-4780-abc9-23fc5ce4de98",
+   "target": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "name": "INFLUENCES",
+   "fact": "The US midterms on November 3, 2026 will test the durability of the Russia sanctions waivers, including the US license suspending sanctions on Russian diesel deliveries, which expires in April 2027."
+  },
+  {
+   "source": "875e8268-0eee-417b-8d85-dedc559d94ec",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "INFLUENCES",
+   "fact": "Russian OFZ yields forced above 16% would make financing Russia's binding constraint in sustaining the war."
+  },
+  {
+   "source": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SUPPLIES",
+   "fact": "US diesel purchases under a Treasury license suspending sanctions on Russian diesel deliveries until April 2027 create a supply channel from Russia to the US"
+  },
+  {
+   "source": "09ae9388-3b41-4d75-95c1-99e20e6fff4f",
+   "target": "b6cf85be-2805-4f81-8606-485a89c841cf",
+   "name": "INFLUENCES",
+   "fact": "A written framework text from the post-November 10 trilateral talks would shift probability mass toward the Formal armistice scenario."
+  },
+  {
+   "source": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "target": "440cc0c0-0ac2-488e-9b3c-92f8f07634c4",
+   "name": "INFLUENCES",
+   "fact": "Under the Active high-intensity war scenario (15%), uranium is forecast above $80/lb if Moscow restricts uranium, titanium and nickel exports"
+  },
+  {
+   "source": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "target": "3ff99200-43fd-46cc-821b-d40fc9ef4eeb",
+   "name": "COMPETES_WITH",
+   "fact": "The US license suspending sanctions on Russian diesel deliveries until April 2027, alongside Trump's October 16, 2026 waiver of the Graham act, runs opposite to the EU's ratcheting 20th package contemplating a maritime-services ban on Russian crude"
+  },
+  {
+   "source": "d59abba2-e793-40f8-922c-787d182c2fd1",
+   "target": "29c2ca43-db8a-4b40-a405-7384a359f0b9",
+   "name": "SETS_REFERENCE_RATE",
+   "fact": "The Hungarian central bank's own fixing printed EUR 1 = 363.13 HUF, while the ECB reference rate on 22 October 2026 was EUR/HUF 366.43"
+  },
+  {
+   "source": "b8354b29-239c-4ac2-b154-4f7827005bad",
+   "target": "27c9cadb-543e-45c2-adc6-0fa26e7ac288",
+   "name": "PUBLISHES",
+   "fact": "Eurostat's flash release is the settling source for whether the euro-area annual HICP flash estimate exceeds 2.5% for December 2027."
+  },
+  {
+   "source": "125fbacd-eb33-4107-a840-00f87284c19b",
+   "target": "1d69ebb5-cf41-484c-9e15-005036c65a19",
+   "name": "INFLUENCES",
+   "fact": "The Fed's forecast paths condition the end-2027 Fed upper limit rate between 3.25–3.50% (Comprehensive peace settlement) and 4.25–4.50% (Active high-intensity war)"
+  },
+  {
+   "source": "425fd87b-fa30-4359-b2cf-0238cf3697e0",
+   "target": "d0c6871c-43a2-400a-9f28-6ed2fc6ec9df",
+   "name": "DEPENDS_ON",
+   "fact": "Gold price forecasts are benchmarked on the IMF Primary Commodity Prices series, with the September 2026 monthly average at 4334.7467 USD per troy ounce and the February 2026 peak at 5014.645."
+  },
+  {
+   "source": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "target": "b5ee2f22-3f05-4f81-937a-d0053a0c17d2",
+   "name": "BACKS",
+   "fact": "NATO's 2035 Hague pledge on defense expenditure continues even under the Comprehensive peace settlement scenario."
+  },
+  {
+   "source": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "target": "ca26acbb-4ad5-46ca-80d7-5f420edb455b",
+   "name": "INFLUENCES",
+   "fact": "In the Frozen conflict scenario, shadow-fleet relief would remove strike premia and cut freight costs"
+  },
+  {
+   "source": "ba952c0c-30e7-444b-b9c9-da9114bdf2b4",
+   "target": "6bdb6ba1-bf00-4bbf-b4e7-c1d004001478",
+   "name": "REPORTS_ON",
+   "fact": "The IEA October 2026 Oil Market Report puts North Sea Dated at a $116.89/bbl September average (+$26.17 m/m), trading around $134/bbl at report time."
+  },
+  {
+   "source": "ccef93b8-0aaa-40db-bfeb-e053389d0e9c",
+   "target": "27c9cadb-543e-45c2-adc6-0fa26e7ac288",
+   "name": "INFLUENCES",
+   "fact": "The energy shock drives the headline–core inflation gap: the EU natural gas price stood at 25.494 US dollars per MMBtu in September 2026, up 131.7% year on year, lifting headline HICP to 3.8% while core stayed at 2.5%."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "name": "OPPOSES",
+   "fact": "Putin's stated red line is Western peacekeeping troops in Ukraine; he reportedly warned Europe of war if peacekeeping troops are deployed (September 14, 2026)."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "name": "BACKS",
+   "fact": "The EU, UK and European allies back rearmament at 5% of GDP by 2035, with Germany's reported €109 billion core defense budget for 2027."
+  },
+  {
+   "source": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "target": "8aa19148-d926-4a89-8240-cf3e3a6940a5",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Frozen conflict scenario (32%), the ECB deposit rate on 31-Dec-2027 is forecast at 2.25–2.75%."
+  },
+  {
+   "source": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "target": "37376ac6-2d7d-4987-a297-6e8e3a4efca5",
+   "name": "BACKS",
+   "fact": "Zelensky cited a European 'Coalition of the Willing' backed by Washington as a postwar security-guarantee option"
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "16fa977f-2a0d-4b92-a169-d25f0980514d",
+   "name": "HAS_ATTRIBUTE",
+   "fact": "Russia conducted nuclear signaling in May 2026, including an exercise, identified as a documented escalation hazard through 2027."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "OPPOSES",
+   "fact": "The forecast scenario described is reduced-intensity attrition through winter 2026-27 between Russia and Ukraine, with a de facto freeze possibly consolidating in the second half of 2027 as settlement is blocked by the ceasefire-first versus final-deal-first gap."
+  },
+  {
+   "source": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "COMPETES_WITH",
+   "fact": "The US goal ranges from stopping the fighting and cutting pump prices to a brokered settlement, with Russia's Putin linking a linked offer to help on Iran to wider US–Russia bargaining; Congress passed the sanctions act the President waived."
+  },
+  {
+   "source": "11e18204-36ae-4c2e-b9a7-94503a522140",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "REPORTS",
+   "fact": "The Institute for the Study of War published its Russian Offensive Campaign Assessment covering the Russia-Ukraine war on October 21, 2026."
+  },
+  {
+   "source": "a1a39c82-e915-4622-8446-bb358c6fc8ec",
+   "target": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "name": "ALLY_OF",
+   "fact": "Grouped with EU goals: financing Ukraine through 2027 and rearmament at 5% of GDP by 2035（sign=+，strength=0.7，valence=allied，polarity=0.60）"
+  },
+  {
+   "source": "5d13d3fd-1fe9-47b7-b60d-1c12b8a18aed",
+   "target": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "name": "INFLUENCES",
+   "fact": "Adoption of the EU maritime-ban basis in the Apr–Dec 2027 window would raise the probability of the Active high-intensity war — 15% scenario."
+  },
+  {
+   "source": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "target": "2816d366-aa47-4a89-b4f8-e88e6c556a06",
+   "name": "SUPPORTS",
+   "fact": "Over USD 4.8 billion in PURL assistance committed by March 2026 (reported) [S132][S12]（sign=+，strength=0.7，valence=allied，polarity=0.60）"
+  },
+  {
+   "source": "fa64be43-f04c-4eaa-b2cf-b804f4e072d8",
+   "target": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "name": "SUPPORTS",
+   "fact": "Zelensky is ready to freeze the conflict along the current front line, an upward adjustment raising the Frozen conflict scenario probability to 32%."
+  },
+  {
+   "source": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "target": "b5ee2f22-3f05-4f81-937a-d0053a0c17d2",
+   "name": "BACKS",
+   "fact": "NATO maintains a defence investment commitment known as NATO's 5% defence commitment, described on its official topic page on defence expenditure."
+  },
+  {
+   "source": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "INFLUENCES",
+   "fact": "The US exerts leverage over Ukraine via sanctions waivers and licenses, intelligence and Starshield access, and assistance at levels below FY2022–24, pressing Kyiv toward a settlement before the November 3, 2026 midterms as diesel prices rose from $3.48/gal (Jan 5, 2026) to a $6.53/gal peak (Sept 21, 2026)."
+  },
+  {
+   "source": "5364df15-00d5-4f28-ac7d-3ccba0b376cb",
+   "target": "4c704d2d-e9ea-4054-854a-f1e0f79462d1",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Comprehensive peace settlement scenario (3%), European NATO defence spending in 2027 is forecast at $650–690 bn, with a weighted central of ≈$700 bn."
+  },
+  {
+   "source": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SUPPORTS",
+   "fact": "Russian war-economy output could sustain an active high-intensity war scenario (15% probability) at or above late-2026 intensity through end-2027."
+  },
+  {
+   "source": "8f3d474f-ecf0-4c94-92f7-e615cf699c07",
+   "target": "c21036d3-079d-4d67-a35d-b44d29dc6335",
+   "name": "COMPETES_WITH",
+   "fact": "US sanctions relief (diesel-delivery suspension until April 2027, Graham Act waiver, possible shadow-fleet relief) diverges from the EU's ratcheting 20th sanctions package between November 2026 and April 2027."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "name": "INFLUENCES",
+   "fact": "Under the Active high-intensity war scenario (15%), Brent is forecast at $100–135/bbl with refinery strikes and Black Sea closure persisting"
+  },
+  {
+   "source": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "target": "1ca71730-687e-4903-94f3-fb16ca3a9665",
+   "name": "INFLUENCES",
+   "fact": "The US sought Russian help on Iran, offered by Putin as part of wider US-Russia bargaining."
+  },
+  {
+   "source": "425fd87b-fa30-4359-b2cf-0238cf3697e0",
+   "target": "5364df15-00d5-4f28-ac7d-3ccba0b376cb",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Comprehensive peace settlement scenario (3%), gold is forecast at $3,500–4,100/oz, with a weighted central of ≈$4,375/oz."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "OPPOSES",
+   "fact": "Russia and Ukraine remain in armed conflict through late October 2026, with Russia holding material advantages and Ukraine constrained by manpower; neither side shows a 2027 collapse on this evidence."
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "8aa19148-d926-4a89-8240-cf3e3a6940a5",
+   "name": "SETS",
+   "fact": "The ECB set its Deposit Facility Rate for the Euro Area at 2.5% as of September 2026, up 0.5 pp year-on-year."
+  },
+  {
+   "source": "072b005a-7915-4117-a8b7-3c5598897737",
+   "target": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "name": "COMPETES_WITH",
+   "fact": "US waivers and diesel purchases against the EU's ratcheting 20th package [S15][S14]（sign=-，strength=0.7，valence=adversarial，polarity=-0.40）"
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "OPPOSES",
+   "fact": "Russia remains in armed opposition to Ukraine, with documented hazards including Russia's May 2026 nuclear signaling exercise and its menu of conventional, nuclear and hybrid responses to Ukrainian deep strikes."
+  },
+  {
+   "source": "212f451d-7be1-43da-be0a-f7f43940ccec",
+   "target": "a62334ce-08ab-42aa-971c-1cc1c0ded4bb",
+   "name": "PARTNERS_WITH",
+   "fact": "Saudi Arabia led OPEC+ supply gains of 2.1 mb/d in September 2026, contributing to global supply rising 2.5 mb/d m/m to 102.3 mb/d per the IEA October 2026 Oil Market Report."
+  },
+  {
+   "source": "52a07749-6f7a-4ab2-a7ae-279c8c1c08bd",
+   "target": "a518768c-63e0-4f81-9b90-46529dfe4a2b",
+   "name": "SANCTIONS",
+   "fact": "Garpiya drone co-production between China and Russia was sanctioned in 2024."
+  },
+  {
+   "source": "8aa19148-d926-4a89-8240-cf3e3a6940a5",
+   "target": "b6cf85be-2805-4f81-8606-485a89c841cf",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Formal armistice scenario (15%), the ECB deposit rate on 31-Dec-2027 is forecast at 2.00–2.50%."
+  },
+  {
+   "source": "125fbacd-eb33-4107-a840-00f87284c19b",
+   "target": "7551d21d-7d9a-4a70-8ba8-6679d987ff4d",
+   "name": "INFLUENCES",
+   "fact": "The 27–28 Oct 2026 FOMC meeting outcome is a policy catalyst whose result (a hike versus an overwhelmingly expected hold) would signal whether the energy pass-through channel is persisting, tracking the Active high-intensity war scenario."
+  },
+  {
+   "source": "f4651a7a-c691-4378-9cb3-57a6ad110bc9",
+   "target": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "name": "INFLUENCES",
+   "fact": "Weekly US diesel prices rose from $3.48/gallon on January 5, 2026 to a $6.53/gallon peak on September 21, 2026, driving US sanctions-relief decisions ahead of the November 3 elections"
+  },
+  {
+   "source": "5d13d3fd-1fe9-47b7-b60d-1c12b8a18aed",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "TARGETS",
+   "fact": "The EU maritime-services ban on Russian crude targets Russian oil; its adoption and enforcement would lift oil prices toward the escalation band."
+  },
+  {
+   "source": "1771e1d2-0f16-4dba-b0f3-d8b5c45ba3bd",
+   "target": "7d7dc820-8611-43e2-b38f-32204cec8087",
+   "name": "REPORTS",
+   "fact": "Reuters exclusively reported that Russia raises 2027 military spending by 27%, per budget documents (2026-09-28)"
+  },
+  {
+   "source": "ba952c0c-30e7-444b-b9c9-da9114bdf2b4",
+   "target": "a62334ce-08ab-42aa-971c-1cc1c0ded4bb",
+   "name": "ASSESSES_SPARE_CAPACITY_OF",
+   "fact": "IEA evidence of rebuilt effective OPEC+ spare capacity, most of it Saudi-held, would lower oil-price thresholds and the oil upper tail"
+  },
+  {
+   "source": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SUPPLIES",
+   "fact": "Russia sells diesel to the United States, part of Russia's leverage (fossil-fuel revenue of EUR 683 million/day as of July 2026)."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "d0c6871c-43a2-400a-9f28-6ed2fc6ec9df",
+   "name": "MEASURED_AS",
+   "fact": "The IMF's September 2026 Brent monthly average was published at 102.0181 $/b, differing from the EIA's 114.1591 $/b reading."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "7551d21d-7d9a-4a70-8ba8-6679d987ff4d",
+   "name": "INFLUENCES",
+   "fact": "A Brent monthly average above 117.6927 US dollars per barrel would reprice the energy-inflation channel in every war state"
+  },
+  {
+   "source": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "target": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "name": "COMPETES_WITH",
+   "fact": "US–EU sanctions divergence: US waivers and diesel purchases run opposite to the EU 20th sanctions package track on Russia"
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "name": "SUPPLIES",
+   "fact": "The EU remains the largest buyer of Russian pipeline gas and LNG, meaning disruption of Russian gas supply would outweigh the Middle East fade."
+  },
+  {
+   "source": "125fbacd-eb33-4107-a840-00f87284c19b",
+   "target": "1771e1d2-0f16-4dba-b0f3-d8b5c45ba3bd",
+   "name": "REPORTS_ON",
+   "fact": "Reuters reported that investors expect the FOMC to hold rates at its October 27–28, 2026 meeting, while September Fed minutes put 'considerable probability' on at least 25 basis points more firming by end-2026"
+  },
+  {
+   "source": "fa64be43-f04c-4eaa-b2cf-b804f4e072d8",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "OPPOSES",
+   "fact": "Zelensky said on October 21, 2026 that Ukraine is ready to freeze the conflict along the current front line, while Putin rejects a 'short' ceasefire."
+  },
+  {
+   "source": "d6427f08-d538-4780-8d73-048e95f2feab",
+   "target": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "name": "SUPPORTS",
+   "fact": "SWP Berlin publicly tracks nuclear signaling based on official Russian statements and exercises, supporting NATO-related analysis."
+  },
+  {
+   "source": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "target": "0b972794-6726-4d15-b81e-1cdf149d9e7b",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Reduced-intensity attrition scenario (35%), euro-area GDP growth in 2027 is forecast at 0.8–1.3%."
+  },
+  {
+   "source": "b8fd2582-bbe0-46ae-b746-47be35417b88",
+   "target": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "name": "PARTNERS_WITH",
+   "fact": "The US mediation track, including the ninth in-person Witkoff–Putin meeting, could close the sequencing gap and raise odds of a formal armistice, with talks resuming around November 10 possibly in Abu Dhabi."
+  },
+  {
+   "source": "125fbacd-eb33-4107-a840-00f87284c19b",
+   "target": "1771e1d2-0f16-4dba-b0f3-d8b5c45ba3bd",
+   "name": "REPORTS_ON",
+   "fact": "Per Reuters, investors overwhelmingly expect the FOMC's October 27–28, 2026 meeting to hold rates steady."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "OPPOSES",
+   "fact": "Ceasefire-first (Kyiv) versus final-deal-first (Moscow) is the central obstacle in Russia-Ukraine negotiations; no agreed text exists"
+  },
+  {
+   "source": "37059a7b-693e-4951-a172-1c44b70b77f8",
+   "target": "c21036d3-079d-4d67-a35d-b44d29dc6335",
+   "name": "COMPETES_WITH",
+   "fact": "Trump's US sanctions-relief track (waiving the Graham act and licensing Russian diesel deliveries until April 2027) diverges from the EU's 20th sanctions package, which contemplates a maritime-services ban on Russian crude"
+  },
+  {
+   "source": "37059a7b-693e-4951-a172-1c44b70b77f8",
+   "target": "fa64be43-f04c-4eaa-b2cf-b804f4e072d8",
+   "name": "INFLUENCES",
+   "fact": "Trump is pressing Kyiv and Zelensky to make a deal in the negotiations with Russia."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "OPPOSES",
+   "fact": "Russia and Ukraine remain in armed conflict with no written ceasefire or framework text existing as of 23 October 2026, with all termination paths being forecasts through December 2027."
+  },
+  {
+   "source": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "OPPOSES",
+   "fact": "Russia's Donetsk offensive was 'operationally defeated' and Russia netted −73 sq km since 1 September 2026, evidence of Ukraine's territorial momentum against Russia."
+  },
+  {
+   "source": "bb6fa1a1-18e7-458f-be0b-acf887af27df",
+   "target": "d2b888f7-761d-4fd6-b9cd-db6e2cc9e7ed",
+   "name": "SANCTIONS",
+   "fact": "US Treasury sanctioned Chinese entities in 2024 for co-production of the Garpiya-A1 drone — the first US action on complete weapons systems."
+  },
+  {
+   "source": "3efcdde9-783b-46ce-8928-2b8c63599831",
+   "target": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "name": "INFLUENCES",
+   "fact": "The Middle East energy shock is explicitly cited by the ECB as a driver inside the baseline."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "name": "INFLUENCES",
+   "fact": "Brent above the stored five-year high of 117.6927 U.S. dollars per barrel would confirm escalation pricing under the Active high-intensity war scenario (15% probability)."
+  },
+  {
+   "source": "a518768c-63e0-4f81-9b90-46529dfe4a2b",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "PARTNERS_WITH",
+   "fact": "China's goal is keeping Russia anchored as a dependent partner and eroding US sanctions primacy, per the US-China Commission."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "DEPENDS_ON",
+   "fact": "Russia's 2027 financing squeeze depends on Brent settling; Brent below Russia's $50-per-barrel fiscal-rule cutoff would tighten the squeeze."
+  },
+  {
+   "source": "a842115f-8af8-4aab-8162-cd9fe0b4caa9",
+   "target": "2816d366-aa47-4a89-b4f8-e88e6c556a06",
+   "name": "FUNDS",
+   "fact": "EUR 4.3 billion military allocations May-June 2026 within the EUR 90 billion loan [S12]（sign=+，strength=0.6，valence=allied，polarity=0.60）"
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "f6302ff5-a75e-4c78-ae04-24cf063b51b8",
+   "name": "BACKS",
+   "fact": "The EU continues contracted SAFE instruments through 2027 even under de-escalation scenarios."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "FUNDS",
+   "fact": "EU financing scales up for Ukraine, offsetting Ukraine's manpower constraint; failure of the November 26–27, 2026 EU summit to close the €70 billion 2027 gap would cut Ukraine's war-fighting floor."
+  },
+  {
+   "source": "d0c6871c-43a2-400a-9f28-6ed2fc6ec9df",
+   "target": "57e3baa8-9cb6-4d5e-ba06-a4bcd91359f5",
+   "name": "ESTIMATES",
+   "fact": "The IMF estimates US CPI at 2.73% for 2025 and projects 3.648% for 2026 and 2.835% for 2027"
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "name": "SUPPLIES",
+   "fact": "Trump announced on October 9, 2026 that Russia would supply diesel to US and global markets."
+  },
+  {
+   "source": "d0c6871c-43a2-400a-9f28-6ed2fc6ec9df",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "FUNDS",
+   "fact": "The IMF maintains a Ukraine country program engagement, as reflected in its IMF Ukraine country page and 2026 staff report on Ukraine."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "OPPOSES",
+   "fact": "In the Active high-intensity war scenario, fighting between Russia and Ukraine continues with Black Sea closures disrupting 17% of the world's traded grain and Russia holding a roughly 19% territorial revision that would go unrecognized under Reduced-intensity attrition."
+  },
+  {
+   "source": "0b972794-6726-4d15-b81e-1cdf149d9e7b",
+   "target": "b6cf85be-2805-4f81-8606-485a89c841cf",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Formal armistice scenario (15%), euro-area GDP growth in 2027 is forecast at 1.4–1.9%."
+  },
+  {
+   "source": "d0c6871c-43a2-400a-9f28-6ed2fc6ec9df",
+   "target": "91693ff5-6a34-45dc-8c9b-03a737193fdf",
+   "name": "PROJECTS",
+   "fact": "The IMF projects euro-area GDP growth of 1.208% (used in the report against ECB staff's 1.4%)."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "OPPOSES",
+   "fact": "Russia rejects a 'short' ceasefire and seeks final-deal security parameters, ready to fight on until stated goals are met; a June 2026 ceasefire-for-talks proposal was reportedly rejected, and the Donetsk offensive was 'operationally defeated' (ISW)."
+  },
+  {
+   "source": "1b345037-7ccb-4abb-bbcb-6989e0935af4",
+   "target": "57e3baa8-9cb6-4d5e-ba06-a4bcd91359f5",
+   "name": "PUBLISHES_DATA_FOR",
+   "fact": "Bureau of Labor Statistics figures showed CPI-U inflation of 3.7% for the twelve months to September 2026, after 3.4% in August."
+  },
+  {
+   "source": "fa64be43-f04c-4eaa-b2cf-b804f4e072d8",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "SUPPORTS",
+   "fact": "Zelenskyy said Ukraine is ready to freeze the conflict along the current front line and move to diplomacy."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SANCTIONS",
+   "fact": "The EU's maritime-services ban basis on Russian crude oil and petroleum products serves as the relief lever under a formal armistice scenario, while US waivers and EU sanctions packages pull apart in the Reduced-intensity attrition scenario."
+  },
+  {
+   "source": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "target": "4c9f4b64-19ac-463e-9ac2-3853355ccf11",
+   "name": "INFLUENCES",
+   "fact": "Active high-intensity war (15% probability) implies EA HICP of 3.0–3.5% and US CPI of 3.5–4.0% by end-2027"
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "91693ff5-6a34-45dc-8c9b-03a737193fdf",
+   "name": "PROJECTS",
+   "fact": "ECB staff project 2027 headline inflation averaging 2.5%; core HICP ran 2.5% year-on-year in September 2026."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "a842115f-8af8-4aab-8162-cd9fe0b4caa9",
+   "name": "FUNDS",
+   "fact": "EU Ukraine Support Loan 2026-27; November 26-27 summit on the ~€70 billion gap [S12][S11]（sign=+，strength=0.8，valence=allied，polarity=0.70）"
+  },
+  {
+   "source": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "target": "5d13d3fd-1fe9-47b7-b60d-1c12b8a18aed",
+   "name": "INFLUENCES",
+   "fact": "In the Active high-intensity war scenario, a prospective EU maritime-services ban would tighten Russian crude and lift core inflation above the 2.6% 2027 ECB staff projection"
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "2a357d56-6ca7-462c-bf67-dc0631b2470c",
+   "name": "PRODUCES_SHARE_OF",
+   "fact": "Russia accounts for about 10% of world nickel production (2022 baseline)."
+  },
+  {
+   "source": "440cc0c0-0ac2-488e-9b3c-92f8f07634c4",
+   "target": "68dcb483-d510-45db-883a-ab1cdf017072",
+   "name": "PRICE_SUPPORTED_BY",
+   "fact": "Uranium prices stay supported under the Formal armistice scenario because the US banned enriched-uranium imports from Russia (then ~$1 billion a year) in May 2024, with a legislated ban running to 2028."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "1874bb9b-758d-47bd-b5c9-eabdfc4f498a",
+   "name": "PRICES",
+   "fact": "Brent crude oil settles in US dollars per barrel on the EIA/FRED daily price series (115.22 dollars per barrel on 2026-10-20)."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "7c2ee544-53f9-44ad-ac6f-295b08cfc35d",
+   "name": "INFLUENCES",
+   "fact": "The October 16 Graham Act waiver signed by Trump affected Brent pricing, with December-2026 Brent reported at $109.55/barrel afterward"
+  },
+  {
+   "source": "072b005a-7915-4117-a8b7-3c5598897737",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "PARTNERS_WITH",
+   "fact": "The United States and Ukraine participated with Russia in three trilateral rounds in Abu Dhabi (January 2026) and Abu Dhabi and Geneva (February 2026), which ended without any agreed text."
+  },
+  {
+   "source": "1b345037-7ccb-4abb-bbcb-6989e0935af4",
+   "target": "57e3baa8-9cb6-4d5e-ba06-a4bcd91359f5",
+   "name": "PUBLISHES",
+   "fact": "Bureau of Labor Statistics figures show US CPI, all items, at 3.7% y/y for the 12 months to September 2026 (August: 3.4%)."
+  },
+  {
+   "source": "7bbab5b1-dbb0-45a0-8de1-952b593dce61",
+   "target": "3177f32b-bf45-4dec-b381-607577434b47",
+   "name": "SUPPORTS",
+   "fact": "Defense Minister Boris Pistorius has been visiting key German companies driving defence production, supporting Germany's defence build-up."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "3cec7927-c423-4b35-be3a-cbdb7a9d20ef",
+   "name": "FUNDS",
+   "fact": "The EU funds Ukraine through the EUR 90 billion EU Support Loan for 2026–27, with another €45 billion planned for 2027 against a gap of around €70 billion."
+  },
+  {
+   "source": "072b005a-7915-4117-a8b7-3c5598897737",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "INFLUENCES",
+   "fact": "Trump is pressing Kyiv to make a deal in the Russia-Ukraine negotiations."
+  },
+  {
+   "source": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "target": "b5ee2f22-3f05-4f81-937a-d0053a0c17d2",
+   "name": "BACKS",
+   "fact": "NATO continues European rearmament on its 2035-anchored pledge path under every war state, including the Active high-intensity war and Frozen conflict scenarios."
+  },
+  {
+   "source": "b8354b29-239c-4ac2-b154-4f7827005bad",
+   "target": "91693ff5-6a34-45dc-8c9b-03a737193fdf",
+   "name": "PUBLISHES",
+   "fact": "Eurostat's official series shows euro-area core HICP (ex energy, food, alcohol, tobacco; 20 countries) at 2.5% y/y in September 2026."
+  },
+  {
+   "source": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "target": "13068664-f950-414e-bac4-0e617b0966ab",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Frozen conflict scenario (32%), TTF is forecast at €50–70/MWh."
+  },
+  {
+   "source": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "target": "4c704d2d-e9ea-4054-854a-f1e0f79462d1",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Frozen conflict scenario (32%), European NATO defence spending in 2027 is forecast at $670–710 bn."
+  },
+  {
+   "source": "ba952c0c-30e7-444b-b9c9-da9114bdf2b4",
+   "target": "71112e7c-7807-4dad-a1fb-e7fbdb250a15",
+   "name": "PUBLISHES_ASSESSMENT_ON",
+   "fact": "The IEA maintains an official resource page on the Strait of Hormuz covering oil security and emergency response."
+  },
+  {
+   "source": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "target": "5d13d3fd-1fe9-47b7-b60d-1c12b8a18aed",
+   "name": "INFLUENCES",
+   "fact": "Adoption of the EU maritime-services ban (basis laid, Council adoption threshold, window H1 2027) is a signpost that shifts weight toward the Reduced-intensity attrition scenario (35% probability)"
+  },
+  {
+   "source": "2816d366-aa47-4a89-b4f8-e88e6c556a06",
+   "target": "072b005a-7915-4117-a8b7-3c5598897737",
+   "name": "DEPENDS_ON",
+   "fact": "Starlink/Starshield restrictions degrade interception; US early-warning sharing restored after Oslo [S27][S51]（sign=+，strength=0.8，valence=transactional，polarity=0.30）"
+  },
+  {
+   "source": "425fd87b-fa30-4359-b2cf-0238cf3697e0",
+   "target": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "name": "INFLUENCES",
+   "fact": "A gold monthly average above the stored February 2026 peak of 5,014.645 U.S. dollars per troy ounce would signal safe-haven repricing toward the Active high-intensity war scenario; gold stood at 4,334.7467 dollars per troy ounce in 2026-09, up 18.225% year-on-year."
+  },
+  {
+   "source": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "target": "13068664-f950-414e-bac4-0e617b0966ab",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Reduced-intensity attrition scenario (35%), TTF is forecast at €65–85/MWh."
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "73830d25-f62a-4865-9d8f-7bc71b2d3c5e",
+   "name": "PUBLISHES",
+   "fact": "CHF levels are defined by market quotes with the ECB reference fixing at 14:15 CET."
+  },
+  {
+   "source": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "INFLUENCES",
+   "fact": "The US offered Russia normalization plus Russian help on Iran on Oct 21, 2026, using sanctions, aid and intelligence as leverage."
+  },
+  {
+   "source": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "target": "4c9f4b64-19ac-463e-9ac2-3853355ccf11",
+   "name": "INFLUENCES",
+   "fact": "Frozen conflict (32% probability) implies EA HICP of 2.0–2.4% and US CPI of 2.5–2.9% by end-2027"
+  },
+  {
+   "source": "f6302ff5-a75e-4c78-ae04-24cf063b51b8",
+   "target": "ac2cedc7-3cba-48ab-93ab-b2179e77ee4e",
+   "name": "INFLUENCES",
+   "fact": "Payments slippage under the SAFE €150 billion envelope would weaken the Readiness 2030 layer through 2027."
+  },
+  {
+   "source": "37059a7b-693e-4951-a172-1c44b70b77f8",
+   "target": "3ff99200-43fd-46cc-821b-d40fc9ef4eeb",
+   "name": "WAIVED",
+   "fact": "Trump signed a waiver of the newly passed Graham Sanctioning Russia and Iran Act on October 16, 2026, granting sanctions relief unilaterally and pre-deal on a pre-midterm clock."
+  },
+  {
+   "source": "37059a7b-693e-4951-a172-1c44b70b77f8",
+   "target": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "name": "ISSUED_BY",
+   "fact": "A US Treasury license suspending US sanctions on Russian diesel deliveries until April 2027 was issued under Trump following his October 9, 2026 diesel purchase deal announcement."
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "ef335fe9-1137-4581-a4cb-da5b560c20c2",
+   "name": "PUBLISHES",
+   "fact": "USD levels are defined by market quotes with the ECB reference fixing at 14:15 CET."
+  },
+  {
+   "source": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "target": "564d891a-56e6-417d-b874-9fa5dcec56b4",
+   "name": "INFLUENCES",
+   "fact": "OSINT net territorial change near-zero for three consecutive months in H1 2027 (Russia net −73 km2 since 1 Sep 2026) would raise the probability of the Frozen conflict — 32% scenario."
+  },
+  {
+   "source": "4c9f4b64-19ac-463e-9ac2-3853355ccf11",
+   "target": "8aa19148-d926-4a89-8240-cf3e3a6940a5",
+   "name": "INFLUENCES",
+   "fact": "Euro-area HICP persistently above the ECB's 2.5% 2027 average (HICP was 3.8% in September 2026) is a signpost for ECB path steepening in every war end-state scenario."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "e79458d0-52f7-4cc6-a284-1c03462fa384",
+   "name": "DEPENDS_ON",
+   "fact": "Russia finances its war effort partly through National Wealth Fund drawdown, leaving a thinning buffer as of late October 2026."
+  },
+  {
+   "source": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "OPPOSES",
+   "fact": "Ukraine seeks to freeze the current front line and then obtain security guarantees, refusing to surrender Donbas; Ukraine's deep-strike drone contracts in 2026 run at 5.5x the 2025 level and about 1,080 km2 have been retaken since Jan 1, 2026 (ISW)."
+  },
+  {
+   "source": "b8354b29-239c-4ac2-b154-4f7827005bad",
+   "target": "0b972794-6726-4d15-b81e-1cdf149d9e7b",
+   "name": "MEASURES",
+   "fact": "Eurostat's first full-year 2027 estimate of euro-area real GDP growth is the settling source for whether 2027 growth falls below 1.0%."
+  },
+  {
+   "source": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "target": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "name": "SUPPORTS",
+   "fact": "Putin's stated rejection of a Western presence (warning Europe of war if peacekeeping troops are deployed to Ukraine, per a Washington Post report of September 14, 2026) removes the covariate most associated with durable ceasefires, making a Frozen conflict (32%) likelier than a Formal armistice (15%) or Comprehensive peace settlement (3%)"
+  },
+  {
+   "source": "1874bb9b-758d-47bd-b5c9-eabdfc4f498a",
+   "target": "ccef93b8-0aaa-40db-bfeb-e053389d0e9c",
+   "name": "PUBLISHES_SERIES_FOR",
+   "fact": "The FRED database provides the official Global price of Natural gas, EU series shown in the report figure, with the latest observation up from a year earlier (as of Sept 2026)."
+  },
+  {
+   "source": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "target": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "name": "COMPETES_WITH",
+   "fact": "US sanctions waivers and EU sanctions packages pull apart under the Reduced-intensity attrition scenario, widening sanctions decay between the two."
+  },
+  {
+   "source": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "target": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "name": "INFLUENCES",
+   "fact": "If the US sanctions license suspending measures on Russian diesel until April 2027 lapses, the probability of the Reduced-intensity attrition — 35% scenario rises (window Apr–Dec 2027)."
+  },
+  {
+   "source": "0b972794-6726-4d15-b81e-1cdf149d9e7b",
+   "target": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Active high-intensity war scenario (15%), euro-area GDP growth in 2027 is forecast at 0.2–0.8% (IMF projects 1.208%)."
+  },
+  {
+   "source": "41298df4-d267-403a-8f46-8b43d710226c",
+   "target": "3cec7927-c423-4b35-be3a-cbdb7a9d20ef",
+   "name": "SUPPORTS",
+   "fact": "The Kiel Institute tracks and reports on the EUR 90 billion EU Support Loan for Ukraine's 2026–27 financing."
+  },
+  {
+   "source": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "target": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "name": "INFLUENCES",
+   "fact": "If the US license to Apr 2027 lapses in the Apr–Dec 2027 window, the probability of the Active high-intensity war — 15% scenario rises."
+  },
+  {
+   "source": "a62334ce-08ab-42aa-971c-1cc1c0ded4bb",
+   "target": "5635234e-87d1-48d4-b3f9-6ff1c76b86f7",
+   "name": "IS_A",
+   "fact": "Spare-capacity response conditions the oil price under any war state；- 角色定位: Spare-capacity response conditions the oil price under any war state；- 立场: Raising output: 2.1 mb/d m/m gains in September 2026 led by Saudi Arabia; IEA projects OPEC liquids recovering from 23.9 to 29.2 mb/d into 2027；- 影响力: high；- 目标/动机: Manage supply and revenue；Rebuild market share；- 约束: Spare capacity concentrated in"
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SANCTIONS",
+   "fact": "The EU's 20th sanctions package adds a prospective maritime-services ban as leverage, with relief only in sequence with a deal, while the US waives sanctions."
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "7551d21d-7d9a-4a70-8ba8-6679d987ff4d",
+   "name": "INFLUENCES",
+   "fact": "The ECB Governing Council's 3–4 February 2027 meeting signals would discriminate whether the energy pass-through channel persists: hold-or-hike signals pass-through persisting, while a cut signals de-escalation disinflation consistent with the Frozen conflict or Formal armistice scenarios."
+  },
+  {
+   "source": "425fd87b-fa30-4359-b2cf-0238cf3697e0",
+   "target": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Reduced-intensity attrition scenario (35%), gold is forecast at $4,200–4,800/oz."
+  },
+  {
+   "source": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "target": "4f7f6fad-5d2e-4af1-97b4-30bb3288d6fd",
+   "name": "OPPOSES",
+   "fact": "Ukraine's red line is surrendering Donbas, per Zelensky."
+  },
+  {
+   "source": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "target": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "name": "INFLUENCES",
+   "fact": "Under the Reduced-intensity attrition — 35% scenario, Brent is priced at $85–105/bbl."
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "8aa19148-d926-4a89-8240-cf3e3a6940a5",
+   "name": "SETS",
+   "fact": "The ECB sets the ECB Deposit Facility Rate for the Euro Area, per the FRED series sourced from ECB data."
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "8aa19148-d926-4a89-8240-cf3e3a6940a5",
+   "name": "INFLUENCES",
+   "fact": "The ECB's forecast paths condition the end-2027 ECB deposit rate between 1.50–1.75% (Comprehensive peace settlement) and 2.75–3.00% (Active high-intensity war), anchored on the ECB's 2026 trough of 2.00%"
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "c21036d3-079d-4d67-a35d-b44d29dc6335",
+   "name": "SANCTIONS",
+   "fact": "The EU's reported 20th sanctions package (Oct 2026) lists 120 individuals, lays the basis for a maritime-services ban on Russian crude, and excludes 20 more banks."
+  },
+  {
+   "source": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "INFLUENCES",
+   "fact": "US pressure for a lower tempo exerts leverage over Russia's conduct of the war, a driver of the Reduced-intensity attrition scenario."
+  },
+  {
+   "source": "37059a7b-693e-4951-a172-1c44b70b77f8",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SANCTIONS",
+   "fact": "Trump signed an executive order on October 16, 2026 exempting Russia from the newly passed sanctions law (the \"Lindsey O. Graham Sanctioning Russia and Iran Act of 2026\")."
+  },
+  {
+   "source": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "target": "b6cf85be-2805-4f81-8606-485a89c841cf",
+   "name": "INFLUENCES",
+   "fact": "A Formal armistice would sequence sanctions relief on the diesel-waiver precedent, with the ECB cutting below 2.00% and US headline CPI tracking the IMF's 2.835% for 2027"
+  },
+  {
+   "source": "6bdade6f-99a3-4a69-84d0-0842c30aefbf",
+   "target": "0b972794-6726-4d15-b81e-1cdf149d9e7b",
+   "name": "PROJECTS",
+   "fact": "The IMF WEO series projects euro-area real GDP growth of 1.119% in 2026 and 1.208% in 2027 (after a 1.237% publisher estimate for 2025), below the ECB staff's 1.4% for 2027"
+  },
+  {
+   "source": "37059a7b-693e-4951-a172-1c44b70b77f8",
+   "target": "3ff99200-43fd-46cc-821b-d40fc9ef4eeb",
+   "name": "SANCTIONS",
+   "fact": "Trump signed an executive order on October 16, 2026 waiving the newly passed Lindsey O. Graham Sanctioning Russia and Iran Act of 2026"
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "072b005a-7915-4117-a8b7-3c5598897737",
+   "name": "PARTNERS_WITH",
+   "fact": "Russia and the United States held three trilateral negotiation rounds with Ukraine in Abu Dhabi (January 2026) and Abu Dhabi and Geneva (February 2026); the Geneva round ended in impasse with no text."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "5364df15-00d5-4f28-ac7d-3ccba0b376cb",
+   "name": "INFLUENCES",
+   "fact": "A Comprehensive peace settlement would make even the EIA's $74/b Brent path by 4Q27 look high"
+  },
+  {
+   "source": "d0c6871c-43a2-400a-9f28-6ed2fc6ec9df",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "FUNDS",
+   "fact": "A new IMF financing arrangement for Ukraine is a potential event that would change the view."
+  },
+  {
+   "source": "4c704d2d-e9ea-4054-854a-f1e0f79462d1",
+   "target": "b6cf85be-2805-4f81-8606-485a89c841cf",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Formal armistice scenario (15%), European NATO defence spending in 2027 is forecast at $660–700 bn."
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "cd1e9918-0ec8-49e0-b046-1b5d7e3b7f30",
+   "name": "SETS",
+   "fact": "The European Central Bank sets its key interest rates, as documented on its official key ECB interest rates statistics page."
+  },
+  {
+   "source": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "target": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "name": "OPPOSES",
+   "fact": "Putin warned Europe of war if peacekeeping troops are deployed to Ukraine (Washington Post, September 14, 2026)"
+  },
+  {
+   "source": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "target": "16fa977f-2a0d-4b92-a169-d25f0980514d",
+   "name": "INFLUENCES",
+   "fact": "A repeat of the May 2026 Russian nuclear exercise package or a doctrine change (threshold for 2027) would shift weight toward the Active high-intensity war scenario (15% probability)"
+  },
+  {
+   "source": "4c9f4b64-19ac-463e-9ac2-3853355ccf11",
+   "target": "b6cf85be-2805-4f81-8606-485a89c841cf",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Formal armistice scenario (15%), euro-area HICP y/y in Dec-2027 is forecast at 2.0–2.5%."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "f6302ff5-a75e-4c78-ae04-24cf063b51b8",
+   "name": "BACKS",
+   "fact": "The EU backs SAFE with up to €150 billion in EU-budget-backed loans, adopted by the Council on 27 May 2025, with first payments in mid-2026 including €351.6 million to Estonia and €118.2 million to Greece."
+  },
+  {
+   "source": "ba952c0c-30e7-444b-b9c9-da9114bdf2b4",
+   "target": "71112e7c-7807-4dad-a1fb-e7fbdb250a15",
+   "name": "INFLUENCES",
+   "fact": "The IEA warns that a prolonged Strait of Hormuz disruption could render unavailable the vast majority of the world's spare production capacity, supporting Brent at $100–135/bbl under Active high-intensity war."
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "27c9cadb-543e-45c2-adc6-0fa26e7ac288",
+   "name": "PROJECTS",
+   "fact": "ECB staff project euro-area headline inflation averaging 3.0% in 2026, 2.5% in 2027 and 2.1% in 2028, with 2027–28 headline revised up from June."
+  },
+  {
+   "source": "48af2300-5ded-4e9f-9f86-a15b15e92805",
+   "target": "2816d366-aa47-4a89-b4f8-e88e6c556a06",
+   "name": "ANALYZES",
+   "fact": "OSW (Centre for Eastern Studies) published a June 15, 2026 analysis, 'Ukrainian Armed Forces pin hopes on foreign recruits'."
+  },
+  {
+   "source": "425fd87b-fa30-4359-b2cf-0238cf3697e0",
+   "target": "b6cf85be-2805-4f81-8606-485a89c841cf",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Formal armistice scenario (15%), gold is forecast at $3,700–4,300/oz."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "EXPORT_REVENUE_SUPPORT",
+   "fact": "Brent Crude trading below Russia's $50-per-barrel fiscal-rule cutoff would tighten Russia's 2027 financing squeeze, showing Russia's budget depends on Brent prices staying above that cutoff."
+  },
+  {
+   "source": "ca26acbb-4ad5-46ca-80d7-5f420edb455b",
+   "target": "4fbfbd48-308e-4a24-bea7-11750cd6fb26",
+   "name": "CUSTOMER_OF",
+   "fact": "CREA July 2026 export data; US weighing vessel-level relief [S62][S57]（sign=+，strength=0.7，valence=transactional，polarity=0.40）"
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "name": "INFLUENCES",
+   "fact": "A US licence of October 9, 2026 suspending sanctions on Russian diesel deliveries until April 2027 contributed to partial Russian return already being priced, with WSJ reporting December-2026 Brent at $109.55/barrel after the October 16 Graham Act waiver"
+  },
+  {
+   "source": "7fbaf028-d87d-42ee-b211-29c430132aac",
+   "target": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "name": "INFLUENCES",
+   "fact": "Russian fiscal strain — with wartime deficit targets never met (2025: 0.5% target vs 2.6% outturn; 2026: 1.6% target vs 3.2% now) and 2027 borrowing rising 43% to 7.7 trillion roubles against a 5.5-trillion-rouble (2.2%-of-GDP) deficit target — influences the Reduced-intensity attrition scenario (35%), with mid-2027 amendments a signpost."
+  },
+  {
+   "source": "c21036d3-079d-4d67-a35d-b44d29dc6335",
+   "target": "5d13d3fd-1fe9-47b7-b60d-1c12b8a18aed",
+   "name": "CREATES_BASIS_FOR",
+   "fact": "The EU 20th sanctions package creates the basis for a maritime-services ban on Russian crude oil"
+  },
+  {
+   "source": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "target": "3cec7927-c423-4b35-be3a-cbdb7a9d20ef",
+   "name": "SUSTAINS_DEPENDENCE_ON",
+   "fact": "Under the Reduced-intensity attrition scenario (35%), Ukraine's 2027 funding gap of around €70 billion against another planned €45 billion from the EU sustains dependence on the EUR 90 billion EU Ukraine Support Loan, with debt falling only slowly."
+  },
+  {
+   "source": "4c9f4b64-19ac-463e-9ac2-3853355ccf11",
+   "target": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Active high-intensity war scenario (15%), euro-area HICP y/y in Dec-2027 is forecast at 3.5–4.5% (3.8% in Sep-2026)."
+  },
+  {
+   "source": "6bdade6f-99a3-4a69-84d0-0842c30aefbf",
+   "target": "57e3baa8-9cb6-4d5e-ba06-a4bcd91359f5",
+   "name": "PUBLISHES",
+   "fact": "The official All Items CPI (period average, percent change) for the United States is published by the IMF World Economic Outlook via World Bank Data360, with IMF WEO projections shown."
+  },
+  {
+   "source": "57e3baa8-9cb6-4d5e-ba06-a4bcd91359f5",
+   "target": "125fbacd-eb33-4107-a840-00f87284c19b",
+   "name": "INFLUENCES",
+   "fact": "US CPI above the IMF's projected 2.835% for 2027 (with 2026 projected at 3.648%) is a monthly signpost for Federal Reserve path steepening in every war end-state."
+  },
+  {
+   "source": "b8354b29-239c-4ac2-b154-4f7827005bad",
+   "target": "4c9f4b64-19ac-463e-9ac2-3853355ccf11",
+   "name": "PUBLISHES",
+   "fact": "Eurostat publishes the year-on-year euro-area HICP rate used to read inflation pass-through."
+  },
+  {
+   "source": "57e3baa8-9cb6-4d5e-ba06-a4bcd91359f5",
+   "target": "712bd998-6fe2-4085-bfe8-8c32208b4049",
+   "name": "PUBLISHED_BY",
+   "fact": "World Bank Data360 is the source for the US All Items CPI, period average percent change of 2.952% in 2024 (−1.175 pp YoY)."
+  },
+  {
+   "source": "bb6fa1a1-18e7-458f-be0b-acf887af27df",
+   "target": "7ad7203b-1644-4fd4-9ec1-201d9f013887",
+   "name": "SANCTIONS",
+   "fact": "US Treasury actions track the Russian oil price cap; any legally effective oil-cap waiver would reprice Russian supply."
+  },
+  {
+   "source": "d0c6871c-43a2-400a-9f28-6ed2fc6ec9df",
+   "target": "0b972794-6726-4d15-b81e-1cdf149d9e7b",
+   "name": "INFLUENCES",
+   "fact": "The IMF projects euro-area growth of 1.208% in 2027."
+  },
+  {
+   "source": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "target": "8d267166-deec-4a4f-b744-85a2c45c702f",
+   "name": "PRICES_IN",
+   "fact": "The Dec-27 Brent contract quoted near $82 with only +0.242% backwardation indicates the market already prices an end-2027 state closer to Frozen conflict (32%) or Reduced-intensity attrition (35%) than continued war."
+  },
+  {
+   "source": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "target": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "name": "PARTNERS_WITH",
+   "fact": "Putin's Russia benefits from a US Treasury license suspending sanctions on Russian diesel deliveries until April 2027, part of US-Russia bargaining."
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "8aa19148-d926-4a89-8240-cf3e3a6940a5",
+   "name": "SETS",
+   "fact": "The ECB sets the deposit facility rate; ECB projection rounds fall in March and June 2027 per the official calendar."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "a518768c-63e0-4f81-9b90-46529dfe4a2b",
+   "name": "SUPPORTS",
+   "fact": "China supplies about 75% of exports of Common High Priority goods to Russia, indicating Russia depends on China for these dual-use goods."
+  },
+  {
+   "source": "425fd87b-fa30-4359-b2cf-0238cf3697e0",
+   "target": "d0c6871c-43a2-400a-9f28-6ed2fc6ec9df",
+   "name": "MEASURED_AS",
+   "fact": "The IMF monthly average gold price for September 2026 was 4,334.7467 $/oz, after a February 2026 peak of 5,014.645 and a July reading of 4,075.0968."
+  },
+  {
+   "source": "ba952c0c-30e7-444b-b9c9-da9114bdf2b4",
+   "target": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "name": "CONTEXTUALIZES",
+   "fact": "IEA analysis of slumped Russian gasoil output and exports (due to Ukrainian drone damage to refineries) frames the context alongside the US Treasury license suspending sanctions on Russian diesel deliveries to April 2027 as marginal refined-product pass-through channels of the Russia-Ukraine war."
+  },
+  {
+   "source": "590cd364-f54d-4ae3-a694-41e545844d03",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "SUPPORTS",
+   "fact": "Ukraine's defense minister reported 200,000 soldiers absent without leave and 2 million men evading draft notices, strain evidence supporting the Reduced-intensity attrition scenario (35%)."
+  },
+  {
+   "source": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "target": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "name": "DEPENDS_ON",
+   "fact": "Ukraine relies on the US for security guarantees (Article-5-style option) and US-anchored aid, including intelligence and Starshield access."
+  },
+  {
+   "source": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "target": "b5ee2f22-3f05-4f81-937a-d0053a0c17d2",
+   "name": "BACKS",
+   "fact": "NATO adopted the 5% pledge: 5% of GDP annually by 2035, with at least 3.5% core plus up to 1.5% broader defense spending and annual incremental-path plans."
+  },
+  {
+   "source": "b8fd2582-bbe0-46ae-b746-47be35417b88",
+   "target": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "name": "MET_WITH",
+   "fact": "US envoy Witkoff met Putin on October 21, 2026, after which Russia agreed 'in principle' to resume trilateral talks after November 10, possibly in Abu Dhabi."
+  },
+  {
+   "source": "a7ada591-bdb2-44f8-82af-a95968706bfe",
+   "target": "ac2cedc7-3cba-48ab-93ab-b2179e77ee4e",
+   "name": "PART_OF",
+   "fact": "EDIP is one of the Readiness 2030 instruments running through 2027."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "c45a8636-59a0-4a38-8be9-334d0a260915",
+   "name": "HALTED_COMMERCIAL_TRANSITS_IN",
+   "fact": "Unconfirmed reports state Russia halted Kerch Strait commercial transits on July 10, 2026."
+  },
+  {
+   "source": "4fbfbd48-308e-4a24-bea7-11750cd6fb26",
+   "target": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "name": "DEPENDS_ON",
+   "fact": "Security at 44% of the 2027 budget; deficit targets subordinated to war aims [S61][S60]（sign=+，strength=0.8，valence=directional，polarity=0.40）"
+  },
+  {
+   "source": "072b005a-7915-4117-a8b7-3c5598897737",
+   "target": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "name": "INFLUENCES",
+   "fact": "Ninth Witkoff-Putin meeting; diesel deal and sanctions waivers; Iran linkage [S49][S15][S51]（sign=+，strength=0.7，valence=transactional，polarity=0.20）"
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "8aa19148-d926-4a89-8240-cf3e3a6940a5",
+   "name": "SETS",
+   "fact": "The ECB Governing Council meets February 3–4 and March 17–18, 2027 (March with new projections per the ECB calendar) to decide the deposit-rate path from the 2.50% print, with no pre-commitment"
+  },
+  {
+   "source": "3177f32b-bf45-4dec-b381-607577434b47",
+   "target": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "name": "BACKS",
+   "fact": "€109 billion core defense ask for 2027, +32.7% over 2026 [S17][S66]（sign=+，strength=0.8，valence=allied，polarity=0.70）"
+  },
+  {
+   "source": "eb25dda0-5f97-485d-b32a-530b86ca3c82",
+   "target": "a518768c-63e0-4f81-9b90-46529dfe4a2b",
+   "name": "INFLUENCES",
+   "fact": "The US-China Commission assesses China aims to erode US sanctions primacy via its ~75% share of Common High Priority exports to Russia."
+  },
+  {
+   "source": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "target": "8d267166-deec-4a4f-b744-85a2c45c702f",
+   "name": "DISCOUNTS",
+   "fact": "The steep Brent backwardation (front month +4.742% on October 23 against +0.242% for Dec-27, quoted near $82) means the market prices substantial normalization by end-2027 — closer to Reduced-intensity attrition or Frozen conflict than to Active high-intensity war."
+  },
+  {
+   "source": "3177f32b-bf45-4dec-b381-607577434b47",
+   "target": "dc22495f-af9a-47a1-a5c5-692c568e1b25",
+   "name": "BACKS",
+   "fact": "The German cabinet approved its 2027 draft budget on July 6, 2026, hiking defence and investment spending."
+  },
+  {
+   "source": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "target": "05be3009-3b59-4975-a340-efccdaeb88f4",
+   "name": "SUPPLIES",
+   "fact": "US stockpiles supplied more than 90% of aid under NATO's PURL initiative in H1 2026, underpinning European military aid to Ukraine."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "name": "INFLUENCES",
+   "fact": "A glide of Brent toward the EIA's $74/bbl path by 4Q27 would confirm de-escalation consistent with the Reduced-intensity attrition scenario."
+  },
+  {
+   "source": "b8354b29-239c-4ac2-b154-4f7827005bad",
+   "target": "0b972794-6726-4d15-b81e-1cdf149d9e7b",
+   "name": "PUBLISHES",
+   "fact": "Eurostat's second estimate showed euro-area real GDP grew +0.6% q/q in Q2 2026."
+  },
+  {
+   "source": "d0c6871c-43a2-400a-9f28-6ed2fc6ec9df",
+   "target": "2a357d56-6ca7-462c-bf67-dc0631b2470c",
+   "name": "PRICES",
+   "fact": "Nickel is priced at 16323.8219 US dollars per metric ton on the IMF monthly series as of 2026-09."
+  },
+  {
+   "source": "425fd87b-fa30-4359-b2cf-0238cf3697e0",
+   "target": "d0c6871c-43a2-400a-9f28-6ed2fc6ec9df",
+   "name": "PUBLISHES",
+   "fact": "The IMF publishes the gold price series (US dollars per troy ounce) used as anchor for gold settlements."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "ba952c0c-30e7-444b-b9c9-da9114bdf2b4",
+   "name": "PRICE_INFORMED_BY_PROJECTION_OF",
+   "fact": "Brent forecast bands under the Frozen conflict ($70–88/b) and Comprehensive peace settlement ($60–75/b) scenarios are informed by the IEA's projected 2027 supply rise of 7.7 mb/d."
+  },
+  {
+   "source": "125fbacd-eb33-4107-a840-00f87284c19b",
+   "target": "125fbacd-eb33-4107-a840-00f87284c19b",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Federal Reserve 亦称 Fed"
+  },
+  {
+   "source": "9a8490a9-c243-46f3-8141-c1ade8a2c895",
+   "target": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "name": "INFLUENCES",
+   "fact": "The Russian autumn draft of about 120,000 conscripts is a mobilization marker; overt general mobilization would shift forecast weight toward the Active high-intensity war scenario."
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "91693ff5-6a34-45dc-8c9b-03a737193fdf",
+   "name": "INFLUENCES",
+   "fact": "The ECB Governing Council's 17–18 March and 9–10 June 2027 meetings with new staff projections would reprice the war state, with euro-area core HICP sustained above the ECB staff's 2.6% 2027 core projection indicating second-round effects."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "d0c6871c-43a2-400a-9f28-6ed2fc6ec9df",
+   "name": "PUBLISHES",
+   "fact": "IMF publishes the monthly average series used as an anchor for Brent settlements."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "name": "SANCTIONS",
+   "fact": "Reported 20th package: 120 individuals, maritime-services ban basis, 20 more banks excluded [S14][S53]（sign=-，strength=0.8，valence=adversarial，polarity=-0.70）"
+  },
+  {
+   "source": "b6cf85be-2805-4f81-8606-485a89c841cf",
+   "target": "8f3d474f-ecf0-4c94-92f7-e615cf699c07",
+   "name": "DEPENDS_ON",
+   "fact": "The Formal armistice scenario (15% probability) depends on US sanctions relief being tied to talks, while relief persisting without a deal supports the Reduced-intensity attrition scenario (35%)."
+  },
+  {
+   "source": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "target": "fa64be43-f04c-4eaa-b2cf-b804f4e072d8",
+   "name": "OPPOSES",
+   "fact": "Putin rejects a 'short' ceasefire while Zelensky demands freeze-first [S4][S22]（sign=-，strength=0.9，valence=adversarial，polarity=-0.80）"
+  },
+  {
+   "source": "5d13d3fd-1fe9-47b7-b60d-1c12b8a18aed",
+   "target": "8f3d474f-ecf0-4c94-92f7-e615cf699c07",
+   "name": "COMPETES_WITH",
+   "fact": "US sanctions waivers on Russia extending past April 2027 alongside EU adoption of the 20th package's maritime-services ban would harden transatlantic divergence between the US and EU policy tracks."
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "4c9f4b64-19ac-463e-9ac2-3853355ccf11",
+   "name": "INFLUENCES",
+   "fact": "EU gas storage and price dynamics drive the ECB's HICP pass-through; euro-area HICP was 3.8% in September 2026 versus the ECB's 2.5% 2027 average reference, with the ECB deposit rate at 2.50% and no pre-commitment."
+  },
+  {
+   "source": "125fbacd-eb33-4107-a840-00f87284c19b",
+   "target": "125fbacd-eb33-4107-a840-00f87284c19b",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Federal Reserve 亦称 FOMC"
+  },
+  {
+   "source": "c21036d3-079d-4d67-a35d-b44d29dc6335",
+   "target": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "name": "COMPETES_WITH",
+   "fact": "The sanctions regime diverges: the US license suspends sanctions on Russian diesel deliveries until April 2027, yet the EU's 20th package contemplates a maritime-services ban on Russian crude oil and petroleum products."
+  },
+  {
+   "source": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "target": "ac2cedc7-3cba-48ab-93ab-b2179e77ee4e",
+   "name": "SUPPORTS",
+   "fact": "NATO's alliance-wide front-loading of the 3.5% core defense-spending target underpins the Readiness 2030 spending path."
+  },
+  {
+   "source": "3177f32b-bf45-4dec-b381-607577434b47",
+   "target": "89bf3e7a-19af-4cc4-af94-4d3b914e4707",
+   "name": "BACKS",
+   "fact": "The German cabinet approved on 6 July 2026 a 2027 core defense budget of €109 billion (up from €82.2 billion in 2026) within a €555.4 billion draft budget with €203.6 billion borrowing; the total ask is nearly €140 billion (about $160 billion)."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "5da8b2cd-507b-4f62-b286-f2aaf4294676",
+   "name": "PARTICIPATES_IN",
+   "fact": "The Geneva talks of February 2026 ended in impasse; a repeat failure of the next round is the causal path for the Active high-intensity war scenario (15%)."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "b6cf85be-2805-4f81-8606-485a89c841cf",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Formal armistice scenario (15% weight), Brent is forecast at $65–80/bbl."
+  },
+  {
+   "source": "a518768c-63e0-4f81-9b90-46529dfe4a2b",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SUPPLIES",
+   "fact": "About 75% of exports of Common High Priority goods to Russia come from China."
+  },
+  {
+   "source": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "target": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Frozen conflict scenario (32% weight), Brent is forecast at $70–88/bbl."
+  },
+  {
+   "source": "fa64be43-f04c-4eaa-b2cf-b804f4e072d8",
+   "target": "6765e8ca-e501-4505-b6c0-0eda7113ce20",
+   "name": "OPPOSES",
+   "fact": "Front-line fighting; Ukraine's counteroffensive defeated Russia's Donetsk offensive [S2]（sign=-，strength=0.95，valence=adversarial，polarity=-0.90）"
+  },
+  {
+   "source": "125fbacd-eb33-4107-a840-00f87284c19b",
+   "target": "7551d21d-7d9a-4a70-8ba8-6679d987ff4d",
+   "name": "INFLUENCES",
+   "fact": "Energy pass-through into US rates is the key question the October 27–28 and December 2026 FOMC meetings will discriminate"
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SANCTIONS",
+   "fact": "Sanctions in this framework settle on EU Council decisions and US executive orders targeting Russia."
+  },
+  {
+   "source": "5364df15-00d5-4f28-ac7d-3ccba0b376cb",
+   "target": "0b972794-6726-4d15-b81e-1cdf149d9e7b",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Comprehensive peace settlement scenario (3%), euro-area GDP growth in 2027 is forecast at 1.5–2.2%, with a weighted central of ≈1.2%."
+  },
+  {
+   "source": "8f3d474f-ecf0-4c94-92f7-e615cf699c07",
+   "target": "3ff99200-43fd-46cc-821b-d40fc9ef4eeb",
+   "name": "SUSPENDS",
+   "fact": "US sanctions relief waived the 'Lindsey O. Graham Sanctioning Russia and Iran Act of 2026' by executive order on October 16, 2026."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "4b8c0b53-9c09-41b0-b4f3-a26d2efc11eb",
+   "name": "BACKS",
+   "fact": "The EU supports the European Defence Fund with around €8.8 billion of funding."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "b5ee2f22-3f05-4f81-937a-d0053a0c17d2",
+   "name": "BACKS",
+   "fact": "As of late October 2026, EU financing instruments form one of the three layers of the committed European defense baseline alongside NATO's 2035-anchored pledge and national budgets, above all Germany's."
+  },
+  {
+   "source": "68240114-7725-4f60-8da6-cc3f0d476b97",
+   "target": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "name": "REPORTS_ON",
+   "fact": "The Washington Post reported on September 14, 2026 that Putin warned Europe of war if peacekeeping troops are deployed to Ukraine"
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SANCTIONS",
+   "fact": "The EU adopted a 20th sanctions package: sanctions on 120 individuals, basis for a future maritime-services ban on Russian crude oil and petroleum products, further port-access bans, and 20 more Russian banks under a transaction ban (70 EU-excluded in total)"
+  },
+  {
+   "source": "fa64be43-f04c-4eaa-b2cf-b804f4e072d8",
+   "target": "54e2ad30-cf22-44b1-9956-fab8709ee164",
+   "name": "DEPENDS_ON",
+   "fact": "Restored US intelligence and Starshield access for Ukraine remains contingent after disruptions related to the diesel deal."
+  },
+  {
+   "source": "3efcdde9-783b-46ce-8928-2b8c63599831",
+   "target": "3acc0ae0-d8d8-4d49-863b-1c3ce04961de",
+   "name": "CO_OCCURS_WITH_IN_BASELINE",
+   "fact": "The Middle East energy shock and the Russia-Ukraine war state are the two geopolitical channels inside the macro baseline fixed as of 23 October 2026, with the war state the central driver of the forecast"
+  },
+  {
+   "source": "4c704d2d-e9ea-4054-854a-f1e0f79462d1",
+   "target": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Active high-intensity war scenario (15%), European NATO defence spending in 2027 is forecast at $700–740 bn (≈$634 bn reported for 2026)."
+  },
+  {
+   "source": "7c2ee544-53f9-44ad-ac6f-295b08cfc35d",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SANCTIONS",
+   "fact": "A reported waiver (Oct 2026) of the Graham Sanctioning Russia and Iran Act of 2026 relieves sanctions on Russia."
+  },
+  {
+   "source": "f4651a7a-c691-4378-9cb3-57a6ad110bc9",
+   "target": "7b0c2168-4332-4780-abc9-23fc5ce4de98",
+   "name": "INFLUENCES",
+   "fact": "Weekly US diesel prices rose from $3.48/gallon on January 5, 2026 to a peak of $6.53/gallon on September 21, 2026, hurting Republicans ahead of the November 3 legislative elections"
+  },
+  {
+   "source": "5364df15-00d5-4f28-ac7d-3ccba0b376cb",
+   "target": "8aa19148-d926-4a89-8240-cf3e3a6940a5",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Comprehensive peace settlement scenario (3%), the ECB deposit rate on 31-Dec-2027 is forecast at 2.00–2.50%, with a weighted central of ≈2.65%."
+  },
+  {
+   "source": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "target": "fa64be43-f04c-4eaa-b2cf-b804f4e072d8",
+   "name": "SUPPORTS",
+   "fact": "Zelensky has stated openness to freezing the frontline, contributing to a 32% forecast probability of a frozen conflict (de facto ceasefire without signature) by end-2027."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "INFLUENCES",
+   "fact": "Brent averaged 102.0181 US dollars per barrel in September 2026 versus 67.6091 a year earlier, influencing Russia's export revenues, which fell 12% month-on-month to EUR 683 million per day."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "BACKS",
+   "fact": "The European Union underwrites Ukraine's budget path via the EUR 90 billion EU Ukraine Support Loan."
+  },
+  {
+   "source": "bb6fa1a1-18e7-458f-be0b-acf887af27df",
+   "target": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "name": "ISSUED",
+   "fact": "The US Treasury issued a license suspending sanctions on Russian diesel deliveries until April 2027, a relief channel affecting refined-product pass-through."
+  },
+  {
+   "source": "13068664-f950-414e-bac4-0e617b0966ab",
+   "target": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Active high-intensity war scenario (15%), TTF is forecast at €85–110/MWh (spot €92.07 on 2026-10-23)."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "7fdd371d-22e4-4c64-a2bf-b5d995136910",
+   "name": "BACKS",
+   "fact": "The European Union convenes a summit on November 26–27, 2026 on 2027 Ukraine funding and the next EU budget, testing aid sustainability into 2027"
+  },
+  {
+   "source": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "target": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "name": "DEPENDS_ON",
+   "fact": "Ukraine's restored access to US intelligence and Starshield remains contingent on US decisions, per the report."
+  },
+  {
+   "source": "7bbab5b1-dbb0-45a0-8de1-952b593dce61",
+   "target": "3177f32b-bf45-4dec-b381-607577434b47",
+   "name": "REQUESTS_FUNDING_FOR",
+   "fact": "German Defence Minister Pistorius is asking parliament for nearly €140 billion (about $160 billion) for 2027 — €109.7 billion from the core ministry budget, a 32.7% increase over 2026, plus roughly €30 billion from other sources."
+  },
+  {
+   "source": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "target": "5d13d3fd-1fe9-47b7-b60d-1c12b8a18aed",
+   "name": "MAINTAINS",
+   "fact": "Under the Reduced-intensity attrition scenario (35%), partial truces lapse and revive while the basis for the EU maritime-services ban on Russian crude oil and petroleum products stays on the books."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "24eb2718-7e18-43a8-9dbd-2a5ecc747abf",
+   "name": "PRODUCES_SHARE_OF",
+   "fact": "Russia holds an estimated 8.7% of titanium sponge production excluding US output, per USGS."
+  },
+  {
+   "source": "5364df15-00d5-4f28-ac7d-3ccba0b376cb",
+   "target": "13068664-f950-414e-bac4-0e617b0966ab",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Comprehensive peace settlement scenario (3%), TTF is forecast at €40–55/MWh, with a weighted central of ≈€70/MWh."
+  },
+  {
+   "source": "5364df15-00d5-4f28-ac7d-3ccba0b376cb",
+   "target": "4c9f4b64-19ac-463e-9ac2-3853355ccf11",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Comprehensive peace settlement scenario (3%), euro-area HICP y/y in Dec-2027 is forecast at 1.9–2.4%, with a weighted central of ≈2.9%."
+  },
+  {
+   "source": "1874bb9b-758d-47bd-b5c9-eabdfc4f498a",
+   "target": "8aa19148-d926-4a89-8240-cf3e3a6940a5",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the official ECB Deposit Facility Rate for Euro Area series."
+  },
+  {
+   "source": "072b005a-7915-4117-a8b7-3c5598897737",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "INFLUENCES",
+   "fact": "At an Oslo meeting on October 20, 2026, US envoy Witkoff, Zelensky, and Finnish, Norwegian, European and NATO representatives tabled proposals with no resulting text; Witkoff then met Putin in St. Petersburg on October 21, 2026 (their ninth in-person meeting, three hours), with US citizen Stephen Hubbard released."
+  },
+  {
+   "source": "425fd87b-fa30-4359-b2cf-0238cf3697e0",
+   "target": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Active high-intensity war scenario (15%), gold is forecast at $4,600–5,300/oz (Sep-2026 average $4,334.7467)."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "name": "SUPPORTS",
+   "fact": "The EU's 20th-package sanctions ratchet and new 2027 Ukraine funding loan (Nov 2026–H1 2027) support the Reduced-intensity attrition scenario (35%), with the Active high-intensity war scenario (15%) more likely if the €70 billion gap stays unfilled."
+  },
+  {
+   "source": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "target": "ca26acbb-4ad5-46ca-80d7-5f420edb455b",
+   "name": "SANCTIONS",
+   "fact": "Reuters reported on October 15, 2026 that the US is considering removing sanctions on some shadow-fleet vessels to cut freight rates."
+  },
+  {
+   "source": "125fbacd-eb33-4107-a840-00f87284c19b",
+   "target": "1d69ebb5-cf41-484c-9e15-005036c65a19",
+   "name": "SET_POLICY_RATE",
+   "fact": "The FOMC maintained the federal funds target range upper limit at 4% as of September 2026; Desk survey respondents before the September FOMC meeting placed considerable probability on at least 25 basis points of additional firming by end-2026."
+  },
+  {
+   "source": "96350577-2a55-47a1-b655-c1a47363c432",
+   "target": "b5ee2f22-3f05-4f81-937a-d0053a0c17d2",
+   "name": "BACKS",
+   "fact": "SAFE's up to €150 billion in EU-backed loans, together with the Hague pledge of 5% of GDP by 2035, bind the trajectory of European defence spending upward even under a Comprehensive peace settlement central of ≈USD 670 billion for 2027, which exceeds 2026 spending."
+  },
+  {
+   "source": "b8354b29-239c-4ac2-b154-4f7827005bad",
+   "target": "4c9f4b64-19ac-463e-9ac2-3853355ccf11",
+   "name": "PUBLISHES",
+   "fact": "Eurostat released euro-area headline HICP at 3.8% y/y for September 2026 (release of 16 Oct 2026)."
+  },
+  {
+   "source": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "target": "3edd289c-c592-4473-ada5-dd06ef0abf2b",
+   "name": "OPPOSES",
+   "fact": "Putin's stated stance favors a final-deal security framework rather than a 'short' ceasefire, weighing against a full front-line ceasefire or armistice being in force by 1 July 2027."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "OPPOSES",
+   "fact": "Russia continues to hold about 19% of Ukraine's territory amid a turning front, with Russia's four-week gain falling from 37 to 3 square miles and a net Ukrainian recapture of 20 square miles on 13–19 October 2026"
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "d0c6871c-43a2-400a-9f28-6ed2fc6ec9df",
+   "name": "PUBLISHES_SERIES_FOR",
+   "fact": "The IMF provides the official Brent Crude (US dollars per barrel) price series shown in the report figure, with the latest observation up from a year earlier, near the top of the charted range (as of Sept 2026)."
+  },
+  {
+   "source": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "OPPOSES",
+   "fact": "Zelensky said on Fox News on October 21, 2026 that Ukraine is ready to freeze the conflict along the current front line, rejects surrendering Donbas, and proposed ceasefires on food security, maritime activity and energy infrastructure — a position ISW assesses Russia's stance effectively rejects."
+  },
+  {
+   "source": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "target": "b51653e8-254a-41f6-9c0a-0d7d00ce3ffa",
+   "name": "INFLUENCES",
+   "fact": "Under the Active high-intensity war scenario (15%), wheat is forecast above 700 USd/Bu"
+  },
+  {
+   "source": "c5af1a08-e78a-431d-9417-5e84074ee1f1",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "OPPOSES",
+   "fact": "ISW assesses Russia's Donetsk offensive as 'operationally defeated', giving Ukraine leverage."
+  },
+  {
+   "source": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "target": "04afe6d5-4609-44a6-8e70-f95f139fcedb",
+   "name": "BACKS",
+   "fact": "NATO's 2035-anchored pledge underwrites European rearmament, which rises under every conflict state."
+  },
+  {
+   "source": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "target": "13068664-f950-414e-bac4-0e617b0966ab",
+   "name": "INFLUENCES",
+   "fact": "Under the Reduced-intensity attrition — 35% scenario, TTF is priced at €65–85/MWh."
+  },
+  {
+   "source": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "target": "09ae9388-3b41-4d75-95c1-99e20e6fff4f",
+   "name": "SUPPORTS",
+   "fact": "Putin agreed on October 21, 2026 to resume three-way peace talks with Ukraine and the US, and Putin and Zelenskyy backed three-way US peace talks on Ukraine."
+  },
+  {
+   "source": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "DEPENDS_ON",
+   "fact": "Kyiv's acceptance of a freeze conditioned on a US guarantee is an indicator that would support the Frozen conflict scenario."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "name": "PARTNERS_WITH",
+   "fact": "SAFE loans up to €150 billion alongside the Hague pledge [S115][S16]（sign=+，strength=0.7，valence=allied，polarity=0.60）"
+  },
+  {
+   "source": "fa64be43-f04c-4eaa-b2cf-b804f4e072d8",
+   "target": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "name": "SUPPORTS",
+   "fact": "Zelensky named NATO membership as one of three unagreed postwar security-guarantee options on October 22, 2026"
+  },
+  {
+   "source": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "target": "4c9f4b64-19ac-463e-9ac2-3853355ccf11",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Reduced-intensity attrition scenario (35%), euro-area HICP y/y in Dec-2027 is forecast at 2.8–3.4%."
+  },
+  {
+   "source": "1b345037-7ccb-4abb-bbcb-6989e0935af4",
+   "target": "57e3baa8-9cb6-4d5e-ba06-a4bcd91359f5",
+   "name": "PUBLISHES",
+   "fact": "BLS publishes US CPI-U, used to read inflation pass-through."
+  },
+  {
+   "source": "ba952c0c-30e7-444b-b9c9-da9114bdf2b4",
+   "target": "a62334ce-08ab-42aa-971c-1cc1c0ded4bb",
+   "name": "REPORTS_ON",
+   "fact": "The IEA October 2026 Oil Market Report records OPEC+ gains of 2.1 mb/d m/m, projects supply averaging 100.7 mb/d in 2026 and rising 7.7 mb/d in 2027."
+  },
+  {
+   "source": "fa64be43-f04c-4eaa-b2cf-b804f4e072d8",
+   "target": "09ae9388-3b41-4d75-95c1-99e20e6fff4f",
+   "name": "SUPPORTS",
+   "fact": "Zelenskyy backed three-way US peace talks on Ukraine and named three postwar security guarantees for Ukraine (October 21–22, 2026)."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "072b005a-7915-4117-a8b7-3c5598897737",
+   "name": "SUPPORTS",
+   "fact": "Putin has offered to help Trump with Iran, linking the Russia-Ukraine negotiation track to wider US–Russia bargaining."
+  },
+  {
+   "source": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "target": "8aa19148-d926-4a89-8240-cf3e3a6940a5",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Reduced-intensity attrition scenario (35%), the ECB deposit rate on 31-Dec-2027 is forecast at 2.50–3.00%."
+  },
+  {
+   "source": "3177f32b-bf45-4dec-b381-607577434b47",
+   "target": "04afe6d5-4609-44a6-8e70-f95f139fcedb",
+   "name": "SUPPORTS",
+   "fact": "German defense budgets support European rearmament; slippage in German or NATO defense budgets would weaken the rearmament floor."
+  },
+  {
+   "source": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "target": "b8e78443-b21d-4148-8714-c2a775e3bf88",
+   "name": "INFLUENCES",
+   "fact": "The 2.5% inflation threshold for 2027 equals the ECB staff projection for the 2027 average, and state-conditioned ranges place Reduced-intensity attrition wholly above it while Frozen conflict straddles it."
+  },
+  {
+   "source": "8f3d474f-ecf0-4c94-92f7-e615cf699c07",
+   "target": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "name": "INCLUDES",
+   "fact": "US sanctions relief includes a Treasury license suspending US sanctions on Russian diesel deliveries until April 2027, with durability dependent on whether it is extended past April 2027 with no deal or rescinded."
+  },
+  {
+   "source": "125fbacd-eb33-4107-a840-00f87284c19b",
+   "target": "072b005a-7915-4117-a8b7-3c5598897737",
+   "name": "COMPETES_WITH",
+   "fact": "Fed hiking into an election cycle with fuel-price politics; 'Inflation remains elevated' [S106][S15]（sign=-，strength=0.4，valence=neutral，polarity=-0.10）"
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "European Central Bank 亦称 ECB"
+  },
+  {
+   "source": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SUPPORTS",
+   "fact": "Putin agreed on Oct 21-23, 2026 to resume trilateral talks after November 10 on final-deal security parameters, not a 'short' ceasefire, supporting Russia's negotiation stance."
+  },
+  {
+   "source": "066c84ea-d73f-4c13-bd0d-9a408f1aca12",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "OPPOSES",
+   "fact": "SCEEUS assesses Russia holds a conventional, nuclear and hybrid escalation menu."
+  },
+  {
+   "source": "3177f32b-bf45-4dec-b381-607577434b47",
+   "target": "b5ee2f22-3f05-4f81-937a-d0053a0c17d2",
+   "name": "BACKS",
+   "fact": "As of late October 2026, Germany's national budget is a key layer of the committed European defense baseline resting on NATO's 2035-anchored pledge, alongside EU financing instruments, with a core budget line of €109 billion for 2027, a ministry budget of about €108 billion for 2026, and EUR 119.7 billion for 2026 including off-budget items per IISS."
+  },
+  {
+   "source": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "target": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Reduced-intensity attrition scenario (35% weight), Brent is forecast at $85–105/bbl."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "1874bb9b-758d-47bd-b5c9-eabdfc4f498a",
+   "name": "PUBLISHES_SERIES_FOR",
+   "fact": "FRED provides the official Crude Oil Prices: Brent - Europe (World) series, with the latest observation up from a year earlier and near the top of the charted range"
+  },
+  {
+   "source": "05be3009-3b59-4975-a340-efccdaeb88f4",
+   "target": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "name": "OPERATED_BY",
+   "fact": "NATO's PURL initiative is a NATO aid initiative under which US stockpiles supplied more than 90% of aid."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Active high-intensity war scenario (15% weight), Brent is forecast at $100–135/bbl (spot $115.22 on 2026-10-20)."
+  },
+  {
+   "source": "09ae9388-3b41-4d75-95c1-99e20e6fff4f",
+   "target": "8a73aef2-3f71-4641-b0ba-46897a1c1d3b",
+   "name": "LOCATED_IN",
+   "fact": "Trilateral Russia-Ukraine-US talks, possibly held in Abu Dhabi, may convene on or after November 10, 2026, and would discriminate between a Formal armistice and continued attrition."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "b51653e8-254a-41f6-9c0a-0d7d00ce3ffa",
+   "name": "PRICES",
+   "fact": "Wheat is priced in CBOT USd/Bu as a settlement anchor for Ukrainian-asset repricing under each end-state."
+  },
+  {
+   "source": "1771e1d2-0f16-4dba-b0f3-d8b5c45ba3bd",
+   "target": "dc22495f-af9a-47a1-a5c5-692c568e1b25",
+   "name": "REPORTS_ON",
+   "fact": "Reuters reported on July 6, 2026 that the German cabinet approved the 2027 draft budget, hiking defence and investment spending."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "a820f8ea-6290-466c-916d-3a26fa994a7a",
+   "name": "BACKS",
+   "fact": "EU leaders are to meet November 26–27, 2026 on 2027 Ukraine funding — €45 billion planned under a new loan against an estimated €70 billion funding gap."
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "abfc9654-0dfa-4ab5-b55c-209b8a1a2b8a",
+   "name": "PUBLISHES",
+   "fact": "The ECB reference rate for EUR/RON was 5.3450 on 22 Oct 2026."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "OPPOSES",
+   "fact": "Russia's minimum goal is a freeze keeping roughly 19% of Ukraine; its red line is Western peacekeeping troops in Ukraine (Washington Post report)."
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "29c2ca43-db8a-4b40-a405-7384a359f0b9",
+   "name": "PUBLISHES",
+   "fact": "The ECB reference rate for EUR/HUF was 366.43 on 22 Oct 2026."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "ba952c0c-30e7-444b-b9c9-da9114bdf2b4",
+   "name": "PROJECTS_PRICE_OF",
+   "fact": "The IEA puts Brent futures near $107/bbl in October 2026, while Brent's monthly average stood at 102.0181 U.S. dollars per barrel in 2026-09, up 50.894% year-on-year."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "3cec7927-c423-4b35-be3a-cbdb7a9d20ef",
+   "name": "BACKS",
+   "fact": "The EU operates the EUR 90 billion EU Ukraine Support Loan for Ukraine's budgetary and defense needs in 2026–2027, which drove nearly EUR 11 billion of allocations in May–June 2026 (EUR 4.3 billion military, EUR 6.7 billion financial and humanitarian)."
+  },
+  {
+   "source": "1771e1d2-0f16-4dba-b0f3-d8b5c45ba3bd",
+   "target": "1399c52c-7561-407c-99fd-8d9b3ae323a6",
+   "name": "SUPPORTS",
+   "fact": "Per Reuters, around €70 billion is planned against another planned €45 billion from the EU on the EUR 90 billion EU Ukraine Support Loan."
+  },
+  {
+   "source": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "INFLUENCES",
+   "fact": "Putin stated that Russia should consider restricting exports of uranium, titanium and nickel, per Reuters (September 11, 2024)."
+  },
+  {
+   "source": "bb6fa1a1-18e7-458f-be0b-acf887af27df",
+   "target": "ca26acbb-4ad5-46ca-80d7-5f420edb455b",
+   "name": "SANCTIONS",
+   "fact": "The US administration is considering lifting sanctions on some Russian shadow-fleet vessels to cut freight rates, as reported around October 14–15, 2026."
+  },
+  {
+   "source": "37059a7b-693e-4951-a172-1c44b70b77f8",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "INFLUENCES",
+   "fact": "Trump told Ukraine to stop attacking Russian refineries; Zelensky said Ukraine would comply only if Russia reciprocated or the US provided more Patriot interceptors"
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "91693ff5-6a34-45dc-8c9b-03a737193fdf",
+   "name": "PROJECTS",
+   "fact": "ECB staff project euro-area core inflation (excluding energy, food, alcohol and tobacco) at 2.5% in 2026, 2.6% in 2027 and 2.3% in 2028."
+  },
+  {
+   "source": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "target": "440cc0c0-0ac2-488e-9b3c-92f8f07634c4",
+   "name": "INFLUENCES",
+   "fact": "Putin suggested in September 2024 restricting uranium, titanium and nickel exports, which could push uranium above $80/lb"
+  },
+  {
+   "source": "ba952c0c-30e7-444b-b9c9-da9114bdf2b4",
+   "target": "a62334ce-08ab-42aa-971c-1cc1c0ded4bb",
+   "name": "ASSESSES_SPARE_CAPACITY_OF",
+   "fact": "A secondary summary of the IEA's September 2026 report put effective OPEC+ spare capacity at 0.22 mb/d, unverified against the IEA's own page, whose most recent verifiable figure is over 4 mb/d in Q4 2025"
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "072b005a-7915-4117-a8b7-3c5598897737",
+   "name": "PARTNERS_WITH",
+   "fact": "On October 21, 2026, Russia agreed 'in principle' to resume trilateral talks with the United States and Ukraine after November 10, possibly in Abu Dhabi, though no agenda text exists."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "b9ac9e7e-87c8-4cd3-800a-0f25b2b8ff43",
+   "name": "BACKS",
+   "fact": "The EU continues contracted EDIP instruments through 2027 even under de-escalation scenarios."
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "name": "REGULATES",
+   "fact": "Deposit rate 2.50% after September 2026 hike; staff projections frame EU macro policy [S5][S9]（sign=+，strength=0.6，valence=neutral，polarity=0.20）"
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "name": "FUNDS",
+   "fact": "The EU plans another €45 billion in support for Ukraine, which enters 2027 with a funding gap of around €70 billion, on top of the EUR 90 billion EU Ukraine Support Loan."
+  },
+  {
+   "source": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SUPPLIES",
+   "fact": "The US diesel purchase deal, with Treasury waivers suspending sanctions on Russian diesel deliveries, provides export revenue support to Russia."
+  },
+  {
+   "source": "3f2623fe-b7b5-4074-bec2-d94212717967",
+   "target": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "name": "SANCTIONS",
+   "fact": "The EU Council maintains the EU maritime ban on Russian oil, which stays on the books under the reduced-intensity attrition scenario."
+  },
+  {
+   "source": "a518768c-63e0-4f81-9b90-46529dfe4a2b",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SUPPLIES",
+   "fact": "China accounts for about 75% of exports of Common High Priority goods to Russia (2026)."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "42c179cd-3723-4e4f-9fb8-afb85b3b3e36",
+   "name": "INFLUENCES",
+   "fact": "The EU's planned €45 billion for 2027 falls short of Ukraine's estimated ~€70 billion funding gap, per Reuters, keeping upward pressure on budgets."
+  },
+  {
+   "source": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SUPPLIES",
+   "fact": "Trump announced a Russian diesel purchase deal on October 9, 2026 aimed at lowering US diesel prices ahead of the November 3 elections"
+  },
+  {
+   "source": "a7aeea12-7661-4ab7-9209-8601420c0b59",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "INFLUENCES",
+   "fact": "The non-official Sachs framework is the only retrieved full-relief text, proposing all sanctions on Russia lifted and immobilized Euroclear assets released in stages by December 31, 2027."
+  },
+  {
+   "source": "b8354b29-239c-4ac2-b154-4f7827005bad",
+   "target": "27c9cadb-543e-45c2-adc6-0fa26e7ac288",
+   "name": "PUBLISHES_DATA_FOR",
+   "fact": "Eurostat's 16 October 2026 release reported euro-area headline HICP inflation of 3.8% year on year in September 2026, up from 3.2% in August and 2.2% a year earlier."
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "b9ac9e7e-87c8-4cd3-800a-0f25b2b8ff43",
+   "name": "BACKS",
+   "fact": "The EU underwrites EDIP with €1.5 billion in grants over 2025–27."
+  },
+  {
+   "source": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "target": "4c704d2d-e9ea-4054-854a-f1e0f79462d1",
+   "name": "BACKS",
+   "fact": "NATO's June 2026 release reports European Allies and Canada 2026 defence spending at about USD 634 billion, 2.53% of GDP, up from a verified USD 571 billion (2021 prices) in 2025."
+  },
+  {
+   "source": "0fda6073-c4c9-436f-8edf-da178f85a7c6",
+   "target": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "name": "INFLUENCES",
+   "fact": "Under the Active high-intensity war — 15% scenario, Brent is priced at $100–135/bbl."
+  },
+  {
+   "source": "072b005a-7915-4117-a8b7-3c5598897737",
+   "target": "fa64be43-f04c-4eaa-b2cf-b804f4e072d8",
+   "name": "INFLUENCES",
+   "fact": "Trump pressing Kyiv to deal; relations deteriorated sharply after the diesel deal [S3][S51]（sign=-，strength=0.7，valence=transactional，polarity=-0.20）"
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "0b972794-6726-4d15-b81e-1cdf149d9e7b",
+   "name": "PROJECTS",
+   "fact": "ECB staff project euro-area real GDP growth of 0.9% in 2026, 1.4% in 2027 and 1.5% in 2028, revised up on 'greater than expected resilience'"
+  },
+  {
+   "source": "17ad2f13-ea3a-4545-85b3-6459a8374863",
+   "target": "fa64be43-f04c-4eaa-b2cf-b804f4e072d8",
+   "name": "SUPPORTS",
+   "fact": "Zelensky has proposed truces on food security, maritime activity and energy infrastructure, which in the Reduced-intensity attrition scenario would trim product and grain premia"
+  },
+  {
+   "source": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "target": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "European Union 亦称 EU"
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "8cd2ad70-e4a4-4607-a2e4-01ed0d361374",
+   "name": "DEPENDS_ON",
+   "fact": "Russia's fiscal rule sets a $50-per-barrel oil price cutoff; Brent settling below it would tighten Russia's 2027 financing squeeze."
+  },
+  {
+   "source": "11e18204-36ae-4c2e-b9a7-94503a522140",
+   "target": "3edd289c-c592-4473-ada5-dd06ef0abf2b",
+   "name": "VERIFIES",
+   "fact": "Entry into force of any Russia–Ukraine full front-line ceasefire or armistice would be confirmed by ISW as the settling source."
+  },
+  {
+   "source": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "target": "0b972794-6726-4d15-b81e-1cdf149d9e7b",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Frozen conflict scenario (32%), euro-area GDP growth in 2027 is forecast at 1.1–1.6%."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "8f3d474f-ecf0-4c94-92f7-e615cf699c07",
+   "name": "INFLUENCES",
+   "fact": "Oil futures pulled back as the U.S. waived some Russia sanctions, per a WSJ report on traders weighing the Russia sanctions waiver against Middle East risks"
+  },
+  {
+   "source": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "target": "5d13d3fd-1fe9-47b7-b60d-1c12b8a18aed",
+   "name": "INFLUENCES",
+   "fact": "The EU adopting or deferring the maritime-services ban (Council decision) is an indicator that could shift the outlook toward the Frozen conflict scenario (32% probability)."
+  },
+  {
+   "source": "5d13d3fd-1fe9-47b7-b60d-1c12b8a18aed",
+   "target": "5e97d295-a652-41eb-97a9-c9158e28f9fa",
+   "name": "SANCTIONS",
+   "fact": "The EU 20th sanctions package laid the basis for a maritime-services ban on Russian crude oil and petroleum products (Oct 2026)."
+  },
+  {
+   "source": "a518768c-63e0-4f81-9b90-46529dfe4a2b",
+   "target": "6765e8ca-e501-4505-b6c0-0eda7113ce20",
+   "name": "SUPPORTS",
+   "fact": "US Treasury sanctioned Chinese entities for Garpiya co-production in 2024 [S67][S68]（sign=+，strength=0.6，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "f209d3ab-3fa8-4740-a8bc-5f7713bc8dc3",
+   "target": "0b972794-6726-4d15-b81e-1cdf149d9e7b",
+   "name": "REPORTS",
+   "fact": "GMK Center reports euro-area Q2 2026 GDP growth of 0.6% quarter on quarter as roughly 1.2% year on year"
+  },
+  {
+   "source": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "target": "ff37cd09-7032-4957-8835-d4fddcf6b543",
+   "name": "SUPPORTS",
+   "fact": "NATO reported that core defense spending by Europe and Canada rose 11 percent in 2026, as tracked in NATO's Defence Investment of NATO Countries (2014-2026) data."
+  },
+  {
+   "source": "f6302ff5-a75e-4c78-ae04-24cf063b51b8",
+   "target": "ac2cedc7-3cba-48ab-93ab-b2179e77ee4e",
+   "name": "PART_OF",
+   "fact": "SAFE is one of the Readiness 2030 instruments (alongside EDIP) whose payments began mid-2026 and run through 2027."
+  },
+  {
+   "source": "b8354b29-239c-4ac2-b154-4f7827005bad",
+   "target": "91693ff5-6a34-45dc-8c9b-03a737193fdf",
+   "name": "PUBLISHES",
+   "fact": "Monthly Eurostat HICP releases track the headline–core gap, with euro-area core HICP sustained above the ECB staff's 2.6% 2027 core projection indicating second-round effects through the energy channel."
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "9a8490a9-c243-46f3-8141-c1ade8a2c895",
+   "name": "HAS_ATTRIBUTE",
+   "fact": "Russia planned a 120,000-conscript autumn draft for 2026, plus a fourth increase in authorized strength and a directive to cut male regional-administration staff by 10–15%, maturing into potential new offensive capability under the Active high-intensity war scenario."
+  },
+  {
+   "source": "fa64be43-f04c-4eaa-b2cf-b804f4e072d8",
+   "target": "b66fb575-0f99-4711-8485-86bb197a9cce",
+   "name": "DEPENDS_ON",
+   "fact": "Told to stop striking Russian refineries, Zelensky said Ukraine would comply only if Russia reciprocated or the US provided more Patriot interceptors."
+  },
+  {
+   "source": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "target": "d0c6871c-43a2-400a-9f28-6ed2fc6ec9df",
+   "name": "PUBLISHED_BY",
+   "fact": "The IMF is the source for Brent Crude unit prices, which stood at 102.0181 USD per barrel in 2026-09 (+50.9% YoY)."
+  },
+  {
+   "source": "5367b650-951a-4c26-b06c-9c5605dfc194",
+   "target": "4c9f4b64-19ac-463e-9ac2-3853355ccf11",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Frozen conflict scenario (32%), euro-area HICP y/y in Dec-2027 is forecast at 2.3–2.8%."
+  },
+  {
+   "source": "d949cc43-fc7a-4de7-a634-3e78ece9b1bc",
+   "target": "3177f32b-bf45-4dec-b381-607577434b47",
+   "name": "BACKS",
+   "fact": "IISS estimates Germany's 2026 defense spending at EUR 119.7 billion including off-budget-inclusive totals, per figures circulating as of late October 2026."
+  },
+  {
+   "source": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SUSPENDS_SANCTIONS_ON",
+   "fact": "The US diesel licence suspends US sanctions on Russian diesel deliveries, with a lapse or extension decision at end-April 2027."
+  },
+  {
+   "source": "5364df15-00d5-4f28-ac7d-3ccba0b376cb",
+   "target": "7517038e-86d5-4a12-a2cd-18b322380111",
+   "name": "FORECAST_RANGE_UNDER",
+   "fact": "Under the Comprehensive peace settlement scenario (3% weight), Brent is forecast at $60–75/bbl, with a weighted central of ≈$89/bbl."
+  },
+  {
+   "source": "3e3f02ab-a66d-49e4-a84d-11ea2d3081dc",
+   "target": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "name": "SANCTIONS",
+   "fact": "A Treasury license suspends US sanctions on Russian diesel deliveries until April 2027, following Trump's announced Russian diesel purchase deal on October 9, 2026"
+  },
+  {
+   "source": "7ef8d5a2-19d1-4026-89db-5c3e0e9b6a67",
+   "target": "427103e8-519f-423c-894a-b50756462d5e",
+   "name": "HAS_ATTRIBUTE",
+   "fact": "Russia's 2026 fiscal deficit is 3.2% of GDP, with 2027 borrowing up 43%, weighing against the Active high-intensity war scenario (15%)."
+  },
+  {
+   "source": "f4651a7a-c691-4378-9cb3-57a6ad110bc9",
+   "target": "7b0c2168-4332-4780-abc9-23fc5ce4de98",
+   "name": "INFLUENCES",
+   "fact": "Weekly US diesel prices peaked at $6.53/gallon on September 21, 2026, ahead of the November 3, 2026 US midterms, making the elections a test of the durability of the diesel waiver and relief track"
+  },
+  {
+   "source": "52a07749-6f7a-4ab2-a7ae-279c8c1c08bd",
+   "target": "a518768c-63e0-4f81-9b90-46529dfe4a2b",
+   "name": "SANCTIONS",
+   "fact": "Garpiya drone co-production involving China was sanctioned in 2024, exposing China to secondary sanctions."
+  },
+  {
+   "source": "b94eeea2-ea86-43a7-8faf-affc22ee0b22",
+   "target": "7ea2fd43-1b16-4247-aa3c-3d1babdd8e3b",
+   "name": "SUPPORTS",
+   "fact": "Ukraine's unagreed security-guarantee options include NATO membership, direct US guarantees modeled on NATO's Article 5, or a European 'Coalition of the Willing' backed by Washington."
+  },
+  {
+   "source": "c576f13e-04c2-4bc4-9cd7-288929298d3e",
+   "target": "29d90e5f-fee0-4de5-96fc-52b32da1f605",
+   "name": "PUBLISHES",
+   "fact": "The ECB reference rate for EUR/PLN was 4.3695 on 22 Oct 2026."
+  },
+  {
+   "source": "b5ee2f22-3f05-4f81-937a-d0053a0c17d2",
+   "target": "4c704d2d-e9ea-4054-854a-f1e0f79462d1",
+   "name": "INFLUENCES",
+   "fact": "The 2035 Hague pledge anchors continued European defense spending even under a Comprehensive peace settlement, limiting near-term downside to the aggregate defense spending path."
+  },
+  {
+   "source": "b635f27a-d4f8-4b20-8efe-baa96397dcae",
+   "target": "85bcc654-41c4-4db3-ae54-61c1f21b1234",
+   "name": "SUPPORTS",
+   "fact": "Putin offered to help Trump with Iran, linking the Ukraine track to wider US-Russia bargaining"
+  }
+ ],
+ "graph_id": "mirofish_2b046215639240d6"
+}

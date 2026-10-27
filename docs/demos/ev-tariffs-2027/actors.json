@@ -1,0 +1,2336 @@
+{
+  "central_question": "As of 30 June 2027, will the EU definitive countervailing duties on Chinese battery-electric vehicles (Implementing Regulation (EU) 2024/2754, up to 35.3% on top of the 10% tariff) remain in force unchanged, be replaced by a negotiated price-undertaking or minimum-price agreement, or otherwise be altered — and will China take retaliatory measures against EU automotive exports before that date?",
+  "as_of_date": "2026-10-20",
+  "situation_brief": {
+    "current_situation": "EU definitive countervailing duties of 7.8%–35.3% (BYD 17.0%, Geely 18.8%, SAIC 35.3%, Tesla Shanghai 7.8%, cooperating 20.7%, residual 35.3%) have applied since 30 October 2024 for five years (expiry 31 October 2029). One company-specific undertaking from Volkswagen (Anhui), accepted 9–10 February 2026 via Implementing Decision (EU) 2026/328 and Implementing Regulation (EU) 2026/330, exempts that exporter; all others remain dutied. WTO dispute DS630 panel was composed 13 October 2025; final report not expected before Q2 2027; both parties pre-agreed MPIA-style Article 25 appeal arbitration on 31 July 2025.",
+    "context": "China's WTO challenge (consultations 4 November 2024, panel established 25 April 2025) runs parallel to negotiations: minimum-price talks restarted December 2025, Commission undertaking guidance issued 12 January 2026, and a 9 October 2026 EU-China understanding caps Chinese hybrid exports (~350,000/year over four years via a safeguard with provisionals advertised for December 2026) and commits to 'immediately begin negotiations on electric vehicle price undertakings'. China has imposed calibrated retaliation: final brandy duties up to 34.9% (from 5 July 2025) with minimum-price exemptions for major cognac houses, final pork duties 4.9%–19.8% (from 17 December 2025), dairy finals reported at 7.4%–11.7% after provisionals of 21.9%–42.7%.",
+    "dynamics": "The five-year expiry clock does not bind before the horizon; no expiry-review decision point falls before 30 June 2027. The February 2026 VW (Anhui) precedent shows a ~9-week review cycle for accepting new undertakings. The DS630 report barely overlaps the horizon, and appeal arbitration would push resolution past it. China's retaliation pattern is calibrated and reversible, with final rates set well below provisionals and linked to EV-talk progress (Reuters reported cognac relief conditioned on EV-tariff progress). German politics shifted from opposing duties (2024) to joining France in pressing for stronger trade defence (Merz–Macron letter, 2026).",
+    "fault_lines": [
+      "Commission openness to undertakings vs its doubt that a single minimum price would counter subsidy-caused injury",
+      "MOFCOM's insistence on government-to-government negotiation vs the Commission's company-specific undertaking model",
+      "French protectionist coalition vs German OEM exposure to Chinese retaliation (~1/3 of 2023 German car sales in China)",
+      "Chinese exporters' discount-driven volume strategies vs undertaking minimum prices and quotas",
+      "WTO legal challenge vs Commission defence of its instrument"
+    ],
+    "catalysts": [
+      "EU hybrid safeguard provisional measures advertised for December 2026",
+      "Any second undertaking decision naming BYD, SAIC, Geely or Tesla in the Official Journal (Nov 2026 – May 2027)",
+      "DS630 panel report, not before Q2 2027",
+      "Any MOFCOM initiation notice on large-displacement EU cars or other sectors",
+      "Withdrawal or tightening of brandy minimum-price exemptions"
+    ]
+  },
+  "actors": [
+    {
+      "name": "European Commission (DG TRADE)",
+      "type": "Organization",
+      "role": "Sole authority accepting undertakings, conducting reviews and defending DS630 litigation",
+      "stance": "Definitive duties in force; guidance issued 12 January 2026 for undertaking offers; accepted only VW (Anhui) offer so far",
+      "description": "Imposed Implementing Regulation (EU) 2024/2754; ran partial interim review Dec 2025–Feb 2026; issued undertaking guidance covering minimum import prices, sales channels, cross-compensation and EU investments; challenges China's dairy and brandy measures at the WTO.",
+      "stated_vs_revealed": "States offers will be assessed objectively, fairly and non-discriminatorily per WTO rules; revealed behaviour is a single company-specific acceptance rather than a general minimum-price deal.",
+      "memory": "Accepted VW (Anhui) undertaking 9 Feb 2026 after a review initiated 4 Dec 2025; issued guidance 12 Jan 2026; reached 9 Oct 2026 Beijing understanding on hybrids.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "DG Trade",
+        "the Commission"
+      ],
+      "goals": [
+        "Defend the countervailing instrument at the WTO",
+        "Obtain WTO-compatible price undertakings that offset subsidy-caused injury",
+        "Preserve non-discrimination among exporters"
+      ],
+      "constraints": [
+        "Must defend duties in DS630; panel report not before Q2 2027",
+        "Believes a single minimum price would not counter injury",
+        "Non-discrimination principle limits selective deals"
+      ],
+      "assets": [
+        "Sole proposer of measures and amendments",
+        "Undertaking acceptance and withdrawal powers (Art. 13(9))",
+        "Review initiation powers under Art. 19(2) of Reg. (EU) 2016/1037"
+      ],
+      "vulnerabilities": [
+        "Adverse WTO panel findings could force modification",
+        "Member-state QMV pressure",
+        "Chinese retaliation against EU exports"
+      ],
+      "incentives": [
+        {
+          "driver": "Instrument credibility",
+          "gains_if": "Duties persist or undertakings demonstrably offset injury",
+          "loses_if": "Measures repealed or struck down at WTO",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Rules-based trade",
+          "Non-discrimination",
+          "WTO compatibility"
+        ],
+        "beliefs": [
+          "Duties counter a threat of injury from unfair subsidies",
+          "A single minimum price would not suffice"
+        ],
+        "identity": "EU trade-defence authority",
+        "frame": "Fair trade through lawful instruments"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "Sole decision-maker on undertakings and reviews"
+      }
+    },
+    {
+      "name": "Maroš Šefčovič",
+      "type": "Person",
+      "role": "EU Trade Commissioner leading EU-China negotiation",
+      "stance": "Negotiating undertakings and market access; reached 9 October 2026 Beijing understanding",
+      "description": "Leads the EU-China negotiation track, including the hybrid-export cap understanding reported to improve China market access for €4 billion of EU products and to open EV price-undertaking negotiations.",
+      "stated_vs_revealed": "Frames outcomes as WTO-compatible solutions; delivered one political framework (9 Oct 2026) but only one company undertaking so far.",
+      "memory": "9 October 2026 Beijing understanding capping hybrid exports and opening EV undertaking talks.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "Šefčovič"
+      ],
+      "goals": [
+        "Negotiated EU-China settlement",
+        "Market access for EU exporters"
+      ],
+      "constraints": [
+        "Must defend duties at WTO",
+        "Member-state politics"
+      ],
+      "assets": [
+        "Negotiating mandate and Commission channel with MOFCOM"
+      ],
+      "vulnerabilities": [
+        "Dependence on MOFCOM reciprocity"
+      ],
+      "incentives": [
+        {
+          "driver": "Settlement legacy",
+          "gains_if": "Undertaking deal accepted by both sides",
+          "loses_if": "Talks collapse and retaliation escalates",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Negotiated solutions",
+          "EU interest"
+        ],
+        "beliefs": [
+          "Both duties and undertakings remain open instruments"
+        ],
+        "identity": "Trade Commissioner",
+        "frame": "Managed de-escalation"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.9,
+        "basis": "Lead negotiator for the EU"
+      }
+    },
+    {
+      "name": "China Ministry of Commerce (MOFCOM)",
+      "type": "Government",
+      "role": "Counterpart negotiator and retaliation authority",
+      "stance": "Wants government-to-government minimum-price agreement instead of duties; opposes company-level carve-outs",
+      "description": "Restarted minimum-price talks (announced 11 December 2025); holds retaliation files (brandy, pork, dairy implemented; large-displacement car tariffs signalled since June 2024 but not implemented); committed on 9 October 2026 to immediately begin EV price-undertaking negotiations.",
+      "stated_vs_revealed": "States Chinese makers are 'simply more competitive' and demands government-to-government negotiation; revealed pattern ties brandy/pork relief to EV-tariff progress, using undertakings as settlement currency.",
+      "memory": "Cut pork final rates five days after announcing EV-talk restart; conditioned cognac minimum-price deal on EV-tariff progress (Reuters).",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "MOFCOM"
+      ],
+      "goals": [
+        "Replace duties with a government-level minimum-price deal",
+        "Retain retaliation leverage",
+        "Protect Chinese exporters' competitiveness"
+      ],
+      "constraints": [
+        "Chinese exporters' discount strategies clash with minimum prices",
+        "Mutual export exposure (China exports 21.071% of GDP, 2025)",
+        "EU challenges brandy/dairy measures at WTO"
+      ],
+      "assets": [
+        "Retaliation files: brandy up to 34.9%, pork 4.9%–19.8%, dairy reported 7.4%–11.7%",
+        "DS630 complainant status",
+        "Signalled large-engine-car tariff option"
+      ],
+      "vulnerabilities": [
+        "Calibrated retaliation reveals bargaining rather than protection aims, weakening legal defence",
+        "Export dependence"
+      ],
+      "incentives": [
+        {
+          "driver": "Market access for Chinese EVs",
+          "gains_if": "Undertaking deal lowering effective burden",
+          "loses_if": "Duties persist unchanged and litigation drags",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "State-led negotiation",
+          "Reciprocity"
+        ],
+        "beliefs": [
+          "Duties are unjustified; retaliation is calibrated bargaining"
+        ],
+        "identity": "China's trade authority",
+        "frame": "Bargaining-chip diplomacy"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "Counterpart decision-maker with retaliation power"
+      }
+    },
+    {
+      "name": "WTO DS630 panel",
+      "type": "Organization",
+      "role": "Arbiter of China's challenge to EU countervailing duties (DS630)",
+      "stance": "Procedural: timetable extended; final report not expected before Q2 2027",
+      "description": "Established 25 April 2025, composed 13 October 2025, members unnamed; 17 third parties including the US; timetable extended 1 April 2026 at parties' request; Article 25 MPIA-style appeal arbitration pre-agreed 31 July 2025 forecloses appeal into the void.",
+      "stated_vs_revealed": "Stated timeline: final report to parties not before Q2 2027; no earlier signals.",
+      "memory": "US third-party filings ran 20 April–31 July 2026.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "arbiter",
+      "aliases": [
+        "DS630 panel",
+        "WTO Dispute Settlement Body"
+      ],
+      "goals": [
+        "Issue a final panel report after full submissions"
+      ],
+      "constraints": [
+        "Translation into three official languages before circulation",
+        "Both parties requested more time"
+      ],
+      "assets": [
+        "Authority to find against the EU measure"
+      ],
+      "vulnerabilities": [
+        "Timeline slips push legal effect past the horizon"
+      ],
+      "incentives": [
+        {
+          "driver": "Due process",
+          "gains_if": "Both parties accept the process",
+          "loses_if": "Further delays",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Multilateral dispute settlement"
+        ],
+        "beliefs": [],
+        "identity": "WTO adjudicator",
+        "frame": "Procedural neutrality"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.75,
+        "basis": "Ruling could force modification but timing limits in-window effect"
+      }
+    },
+    {
+      "name": "German government",
+      "type": "Government",
+      "role": "Council actor; shifted from duty opponent to joint trade-defence advocate",
+      "stance": "Voted against duties in October 2024; by 2026 jointly presses with France for stronger trade-defence instruments",
+      "description": "Under Chancellor Merz, co-signed with Macron a letter to von der Leyen seeking an instrument to cut unfair trading partners off from the single market; China fell from Germany's second-largest export market (2021) to ninth by H1 2026 (GTAI data).",
+      "stated_vs_revealed": "Voted against duties in 2024 but lobbied for stronger trade defence by 2026 — converging with Paris.",
+      "memory": "October 2024 vote against; 2026 Merz–Macron letter.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Berlin"
+      ],
+      "goals": [
+        "Protect German industry from unfair practices and retaliation",
+        "Support the automotive sector"
+      ],
+      "constraints": [
+        "German OEMs' ~1/3 of 2023 sales in China",
+        "QMV requires partners"
+      ],
+      "assets": [
+        "Council voting weight",
+        "Franco-German axis"
+      ],
+      "vulnerabilities": [
+        "OEM exposure to Chinese retaliation"
+      ],
+      "incentives": [
+        {
+          "driver": "Industry protection",
+          "gains_if": "Settlement lowering retaliation risk while shielding industry",
+          "loses_if": "Escalation hits German car exports",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Export competitiveness",
+          "European industrial policy"
+        ],
+        "beliefs": [
+          "Chinese competition threatens German autos"
+        ],
+        "identity": "Lead EU economy, pro-settlement turned defensive",
+        "frame": "Economic security"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.8,
+        "basis": "Council weight and OEM exposure"
+      }
+    },
+    {
+      "name": "French government",
+      "type": "Government",
+      "role": "Anchor of the pro-tariff coalition in the Council",
+      "stance": "Voted in favour of duties 4 October 2024; by 2026 presses with Germany for stronger trade-defence instruments",
+      "description": "Leads the protectionist bloc; French exports bear Chinese brandy duties up to 34.9% and provisional dairy duties up to 42.7%.",
+      "stated_vs_revealed": "Consistent support for the measures; retaliation has not shifted its pro-duty stance.",
+      "memory": "October 2024 vote in favour; 2026 joint letter with Germany.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Paris"
+      ],
+      "goals": [
+        "Maintain duties protecting French manufacturers",
+        "Obtain relief for cognac and dairy"
+      ],
+      "constraints": [
+        "Brandy and dairy retaliation exposure",
+        "Reliance on Commission decisions"
+      ],
+      "assets": [
+        "Council voting weight",
+        "Franco-German axis on trade defence"
+      ],
+      "vulnerabilities": [
+        "Cognac/dairy sectors under Chinese duties"
+      ],
+      "incentives": [
+        {
+          "driver": "Protection of national industry",
+          "gains_if": "Duties hold and retaliation eases",
+          "loses_if": "Undertakings erode protection or retaliation tightens",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Economic patriotism",
+          "EU trade defence"
+        ],
+        "beliefs": [
+          "Duties protect EU BEV producers"
+        ],
+        "identity": "Protectionist anchor",
+        "frame": "Fair competition"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.75,
+        "basis": "Council anchor of pro-measure bloc"
+      }
+    },
+    {
+      "name": "Volkswagen Group",
+      "type": "Organization",
+      "role": "German OEM; via Volkswagen (Anhui) the sole undertaking holder",
+      "stance": "Secured the only accepted BEV undertaking (9–10 February 2026)",
+      "description": "Its Anhui subsidiary's undertaking pairs an annual quota with a minimum import price, documentation and monitoring duties, exempting it from duties under Decision (EU) 2026/328 and Reg. (EU) 2026/330; welcomed the Franco-German car-industry deal.",
+      "stated_vs_revealed": "Lobbied against duties in 2024; then used the undertaking route to carve itself out.",
+      "memory": "Undertaking accepted February 2026.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "stakeholder",
+      "aliases": [
+        "VW",
+        "Volkswagen (Anhui)"
+      ],
+      "goals": [
+        "Duty-free access for its China-built BEV exports",
+        "Stable EU-China trade"
+      ],
+      "constraints": [
+        "Minimum-price and quota commitments",
+        "Art. 13(9) withdrawal on breach with retroactive collection"
+      ],
+      "assets": [
+        "Only accepted undertaking",
+        "Political weight in Berlin"
+      ],
+      "vulnerabilities": [
+        "Undertaking lapse if breached",
+        "China market exposure"
+      ],
+      "incentives": [
+        {
+          "driver": "Cost advantage vs competitors",
+          "gains_if": "Undertaking holds and rivals stay dutied or join",
+          "loses_if": "Undertaking withdrawn",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Volume and market share"
+        ],
+        "beliefs": [
+          "Negotiated prices beat tariffs"
+        ],
+        "identity": "German major with China operations",
+        "frame": "Pragmatic accommodation"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.8,
+        "basis": "Holds the precedent-setting undertaking"
+      }
+    },
+    {
+      "name": "BYD",
+      "type": "Organization",
+      "role": "Largest Chinese BEV exporter; potential undertaking applicant and localiser",
+      "stance": "Dutied at 17.0%; no undertaking offer on record",
+      "description": "Faces 17.0% CVD; Rhodium rates its undertaking prospects low because its plug-in-hybrid exports fall outside the duty's scope; pursues discount-driven strategies (e.g., Germany subsidies-plus-incentives) and localisation (Hungary plant, volumes unquantified in official sources).",
+      "stated_vs_revealed": "No formal offer despite Commission guidance; behaviour suggests discount strategy incompatible with undertakings.",
+      "memory": "Chinese brands' share of EU imports from China rose from 50% (2023) to over 70% (2025).",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "BYD Group"
+      ],
+      "goals": [
+        "Grow EU volume via discounts and PHEV substitution"
+      ],
+      "constraints": [
+        "17.0% duty on BEV exports",
+        "Undertaking minimum prices would cap discounts"
+      ],
+      "assets": [
+        "PHEV exports outside duty scope",
+        "Hungary localisation"
+      ],
+      "vulnerabilities": [
+        "Hybrid safeguard (December 2026) could cap its PHEV channel"
+      ],
+      "incentives": [
+        {
+          "driver": "Volume growth",
+          "gains_if": "Duties persist while PHEV channel stays open",
+          "loses_if": "Hybrid cap plus undertaking constraints",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Scale and cost leadership"
+        ],
+        "beliefs": [
+          "Chinese makers are 'simply more competitive' (MOFCOM framing)"
+        ],
+        "identity": "Chinese EV champion",
+        "frame": "Competitive expansion"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 2,
+        "score": 0.75,
+        "basis": "Key exporter shaping undertaking incentives and substitution"
+      }
+    },
+    {
+      "name": "SAIC Group",
+      "type": "Organization",
+      "role": "Chinese exporter at the top duty rate",
+      "stance": "Dutied at 35.3%; no undertaking offer on record",
+      "description": "Faces the 35.3% rate (also the residual for non-cooperators), giving it the strongest nominal incentive toward an undertaking.",
+      "stated_vs_revealed": "No offer submitted as of February 2026 Commission record.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "aliases": [
+        "SAIC"
+      ],
+      "goals": [
+        "Reduce duty burden"
+      ],
+      "constraints": [
+        "Top duty rate",
+        "Undertaking minimum prices"
+      ],
+      "vulnerabilities": [
+        "Highest duty among majors"
+      ],
+      "incentives": [
+        {
+          "driver": "Duty relief",
+          "gains_if": "Undertaking replaces duties",
+          "loses_if": "Duties hold at 35.3%",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Market access"
+        ],
+        "beliefs": [],
+        "identity": "Chinese state-linked OEM",
+        "frame": "Cost competition"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "Duty-rate leader shaping undertaking incentives"
+      }
+    },
+    {
+      "name": "Geely Group",
+      "type": "Organization",
+      "role": "Chinese exporter at 18.8% duty",
+      "stance": "Dutied at 18.8%; no undertaking offer on record",
+      "description": "Faces 18.8% CVD; no formal undertaking submission in the Commission record.",
+      "stated_vs_revealed": "No offer on record.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Geely"
+      ],
+      "goals": [
+        "Grow EU sales"
+      ],
+      "constraints": [
+        "18.8% duty",
+        "Discount strategies vs minimum prices"
+      ],
+      "vulnerabilities": [
+        "Hybrid safeguard exposure"
+      ],
+      "incentives": [
+        {
+          "driver": "Duty relief",
+          "gains_if": "Undertaking deal",
+          "loses_if": "Duties plus hybrid cap",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Expansion"
+        ],
+        "beliefs": [],
+        "identity": "Chinese OEM",
+        "frame": "Cost competition"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.45,
+        "basis": "Mid-rate duty payer, potential undertaking applicant"
+      }
+    },
+    {
+      "name": "Tesla (Shanghai)",
+      "type": "Organization",
+      "role": "Individual-rate exporter from Shanghai plant",
+      "stance": "Holds 7.8% individual rate; no undertaking offer on record",
+      "description": "Granted 7.8% on individual examination; its Shanghai-built share of EU imports from China fell from 30% (2023) to 10% (2025) as Chinese brands rose above 70%.",
+      "stated_vs_revealed": "No undertaking offer in the record.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Tesla"
+      ],
+      "goals": [
+        "Maintain low-duty EU access"
+      ],
+      "constraints": [
+        "7.8% duty still applies"
+      ],
+      "assets": [
+        "Lowest duty rate among majors"
+      ],
+      "vulnerabilities": [
+        "Falling EU import share"
+      ],
+      "incentives": [
+        {
+          "driver": "Margin preservation",
+          "gains_if": "Status quo or duty removal",
+          "loses_if": "Retaliation or escalation",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Efficiency"
+        ],
+        "beliefs": [],
+        "identity": "US OEM exporting from China",
+        "frame": "Global production optimisation"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.45,
+        "basis": "Individual-rate exporter with Shanghai exposure"
+      }
+    },
+    {
+      "name": "BMW and Mercedes-Benz Group",
+      "type": "Organization",
+      "role": "German majors exposed to Chinese retaliation",
+      "stance": "Opposed duties in 2024 alongside VDA and IG Metall",
+      "description": "About one third of 2023 German car sales were in China; they lobbied against duties fearing retaliation, though the German lobby shifted toward trade defence by 2026.",
+      "stated_vs_revealed": "Opposed duties in 2024; no dated public position since in the record.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "BMW",
+        "Mercedes-Benz"
+      ],
+      "goals": [
+        "Avoid Chinese retaliation",
+        "Preserve China market access"
+      ],
+      "constraints": [
+        "China exposure"
+      ],
+      "assets": [
+        "Lobbying weight"
+      ],
+      "vulnerabilities": [
+        "Large-engine-car tariff threat signalled since June 2024"
+      ],
+      "incentives": [
+        {
+          "driver": "China market protection",
+          "gains_if": "Negotiated settlement",
+          "loses_if": "Escalation scenario",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Export market access"
+        ],
+        "beliefs": [
+          "Tariffs invite retaliation"
+        ],
+        "identity": "Premium German exporters",
+        "frame": "Free-trade pragmatism"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.55,
+        "basis": "Retaliation-exposed majors in the pro-settlement coalition"
+      }
+    },
+    {
+      "name": "Renault and Stellantis",
+      "type": "Organization",
+      "role": "French manufacturers benefiting from protection",
+      "stance": "Protected by the duties; no dated public position in the retrieved record",
+      "description": "Their weight enters through Paris's pro-tariff vote; Stellantis also partners Leapmotor's European localisation (output volumes unquantified in official sources).",
+      "stated_vs_revealed": "No dated public position in the record; interest alignment with French vote.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Renault",
+        "Stellantis"
+      ],
+      "goals": [
+        "Maintain protection from Chinese competition"
+      ],
+      "constraints": [
+        "Depend on French government advocacy"
+      ],
+      "assets": [
+        "Leapmotor partnership (Stellantis)"
+      ],
+      "vulnerabilities": [
+        "Cheap Chinese imports if duties lapse"
+      ],
+      "incentives": [
+        {
+          "driver": "Home-market share",
+          "gains_if": "Duties hold unchanged",
+          "loses_if": "Undertakings erode price protection",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Domestic manufacturing"
+        ],
+        "beliefs": [
+          "Duties shield EU BEV producers"
+        ],
+        "identity": "French/ Franco-Italian OEMs",
+        "frame": "Protection"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.4,
+        "basis": "Beneficiaries acting via Paris"
+      }
+    },
+    {
+      "name": "VDA (German automotive association)",
+      "type": "Organization",
+      "role": "German industry voice against duties, favouring negotiated prices",
+      "stance": "Lobbied against duties in 2024; German automotive lobby shifted toward trade defence by 2026",
+      "description": "With IG Metall, lobbied against the duties in 2024; by 2026 pressure from the German automotive lobby itself for trade defence grew.",
+      "stated_vs_revealed": "Anti-duty in 2024; membership pressure later favoured more defence.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "amplifier",
+      "aliases": [
+        "Verband der Automobilindustrie"
+      ],
+      "goals": [
+        "Avoid retaliation and trade conflict"
+      ],
+      "constraints": [
+        "Member firms' diverging strategies"
+      ],
+      "assets": [
+        "Lobbying access in Berlin"
+      ],
+      "vulnerabilities": [
+        "Shifting member positions"
+      ],
+      "incentives": [
+        {
+          "driver": "Industry stability",
+          "gains_if": "Negotiated settlement",
+          "loses_if": "Escalation",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Export industry interests"
+        ],
+        "beliefs": [
+          "Tariffs harm German OEMs"
+        ],
+        "identity": "Industry association",
+        "frame": "Interest representation"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.4,
+        "basis": "Amplifier of German industry positions"
+      }
+    },
+    {
+      "name": "ACEA",
+      "type": "Organization",
+      "role": "Carmaker association signalling industry consensus",
+      "stance": "Publishes EU registration data (BEVs at 19.4% of Q1 2026 registrations); no explicit duty position in record",
+      "description": "Reported EU new-car registrations up 4% in Q1 2026 with BEVs at 19.4% of the market.",
+      "stated_vs_revealed": "No explicit duty position in the retrieved record.",
+      "influence": "low",
+      "simulation_tier": 4,
+      "role_class": "amplifier",
+      "goals": [
+        "Industry competitiveness"
+      ],
+      "constraints": [
+        "Heterogeneous membership"
+      ],
+      "assets": [
+        "Data publication and voice"
+      ],
+      "incentives": [
+        {
+          "driver": "Consensus signalling",
+          "gains_if": "Stable policy environment",
+          "loses_if": "Fragmentation",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Automotive industry interests"
+        ],
+        "beliefs": [],
+        "identity": "EU carmaker association",
+        "frame": "Industry representation"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 4,
+        "score": 0.25,
+        "basis": "Data and signalling role only"
+      }
+    },
+    {
+      "name": "EU member-state governments in Council",
+      "type": "Government",
+      "role": "Advisory voters on trade measures; QMV pressure channel",
+      "stance": "4 October 2024 vote: 10 in favour (incl. France, Italy), 5 against (incl. Germany), 12 abstentions (incl. Spain)",
+      "description": "No Council vote on the duties appears in the record after October 2024; leverage since runs through review consent, lobbying and the parallel hybrid negotiation.",
+      "stated_vs_revealed": "The 2024 vote fixed the political map; Franco-German convergence since reshaped it toward defence.",
+      "memory": "October 2024 vote split.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "the Council"
+      ],
+      "goals": [
+        "National interest balances between protection and export exposure"
+      ],
+      "constraints": [
+        "Advisory vote only; Commission decides"
+      ],
+      "assets": [
+        "QMV signalling"
+      ],
+      "vulnerabilities": [
+        "Split coalitions"
+      ],
+      "incentives": [
+        {
+          "driver": "Domestic politics",
+          "gains_if": "Outcomes matching national industry mixes",
+          "loses_if": "Retaliation hits national exporters",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "National interest"
+        ],
+        "beliefs": [],
+        "identity": "EU legislature in trade",
+        "frame": "Coalition politics"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.5,
+        "basis": "Can shift Commission course through QMV pressure"
+      }
+    },
+    {
+      "name": "Chinese brandy, dairy and pork exporters to China",
+      "type": "Other",
+      "role": "Targets of Chinese investigations that constrain EU choices",
+      "stance": "Under Chinese duties: brandy up to 34.9% (major houses exempt at minimum prices), pork 4.9%–19.8%, dairy reported 7.4%–11.7%",
+      "description": "Affected trade: pork over $2 billion; dairy $589 million of 2024 imports; brandy deposits from October 2024 provisionals refunded; exemptions and rate cuts pattern tied to EV-talk progress.",
+      "stated_vs_revealed": "Exemptions granted but price levels and review terms undisclosed — bargaining currency.",
+      "memory": "Brandy deal reported conditional on EV-tariff progress (Reuters, 27 June 2025).",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "aliases": [
+        "EU agricultural exporters"
+      ],
+      "goals": [
+        "Relief and rollback of Chinese duties"
+      ],
+      "constraints": [
+        "Hostage to EV-talk progress"
+      ],
+      "assets": [
+        "Minimum-price exemptions for major cognac houses"
+      ],
+      "vulnerabilities": [
+        "Withdrawal or tightening of exemptions"
+      ],
+      "incentives": [
+        {
+          "driver": "Export relief",
+          "gains_if": "EU-China settlement",
+          "loses_if": "Talks collapse and exemptions tighten",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Export livelihoods"
+        ],
+        "beliefs": [],
+        "identity": "Retaliation targets",
+        "frame": "Bargaining chips"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "Existing retaliation constrains EU negotiating room"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source": "European Commission (DG TRADE)",
+      "target": "SAIC Group",
+      "type": "REGULATES",
+      "relation_label": "imposes 35.3% countervailing duty on",
+      "since": "2024-10-30",
+      "basis": "Implementing Regulation (EU) 2024/2754 company rates [report §Legal status]",
+      "valence": "adversarial",
+      "polarity": -0.6,
+      "strength": 0.8,
+      "sign": "-"
+    },
+    {
+      "source": "European Commission (DG TRADE)",
+      "target": "BYD",
+      "type": "REGULATES",
+      "relation_label": "imposes 17.0% countervailing duty on",
+      "since": "2024-10-30",
+      "basis": "Implementing Regulation (EU) 2024/2754 [report §Legal status]",
+      "valence": "adversarial",
+      "polarity": -0.5,
+      "strength": 0.8,
+      "sign": "-"
+    },
+    {
+      "source": "European Commission (DG TRADE)",
+      "target": "China Ministry of Commerce (MOFCOM)",
+      "type": "PARTNERS_WITH",
+      "relation_label": "negotiates price undertakings and hybrid cap with",
+      "since": "2025-12-11",
+      "basis": "Restarted minimum-price talks; 9 October 2026 understanding [report §Price-undertaking negotiations]",
+      "valence": "transactional",
+      "polarity": 0.3,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "China Ministry of Commerce (MOFCOM)",
+      "target": "European Commission (DG TRADE)",
+      "type": "OPPOSES",
+      "relation_label": "challenges EU duties at WTO (DS630)",
+      "since": "2024-11-04",
+      "basis": "DS630 consultations, panel request and litigation [report §WTO litigation path]",
+      "valence": "adversarial",
+      "polarity": -0.7,
+      "strength": 0.8,
+      "sign": "-"
+    },
+    {
+      "source": "China Ministry of Commerce (MOFCOM)",
+      "target": "Chinese brandy, dairy and pork exporters to China",
+      "type": "SANCTIONS",
+      "relation_label": "imposes calibrated anti-dumping/anti-subsidy duties on",
+      "since": "2025-07-05",
+      "basis": "Brandy finals up to 34.9%; pork 4.9%–19.8%; dairy finals reported [report §Chinese retaliation track]",
+      "valence": "adversarial",
+      "polarity": -0.5,
+      "strength": 0.7,
+      "sign": "-"
+    },
+    {
+      "source": "Volkswagen Group",
+      "target": "European Commission (DG TRADE)",
+      "type": "CUSTOMER_OF",
+      "relation_label": "holds sole accepted undertaking with",
+      "since": "2026-02-09",
+      "basis": "Implementing Decision (EU) 2026/328 [report §Legal status]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "French government",
+      "target": "European Commission (DG TRADE)",
+      "type": "BACKS",
+      "relation_label": "supports definitive duties",
+      "since": "2024-10-04",
+      "basis": "Council vote in favour [report §Member-state politics]",
+      "valence": "allied",
+      "polarity": 0.7,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "German government",
+      "target": "European Commission (DG TRADE)",
+      "type": "INFLUENCES",
+      "relation_label": "shifted from opposing duties to joint trade-defence advocacy",
+      "since": "2026",
+      "basis": "Merz–Macron letter 2026 [report §Member-state politics]",
+      "valence": "allied",
+      "polarity": 0.4,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "German government",
+      "target": "French government",
+      "type": "ALLY_OF",
+      "relation_label": "jointly press for stronger trade-defence instruments",
+      "since": "2026",
+      "basis": "Joint letter to von der Leyen [report §Member-state politics]",
+      "valence": "allied",
+      "polarity": 0.6,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "VDA (German automotive association)",
+      "target": "BMW and Mercedes-Benz Group",
+      "type": "SUPPORTS",
+      "relation_label": "represents anti-duty, pro-negotiated-price lobby",
+      "since": "2024",
+      "basis": "2024 lobbying with IG Metall [report §Member-state politics]",
+      "valence": "allied",
+      "polarity": 0.6,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "Renault and Stellantis",
+      "target": "French government",
+      "type": "DEPENDS_ON",
+      "relation_label": "protection enters through Paris's vote",
+      "since": "2024",
+      "basis": "No dated public position; weight via Paris [report §Member-state politics]",
+      "valence": "directional",
+      "polarity": 0.4,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "EU member-state governments in Council",
+      "target": "European Commission (DG TRADE)",
+      "type": "INFLUENCES",
+      "relation_label": "QMV pressure can shift Commission course",
+      "since": "2024-10-04",
+      "basis": "October 2024 vote 10–5–12 [report §Member-state politics]",
+      "valence": "directional",
+      "polarity": 0.2,
+      "strength": 0.4,
+      "sign": "+"
+    },
+    {
+      "source": "WTO DS630 panel",
+      "target": "European Commission (DG TRADE)",
+      "type": "REGULATES",
+      "relation_label": "adjudicates legality of EU duties",
+      "since": "2025-10-13",
+      "basis": "DS630 composition and timetable [report §WTO litigation path]",
+      "valence": "neutral",
+      "polarity": 0.0,
+      "strength": 0.6
+    },
+    {
+      "source": "China Ministry of Commerce (MOFCOM)",
+      "target": "WTO DS630 panel",
+      "type": "OTHER",
+      "relation_label": "complainant in DS630 with pre-agreed Article 25 appeal arbitration",
+      "since": "2024-11-04",
+      "basis": "Panel request and MPIA-style arbitration agreement [report §WTO litigation path]",
+      "valence": "directional",
+      "polarity": -0.4,
+      "strength": 0.6,
+      "sign": "-"
+    },
+    {
+      "source": "Maroš Šefčovič",
+      "target": "European Commission (DG TRADE)",
+      "type": "PARTNERS_WITH",
+      "relation_label": "leads negotiation track within",
+      "since": "2024",
+      "basis": "Trade Commissioner role; 9 Oct 2026 Beijing understanding [report]",
+      "valence": "allied",
+      "polarity": 0.7,
+      "strength": 0.8,
+      "sign": "+"
+    }
+  ],
+  "hot_topics": [
+    "Acceptance of further BEV undertakings (BYD, SAIC, Geely, Tesla) under the 12 January 2026 guidance",
+    "EU hybrid safeguard provisional measures advertised for December 2026 (~350,000 vehicles/year cap)",
+    "DS630 panel final report not before Q2 2027 and Article 25 appeal arbitration",
+    "Possible MOFCOM probe on large-displacement EU cars",
+    "Stability of brandy minimum-price exemptions tied to EV-talk progress",
+    "Substitution from BEV to plug-in-hybrid imports (+48% in 2025)",
+    "German–French convergence on stronger trade defence",
+    "Chinese localisation in the EU (BYD Hungary, Chery Spain, Leapmotor/Stellantis)"
+  ],
+  "key_events": [
+    {
+      "date": "2024-07-04",
+      "event": "EU provisional countervailing duty on Chinese BEVs applied (amounts secured, not collected).",
+      "staleness_days": 838,
+      "is_stale": true
+    },
+    {
+      "date": "2024-10-04",
+      "event": "Council vote on definitive duties: 10 in favour (incl. France), 5 against (incl. Germany), 12 abstentions (incl. Spain).",
+      "staleness_days": 746,
+      "is_stale": true
+    },
+    {
+      "date": "2024-10-30",
+      "event": "Definitive countervailing duties under Implementing Regulation (EU) 2024/2754 apply for five years (rates 7.8%–35.3% by company, on top of 10% base tariff).",
+      "staleness_days": 720,
+      "is_stale": true
+    },
+    {
+      "date": "2024-11-04",
+      "event": "China requests WTO consultations with the EU on the BEV countervailing duties (DS630).",
+      "staleness_days": 715,
+      "is_stale": true
+    },
+    {
+      "date": "2024-12",
+      "event": "WTO consultations held, dispute unresolved.",
+      "staleness_days": 688,
+      "is_stale": true
+    },
+    {
+      "date": "2025-03-13",
+      "event": "China requests establishment of WTO panel in DS630.",
+      "staleness_days": 586,
+      "is_stale": true
+    },
+    {
+      "date": "2025-03-24",
+      "event": "DSB defers panel establishment.",
+      "staleness_days": 575,
+      "is_stale": true
+    },
+    {
+      "date": "2025-04-25",
+      "event": "DSB establishes the DS630 panel; 17 members reserve third-party rights.",
+      "staleness_days": 543,
+      "is_stale": true
+    },
+    {
+      "date": "2025-07-04",
+      "event": "China issues final anti-dumping ruling on EU brandy, duties up to 34.9% for five years from 5 July 2025, with minimum-price exemptions for major cognac producers.",
+      "staleness_days": 473,
+      "is_stale": true
+    },
+    {
+      "date": "2025-07-31",
+      "event": "China and the EU notify the DSB of agreed MPIA-style DSU Article 25 arbitration procedures for any DS630 appeal.",
+      "staleness_days": 446,
+      "is_stale": true
+    },
+    {
+      "date": "2025-10-13",
+      "event": "DS630 panel composed.",
+      "staleness_days": 372,
+      "is_stale": true
+    },
+    {
+      "date": "2025-12-04",
+      "event": "Commission initiates partial interim review limited to the form of the measure (VW (Anhui) undertaking) under Article 19(2) of Regulation (EU) 2016/1037.",
+      "staleness_days": 320,
+      "is_stale": false
+    },
+    {
+      "date": "2025-12-11",
+      "event": "MOFCOM spokesperson announces restart of minimum-price talks on EVs.",
+      "staleness_days": 313,
+      "is_stale": false
+    },
+    {
+      "date": "2025-12-16",
+      "event": "China issues final anti-dumping ruling on EU pork, duties 4.9%–19.8% for five years from 17 December 2025.",
+      "staleness_days": 308,
+      "is_stale": false
+    },
+    {
+      "date": "2025-12-23",
+      "event": "Chinese provisional anti-subsidy duties on EU dairy collected (21.9%–42.7%) through 21 February 2026.",
+      "staleness_days": 301,
+      "is_stale": false
+    },
+    {
+      "date": "2026-01-12",
+      "event": "Commission issues Guidance Document on submission of price-undertaking offers for Chinese BEVs.",
+      "staleness_days": 281,
+      "is_stale": false
+    },
+    {
+      "date": "2026-02-09",
+      "event": "Volkswagen (Anhui) undertaking accepted; interim review closed (Implementing Decision (EU) 2026/328; Implementing Regulation (EU) 2026/330, OJ 10 February 2026).",
+      "staleness_days": 253,
+      "is_stale": false
+    },
+    {
+      "date": "2026-02-13",
+      "event": "Final Chinese anti-subsidy duties on EU dairy (7.4%–11.7%) effective, reported by Caixin and The Straits Times.",
+      "staleness_days": 249,
+      "is_stale": false
+    },
+    {
+      "date": "2026-04-01",
+      "event": "DS630 panel Chair informs DSB of timetable extension at parties' request; final report not expected before Q2 2027.",
+      "staleness_days": 202,
+      "is_stale": false
+    },
+    {
+      "date": "2026-04-20",
+      "event": "United States submits third-party filing in DS630.",
+      "staleness_days": 183,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07-02",
+      "event": "United States submits third-party oral statement in DS630.",
+      "staleness_days": 110,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-09",
+      "event": "EU-China understanding on hybrid exports (cap ~350,000 vehicles/year over four years) and market access for €4 billion of EU products; MOFCOM says EV price-undertaking negotiations to immediately begin.",
+      "staleness_days": 11,
+      "is_stale": false
+    },
+    {
+      "date": "2026-12",
+      "event": "EU hybrid safeguard provisional measures planned (not yet launched).",
+      "staleness_days": -42,
+      "is_stale": false
+    }
+  ],
+  "quantitative_facts": [
+    {
+      "metric": "BYD Group countervailing duty rate",
+      "value": "17.0",
+      "series": "Implementing Regulation (EU) 2024/2754",
+      "unit": "% ad valorem",
+      "as_of_date": "2024-10-30",
+      "period_end": "2029-10-31",
+      "geography": "EU imports from China",
+      "definition": "Definitive countervailing duty, additional to 10% base tariff",
+      "source": "EUR-Lex / Commission Implementing Regulation (EU) 2024/2754",
+      "value_type": "actual",
+      "source_url": "https://trade.ec.europa.eu/access-to-markets/en/news/eu-commission-imposes-countervailing-duties-imports-battery-electric-vehicles-bevs-china",
+      "tier": "S1",
+      "value_num": 17.0,
+      "year": 2029,
+      "value_kind": "actual",
+      "region": "EU imports from China",
+      "analyst": "EUR-Lex / Commission Implementing Regulation (EU) 2024/2754",
+      "staleness_days": 720,
+      "is_stale": true
+    },
+    {
+      "metric": "Geely Group countervailing duty rate",
+      "value": "18.8",
+      "series": "Implementing Regulation (EU) 2024/2754",
+      "unit": "% ad valorem",
+      "as_of_date": "2024-10-30",
+      "period_end": "2029-10-31",
+      "geography": "EU imports from China",
+      "definition": "Definitive countervailing duty",
+      "source": "Implementing Regulation (EU) 2024/2754",
+      "value_type": "actual",
+      "source_url": "https://trade.ec.europa.eu/access-to-markets/en/news/eu-commission-imposes-countervailing-duties-imports-battery-electric-vehicles-bevs-china",
+      "tier": "S1",
+      "value_num": 18.8,
+      "year": 2029,
+      "value_kind": "actual",
+      "region": "EU imports from China",
+      "analyst": "Implementing Regulation (EU) 2024/2754",
+      "staleness_days": 720,
+      "is_stale": true
+    },
+    {
+      "metric": "SAIC Group countervailing duty rate",
+      "value": "35.3",
+      "series": "Implementing Regulation (EU) 2024/2754",
+      "unit": "% ad valorem",
+      "as_of_date": "2024-10-30",
+      "period_end": "2029-10-31",
+      "geography": "EU imports from China",
+      "definition": "Definitive countervailing duty; residual rate for non-cooperating companies",
+      "source": "Implementing Regulation (EU) 2024/2754",
+      "value_type": "actual",
+      "source_url": "https://trade.ec.europa.eu/access-to-markets/en/news/eu-commission-imposes-countervailing-duties-imports-battery-electric-vehicles-bevs-china",
+      "tier": "S1",
+      "value_num": 35.3,
+      "year": 2029,
+      "value_kind": "actual",
+      "region": "EU imports from China",
+      "analyst": "Implementing Regulation (EU) 2024/2754",
+      "staleness_days": 720,
+      "is_stale": true
+    },
+    {
+      "metric": "Tesla (Shanghai) countervailing duty rate",
+      "value": "7.8",
+      "series": "Implementing Regulation (EU) 2024/2754",
+      "unit": "% ad valorem",
+      "as_of_date": "2024-10-30",
+      "period_end": "2029-10-31",
+      "geography": "EU imports from China",
+      "definition": "Individual examination rate",
+      "source": "Implementing Regulation (EU) 2024/2754",
+      "value_type": "actual",
+      "source_url": "https://trade.ec.europa.eu/access-to-markets/en/news/eu-commission-imposes-countervailing-duties-imports-battery-electric-vehicles-bevs-china",
+      "tier": "S1",
+      "value_num": 7.8,
+      "year": 2029,
+      "value_kind": "actual",
+      "region": "EU imports from China",
+      "analyst": "Implementing Regulation (EU) 2024/2754",
+      "staleness_days": 720,
+      "is_stale": true
+    },
+    {
+      "metric": "Other cooperating companies countervailing duty rate",
+      "value": "20.7",
+      "series": "Implementing Regulation (EU) 2024/2754",
+      "unit": "% ad valorem",
+      "as_of_date": "2024-10-30",
+      "period_end": "2029-10-31",
+      "geography": "EU imports from China",
+      "definition": "Definitive countervailing duty",
+      "source": "Implementing Regulation (EU) 2024/2754",
+      "value_type": "actual",
+      "source_url": "https://trade.ec.europa.eu/access-to-markets/en/news/eu-commission-imposes-countervailing-duties-imports-battery-electric-vehicles-bevs-china",
+      "tier": "S1",
+      "value_num": 20.7,
+      "year": 2029,
+      "value_kind": "actual",
+      "region": "EU imports from China",
+      "analyst": "Implementing Regulation (EU) 2024/2754",
+      "staleness_days": 720,
+      "is_stale": true
+    },
+    {
+      "metric": "Combined duty ceiling including base tariff",
+      "value": "up to 45",
+      "series": "Commission duties",
+      "unit": "%",
+      "as_of_date": "2024-10-30",
+      "geography": "EU",
+      "definition": "10% base car tariff plus countervailing margin",
+      "source": "Reuters vote report",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/business/autos-transportation/how-eu-governments-plan-vote-chinese-ev-tariffs-2024-10-04/",
+      "tier": "S2",
+      "value_num": 45.0,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "Reuters vote report",
+      "staleness_days": 720,
+      "is_stale": true
+    },
+    {
+      "metric": "Council vote on definitive duties",
+      "value": "10-5-12",
+      "series": "Council vote 4 October 2024",
+      "unit": "votes for-against-abstentions",
+      "as_of_date": "2024-10-04",
+      "geography": "EU Council",
+      "definition": "10 in favour (incl. France), 5 against (incl. Germany), 12 abstentions (incl. Spain)",
+      "source": "Reuters",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/business/autos-transportation/how-eu-governments-plan-vote-chinese-ev-tariffs-2024-10-04/",
+      "tier": "S2",
+      "value_num": 7.5,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "EU Council",
+      "analyst": "Reuters",
+      "staleness_days": 746,
+      "is_stale": true
+    },
+    {
+      "metric": "Scheduled expiry of duties",
+      "value": "31 October 2029",
+      "series": "TRON case record",
+      "unit": "date",
+      "as_of_date": "2026-02-06",
+      "period_end": "2029-10-31",
+      "geography": "EU",
+      "definition": "Five-year term from 30 October 2024",
+      "source": "Commission TRON case database",
+      "value_type": "actual",
+      "source_url": "https://tron.trade.ec.europa.eu/investigations/case-history?caseId=2684",
+      "tier": "S1",
+      "value_num": 31.0,
+      "year": 2029,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "Commission TRON case database",
+      "staleness_days": 256,
+      "is_stale": false
+    },
+    {
+      "metric": "Expiry-review confirmation rate 2024",
+      "value": "11/13",
+      "series": "Commission annual report",
+      "unit": "reviews",
+      "as_of_date": "2024-12-31",
+      "period_end": "2024",
+      "geography": "EU",
+      "definition": "Expiry reviews concluded with duties confirmed (2 lapsed); 84.6% derived in report",
+      "source": "Commission annual report",
+      "value_type": "actual",
+      "source_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=CELEX:52025DC0428",
+      "tier": "S1",
+      "value_num": 11.0,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "Commission annual report",
+      "staleness_days": 658,
+      "is_stale": true
+    },
+    {
+      "metric": "Definitive measures in force end-2024",
+      "value": "192",
+      "series": "Commission annual report",
+      "unit": "measures",
+      "as_of_date": "2024-12-31",
+      "period_end": "2024",
+      "geography": "EU",
+      "definition": "124 anti-dumping, 38 AD extensions, 22 anti-subsidy, 7 AS extensions, 1 safeguard",
+      "source": "Commission annual report",
+      "value_type": "actual",
+      "source_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=CELEX:52025DC0428",
+      "tier": "S1",
+      "value_num": 192.0,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "Commission annual report",
+      "staleness_days": 658,
+      "is_stale": true
+    },
+    {
+      "metric": "New investigations in 2024",
+      "value": "33",
+      "series": "Commission annual report",
+      "unit": "investigations",
+      "as_of_date": "2024-12-31",
+      "period_end": "2024",
+      "geography": "EU",
+      "definition": "29 anti-dumping, 3 anti-subsidy, 1 safeguard; vs stated average of around 12 annually, record back to 2006",
+      "source": "Commission annual report",
+      "value_type": "actual",
+      "source_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=CELEX:52025DC0428",
+      "tier": "S1",
+      "value_num": 33.0,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "Commission annual report",
+      "staleness_days": 658,
+      "is_stale": true
+    },
+    {
+      "metric": "Chinese final anti-dumping duty on EU brandy",
+      "value": "up to 34.9",
+      "series": "MOFCOM ruling",
+      "unit": "%",
+      "as_of_date": "2025-07-05",
+      "period_end": "2030-07-04",
+      "geography": "China imports from EU",
+      "definition": "Five years from 5 July 2025; provisional deposits up to 39.0% refunded; major cognac producers exempt at minimum prices",
+      "source": "Reuters",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/world/china/china-impose-duties-up-349-eu-brandy-starting-july-5-2025-07-04/",
+      "tier": "S2",
+      "value_num": 34.9,
+      "year": 2030,
+      "value_kind": "actual",
+      "region": "China imports from EU",
+      "analyst": "Reuters",
+      "staleness_days": 472,
+      "is_stale": true
+    },
+    {
+      "metric": "Chinese provisional brandy duty",
+      "value": "up to 39.0",
+      "series": "MOFCOM provisional",
+      "unit": "%",
+      "as_of_date": "2024-10",
+      "geography": "China",
+      "definition": "Provisional deposits from October 2024, refunded",
+      "source": "Reuters",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/world/china/china-impose-duties-up-349-eu-brandy-starting-july-5-2025-07-04/",
+      "tier": "S2",
+      "value_num": 39.0,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "Reuters",
+      "staleness_days": 749,
+      "is_stale": true
+    },
+    {
+      "metric": "Chinese final anti-dumping duty on EU pork",
+      "value": "4.9–19.8",
+      "series": "MOFCOM ruling",
+      "unit": "%",
+      "as_of_date": "2025-12-17",
+      "period_end": "2030-12-16",
+      "geography": "China imports from EU",
+      "definition": "Five years from 17 December 2025; affected trade worth over $2 billion",
+      "source": "Reuters",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/world/asia-pacific/china-cuts-eu-pork-tariffs-final-ruling-2025-12-16/",
+      "tier": "S2",
+      "value_num": 12.350000000000001,
+      "year": 2030,
+      "value_kind": "actual",
+      "region": "China imports from EU",
+      "analyst": "Reuters",
+      "staleness_days": 307,
+      "is_stale": false
+    },
+    {
+      "metric": "Chinese provisional pork duty",
+      "value": "15.6–62.4",
+      "series": "MOFCOM provisional",
+      "unit": "%",
+      "as_of_date": "2025-09",
+      "geography": "China",
+      "definition": "Provisional September 2025, difference refunded",
+      "source": "Reuters",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/world/asia-pacific/china-cuts-eu-pork-tariffs-final-ruling-2025-12-16/",
+      "tier": "S2",
+      "value_num": 39.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "Reuters",
+      "staleness_days": 414,
+      "is_stale": true
+    },
+    {
+      "metric": "Chinese provisional anti-subsidy duty on EU dairy",
+      "value": "21.9–42.7",
+      "series": "MOFCOM provisional",
+      "unit": "%",
+      "as_of_date": "2025-12-23",
+      "period_end": "2026-02-21",
+      "geography": "China imports from EU",
+      "definition": "Collected 23 Dec 2025 – 21 Feb 2026; most companies just under 30%; $589 million covered imports in 2024",
+      "source": "Reuters",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/world/china/china-impose-provisional-duties-up-427-eu-dairy-products-2025-12-22/",
+      "tier": "S2",
+      "value_num": 32.3,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "China imports from EU",
+      "analyst": "Reuters",
+      "staleness_days": 301,
+      "is_stale": false
+    },
+    {
+      "metric": "Chinese final anti-subsidy duty on EU dairy (reported)",
+      "value": "7.4–11.7",
+      "series": "MOFCOM final",
+      "unit": "%",
+      "as_of_date": "2026-02-13",
+      "geography": "China imports from EU",
+      "definition": "Five years; reported by Caixin and The Straits Times, not confirmed on a primary record",
+      "source": "Caixin / The Straits Times",
+      "value_type": "actual",
+      "source_url": "https://www.caixinglobal.com/2026-02-13/china-to-impose-anti-subsidy-tariffs-of-up-to-117-on-eu-dairy-102414091.html",
+      "tier": "S2",
+      "value_num": 9.55,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "China imports from EU",
+      "analyst": "Caixin / The Straits Times",
+      "staleness_days": 249,
+      "is_stale": false
+    },
+    {
+      "metric": "EU imports of electric (battery) cars, value change",
+      "value": "-8",
+      "series": "Eurostat",
+      "unit": "% year-on-year",
+      "as_of_date": "2025-12-31",
+      "period_end": "2025",
+      "geography": "EU",
+      "definition": "Value change in 2025",
+      "source": "Eurostat Statistics Explained",
+      "value_type": "actual",
+      "source_url": "https://ec.europa.eu/eurostat/statistics-explained/index.php?title=Trade_and_production_of_hybrid_and_electric_cars",
+      "tier": "S1",
+      "value_num": -8.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "Eurostat Statistics Explained",
+      "staleness_days": 293,
+      "is_stale": false
+    },
+    {
+      "metric": "EU plug-in-hybrid imports",
+      "value": "€8.8 billion → €13.0 billion (+48%)",
+      "series": "Eurostat",
+      "unit": "% / EUR billion",
+      "as_of_date": "2025-12-31",
+      "period_end": "2025",
+      "geography": "EU",
+      "definition": "Total hybrid+electric imports +4% to €45.1 billion",
+      "source": "Eurostat",
+      "value_type": "actual",
+      "source_url": "https://ec.europa.eu/eurostat/statistics-explained/index.php?title=Trade_and_production_of_hybrid_and_electric_cars",
+      "tier": "S1",
+      "value_num": 8.8,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "Eurostat",
+      "staleness_days": 293,
+      "is_stale": false
+    },
+    {
+      "metric": "China share of extra-EU electric-car import value",
+      "value": "42",
+      "series": "Eurostat",
+      "unit": "%",
+      "as_of_date": "2025-12-31",
+      "period_end": "2025",
+      "geography": "EU imports",
+      "definition": "Largest origin; China, Japan, South Korea and UK together 73% of hybrid and electric imports",
+      "source": "Eurostat Statistics Explained",
+      "value_type": "actual",
+      "source_url": "https://ec.europa.eu/eurostat/statistics-explained/index.php?title=Trade_and_production_of_hybrid_and_electric_cars",
+      "tier": "S1",
+      "value_num": 42.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "EU imports",
+      "analyst": "Eurostat Statistics Explained",
+      "metric_family": "market share",
+      "staleness_days": 293,
+      "is_stale": false
+    },
+    {
+      "metric": "EU electric-car imports from China, units",
+      "value": "more than 900,000",
+      "series": "IEA Global EV Outlook 2026",
+      "unit": "units",
+      "as_of_date": "2025-12-31",
+      "period_end": "2025",
+      "geography": "EU imports",
+      "definition": "Around +35% year-on-year; China almost 60% of imports, less than 20% of EU demand, share similar to prior year",
+      "source": "IEA Global EV Outlook 2026",
+      "value_type": "actual",
+      "source_url": "https://www.iea.org/reports/global-ev-outlook-2026/manufacturing-and-trade",
+      "tier": "S1",
+      "value_num": 900000.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "EU imports",
+      "analyst": "IEA Global EV Outlook 2026",
+      "metric_family": "market share",
+      "staleness_days": 293,
+      "is_stale": false
+    },
+    {
+      "metric": "Chinese brands' share of EU imports from China",
+      "value": "50% → more than 70%",
+      "series": "IEA",
+      "unit": "%",
+      "as_of_date": "2025-12-31",
+      "period_end": "2023–2025",
+      "geography": "EU",
+      "definition": "2023 to 2025; Tesla Shanghai-built share fell from 30% to 10%",
+      "source": "IEA Global EV Outlook 2026",
+      "value_type": "actual",
+      "source_url": "https://www.iea.org/reports/global-ev-outlook-2026/manufacturing-and-trade",
+      "tier": "S1",
+      "value_num": 50.0,
+      "year": 2023,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "IEA Global EV Outlook 2026",
+      "metric_family": "market share",
+      "staleness_days": 293,
+      "is_stale": false
+    },
+    {
+      "metric": "EU electric-car production",
+      "value": "nearly 3.2 million",
+      "series": "IEA",
+      "unit": "units",
+      "as_of_date": "2025-12-31",
+      "period_end": "2025",
+      "geography": "EU",
+      "definition": "+30% vs 2024; net exporter, exports above 1 million units (+25%), two-thirds to the UK",
+      "source": "IEA Global EV Outlook 2026",
+      "value_type": "actual",
+      "source_url": "https://www.iea.org/reports/global-ev-outlook-2026/manufacturing-and-trade",
+      "tier": "S1",
+      "value_num": 3.2,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "IEA Global EV Outlook 2026",
+      "staleness_days": 293,
+      "is_stale": false
+    },
+    {
+      "metric": "EU hybrid and electric car production value",
+      "value": "€138.7 billion",
+      "series": "Eurostat",
+      "unit": "EUR billion",
+      "as_of_date": "2025-12-31",
+      "period_end": "2025",
+      "geography": "EU",
+      "definition": "+13.1% vs 2024, more than double 2021; full-electric 21.0% of cars produced",
+      "source": "Eurostat",
+      "value_type": "actual",
+      "source_url": "https://ec.europa.eu/eurostat/statistics-explained/index.php?title=Trade_and_production_of_hybrid_and_electric_cars",
+      "tier": "S1",
+      "value_num": 138.7,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "Eurostat",
+      "staleness_days": 293,
+      "is_stale": false
+    },
+    {
+      "metric": "BEV new registrations share, Q1 2026",
+      "value": "19.4",
+      "series": "ACEA",
+      "unit": "% of EU new-car registrations",
+      "as_of_date": "2026-03-31",
+      "period_end": "2026-Q1",
+      "geography": "EU",
+      "definition": "Registrations up 4% in Q1 2026",
+      "source": "ACEA",
+      "value_type": "actual",
+      "source_url": "https://www.acea.auto/pc-registrations/new-car-registrations-4-in-q1-2026-battery-electric-19-4-market-share/",
+      "tier": "S3",
+      "value_num": 19.4,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "ACEA",
+      "metric_family": "market share",
+      "staleness_days": 203,
+      "is_stale": false
+    },
+    {
+      "metric": "Countervailing-duty revenue estimate",
+      "value": "roughly €500 million per quarter, about €2 billion per year",
+      "series": "CEPR VoxEU estimate (Gros et al.)",
+      "unit": "EUR",
+      "as_of_date": "2025-06-30",
+      "period_end": "2024–25",
+      "geography": "EU",
+      "definition": "Authors' estimate based on actual 2024–25 import patterns, not a customs statistic",
+      "source": "CEPR VoxEU (Gros et al.)",
+      "value_type": "estimate",
+      "source_url": "https://cepr.org/voxeu/columns/dont-swap-tariffs-minimum-prices-chinese-electric-vehicles",
+      "tier": "S3",
+      "value_num": 500.0,
+      "year": 2024,
+      "value_kind": "forecast",
+      "region": "Europe",
+      "analyst": "CEPR VoxEU (Gros et al.)",
+      "metric_family": "annual revenue",
+      "staleness_days": 477,
+      "is_stale": true
+    },
+    {
+      "metric": "China value share in EU EV imports",
+      "value": "about 55% → about 42%",
+      "series": "Gros et al. estimate",
+      "unit": "%",
+      "as_of_date": "2025-06-30",
+      "period_end": "early 2024 – mid-2025",
+      "geography": "EU",
+      "definition": "Fell by similar or larger margin in tariff-free Norway, Switzerland, UK; DiD effect negative, small, statistically insignificant",
+      "source": "CEPR VoxEU (Gros et al.)",
+      "value_type": "estimate",
+      "source_url": "https://cepr.org/voxeu/columns/dont-swap-tariffs-minimum-prices-chinese-electric-vehicles",
+      "tier": "S3",
+      "value_num": 55.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Europe",
+      "analyst": "CEPR VoxEU (Gros et al.)",
+      "metric_family": "market share",
+      "staleness_days": 477,
+      "is_stale": true
+    },
+    {
+      "metric": "Chinese-made share of EU new-car sales",
+      "value": "record 9.3",
+      "series": "Rhodium Group",
+      "unit": "%",
+      "as_of_date": "2025-12-31",
+      "period_end": "December 2025",
+      "geography": "EU",
+      "definition": "Share of new cars sold in the EU made in China",
+      "source": "Rhodium Group",
+      "value_type": "actual",
+      "source_url": "https://rhg.com/research/dont-stop-me-now-chinese-cars-are-having-a-good-time-in-europe/",
+      "tier": "S3",
+      "value_num": 9.3,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "Rhodium Group",
+      "metric_family": "market share",
+      "staleness_days": 293,
+      "is_stale": false
+    },
+    {
+      "metric": "China hybrid exports to EU-27",
+      "value": "$7.5 billion",
+      "series": "Chinese customs data via Reuters",
+      "unit": "USD billion",
+      "as_of_date": "2026-06-30",
+      "period_end": "H1 2026",
+      "geography": "EU-27 imports from China",
+      "definition": "Tripled from $2.5 billion in H1 2025",
+      "source": "Reuters (Chinese customs data)",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/business/autos-transportation/chinas-75-billion-eu-hybrid-boom-faces-new-curbs-under-china-eu-deal-2026-10-12/",
+      "tier": "S2",
+      "value_num": 7.5,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "EU-27 imports from China",
+      "analyst": "Reuters (Chinese customs data)",
+      "staleness_days": 112,
+      "is_stale": false
+    },
+    {
+      "metric": "Hybrid export cap under EU-China understanding",
+      "value": "around 350,000",
+      "series": "Trade-media accounts",
+      "unit": "vehicles per year",
+      "as_of_date": "2026-10-09",
+      "period_end": "four years",
+      "geography": "EU-China",
+      "definition": "Cap on Chinese hybrid exports over four years via EU safeguard",
+      "source": "Reuters / trade media",
+      "value_type": "target",
+      "source_url": "https://www.reuters.com/world/china/china-eu-reach-hybrid-vehicle-trade-understanding-keep-talks-alive-ev-dispute-2026-10-09/",
+      "tier": "S2",
+      "value_num": 350000.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "EU-China",
+      "analyst": "Reuters / trade media",
+      "staleness_days": 11,
+      "is_stale": false
+    },
+    {
+      "metric": "EU products gaining China market access",
+      "value": "€4 billion",
+      "series": "Reuters",
+      "unit": "EUR",
+      "as_of_date": "2026-10-09",
+      "geography": "EU-China",
+      "definition": "Reported improved China market access for €4 billion of EU products under 9 October 2026 understanding",
+      "source": "Reuters",
+      "value_type": "target",
+      "source_url": "https://www.reuters.com/world/china/china-eu-reach-hybrid-vehicle-trade-understanding-keep-talks-alive-ev-dispute-2026-10-09/",
+      "tier": "S2",
+      "value_num": 4.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "EU-China",
+      "analyst": "Reuters",
+      "staleness_days": 11,
+      "is_stale": false
+    },
+    {
+      "metric": "China exports of goods and services",
+      "value": "21.071",
+      "series": "World Bank WDI",
+      "unit": "% of GDP",
+      "as_of_date": "2025-12-31",
+      "period_end": "2025",
+      "geography": "China",
+      "definition": "Up from 20.443% of GDP in 2024",
+      "source": "World Bank WDI via Data360",
+      "value_type": "actual",
+      "source_url": "https://data360.worldbank.org/en/indicator/WB_WDI_NE_EXP_GNFS_ZS",
+      "tier": "S1",
+      "value_num": 21.071,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "World Bank WDI via Data360",
+      "staleness_days": 293,
+      "is_stale": false
+    },
+    {
+      "metric": "US imports of goods from China",
+      "value": "27133.8159",
+      "series": "FRED / US Census",
+      "unit": "Millions of Dollars",
+      "as_of_date": "2026-08-31",
+      "period_end": "2026-08",
+      "geography": "United States",
+      "definition": "Customs basis; up from 25371.0252 in 2025-08 (+6.948%)",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/IMPCH",
+      "tier": "S1",
+      "value_num": 27133.8159,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "staleness_days": 50,
+      "is_stale": false
+    },
+    {
+      "metric": "China credit to private non-financial sector",
+      "value": "204.1",
+      "series": "BIS",
+      "unit": "% of GDP",
+      "as_of_date": "2026-03-31",
+      "period_end": "2026-Q1",
+      "geography": "China",
+      "definition": "All sectors, market value, adjusted for breaks; up 2.2 pp from 201.9% in 2025-Q1",
+      "source": "BIS",
+      "value_type": "actual",
+      "source_url": "https://data.bis.org/topics/TOTAL_CREDIT/BIS,WS_TC,2.0/Q.CN.P.A.M.770.A",
+      "tier": "S1",
+      "value_num": 204.1,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "BIS",
+      "staleness_days": 203,
+      "is_stale": false
+    },
+    {
+      "metric": "Historical undertaking share of EU anti-dumping measures",
+      "value": "almost half",
+      "series": "Steinbach, Journal of Economic Integration",
+      "unit": "share",
+      "as_of_date": "2014",
+      "period_end": "pre-2014",
+      "geography": "EU",
+      "definition": "Share drastically changed in recent years; rarely used against China due to monitoring difficulty",
+      "source": "Steinbach (2014), Journal of Economic Integration",
+      "value_type": "actual",
+      "source_url": "https://www.e-jei.org/journal/view.php?number=2013600039",
+      "tier": "S3",
+      "year": 2014,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "Steinbach (2014), Journal of Economic Integration",
+      "metric_family": "market share",
+      "staleness_days": 4675,
+      "is_stale": true
+    },
+    {
+      "metric": "Solar 2013 provisional duty",
+      "value": "11.8",
+      "series": "Contemporary analyses",
+      "unit": "%",
+      "as_of_date": "2013",
+      "geography": "EU",
+      "definition": "Provisional duties against an initially expected 47%; settled by undertaking with minimum prices and volume cap, Commission Decision of 2 August 2013",
+      "source": "Contemporary analyses / EUR-Lex",
+      "value_type": "actual",
+      "source_url": "https://www.cepweb.org/china-eu-solar-panel-trade-dispute-rhetoric-versus-reality/",
+      "tier": "S3",
+      "value_num": 11.8,
+      "year": 2013,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "Contemporary analyses / EUR-Lex",
+      "staleness_days": 5040,
+      "is_stale": true
+    },
+    {
+      "metric": "German OEM China sales exposure",
+      "value": "about one third",
+      "series": "Reuters",
+      "unit": "share of 2023 sales",
+      "as_of_date": "2023-12-31",
+      "period_end": "2023",
+      "geography": "Germany",
+      "definition": "Share of German carmakers' 2023 sales in China",
+      "source": "Reuters",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/business/autos-transportation/germany-vote-against-eu-tariffs-chinese-electric-vehicles-sources-say-2024-10-03/",
+      "tier": "S2",
+      "year": 2023,
+      "value_kind": "actual",
+      "region": "Germany",
+      "analyst": "Reuters",
+      "metric_family": "market share",
+      "staleness_days": 1024,
+      "is_stale": true
+    },
+    {
+      "metric": "Third parties in DS630",
+      "value": "17",
+      "series": "WTO DS630 record",
+      "unit": "members",
+      "as_of_date": "2025-04-25",
+      "geography": "WTO",
+      "definition": "Members reserving third-party rights: Australia, Brazil, Canada, India, Japan, Kazakhstan, Korea, Mexico, Norway, Russia, Singapore, Switzerland, Thailand, Türkiye, Ukraine, UK, US",
+      "source": "WTO DSB",
+      "value_type": "actual",
+      "source_url": "https://www.wto.org/english/tratop_e/dispu_e/cases_e/ds630_e.htm",
+      "tier": "S3",
+      "value_num": 17.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "WTO",
+      "analyst": "WTO DSB",
+      "staleness_days": 543,
+      "is_stale": true
+    },
+    {
+      "metric": "Interim review duration VW (Anhui)",
+      "value": "roughly nine weeks",
+      "series": "OJ record",
+      "unit": "time",
+      "as_of_date": "2026-02-09",
+      "geography": "EU",
+      "definition": "Own calculation: initiation 4 Dec 2025 to decision 9 Feb 2026",
+      "source": "Own calculation from EUR-Lex acts",
+      "value_type": "actual",
+      "source_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=OJ:L_202600330",
+      "tier": "S1",
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "Own calculation from EUR-Lex acts",
+      "metric_family": "duration",
+      "staleness_days": 253,
+      "is_stale": false
+    }
+  ],
+  "contested_claims": [
+    {
+      "claim": "Headline rate of China's final pork anti-dumping duties on EU exports",
+      "positions": [
+        {
+          "stance": "Final rates of 4.9%–19.8%",
+          "sources": [
+            "https://www.reuters.com/world/asia-pacific/china-cuts-eu-pork-tariffs-final-ruling-2025-12-16/"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "Up to 18.9%",
+          "sources": [
+            "https://www.foodmanufacturing.com/supply-chain/news/22956932/china-puts-antidumping-tariff-of-up-to-189-on-imports-of-pork-from-the-eu"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "An aggregator's headline figure conflicts with Reuters-reported final rates; Reuters figures stand."
+    },
+    {
+      "claim": "Final Chinese dairy anti-subsidy duty rates effective 13 February 2026",
+      "positions": [
+        {
+          "stance": "7.4%–11.7%, five years",
+          "sources": [
+            "https://www.caixinglobal.com/2026-02-13/china-to-impose-anti-subsidy-tariffs-of-up-to-117-on-eu-dairy-102414091.html",
+            "https://www.straitstimes.com/asia/east-asia/china-lowers-eu-dairy-tariffs-in-final-ruling-after-18-month-probe"
+          ],
+          "tier": "S2"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Reported by Caixin and The Straits Times but not confirmed on a primary record."
+    },
+    {
+      "claim": "Whether EV minimum prices were already agreed",
+      "positions": [
+        {
+          "stance": "Social-media claim that EV minimum prices were already agreed",
+          "sources": [
+            "https://www.facebook.com/eudebates.tv/posts/china-accepts-eu-safeguards-on-hybrid-vehicles-european-commission-president-urs/1899093784396521/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Only the VW (Anhui) undertaking has been accepted; EV price-undertaking negotiations to begin after 9 October 2026 understanding",
+          "sources": [
+            "https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=OJ:L_202600330",
+            "https://www.facebook.com/mofcom.china/posts/q-could-you-share-the-latest-progress-in-the-recent-china-eu-economic-and-trade-/1024026756811601/"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "The claim is unconfirmed social media; the official record shows only one accepted undertaking and pending negotiations."
+    },
+    {
+      "claim": "Causal effect of the duties on Chinese share of EU EV imports",
+      "positions": [
+        {
+          "stance": "Difference-in-differences estimate negative, small and statistically insignificant; similar share decline in tariff-free Norway, Switzerland, UK",
+          "sources": [
+            "https://cepr.org/voxeu/columns/dont-swap-tariffs-minimum-prices-chinese-electric-vehicles"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Duties were imposed to counter subsidisation causing threat of injury to Union BEV producers",
+          "sources": [
+            "https://trade.ec.europa.eu/access-to-markets/en/news/eu-commission-imposes-countervailing-duties-imports-battery-electric-vehicles-bevs-china"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "The economic estimate finds no measurable protective effect, in tension with the Regulation's recorded protective intent; different methods (econometric estimation vs legal finding)."
+    },
+    {
+      "claim": "Whether Chinese BEV imports to the EU rose or fell after the duties",
+      "positions": [
+        {
+          "stance": "In value, EU imports of battery-electric cars fell 8% in 2025",
+          "sources": [
+            "https://ec.europa.eu/eurostat/statistics-explained/index.php?title=Trade_and_production_of_hybrid_and_electric_cars"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "In units, imports grew about 35% to more than 900,000 and Chinese car imports into Europe are accelerating overall",
+          "sources": [
+            "https://www.iea.org/reports/global-ev-outlook-2026/manufacturing-and-trade",
+            "https://rhg.com/research/dont-stop-me-now-chinese-cars-are-having-a-good-time-in-europe/"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Value and unit measures diverge; substitution toward plug-in hybrids (outside duty scope) and local price effects explain the gap."
+    },
+    {
+      "claim": "Commission's own statement text of the 9 October 2026 EU-China understanding",
+      "positions": [
+        {
+          "stance": "EV trade will continue to be regulated through either countervailing duties or price undertakings (Bruegel's reading of the Commission statement)",
+          "sources": [
+            "https://www.bruegel.org/first-glance/eu-china-trade-and-investment-understanding-welcome-buying-time"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "MOFCOM: sides will immediately begin negotiations on electric vehicle price undertakings and discuss investment cooperation",
+          "sources": [
+            "https://www.facebook.com/mofcom.china/posts/q-could-you-share-the-latest-progress-in-the-recent-china-eu-economic-and-trade-/1024026756811601/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Framework not signed text; the Commission's own statement text remains unconfirmed, so readings rest on secondary accounts."
+    },
+    {
+      "claim": "Whether the dairy final duties apply and at what level",
+      "positions": [
+        {
+          "stance": "Provisional 21.9%–42.7% collected 23 Dec 2025 – 21 Feb 2026",
+          "sources": [
+            "https://www.reuters.com/world/china/china-impose-provisional-duties-up-427-eu-dairy-products-2025-12-22/"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "Final duties of 7.4%–11.7% effective 13 February 2026 (reported)",
+          "sources": [
+            "https://www.caixinglobal.com/2026-02-13/china-to-impose-anti-subsidy-tariffs-of-up-to-117-on-eu-dairy-102414091.html",
+            "https://www.straitstimes.com/asia/east-asia/china-lowers-eu-dairy-tariffs-in-final-ruling-after-18-month-probe"
+          ],
+          "tier": "S2"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Provisional rates on primary record; final rates reported by press (Caixin, Straits Times) without primary confirmation — timing and sourcing differences."
+    }
+  ],
+  "forecast_inputs": {
+    "scenarios": [
+      {
+        "name": "Duties hold unchanged",
+        "probability": 0.5,
+        "narrative": "No agreement is reached and the definitive duties stay in force at current rates through 30 June 2027; prior: trade-defence measures mostly persist unchanged to first expiry review."
+      },
+      {
+        "name": "Undertaking replaces duties",
+        "probability": 0.2,
+        "narrative": "A negotiated minimum-price or price-undertaking agreement accepted by both MOFCOM and the Commission replaces the duties before mid-2027; prior: undertakings accepted in a minority of EU anti-subsidy cases, but talks are active."
+      },
+      {
+        "name": "Duties modified after review",
+        "probability": 0.15,
+        "narrative": "An interim or WTO-driven review adjusts duty rates without removing the instrument before the horizon."
+      },
+      {
+        "name": "Escalation and retaliation",
+        "probability": 0.15,
+        "narrative": "Talks collapse and China imposes visible retaliatory measures on EU automotive or agricultural exports while the duties remain."
+      }
+    ],
+    "base_rates": [
+      {
+        "reference_class": "EU expiry reviews concluding with duties confirmed (2024, concluded reviews, one-year window)",
+        "outcome_frequency": "11 of 13 confirmed, 2 lapsed (derived: 84.6%)",
+        "basis": "Commission's 2024 annual report on trade-defence measures; figure derived in the report, not a published rate [S3]"
+      },
+      {
+        "reference_class": "EU anti-dumping measures concluded as price undertakings (historical era, pre-2014)",
+        "outcome_frequency": "\"almost half\" historically, share since \"drastically changed\"; no modern k/n; rare against China",
+        "basis": "Steinbach, Journal of Economic Integration, 2014 (peer-reviewed study) [S8]"
+      },
+      {
+        "reference_class": "EU duties against China replaced by an undertaking before five-year expiry (2013–2026)",
+        "outcome_frequency": "2 of 2 cases: 1 full replacement (solar 2013), 1 partial carve-out (VW Anhui, February 2026)",
+        "basis": "EUR-Lex acts: Commission Decision of 2 August 2013; Decision (EU) 2026/328 [S45][S5]"
+      },
+      {
+        "reference_class": "Chinese retaliation after EU trade measures on China (investigations launched within months, 2013 and 2024–25)",
+        "outcome_frequency": "2 of 2 episodes led to investigations; duties implemented in brandy and pork",
+        "basis": "Official rulings and Reuters reporting [S47][S11][S10]"
+      },
+      {
+        "reference_class": "Chinese retaliation-linked probes reaching duties (2023–25)",
+        "outcome_frequency": "at least 2 of 3 (own count), with final rates well below provisional levels",
+        "basis": "Reuters and probe records as counted in the report [S9][S49][S10][S11]"
+      },
+      {
+        "reference_class": "EU interim reviews initiated (2024)",
+        "outcome_frequency": "4 initiated in 2024, outcomes unreported",
+        "basis": "Commission 2024 annual report [S3]"
+      }
+    ],
+    "drivers": [
+      {
+        "variable": "Absence of any expiry-review decision point before the horizon",
+        "direction": "Pushes toward duties persisting",
+        "why_it_matters": "Duties run to 31 October 2029 with the expiry-review request due about three months before, so no expiry clock binds by 30 June 2027 [S1][S2][S3]"
+      },
+      {
+        "variable": "VW (Anhui) undertaking accepted as the only formal offer",
+        "direction": "Partially toward undertaking replacement; caps broad replacement",
+        "why_it_matters": "A carve-out exists (Decision (EU) 2026/328) but the Commission recorded it as the sole offer submitted, so general replacement needs new submissions [S5][S6]"
+      },
+      {
+        "variable": "WTO DS630 panel report not expected before Q2 2027, with pre-agreed Article 25 appeal arbitration",
+        "direction": "Pushes WTO-driven change out of the window",
+        "why_it_matters": "No WTO compulsion can alter Regulation 2024/2754 before the horizon; an interim review is the only channel for modification [S4][S23]"
+      },
+      {
+        "variable": "9 October 2026 EU-China understanding starting EV price-undertaking negotiations",
+        "direction": "Raises probability of undertaking replacement",
+        "why_it_matters": "MOFCOM said the sides will \"immediately begin negotiations\" and EV trade stays regulated by duties or undertakings [S27][S28][S25]"
+      },
+      {
+        "variable": "Commission doubt that a single minimum price counters subsidy injury, and guidance's per-company model",
+        "direction": "Pushes against a general negotiated replacement",
+        "why_it_matters": "The Commission accepts offers case-by-case under non-discrimination, slowing any broad deal [S24][S7][S18]"
+      },
+      {
+        "variable": "Chinese exporters' weak incentive to seek undertakings",
+        "direction": "Pushes toward duties holding",
+        "why_it_matters": "Undertakings cap discount-driven volume strategies; BYD's PHEV exports sit outside the duty scope, lowering its incentive [S16]"
+      },
+      {
+        "variable": "China's calibrated, reversible retaliation pattern (agriculture hit, automotive untouched)",
+        "direction": "Lowers probability of new escalation",
+        "why_it_matters": "Final rates were set well below provisional levels and brandy relief was tied to EV-tariff progress, signalling bargaining-chip use [S10][S11][S12][S30]"
+      },
+      {
+        "variable": "Franco-German convergence on trade defence by 2026",
+        "direction": "Pushes toward duties persisting and against repeal",
+        "why_it_matters": "Berlin moved from opposing the duties to jointly seeking stronger instruments with Paris, removing the main Council pressure for removal [S17][S38]"
+      }
+    ],
+    "indicators": [
+      {
+        "indicator": "Exports of goods and services (% of GDP): China (wb:WB_WDI_NE_EXP_GNFS_ZS/CHN)",
+        "series": "wb:WB_WDI_NE_EXP_GNFS_ZS/CHN",
+        "latest_value": 21.071198,
+        "latest_date": "2025-12-31",
+        "latest_period": "2025",
+        "status": "observed",
+        "units": "Percent of GDP",
+        "frequency": "A",
+        "date_or_trigger": "next annual release after 2025",
+        "source_ref": "S19"
+      },
+      {
+        "indicator": "U.S. Imports of Goods by Customs Basis from China (fred:IMPCH)",
+        "series": "fred:IMPCH",
+        "latest_value": 27133.815902,
+        "latest_date": "2026-08-31",
+        "latest_period": "2026-08",
+        "status": "observed",
+        "units": "Millions of Dollars",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-08",
+        "source_ref": "S20"
+      },
+      {
+        "indicator": "China - Credit to Private non-financial sector from All sectors at Market value - Percentage of GDP - Adjusted for breaks (bis:WS_TC/Q.CN.P.A.M.770.A)",
+        "series": "bis:WS_TC/Q.CN.P.A.M.770.A",
+        "latest_value": 204.1,
+        "latest_date": "2026-03-31",
+        "latest_period": "2026-Q1",
+        "status": "observed",
+        "units": "Percentage of GDP",
+        "frequency": "Q",
+        "date_or_trigger": "next quarterly release after 2026-Q1",
+        "source_ref": "S21"
+      }
+    ]
+  }
+}

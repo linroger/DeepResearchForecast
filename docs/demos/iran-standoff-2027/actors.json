@@ -1,0 +1,3198 @@
+{
+  "central_question": "What will be the state of the Iran conflict and nuclear standoff as of 31 December 2027 (renewed large-scale strikes, low-intensity conflict, durable ceasefire, negotiated framework, or regime crisis), and what are the probability-weighted implications for end-2027 and 2027-average Brent, gold, gas, macro and regional markets?",
+  "as_of_date": "2026-10-23",
+  "situation_brief": {
+    "current_situation": "A US-Iran war of attrition: Khamenei was killed in the February 28, 2026 opening strikes and succeeded by his son Mojtaba Khamenei in March; a June 2026 Memorandum of Understanding collapsed and formally expired in August. The US naval blockade, renewed July 13, 2026, has effectively halted Iranian crude exports (loadings 210 kbd mid-September; October reported at zero). The IAEA has had no access to declared enrichment sites since January 2026. Iran's economy faces a projected 7.7% contraction in fiscal 2026-27.",
+    "context": "Two prior strike rounds damaged all three enrichment plants; surviving 60% uranium estimates range from 'a bit more than 200 kg' (Grossi) to 265-287 kg in Isfahan tunnels (ISIS). Talks via Qatari mediators are deadlocked: Iran offers to reopen Hormuz within seven days under its control for a blockade lift, eased export limits and released assets. The US and Israel reportedly have specific plans for a 'short but intensive operation' after the November 3, 2026 midterms. Brent averaged 102.0181 $/b (IMF) in September 2026; gold 4334.7467 $/oz; US CPI 3.717%; Fed funds midpoint 3.875%; ECB deposit rate 2.5%.",
+    "dynamics": "Managed attrition dominates: the blockade severs Iran's revenue while Gulf exports recover above pre-war levels; OPEC-8 effective spare capacity is nearly exhausted (0.04 mb/d) and observed inventories are 509 million barrels below pre-war. Escalation pressure comes from collapsed IAEA verification, Iran's September 2026 preemption doctrine, pre-delegated missile authority, and Netanyahu's stated aim of overthrowing the regime. Restraint pressure comes from US war unpopularity (62% say the war was not worth it), the November 3 midterms, and Trump's repeated cancellation of major-combat plans.",
+    "fault_lines": [
+      "IRGC-heavy coalition vs surviving reformist presidency carrying the US channel",
+      "Sequencing deadlock in Qatar-mediated talks: relief first vs concessions first",
+      "Israeli regime-change doctrine vs Trump's aim to protect oil infrastructure and prices",
+      "Pre-midterm electoral restraint vs post-midterm strike window",
+      "Blockade attrition vs Iran's economic collapse timeline (World Bank -7.7% projection vs regime cohesion)",
+      "Hezbollah rearmament vs Lebanon ceasefire disarmament framework",
+      "Houthi Red Sea attacks vs Saudi/Gulf shipping and insurance costs",
+      "US sanctions enforcement (Operation Economic Outcast) vs Chinese teapot purchases of remaining Iranian barrels"
+    ],
+    "catalysts": [
+      "US midterm elections, November 3, 2026 - the stated gate for post-midterm strike planning",
+      "FOMC meeting October 27-28, 2026 after the September 16 hike to 3.75-4%",
+      "ECB Governing Council October 29, 2026 (~96% implied hold at 2.50%)",
+      "Execution or a third cancellation of the drafted 'short but intensive' US-Israeli operation",
+      "IAEA Board meetings; Isfahan design-information verification or verified cascade reinstallation",
+      "Iranian loadings rebounding above 0.5-1 million b/d, or floating storage (45 million barrels) exhausting",
+      "Kpler Hormuz crude transits below 10 million b/d for 14 consecutive days",
+      "A signed US-Iran text on Hormuz-for-blockade-relief sequencing"
+    ]
+  },
+  "actors": [
+    {
+      "name": "Supreme Leader Mojtaba Khamenei",
+      "type": "Person",
+      "role": "Iran's Supreme Leader since March 2026",
+      "stance": "IRGC-aligned survivor; preemption doctrine; conditional on talks via presidency",
+      "description": "Son of Ali Khamenei, elected by the 88-member Assembly of Experts within about nine days of his father's killing in the February 28, 2026 strikes; deep IRGC ties but never held elected office and modest theological credentials. Governs through a dispersed SNSC-centred coalition.",
+      "stated_vs_revealed": "States willingness for talks through the presidency; revealed behavior is attrition, preemption doctrine, and prolonged negotiations past the midterms.",
+      "memory": "Father killed February 28, 2026 in US-Israeli strikes; succeeded March 8-9, 2026; endorsed direct talks under the June 2026 MoU that collapsed.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "Mojtaba Khamenei"
+      ],
+      "goals": [
+        "Survive and consolidate leadership",
+        "Lift the blockade, ease export limits, recover frozen assets",
+        "Preserve threshold nuclear status",
+        "Keep regime cohesive under attrition"
+      ],
+      "constraints": [
+        "Never held elected office; contested legitimacy",
+        "Exports near zero under blockade; World Bank projects -7.7% GDP fiscal 2026-27",
+        "Missile authority pre-delegated to lower ranks",
+        "Dependent on IRGC coalition"
+      ],
+      "assets": [
+        "Succession legitimacy via Assembly of Experts procedure",
+        "IRGC coercive apparatus",
+        "Hormuz 'kill box' leverage",
+        "Surviving 60% uranium stock (estimates 200-287 kg)"
+      ],
+      "vulnerabilities": [
+        "Economic collapse timeline",
+        "Popular unrest precedent (2025-26 protests in 675 locations, 210 cities)",
+        "IRGC faction could sideline him"
+      ],
+      "incentives": [
+        {
+          "driver": "Regime survival",
+          "gains_if": "Blockade relief without nuclear concessions",
+          "loses_if": "Internal rupture or successful decapitation strike",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Regime preservation",
+          "IRGC primacy",
+          "Resistance-economy endurance"
+        ],
+        "beliefs": [
+          "The US will tire of attrition before Iran collapses",
+          "Threshold nuclear status is the regime's shield"
+        ],
+        "identity": "Second supreme leader of the Islamic Republic, IRGC-backed principlist",
+        "frame": "Existential standoff where concession invites attack"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "Ultimate decision-maker on retaliation, talks and succession in the core conflict dyad"
+      }
+    },
+    {
+      "name": "IRGC",
+      "type": "Organization",
+      "role": "Iran's coercive apparatus; controls proxies, shadow fleet and escalation options",
+      "stance": "Escalation-prone; resists diplomacy",
+      "description": "Cohesive Revolutionary Guard that survived the decapitation strikes, replaced killed officials, and anchors the SNSC-centred coalition; former commander Mohsen Rezaei was appointed SNSC secretary in August 2026.",
+      "stated_vs_revealed": "Publicly backs talks; operates preemption doctrine and pre-delegated retaliation.",
+      "memory": "Senior leaders killed in 2026 strikes; apparatus held and replaced them per FRS.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "Islamic Revolutionary Guard Corps"
+      ],
+      "goals": [
+        "Regime preservation",
+        "Keep proxies as bargaining leverage",
+        "Raise costs of any re-strike via preemption doctrine",
+        "Preserve missile/Hormuz leverage"
+      ],
+      "constraints": [
+        "Blockade severs export funding",
+        "CRS assesses limited ability to continue attacks",
+        "US finite but real counter-capacity"
+      ],
+      "assets": [
+        "Pre-delegated missile-launch authority",
+        "Hezbollah resupply channel",
+        "Hormuz 'kill box' attacks",
+        "Shadow-fleet remnants"
+      ],
+      "vulnerabilities": [
+        "Sanctions on 17 shadow-fleet vessels (October 8, 2026)",
+        "Revenue collapse with loadings at 210 kbd"
+      ],
+      "incentives": [
+        {
+          "driver": "Coercive primacy",
+          "gains_if": "Costly US/Israeli overreach or blockade erosion",
+          "loses_if": "Diplomatic settlement sidelining the Guard",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Guardian of the revolution",
+          "Deterrence through cost imposition"
+        ],
+        "beliefs": [
+          "Only credible retaliation threats deter re-strikes"
+        ],
+        "identity": "Praetorian and expeditionary force of the Islamic Republic",
+        "frame": "Attrition favors Iran against a war-weary US"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.9,
+        "basis": "Controls the escalation ladder and proxies driving the 25% strike scenario"
+      }
+    },
+    {
+      "name": "Iranian diplomatic faction (Foreign Ministry)",
+      "type": "Organization",
+      "role": "Reformist-leaning channel for ceasefire and framework negotiations via the Pezeshkian presidency",
+      "stance": "Sequenced relief; supports negotiation",
+      "description": "Carries the US channel through Qatari mediators; survived reformist arrests after the 2025-26 protests but is sidelined by hardliners; proposed Hormuz reopening within seven days in exchange for blockade relief.",
+      "stated_vs_revealed": "Publicly offers Hormuz-first sequencing; has prolonged talks past the midterms, per Reuters.",
+      "memory": "Pakistan-mediated two-week ceasefire April 8, 2026; June 2026 MoU collapsed; Qatar channel deadlocked as of October 20, 2026.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "intermediary",
+      "aliases": [
+        "Pezeshkian presidency",
+        "Foreign Ministry"
+      ],
+      "goals": [
+        "Blockade lift, eased export limits, released frozen assets",
+        "Sequenced de-escalation without full nuclear concessions"
+      ],
+      "constraints": [
+        "Hardliners dominate; reformist politicians arrested",
+        "Two prior agreements collapsed",
+        "Sequencing dispute with Washington"
+      ],
+      "assets": [
+        "Qatar-mediated channel",
+        "Constitutional interim-council role of the presidency"
+      ],
+      "vulnerabilities": [
+        "Purge or removal of Pezeshkian",
+        "No trust after MoU collapse"
+      ],
+      "incentives": [
+        {
+          "driver": "Economic relief",
+          "gains_if": "Signed ceasefire or framework",
+          "loses_if": "Renewed strikes",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Diplomatic settlement",
+          "Economic normalization"
+        ],
+        "beliefs": [
+          "Sequenced relief is achievable through negotiation"
+        ],
+        "identity": "Reformist remainder of the elected Iranian state",
+        "frame": "War is bankrupting Iran; deal-making is the exit"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "Sole active channel toward Durable ceasefire and Negotiated framework states"
+      }
+    },
+    {
+      "name": "Benjamin Netanyahu",
+      "type": "Person",
+      "role": "Israeli Prime Minister; sets strike doctrine and red lines on Iran",
+      "stance": "Regime change and nuclear suppression maximalist",
+      "description": "Has directed the military and intelligence agencies toward removing the Iranian threat, stating 'there's only one way to remove this threat once and for all - overthrow the regime in Iran'; denies Trump blocked a mid-October 2026 Israeli strike.",
+      "stated_vs_revealed": "Publicly demands regime change; reportedly restrained from a mid-October strike by Washington, which he denies.",
+      "memory": "June 13, 2025 strikes opened the Twelve-Day War; February-March 2026 campaigns; Lebanon ceasefire June 21, 2026.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "Netanyahu"
+      ],
+      "goals": [
+        "Prevent the new supreme leader developing nuclear weapons",
+        "Hezbollah disarmament",
+        "Ultimately overthrow the Iranian regime"
+      ],
+      "constraints": [
+        "Reported US block of a mid-October strike (denied)",
+        "Ceasefire framework with Lebanon",
+        "Dependence on US backing"
+      ],
+      "assets": [
+        "Strike capability",
+        "IDF",
+        "US alliance",
+        "Lebanon ceasefire leverage"
+      ],
+      "vulnerabilities": [
+        "Escalation triggering multi-front war",
+        "US pressure against oil-infrastructure strikes"
+      ],
+      "incentives": [
+        {
+          "driver": "Nuclear elimination",
+          "gains_if": "Campaign degrading Iran's program and regime",
+          "loses_if": "Iran crosses threshold or a deal legitimizes it",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Israeli security primacy",
+          "Preemption over containment"
+        ],
+        "beliefs": [
+          "Deterrence fails against a nuclearizing Iran"
+        ],
+        "identity": "Long-serving Israeli leader presiding over the 2025-26 wars",
+        "frame": "Existential window before Iran rebuilds"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.9,
+        "basis": "Sets the red lines that gate the 25% renewed-strikes scenario"
+      }
+    },
+    {
+      "name": "Donald Trump",
+      "type": "Person",
+      "role": "US President; controls military posture, the naval blockade and sanctions relief",
+      "stance": "Containment without oil-price shock; conditional escalation",
+      "description": "Launched the February 28, 2026 strikes ('Operation Epic Fury') that killed Khamenei, then imposed and renewed the naval blockade; has repeatedly canceled plans for return to major combat; approved plans steering strikes away from oil infrastructure, with Pickaxe Mountain a candidate target; temporarily lifted Russian diesel sanctions October 12, 2026.",
+      "stated_vs_revealed": "Publicly hardline on Iran; revealed record of repeatedly canceling major-combat plans and seeking oil-market relief.",
+      "memory": "June 2025 strikes, February 2026 war, April ceasefire, June MoU, blockade renewal July 13, 2026.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "Trump"
+      ],
+      "goals": [
+        "End the nuclear threat",
+        "Avoid gas-price spikes",
+        "Win the November 3, 2026 midterms"
+      ],
+      "constraints": [
+        "62% of voters say the war was not worth it; Senate rejected war termination 49-50",
+        "Inflation at 3.717% CPI",
+        "IEA emergency releases already engaged"
+      ],
+      "assets": [
+        "Naval blockade",
+        "Operation Economic Outcast sanctions",
+        "Post-midterm strike plans",
+        "Emergency reserve releases"
+      ],
+      "vulnerabilities": [
+        "Electoral backlash",
+        "Nineteen US service members killed",
+        "Thin public support for escalation"
+      ],
+      "incentives": [
+        {
+          "driver": "Political survival and price stability",
+          "gains_if": "Iran capitulates or is neutralized cheaply",
+          "loses_if": "Oil spikes or war drags into 2027",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Deal-making leverage",
+          "Energy price sensitivity",
+          "America-first restraint"
+        ],
+        "beliefs": [
+          "Maximum pressure can force a better deal"
+        ],
+        "identity": "US president prosecuting a second-term Iran campaign",
+        "frame": "Coercive bargaining, not open-ended war"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "Single decision-maker over strikes, blockade and relief"
+      }
+    },
+    {
+      "name": "Israel Defense Forces",
+      "type": "Organization",
+      "role": "Executes strikes and deterrence against Iran and Hezbollah",
+      "stance": "Operational readiness for a 'short but intensive' post-midterm operation",
+      "description": "Conducted the June 2025 and 2026 campaigns; maintaining stepped-up exercises and overflights of Iran; enforcing the Lebanon ceasefire with declared readiness for a large-scale operation over Hezbollah disarmament.",
+      "stated_vs_revealed": "Exercises and overflights signal readiness; awaiting political decision.",
+      "memory": "June 2025 Twelve-Day War; February-March 2026 campaigns; June 21, 2026 Lebanon ceasefire.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "IDF"
+      ],
+      "goals": [
+        "Degrade Iranian nuclear and missile capacity",
+        "Enforce Hezbollah disarmament",
+        "Restore deterrence"
+      ],
+      "constraints": [
+        "US political gate on timing",
+        "Multi-front exposure",
+        "First war phase 'might not be' outperformed by a repeat, per NYT"
+      ],
+      "assets": [
+        "Strike packages against Pickaxe Mountain and Isfahan tunnels",
+        "Air superiority",
+        "Lebanon ceasefire enforcement"
+      ],
+      "vulnerabilities": [
+        "Iranian preemption doctrine compressing warning time",
+        "Houthi and militia retaliation"
+      ],
+      "incentives": [
+        {
+          "driver": "Military advantage window",
+          "gains_if": "Striking before Iran reconstitutes",
+          "loses_if": "Political restraint lets Iran rebuild",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Security through superiority",
+          "Preemption"
+        ],
+        "beliefs": [
+          "The nuclear window is closing"
+        ],
+        "identity": "Israel's military instrument in a two-front standoff",
+        "frame": "Military windows outrank diplomatic timelines"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.85,
+        "basis": "Executor of any renewed large-scale strikes"
+      }
+    },
+    {
+      "name": "US Central Command",
+      "type": "Organization",
+      "role": "Runs the naval blockade and Gulf posture",
+      "stance": "Attrition enforcement via a blockade ladder",
+      "description": "Enforces the blockade under a ladder of warning, redirect, disabling propulsion and destroying shadow-network vessels; commands Gulf posture that shapes escalation risk; assessments note finite capacity to counter Iranian attacks.",
+      "stated_vs_revealed": "Professional enforcement posture; settling source for strike events.",
+      "memory": "Blockade begun April 13, 2026; renewed July 13, 2026.",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "CENTCOM"
+      ],
+      "goals": [
+        "Sustain the blockade with minimal escalation",
+        "Protect Gulf shipping and Hormuz flow"
+      ],
+      "constraints": [
+        "Finite counter-attack capacity per CRS",
+        "Nineteen US service members killed",
+        "Tanker incidents (Kazimah III, October 1, 2026)"
+      ],
+      "assets": [
+        "Naval blockade fleet",
+        "Gulf basing",
+        "Strike planning for post-midterm operations"
+      ],
+      "vulnerabilities": [
+        "Iranian 'kill box' tactics",
+        "Proxy attacks on US forces"
+      ],
+      "incentives": [
+        {
+          "driver": "Mission success at low cost",
+          "gains_if": "Blockade strangles Iranian exports without war",
+          "loses_if": "Hormuz disruption forces wider war",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Force protection",
+          "Chokepoint security"
+        ],
+        "beliefs": [
+          "Blockade is the efficient middle option"
+        ],
+        "identity": "US regional combatant command",
+        "frame": "Escalation management"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.75,
+        "basis": "Operational owner of the defining coercion instrument"
+      }
+    },
+    {
+      "name": "IAEA",
+      "type": "Organization",
+      "role": "Nuclear verification body; access status determines breakout-time visibility",
+      "stance": "Neutral; urging cooperation",
+      "description": "Has had no access to any declared Iranian enrichment facility since January 2026; cannot verify stockpiles or centrifuges or conclude no diversion; Board urged cooperation June 10 and September 9, 2026 (GOV/2026/61); Iran calls normal safeguards 'legally untenable and materially impracticable'.",
+      "stated_vs_revealed": "Grossi estimates 'a bit more than 200 kg' of 60% uranium survives; Board resolutions are urging only.",
+      "memory": "Access lost January 2026; Iran's February 2, 2026 refusal letter.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "arbiter",
+      "aliases": [
+        "International Atomic Energy Agency"
+      ],
+      "goals": [
+        "Restore safeguards at Fordow, Natanz, Isfahan",
+        "Design-information verification at Isfahan"
+      ],
+      "constraints": [
+        "Iran refuses access citing 'illegal military attacks'",
+        "Verification baseline lost"
+      ],
+      "assets": [
+        "Board resolutions",
+        "Inspectorate",
+        "ISIS imagery corroboration"
+      ],
+      "vulnerabilities": [
+        "Political marginalization if access stays collapsed"
+      ],
+      "incentives": [
+        {
+          "driver": "Verification mandate",
+          "gains_if": "Access restored under a framework",
+          "loses_if": "Undetected weaponization",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Non-proliferation",
+          "Technical verification"
+        ],
+        "beliefs": [
+          "Detection timelines are the red-line mechanism"
+        ],
+        "identity": "UN nuclear watchdog",
+        "frame": "Blindness breeds escalation"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.7,
+        "basis": "Access status is the key signpost separating diplomatic and strike scenarios"
+      }
+    },
+    {
+      "name": "Hezbollah",
+      "type": "Organization",
+      "role": "Main Iranian proxy; reconstitution pace sets low-intensity intensity",
+      "stance": "Rebuilding deterrent while nominally inside the Lebanon ceasefire",
+      "description": "Holds an arsenal of approximately 25,000 rockets and missiles per Israel's Alma center, with FPV payloads raised from 2.5 kg to 4-6 kg and fibre-optic range from 20 km to over 30 km; rebuilding both sides of the Litani with Iranian support under the US-backed ceasefire framework that requires disarmament.",
+      "stated_vs_revealed": "Inside a ceasefire it is quietly rearming; no cross-border strike killing Israelis since June 21, 2026.",
+      "memory": "Entered the March 2, 2026 round; ceasefire June 21, 2026.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Keep arms north of the Litani",
+        "Rebuild deterrent against Israel",
+        "Serve as Iran's bargaining leverage"
+      ],
+      "constraints": [
+        "Ceasefire framework requires disarmament; LAF deployed",
+        "One explosives truck seized",
+        "Reported $50 million monthly rearmament budget unconfirmed"
+      ],
+      "assets": [
+        "~25,000-item arsenal",
+        "Upgraded drones",
+        "Rebuilt positions"
+      ],
+      "vulnerabilities": [
+        "Threatened large-scale Israeli operation",
+        "Iranian resupply strangled by blockade"
+      ],
+      "incentives": [
+        {
+          "driver": "Survival and leverage",
+          "gains_if": "Reconstitution deters Israeli action",
+          "loses_if": "Israel launches a Lebanon operation",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Armed resistance",
+          "Deterrence"
+        ],
+        "beliefs": [
+          "Disarmament invites destruction"
+        ],
+        "identity": "Lebanese Shia militant movement and Iranian ally",
+        "frame": "Rebuild now for the next round"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.7,
+        "basis": "Its escalation is the likeliest trigger of the Lebanon front reopening"
+      }
+    },
+    {
+      "name": "Houthi movement",
+      "type": "Organization",
+      "role": "Controls Red Sea shipping risk and Bab al-Mandeb leverage",
+      "stance": "Active anti-shipping campaign resumed July 2026",
+      "description": "Resumed attacks in July 2026 after a half-year hiatus - twelve attacks on commercial vessels in the southern Red Sea since, including ballistic-missile attacks on Saudi tankers Amzan, Encelia and Layla; announced a blockade of Saudi ports and ships; transits remain below one-third of pre-October-2023 levels.",
+      "stated_vs_revealed": "Declares a Saudi blockade; attacks resumed only in July 2026 after a six-month pause.",
+      "memory": "Half-year hiatus before July 2026 resumption.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Houthis",
+        "Ansar Allah"
+      ],
+      "goals": [
+        "Leverage over the 32 km-wide Bab al-Mandeb",
+        "Pressure Saudi Arabia and shipping insurers",
+        "Support Iran's bargaining position"
+      ],
+      "constraints": [
+        "About 530 attacks since November 2023 at heavy cost",
+        "Mokha and Perim Island held by opponents",
+        "Finite munitions"
+      ],
+      "assets": [
+        "Anti-ship missiles and drones at 2:1 ratio",
+        "Bab al-Mandeb geography"
+      ],
+      "vulnerabilities": [
+        "Counter-strikes on held positions"
+      ],
+      "incentives": [
+        {
+          "driver": "Chokepoint leverage",
+          "gains_if": "Insurance and rerouting costs bleed Gulf economies",
+          "loses_if": "A durable ceasefire sidelines the front",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Axis of resistance"
+        ],
+        "beliefs": [
+          "Shipping extortion yields political returns"
+        ],
+        "identity": "Yemeni insurgent movement aligned with Iran",
+        "frame": "The sea is the front"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "Sets freight and insurance costs in the modal low-intensity path"
+      }
+    },
+    {
+      "name": "OPEC+ (Saudi Arabia-led)",
+      "type": "Organization",
+      "role": "Holds the spare capacity that buffers any Iranian supply loss",
+      "stance": "Ramping output; capacity already deployed",
+      "description": "Saudi-led OPEC+ added 2.1 million b/d month-on-month in September 2026; Gulf crude exports up 4.4 million b/d to 13.9 million b/d, over 75% of pre-war levels - but effective spare capacity (excluding shut-in Iranian and Russian crude) was only 0.04 million b/d in June 2026 against 22.83 million b/d sustainable capacity.",
+      "stated_vs_revealed": "Headline spare-capacity claims of 4-6 mb/d overstate what is idle on the IEA effective metric.",
+      "memory": "September 2026 ramp; record March 2026 IEA release context.",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "OPEC+"
+      ],
+      "goals": [
+        "Market share and revenue",
+        "Avoid a demand-destroying price spike",
+        "Political alignment with Washington"
+      ],
+      "constraints": [
+        "Effective spare nearly exhausted; inventories 509 mb below pre-war",
+        "On-land stocks lowest since at least 2016"
+      ],
+      "assets": [
+        "Sustainable capacity of 22.83 million b/d (OPEC-8)",
+        "Pipeline bypasses (40% of Gulf crude vs 17% prewar)"
+      ],
+      "vulnerabilities": [
+        "Hormuz product-transit constraint (677 kbd vs ~3.6 mbd prewar)",
+        "Houthi attacks on Saudi tankers"
+      ],
+      "incentives": [
+        {
+          "driver": "Revenue and stability",
+          "gains_if": "Disruption premiums with volumes protected",
+          "loses_if": "Hormuz closure or demand destruction",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Market management"
+        ],
+        "beliefs": [
+          "Ramping keeps customers and Washington aligned"
+        ],
+        "identity": "Producer coalition led by Saudi Arabia",
+        "frame": "Swing supplier under stress"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.8,
+        "basis": "Determines how much of any Iranian loss the market can absorb"
+      }
+    },
+    {
+      "name": "Government of China",
+      "type": "Government",
+      "role": "Main buyer of Iranian crude and potential mediator",
+      "stance": "Economic opportunism; opposes targeting the new supreme leader; no mediation yet",
+      "description": "Purchases approximately 90 percent of Iran's oil exports, mostly via teapot refineries; Iranian arrivals fell to 590,000 bpd in September 2026, the lowest since January 2023; teapots substituted at least 12 million barrels of Iraqi and Qatari crude plus over 20 million barrels of West African, Canadian and Colombian grades; opposed targeting Mojtaba Khamenei.",
+      "stated_vs_revealed": "Publicly defends Iran's leadership; commercially substituted away from Iranian barrels within months.",
+      "memory": "Purchases nearly halved year-on-year under the blockade.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Beijing"
+      ],
+      "goals": [
+        "Keep discounted Iranian barrels flowing",
+        "Energy security at low cost",
+        "Avoid US financial-system exclusion under Operation Economic Outcast"
+      ],
+      "constraints": [
+        "Sanctions exposure for non-US persons",
+        "Has largely refrained from selling weapons to Iran since the mid-2000s",
+        "Total seaborne imports depressed (8.8 mbd vs 10.6 mbd 2025 average)"
+      ],
+      "assets": [
+        "Teapot refining base",
+        "2021 25-year Cooperation Program",
+        "UN Security Council veto and diplomatic cover"
+      ],
+      "vulnerabilities": [
+        "Floating Iranian storage near exhaustion (45 mb)",
+        "Secondary-sanctions exposure"
+      ],
+      "incentives": [
+        {
+          "driver": "Cheap supply and leverage",
+          "gains_if": "Sanctioned barrels flow or relief legalizes them",
+          "loses_if": "OFAC designations cut facilitators off from the US system",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Energy security",
+          "Non-interference",
+          "Strategic patience"
+        ],
+        "beliefs": [
+          "The US war degrades both rivals; buying time is cheap"
+        ],
+        "identity": "Iran's largest oil customer and strategic partner",
+        "frame": "Opportunistic patron, not protector"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.7,
+        "basis": "Its purchase decisions determine blockade bite and any framework's viability"
+      }
+    },
+    {
+      "name": "Government of Russia",
+      "type": "Government",
+      "role": "Military-technical partner and sanctions-evasion enabler for Iran",
+      "stance": "Supportive of Iran tying down the US; limited transfers",
+      "description": "Putin pledged 'unwavering' support for Mojtaba Khamenei's appointment; supersonic cruise-missile technology shared since 2023 (Financial Times via Soufan Center); critical intelligence and satellite imagery on US naval movements reported; S-400 deliveries presented as priority but unconfirmed.",
+      "stated_vs_revealed": "Pledges unwavering support; material transfers remain limited and unconfirmed.",
+      "memory": "Supported Iran's succession in March 2026.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Kremlin"
+      ],
+      "goals": [
+        "Keep the US tied down in the Middle East",
+        "Deepen military-technical partnership with Iran",
+        "Preserve budget surplus (projected over $150 billion in 2026)"
+      ],
+      "constraints": [
+        "S-400 battery numbers and availability unconfirmed",
+        "No evidence of direct combat support"
+      ],
+      "assets": [
+        "Missile technology",
+        "Satellite intelligence",
+        "Sanctions-evasion know-how"
+      ],
+      "vulnerabilities": [
+        "Own war commitments",
+        "Sanctions pressure"
+      ],
+      "incentives": [
+        {
+          "driver": "Strategic distraction of the US",
+          "gains_if": "The war grinds on",
+          "loses_if": "A US-Iran settlement frees US capacity",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Multipolarity",
+          "Anti-US alignment"
+        ],
+        "beliefs": [
+          "Prolonged US wars serve Russian interests"
+        ],
+        "identity": "Iran's military-technical patron",
+        "frame": "Proxy attrition against the West"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "Affects Iranian resilience but not the decisive variables"
+      }
+    },
+    {
+      "name": "US Federal Reserve",
+      "type": "Organization",
+      "role": "US monetary policy; responds to oil-driven inflation",
+      "stance": "Restrictive; hiking into the energy shock",
+      "description": "Raised the target range to 3.75-4.00 percent on September 16, 2026 by a 12-0 vote, citing elevated inflation and geopolitical uncertainty; officials signal at least one more hike before year-end; next meeting October 27-28, 2026.",
+      "stated_vs_revealed": "Unanimous hike signals resolve; market pricing focuses on nearest meetings.",
+      "memory": "Hiked September 16, 2026 after the spring inflation surge.",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Fed",
+        "FOMC"
+      ],
+      "goals": [
+        "Return inflation to target while the oil shock passes through",
+        "Maintain credibility"
+      ],
+      "constraints": [
+        "CPI at 3.717% after a 4.167% May peak",
+        "Growth drag from the war"
+      ],
+      "assets": [
+        "Policy rate at 3.875% midpoint",
+        "Credibility"
+      ],
+      "vulnerabilities": [
+        "Stagflation if strikes re-spike oil"
+      ],
+      "incentives": [
+        {
+          "driver": "Price stability",
+          "gains_if": "Oil premium decays and disinflation resumes",
+          "loses_if": "Renewed strikes force hikes into weakness",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Inflation control",
+          "Data dependence"
+        ],
+        "beliefs": [
+          "Energy pass-through must not become entrenched"
+        ],
+        "identity": "US central bank",
+        "frame": "Credibility over growth"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.7,
+        "basis": "Policy path is a core priced deliverable in every scenario"
+      }
+    },
+    {
+      "name": "European Central Bank",
+      "type": "Organization",
+      "role": "Euro-area monetary policy under energy-shock scenarios",
+      "stance": "Restrictive hold at 2.50%",
+      "description": "Deposit rate at 2.5% at end-September 2026 after a September 25 bp hike; market-implied probability of holding at the October 29, 2026 meeting is about 96%; euro-area HICP at 3.75-3.8% with energy the largest contributor at +1.71 pp.",
+      "stated_vs_revealed": "Hiked in September; market expects a hold in October.",
+      "memory": "Deposit rate 2% Feb-May 2026, 2.25% June, 2.5% September.",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "ECB"
+      ],
+      "goals": [
+        "Return HICP to 2%",
+        "Avoid second-round effects from gas and oil"
+      ],
+      "constraints": [
+        "Gas at 25.494 $/MMBtu, +131.7% y/y",
+        "Growth weakness"
+      ],
+      "assets": [
+        "Policy rate at 2.50%",
+        "Credibility"
+      ],
+      "vulnerabilities": [
+        "Renewed Qatari LNG disruption would rebuild the energy contribution"
+      ],
+      "incentives": [
+        {
+          "driver": "Inflation control",
+          "gains_if": "Gas premium unwinds",
+          "loses_if": "HICP above 4% under re-strikes",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Price stability",
+          "Symmetric reaction function"
+        ],
+        "beliefs": [
+          "Energy shocks require vigilance but not panic"
+        ],
+        "identity": "Euro-area central bank",
+        "frame": "Second-round effects are the red line"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "Euro-area rate path is a priced deliverable"
+      }
+    },
+    {
+      "name": "Gulf Cooperation Council states",
+      "type": "Government",
+      "role": "Exposed regional credit and equity markets; Hormuz hosts and mediators (Qatar)",
+      "stance": "De--escalation-seeking; economically resilient so far",
+      "description": "Saudi 5Y USD CDS at 67.75 bps (October 15, 2026, Investing.com, provisional anchor); Saudi output ramping with exports above pre-war levels; S&P reported to have upgraded Saudi Arabia to 'A+'; Qatar is the active US-Iran mediator; members face Houthi attacks on Saudi tankers and ports.",
+      "stated_vs_revealed": "Publicly neutral mediators; commercially capturing Iran's displaced market share.",
+      "memory": "March 2026 strikes on Qatari LNG and a Saudi refinery.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "aliases": [
+        "GCC"
+      ],
+      "goals": [
+        "Protect energy exports and Hormuz flow",
+        "Avoid being the battlefield",
+        "Mediate de-escalation"
+      ],
+      "constraints": [
+        "Product-transit bottleneck at Hormuz (677 kbd)",
+        "Houthi blockade of Saudi ports",
+        "Proximity risk to spreads"
+      ],
+      "assets": [
+        "Pipeline bypasses (40% of Gulf crude)",
+        "Mediation channels (Qatar)",
+        "Spare capacity and revenue"
+      ],
+      "vulnerabilities": [
+        "Escalation to energy infrastructure",
+        "CDS widening in strike scenarios"
+      ],
+      "incentives": [
+        {
+          "driver": "Regime and revenue stability",
+          "gains_if": "Ceasefire with flows intact",
+          "loses_if": "Hormuz war closes their export routes",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Stability, diversification"
+        ],
+        "beliefs": [
+          "They can outlast Iran's blockade pain"
+        ],
+        "identity": "Gulf monarchies hosting US forces and Hormuz",
+        "frame": "Prosperity requires de-escalation"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "Regional market pricing and mediation channel"
+      }
+    },
+    {
+      "name": "Central banks (gold buyers)",
+      "type": "Organization",
+      "role": "Sustained official gold demand that amplifies the safe-haven premium",
+      "stance": "Structural accumulation",
+      "description": "No official purchase figures for 2025-26 exist in the evidence, but gold's stickiness - averaging 4334.7467 $/oz in September 2026 against a 4075.0968 July trough - is consistent with structural official demand; immobilization risk (frozen Iranian assets) reinforces the diversification motive.",
+      "stated_vs_revealed": "No published figures; price signature implies a floor beneath gold rather than a collapse after ceasefires.",
+      "memory": "Frozen Iranian assets and shadow-fleet seizures in 2026.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "amplifier",
+      "goals": [
+        "Reserve diversification away from the dollar",
+        "Insurance against sanctions and conflict"
+      ],
+      "constraints": [
+        "Price discipline at elevated levels"
+      ],
+      "assets": [
+        "Persistent buying capacity"
+      ],
+      "vulnerabilities": [
+        "Settlement-driven retracement of the premium"
+      ],
+      "incentives": [
+        {
+          "driver": "Reserve security",
+          "gains_if": "Conflict persists or escalates",
+          "loses_if": "Framework restores confidence in the dollar system",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Sanctions-proof reserves"
+        ],
+        "beliefs": [
+          "Reserve immobilization risk is now demonstrable"
+        ],
+        "identity": "Emerging-market and diversifying official sector",
+        "frame": "Gold as geopolitical insurance"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "Amplifies gold outcomes across all scenarios"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source": "Benjamin Netanyahu",
+      "target": "Supreme Leader Mojtaba Khamenei",
+      "type": "OPPOSES",
+      "relation_label": "Seeks regime overthrow and nuclear elimination",
+      "since": "2026-03",
+      "basis": "Netanyahu's stated directive to 'overthrow the regime in Iran' [S26]",
+      "valence": "adversarial",
+      "polarity": -0.9,
+      "strength": 0.9,
+      "sign": "-"
+    },
+    {
+      "source": "Donald Trump",
+      "target": "Supreme Leader Mojtaba Khamenei",
+      "type": "SANCTIONS",
+      "relation_label": "Naval blockade and Operation Economic Outcast",
+      "since": "2026-02",
+      "basis": "Blockade renewed July 13, 2026; exports effectively halted [S3][S4][S45]",
+      "valence": "adversarial",
+      "polarity": -0.8,
+      "strength": 0.85,
+      "sign": "-"
+    },
+    {
+      "source": "Israel Defense Forces",
+      "target": "IRGC",
+      "type": "COMPETES_WITH",
+      "relation_label": "Two-round direct war and attrition",
+      "since": "2025-06",
+      "basis": "June 2025 and 2026 campaigns; 'trading limited strikes' [S13][S1]",
+      "valence": "adversarial",
+      "polarity": -0.8,
+      "strength": 0.8,
+      "sign": "-"
+    },
+    {
+      "source": "Benjamin Netanyahu",
+      "target": "Donald Trump",
+      "type": "DEPENDS_ON",
+      "relation_label": "Relies on US backing; constrained by US gate on strike timing",
+      "since": "2025",
+      "basis": "Reported US block of a mid-October 2026 strike, which Netanyahu denies [S26]",
+      "valence": "transactional",
+      "polarity": 0.3,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "US Central Command",
+      "target": "IRGC",
+      "type": "OPPOSES",
+      "relation_label": "Blockade enforcement vs shadow fleet and kill-box tactics",
+      "since": "2026-04",
+      "basis": "Blockade ladder and shadow-network vessel destruction [S2][S68][S4]",
+      "valence": "adversarial",
+      "polarity": -0.7,
+      "strength": 0.75,
+      "sign": "-"
+    },
+    {
+      "source": "IRGC",
+      "target": "Hezbollah",
+      "type": "SUPPORTS",
+      "relation_label": "Rearms and funds Hezbollah's rebuild",
+      "basis": "Rebuilding both sides of the Litani with Iranian support [S67][S83]",
+      "valence": "allied",
+      "polarity": 0.8,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "IRGC",
+      "target": "Houthi movement",
+      "type": "BACKS",
+      "relation_label": "Axis-of-resistance alignment in Red Sea campaign",
+      "basis": "Houthi attacks resumed July 2026; Saudi tankers targeted [S48]",
+      "valence": "allied",
+      "polarity": 0.6,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "Government of China",
+      "target": "IRGC",
+      "type": "CUSTOMER_OF",
+      "relation_label": "Buys ~90% of Iran's oil exports via teapots",
+      "basis": "Treasury assessment; September 2026 arrivals 590,000 bpd [S43][S40]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "Government of Russia",
+      "target": "Supreme Leader Mojtaba Khamenei",
+      "type": "BACKS",
+      "relation_label": "'Unwavering' support; intelligence and missile technology",
+      "since": "2026-03",
+      "basis": "Putin's pledge; satellite imagery on US naval movements [S17][S96][S97]",
+      "valence": "allied",
+      "polarity": 0.6,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "Gulf Cooperation Council states",
+      "target": "Houthi movement",
+      "type": "OPPOSES",
+      "relation_label": "Houthi blockade of Saudi ports and tanker attacks",
+      "since": "2026-07",
+      "basis": "Attacks on Saudi tankers Amzan, Encelia, Layla [S48][S49]",
+      "valence": "adversarial",
+      "polarity": -0.7,
+      "strength": 0.6,
+      "sign": "-"
+    },
+    {
+      "source": "Iranian diplomatic faction (Foreign Ministry)",
+      "target": "Gulf Cooperation Council states",
+      "type": "PARTNERS_WITH",
+      "relation_label": "Qatar-mediated US-Iran channel",
+      "since": "2026",
+      "basis": "Talks via Qatari mediators deadlocked as of October 20, 2026 [S23]",
+      "valence": "transactional",
+      "polarity": 0.4,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "US Federal Reserve",
+      "target": "Donald Trump",
+      "type": "INFLUENCES",
+      "relation_label": "Monetary tightening constrains fiscal-political room",
+      "since": "2026",
+      "basis": "September 16, 2026 hike to 3.75-4% citing inflation [S11]",
+      "valence": "neutral",
+      "polarity": -0.2,
+      "strength": 0.4,
+      "sign": "-"
+    },
+    {
+      "source": "OPEC+ (Saudi Arabia-led)",
+      "target": "Donald Trump",
+      "type": "SUPPLIES",
+      "relation_label": "Ramped output to offset Iranian loss and cap prices",
+      "since": "2026",
+      "basis": "September ramp of 2.1 million b/d; Gulf exports 13.9 million b/d [S57]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "IAEA",
+      "target": "Supreme Leader Mojtaba Khamenei",
+      "type": "REGULATES",
+      "relation_label": "Safeguards demand refused; verification blackout",
+      "since": "2026-01",
+      "basis": "No access to declared enrichment sites since January 2026 [S15][S16][S19]",
+      "valence": "directional",
+      "polarity": -0.3,
+      "strength": 0.5,
+      "sign": "-"
+    },
+    {
+      "source": "Central banks (gold buyers)",
+      "target": "IRGC",
+      "type": "OTHER",
+      "relation_label": "Asset-freeze demonstration reinforces gold diversification",
+      "since": "2026",
+      "basis": "Frozen-asset demands in Iran's proposal; sticky gold prices [S23][S10]",
+      "valence": "directional",
+      "polarity": 0.2,
+      "strength": 0.3,
+      "sign": "+"
+    },
+    {
+      "source": "IRGC",
+      "target": "Iranian diplomatic faction (Foreign Ministry)",
+      "type": "COMPETES_WITH",
+      "relation_label": "Hardliners sideline the negotiation channel",
+      "since": "2026",
+      "basis": "Reformist arrests; FRS assessment of IRGC-heavy coalition [S87][S85]",
+      "valence": "adversarial",
+      "polarity": -0.4,
+      "strength": 0.5,
+      "sign": "-"
+    },
+    {
+      "source": "Hezbollah",
+      "target": "Israel Defense Forces",
+      "type": "OPPOSES",
+      "relation_label": "Ceasefire with rearmament under disarmament pressure",
+      "since": "2026-06",
+      "basis": "Framework requires disarmament; Israel threatens large-scale operation [S67][S83]",
+      "valence": "adversarial",
+      "polarity": -0.7,
+      "strength": 0.65,
+      "sign": "-"
+    }
+  ],
+  "hot_topics": [
+    "Post-midterm US-Israeli 'short but intensive' strike plans and Pickaxe Mountain targeting",
+    "Naval blockade durability and Iranian export collapse (210 kbd to zero)",
+    "IAEA verification blackout and Iran's surviving 60% uranium stock (200-287 kg)",
+    "Qatar-mediated Hormuz-for-blockade-relief sequencing deadlock",
+    "Hezbollah reconstitution (~25,000 items) vs Lebanon disarmament framework",
+    "Houthi Red Sea campaign and war-risk insurance surge",
+    "OPEC+ effective spare capacity exhaustion and 509-million-barrel inventory draw",
+    "Chinese teapot substitution away from Iranian barrels",
+    "Fed and ECB hiking cycles into the oil shock (3.875% and 2.50%)",
+    "Regime stability under Mojtaba Khamenei and World Bank -7.7% contraction projection",
+    "Gold's sticky premium and central-bank buying floor",
+    "US midterm elections November 3, 2026 as the escalation gate"
+  ],
+  "key_events": [
+    {
+      "date": "2025-06-13",
+      "event": "Israel struck Iran's nuclear facilities; a 12-day US-Israeli campaign followed, destroying or badly damaging all three then-operating enrichment plants",
+      "staleness_days": 497,
+      "is_stale": true
+    },
+    {
+      "date": "2026-01-29",
+      "event": "IAEA letter: no access to any declared Iranian enrichment facility; stockpile, centrifuges and non-diversion unverifiable",
+      "staleness_days": 267,
+      "is_stale": false
+    },
+    {
+      "date": "2026-01-16",
+      "event": "2025-26 protest wave (675 locations, 210 cities) quelled",
+      "staleness_days": 280,
+      "is_stale": false
+    },
+    {
+      "date": "2026-02-02",
+      "event": "Iran replied that normal safeguards implementation was 'legally untenable and materially impracticable'",
+      "staleness_days": 263,
+      "is_stale": false
+    },
+    {
+      "date": "2026-02-28",
+      "event": "US-Israel war on Iran opened; Supreme Leader Ali Khamenei and dozens of senior leaders killed; IRGC, Basij and security targets struck (Operation Epic Fury)",
+      "staleness_days": 237,
+      "is_stale": false
+    },
+    {
+      "date": "2026-03-02",
+      "event": "Front-month TTF jumped 46% intraday as strikes hit Qatari LNG, a Saudi refinery and Israeli energy fields",
+      "staleness_days": 235,
+      "is_stale": false
+    },
+    {
+      "date": "2026-03-08",
+      "event": "Mojtaba Khamenei announced as successor Supreme Leader (elected 3-8 March, announced 8-9 March)",
+      "staleness_days": 229,
+      "is_stale": false
+    },
+    {
+      "date": "2026-04-08",
+      "event": "Pakistan-mediated two-week US-Iran ceasefire took effect (window April 8 - July 8, 2026)",
+      "staleness_days": 198,
+      "is_stale": false
+    },
+    {
+      "date": "2026-04-13",
+      "event": "US naval blockade of Iranian ports began",
+      "staleness_days": 193,
+      "is_stale": false
+    },
+    {
+      "date": "2026-04-16",
+      "event": "Ten-day cessation of hostilities in Israel-Lebanon from 17:00 EST, US-mediated",
+      "staleness_days": 190,
+      "is_stale": false
+    },
+    {
+      "date": "2026-05-31",
+      "event": "Conflict shut-ins peaked at 10.9 million b/d (EIA estimate, May 2026)",
+      "staleness_days": 145,
+      "is_stale": false
+    },
+    {
+      "date": "2026-06-10",
+      "event": "IAEA Board of Governors urged Iranian cooperation",
+      "staleness_days": 135,
+      "is_stale": false
+    },
+    {
+      "date": "2026-06-21",
+      "event": "Lebanon ceasefire took effect",
+      "staleness_days": 124,
+      "is_stale": false
+    },
+    {
+      "date": "2026-06-01",
+      "event": "June 2026 US-Iran Memorandum of Understanding signed (Macron present); blockade lifted on entry; 60-day negotiating clock; collapsed weeks later, formally expired August 2026",
+      "staleness_days": 144,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07-13",
+      "event": "US renewed the naval blockade as the June deal broke down",
+      "staleness_days": 102,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07-01",
+      "event": "Houthis resumed attacks on commercial vessels after a half-year hiatus; 12 attacks in southern Red Sea since",
+      "staleness_days": 114,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07-01",
+      "event": "House passed H.Con.Res. 89 urging an end to the war, 214-208",
+      "staleness_days": 114,
+      "is_stale": false
+    },
+    {
+      "date": "2026-08-24",
+      "event": "Treasury Secretary Bessent announced 'Operation Economic Outcast' ('Economic D-Day')",
+      "staleness_days": 60,
+      "is_stale": false
+    },
+    {
+      "date": "2026-08-09",
+      "event": "Former IRGC commander Mohsen Rezaei replaced Zolghadr as SNSC secretary",
+      "staleness_days": 75,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-09",
+      "event": "IAEA Board of Governors again urged cooperation (GOV/2026/61)",
+      "staleness_days": 44,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-15",
+      "event": "Vortexa: Iranian loadings at 210 kbd",
+      "staleness_days": 38,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-16",
+      "event": "FOMC raised target range 1/4 point to 3.75-4.00 percent, 12-0 vote, citing elevated inflation",
+      "staleness_days": 37,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-16",
+      "event": "CRS describes a 'war of attrition': US and Iran 'again trading limited strikes'",
+      "staleness_days": 37,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-01",
+      "event": "VLCC Kazimah III struck in the Strait of Hormuz; sectoral sanctions on auto and rail took effect",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-08",
+      "event": "OFAC designated 17 shadow-fleet vessels moving Iranian crude, products, petrochemicals and bitumen",
+      "staleness_days": 15,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-12",
+      "event": "Trump temporarily lifted sanctions on Russian diesel",
+      "staleness_days": 11,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-15",
+      "event": "IEA agreed to release over 20 million barrels of diesel alongside remaining March 2026 emergency-release volumes",
+      "staleness_days": 8,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-15",
+      "event": "Saudi 5Y USD CDS at 67.75 bps (Investing.com, uncorroborated)",
+      "staleness_days": 8,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-20",
+      "event": "EIA/FRED Brent daily value 115.22 dollars per barrel; WTI 107.89; LBMA PM gold $4,124.5",
+      "staleness_days": 3,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-20",
+      "event": "Iran offered via Qatari mediators to reopen Hormuz within seven days under Iranian control for a blockade lift; talks deadlocked over sequencing",
+      "staleness_days": 3,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-21",
+      "event": "NYT reported US-Israeli plans for a 'short but intensive operation' after the November 3 midterms; US HY OAS at 3.27%",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-01",
+      "event": "Senate rejected war-ending resolution 49-50",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "date": "2026-11-03",
+      "event": "US midterm elections scheduled; the stated gate for post-midterm strike planning",
+      "staleness_days": -11,
+      "is_stale": false
+    }
+  ],
+  "quantitative_facts": [
+    {
+      "metric": "Brent crude monthly average",
+      "value": "102.0181",
+      "series": "IMF Brent unit prices",
+      "unit": "U.S. dollars per barrel",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "World",
+      "definition": "Monthly average; +50.894% year-on-year",
+      "source": "IMF",
+      "value_type": "actual",
+      "source_url": "https://data.imf.org/en/datasets/IMF.RES:PCPS",
+      "tier": "S1",
+      "value_num": 102.0181,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "IMF",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Brent crude monthly observation",
+      "value": "114.1591",
+      "series": "EIA/FRED DCOILBRENTEU",
+      "unit": "Dollars per Barrel",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "World",
+      "definition": "EIA series monthly observation for September 2026",
+      "source": "EIA/FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DCOILBRENTEU",
+      "tier": "S1",
+      "value_num": 114.1591,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "EIA/FRED",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Brent crude daily",
+      "value": "115.22",
+      "series": "EIA/FRED DCOILBRENTEU",
+      "unit": "Dollars per Barrel",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-10-20",
+      "geography": "World",
+      "definition": "Latest daily value",
+      "source": "EIA/FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DCOILBRENTEU",
+      "tier": "S1",
+      "value_num": 115.22,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "EIA/FRED",
+      "staleness_days": 3,
+      "is_stale": false
+    },
+    {
+      "metric": "WTI crude monthly observation",
+      "value": "97.3081",
+      "series": "EIA/FRED DCOILWTICO",
+      "unit": "Dollars per Barrel",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "World",
+      "definition": "September 2026 monthly observation; +52.141% y/y",
+      "source": "EIA/FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DCOILWTICO",
+      "tier": "S1",
+      "value_num": 97.3081,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "EIA/FRED",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "WTI crude daily",
+      "value": "107.89",
+      "series": "EIA/FRED DCOILWTICO",
+      "unit": "Dollars per Barrel",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-10-20",
+      "geography": "World",
+      "definition": "Latest daily value; a year earlier 63.959",
+      "source": "EIA/FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DCOILWTICO",
+      "tier": "S1",
+      "value_num": 107.89,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "EIA/FRED",
+      "staleness_days": 3,
+      "is_stale": false
+    },
+    {
+      "metric": "EU natural gas price",
+      "value": "25.494",
+      "series": "FRED Global price of Natural gas, EU",
+      "unit": "U.S. Dollars per Million Metric British Thermal Unit",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "Euro area",
+      "definition": "Monthly average; +131.7% y/y from 11.003",
+      "source": "IMF/FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/PNGASEUUSDM",
+      "tier": "S1",
+      "value_num": 25.494,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Euro area",
+      "analyst": "IMF/FRED",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Gold monthly average",
+      "value": "4334.7467",
+      "series": "IMF gold unit prices",
+      "unit": "U.S. dollars per troy ounce",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "World",
+      "definition": "2026 range 4075.0968 (Jul) to 5014.645 (Feb)",
+      "source": "IMF",
+      "value_type": "actual",
+      "source_url": "https://data.imf.org/en/datasets/IMF.RES:PCPS",
+      "tier": "S1",
+      "value_num": 4334.7467,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "IMF",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Gold LBMA PM",
+      "value": "4124.5",
+      "series": "LBMA PM auction",
+      "unit": "U.S. dollars per troy ounce",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-10-20",
+      "geography": "World",
+      "definition": "Spot PM print; other late-October quotes $4,068.16-$4,140.75",
+      "source": "LBMA",
+      "value_type": "actual",
+      "source_url": "https://www.lbma.org.uk/",
+      "tier": "S3",
+      "value_num": 4124.5,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "LBMA",
+      "staleness_days": 3,
+      "is_stale": false
+    },
+    {
+      "metric": "Federal funds target midpoint",
+      "value": "3.875",
+      "series": "BIS central bank policy rates",
+      "unit": "% per year",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "End of period; range 3.75-4.00% after September 16 hike",
+      "source": "BIS",
+      "value_type": "actual",
+      "source_url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US",
+      "tier": "S1",
+      "value_num": 3.875,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "BIS",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "ECB deposit rate",
+      "value": "2.5",
+      "series": "BIS central bank policy rates",
+      "unit": "% per year",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "Euro area",
+      "definition": "End of period; after 25 bp September hike from 2.25%",
+      "source": "BIS",
+      "value_type": "actual",
+      "source_url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.XM",
+      "tier": "S1",
+      "value_num": 2.5,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Euro area",
+      "analyst": "BIS",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "US CPI year-on-year",
+      "value": "3.717",
+      "series": "FRED CPIAUCSL y/y",
+      "unit": "% change from year ago",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "May 2026 peak 4.167%; +0.695 pp y/y",
+      "source": "BLS/FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/CPIAUCSL",
+      "tier": "S1",
+      "value_num": 3.717,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "BLS/FRED",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Euro-area HICP year-on-year",
+      "value": "3.75",
+      "series": "FRED HICP euro area",
+      "unit": "% change from year ago",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "Euro area (19 countries)",
+      "definition": "Eurostat prints 3.8% with energy +1.71 pp; BIS August 3.249%",
+      "source": "FRED/Eurostat",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/CP0000EZ19M086NEST",
+      "tier": "S1",
+      "value_num": 3.75,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Euro area (19 countries)",
+      "analyst": "FRED/Eurostat",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "US high-yield OAS",
+      "value": "2.755",
+      "series": "ICE BofA US High Yield OAS",
+      "unit": "%",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Monthly; latest daily 3.27% (Oct 21); 5-year range 2.696-4.035%",
+      "source": "ICE BofA/FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/BAMLH0A0HYM2",
+      "tier": "S1",
+      "value_num": 2.755,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "ICE BofA/FRED",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Saudi 5Y USD CDS",
+      "value": "67.75",
+      "series": "Saudi 5Y USD CDS",
+      "unit": "bps",
+      "as_of_date": "2026-10-15",
+      "period_end": "2026-10-15",
+      "geography": "Saudi Arabia",
+      "definition": "From 65.60 (Oct 13) and 66.31 (Oct 14); aggregator quote, uncorroborated",
+      "source": "Investing.com",
+      "value_type": "actual",
+      "source_url": "https://www.investing.com/rates-bonds/saudi-arabia-cds-5-year-usd-historical-data",
+      "tier": "S3",
+      "value_num": 67.75,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Saudi Arabia",
+      "analyst": "Investing.com",
+      "staleness_days": 8,
+      "is_stale": false
+    },
+    {
+      "metric": "60%-enriched uranium stock pre-strike",
+      "value": "440.9",
+      "series": "IAEA estimate",
+      "unit": "kg",
+      "as_of_date": "2026-10-23",
+      "period_end": "2025-06",
+      "geography": "Iran",
+      "definition": "On the eve of the June 2025 strikes; enough for ten nuclear weapons by IAEA yardstick",
+      "source": "IAEA",
+      "value_type": "estimate",
+      "source_url": "https://www.reuters.com/world/middle-east/status-irans-uranium-enrichment-programme-2026-10-07/",
+      "tier": "S2",
+      "value_num": 440.9,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Iran",
+      "analyst": "IAEA",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "60% uranium in Isfahan tunnels",
+      "value": "265-287",
+      "series": "ISIS imagery estimate",
+      "unit": "kg",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-05",
+      "geography": "Iran",
+      "definition": "ISIS post-ceasefire imagery; Grossi said 'a bit more than 200 kg' remains",
+      "source": "ISIS",
+      "value_type": "estimate",
+      "source_url": "https://isis-online.org/isis-reports/comprehensive-imagery-report-on-nuclear-enrichment-related-sites-post-april-ceasefire",
+      "tier": "S3",
+      "value_num": 276.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Iran",
+      "analyst": "ISIS",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Iranian loadings",
+      "value": "210",
+      "series": "Vortexa",
+      "unit": "thousand barrels per day",
+      "as_of_date": "2026-09-15",
+      "period_end": "2026-09-15",
+      "geography": "Iran",
+      "definition": "Loadings at Iranian terminals",
+      "source": "Vortexa",
+      "value_type": "estimate",
+      "source_url": "https://www.vortexa.com/insights/irans-export-floor-disappears",
+      "tier": "S3",
+      "value_num": 210.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Iran",
+      "analyst": "Vortexa",
+      "staleness_days": 38,
+      "is_stale": false
+    },
+    {
+      "metric": "Iranian loadings crude and condensate",
+      "value": "220,000-255,000",
+      "series": "Vortexa and Kpler via Reuters",
+      "unit": "bpd",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-08",
+      "geography": "Iran",
+      "definition": "August 2026 loadings",
+      "source": "Vortexa and Kpler via Reuters",
+      "value_type": "estimate",
+      "source_url": "https://www.reuters.com/business/energy/blockade-succeeds-where-sanctions-failed-iran-oil-exports-stall-2026-09-01/",
+      "tier": "S2",
+      "value_num": 237500.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Iran",
+      "analyst": "Vortexa and Kpler via Reuters",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Iranian crude arrivals in China",
+      "value": "590,000",
+      "series": "Kpler via Reuters",
+      "unit": "bpd",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "China",
+      "definition": "Lowest since January 2023; nearly halved year-on-year",
+      "source": "Kpler",
+      "value_type": "estimate",
+      "source_url": "https://www.reuters.com/business/energy/chinese-independent-refiners-boost-iraqi-oil-purchases-iranian-flows-fall-2026-10-06/",
+      "tier": "S2",
+      "value_num": 590000.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "China",
+      "analyst": "Kpler",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Iranian oil floating storage outside blockade",
+      "value": "45",
+      "series": "Kpler via Reuters",
+      "unit": "million barrels",
+      "as_of_date": "2026-10-06",
+      "period_end": "2026-10-06",
+      "geography": "Outside blockade zone",
+      "definition": "Down from 100 million in late July",
+      "source": "Kpler",
+      "value_type": "estimate",
+      "source_url": "https://www.reuters.com/business/energy/chinese-independent-refiners-boost-iraqi-oil-purchases-iranian-flows-fall-2026-10-06/",
+      "tier": "S2",
+      "value_num": 45.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Outside blockade zone",
+      "analyst": "Kpler",
+      "staleness_days": 17,
+      "is_stale": false
+    },
+    {
+      "metric": "Hormuz crude transits",
+      "value": "13.5",
+      "series": "Kpler 7-day average",
+      "unit": "million b/d",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09-30",
+      "geography": "Strait of Hormuz",
+      "definition": "Crude-only, at Kpler's prewar crude baseline; IEA September reading 10.9 million b/d",
+      "source": "Kpler",
+      "value_type": "actual",
+      "source_url": "https://www.cnbc.com/2026/09/30/iran-war-strait-hormuz-gulf-oil-fuel.html",
+      "tier": "S3",
+      "value_num": 13.5,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Strait of Hormuz",
+      "analyst": "Kpler",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Hormuz product transits",
+      "value": "677",
+      "series": "Kpler",
+      "unit": "kb/d",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09-30",
+      "geography": "Strait of Hormuz",
+      "definition": "Versus ~3.6 million b/d prewar; ~40% of Gulf crude bypasses via pipelines vs 17% prewar",
+      "source": "Kpler",
+      "value_type": "actual",
+      "source_url": "https://www.cnbc.com/2026/09/30/iran-war-strait-hormuz-gulf-oil-fuel.html",
+      "tier": "S3",
+      "value_num": 677.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Strait of Hormuz",
+      "analyst": "Kpler",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "OPEC-8 effective spare capacity",
+      "value": "0.04",
+      "series": "IEA",
+      "unit": "million b/d",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-06",
+      "geography": "OPEC-8",
+      "definition": "Production 13.71 vs sustainable capacity 22.83 million b/d; excludes shut-in Iranian and Russian crude",
+      "source": "IEA",
+      "value_type": "estimate",
+      "source_url": "https://www.iea.org/reports/oil-market-report-july-2026",
+      "tier": "S1",
+      "value_num": 0.04,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "OPEC-8",
+      "analyst": "IEA",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Conflict shut-ins",
+      "value": "4.8",
+      "series": "EIA STEO",
+      "unit": "million b/d",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "Middle East",
+      "definition": "May 2026 peak 10.9; August 5.8; 4.5 assumed for 4Q26",
+      "source": "EIA",
+      "value_type": "estimate",
+      "source_url": "https://www.eia.gov/outlooks/steo/report/global_oil.php",
+      "tier": "S1",
+      "value_num": 4.8,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Middle East",
+      "analyst": "EIA",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Global observed inventories vs pre-war",
+      "value": "509",
+      "series": "IEA OMR",
+      "unit": "million barrels below pre-war",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "Global",
+      "definition": "On-land stocks lowest since at least 2016",
+      "source": "IEA",
+      "value_type": "actual",
+      "source_url": "https://www.iea.org/reports/oil-market-report-october-2026",
+      "tier": "S1",
+      "value_num": 509.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "IEA",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "EIA projected Brent 4Q27",
+      "value": "74",
+      "series": "EIA October 2026 STEO",
+      "unit": "$/b",
+      "as_of_date": "2026-10-23",
+      "period_end": "2027-Q4",
+      "geography": "World",
+      "definition": "Conditional on Middle East export workarounds; 4Q26 $105, 2Q27 $87, 2027 average $84",
+      "source": "EIA",
+      "value_type": "forecast",
+      "source_url": "https://www.eia.gov/outlooks/steo/report/global_oil.php",
+      "tier": "S1",
+      "value_num": 74.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "EIA",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "IEA projected 2027 supply increase",
+      "value": "7.7",
+      "series": "IEA OMR",
+      "unit": "million b/d",
+      "as_of_date": "2026-10-23",
+      "period_end": "2027",
+      "geography": "Global",
+      "definition": "2027 demand forecast 620 kb/d below 2025; possible surplus",
+      "source": "IEA",
+      "value_type": "forecast",
+      "source_url": "https://www.iea.org/reports/oil-market-report-october-2026",
+      "tier": "S1",
+      "value_num": 7.7,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "IEA",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "China share of Iranian oil exports",
+      "value": "approximately 90",
+      "series": "US Treasury assessment",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026",
+      "geography": "China/Iran",
+      "definition": "Teapot refineries the majority of purchases",
+      "source": "US Treasury",
+      "value_type": "estimate",
+      "source_url": "https://home.treasury.gov/news/press-releases/sb0476",
+      "tier": "S1",
+      "value_num": 90.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "China/Iran",
+      "analyst": "US Treasury",
+      "metric_family": "market share",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "China seaborne crude imports",
+      "value": "8.8",
+      "series": "Vortexa",
+      "unit": "mbd",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10",
+      "geography": "China",
+      "definition": "Expected October; Q3 average 7.5 mbd; 2025 average 10.6 mbd",
+      "source": "Vortexa",
+      "value_type": "forecast",
+      "source_url": "https://www.vortexa.com/insights/gulf-producers-stand-to-gain-as-china",
+      "tier": "S3",
+      "value_num": 8.8,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "China",
+      "analyst": "Vortexa",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "World Bank Iran GDP projection",
+      "value": "-7.7",
+      "series": "World Bank",
+      "unit": "% contraction",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-27 (fiscal year)",
+      "geography": "Iran",
+      "definition": "Projection Iranian authorities reject",
+      "source": "World Bank",
+      "value_type": "forecast",
+      "source_url": "https://www.aljazeera.com/news/2026/10/20/iran-denies-collapse-is-close-as-us-claims-irgc-running-out-of-money",
+      "tier": "S3",
+      "value_num": -7.7,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Iran",
+      "analyst": "World Bank",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "US real exports of goods and services",
+      "value": "2814.538",
+      "series": "FRED EXPGSC1",
+      "unit": "Billions of Chained 2017 Dollars",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-Q2",
+      "geography": "United States",
+      "definition": "+5.837% from 2659.32 in 2025-Q2",
+      "source": "BEA/FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/EXPGSC1",
+      "tier": "S1",
+      "value_num": 2814.538,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "BEA/FRED",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "IMF all-commodity index",
+      "value": "222.4285",
+      "series": "IMF PCPS all index",
+      "unit": "Index, 2016=100",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "World",
+      "definition": "+32.821% y/y from 167.4645",
+      "source": "IMF",
+      "value_type": "actual",
+      "source_url": "https://data.imf.org/en/datasets/IMF.RES:PCPS",
+      "tier": "S1",
+      "value_num": 222.4285,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "IMF",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Red Sea transits",
+      "value": "below one third of pre-October-2023 levels",
+      "series": "IMF PortWatch / Africa Center",
+      "unit": "share of pre-war volumes",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "Red Sea",
+      "definition": "Pre-war weekly average 80 vessels carrying 3.4 million metric tons",
+      "source": "Africa Center / IMF PortWatch",
+      "value_type": "actual",
+      "source_url": "https://africacenter.org/spotlight/2026-houthi-red-sea-threats/",
+      "tier": "S3",
+      "value_num": -2023.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Red Sea",
+      "analyst": "Africa Center / IMF PortWatch",
+      "metric_family": "market share",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "VLCC rate Gulf of Oman-China",
+      "value": "WS776",
+      "series": "Reuters/Baltic",
+      "unit": "Worldscale",
+      "as_of_date": "2026-10-16",
+      "period_end": "2026-10-16",
+      "geography": "Gulf of Oman-China",
+      "definition": "Spot; TD3C Week-41 average WS1,288 on a different route",
+      "source": "Reuters/Baltic",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/business/energy/supertanker-rates-fall-record-highs-2026-10-16/",
+      "tier": "S2",
+      "value_num": 776.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Gulf of Oman-China",
+      "analyst": "Reuters/Baltic",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "metric": "Hezbollah arsenal",
+      "value": "approximately 25,000",
+      "series": "Alma (Israeli institute) estimate",
+      "unit": "items of rockets and missiles",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026",
+      "geography": "Lebanon",
+      "definition": "Institute estimate, not a measured inventory; mainly short- and medium-range",
+      "source": "Alma",
+      "value_type": "estimate",
+      "source_url": "https://israel-alma.org/key-points-of-hezbollahs-current-military-status-january-2026-situation-assessment/",
+      "tier": "S3",
+      "value_num": 25000.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Lebanon",
+      "analyst": "Alma",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Abqaiq attack Brent move",
+      "value": "60.22 to 69.02",
+      "series": "EIA/Reuters settlement data",
+      "unit": "$/b close",
+      "as_of_date": "2026-10-23",
+      "period_end": "2019-09-16",
+      "geography": "Global",
+      "definition": "14 September 2019 attack disrupted 5.7 million b/d; only $1.58 above pre-attack two weeks later",
+      "source": "EIA/Reuters",
+      "value_type": "actual",
+      "source_url": "https://www.congress.gov/crs_external_products/IN/PDF/IN11173/IN11173.3.pdf",
+      "tier": "S1",
+      "value_num": 64.62,
+      "year": 2019,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "EIA/Reuters",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Brent June 13, 2025 move",
+      "value": "7",
+      "series": "Reuters",
+      "unit": "% settled up",
+      "as_of_date": "2026-10-23",
+      "period_end": "2025-06-13",
+      "geography": "Global",
+      "definition": "Intraday up to about 13-14%, biggest since March 2022; unwound within about 10 trading days of June 24, 2025 ceasefire",
+      "source": "Reuters",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/world/china/oil-prices-jump-more-than-4-after-israel-strikes-iran-2025-06-13/",
+      "tier": "S2",
+      "value_num": 7.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Reuters",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "House war-ending resolution vote",
+      "value": "214-208",
+      "series": "Congressional record",
+      "unit": "votes",
+      "as_of_date": "2026-07-01",
+      "period_end": "2026-07",
+      "geography": "United States",
+      "definition": "H.Con.Res. 89 passed the House in July 2026; Senate rejected 49-50 in October",
+      "source": "Congress via NBC News",
+      "value_type": "actual",
+      "source_url": "https://www.nbcnews.com/politics/congress/senate-rejects-resolution-calling-end-iran-war-republicans-stick-trump-rcna599624",
+      "tier": "S3",
+      "value_num": 211.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Congress via NBC News",
+      "staleness_days": 114,
+      "is_stale": false
+    },
+    {
+      "metric": "NBC poll war support",
+      "value": "33 vs 62",
+      "series": "NBC News poll",
+      "unit": "percent of registered voters",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "33% say war worth it, 62% do not; 19 US service members killed counted by NBC",
+      "source": "NBC News",
+      "value_type": "actual",
+      "source_url": "https://www.nbcnews.com/politics/congress/senate-rejects-resolution-calling-end-iran-war-republicans-stick-trump-rcna599624",
+      "tier": "S3",
+      "value_num": 33.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "NBC News",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Forbes succession probabilities",
+      "value": "35 / 30 / 25",
+      "series": "Forbes assessment",
+      "unit": "percent",
+      "as_of_date": "2026-02-28",
+      "period_end": "2026-02-28",
+      "geography": "Iran",
+      "definition": "IRGC consolidation around collective leadership 35%; protracted power contest 30%; popular uprising 25%",
+      "source": "Forbes",
+      "value_type": "estimate",
+      "source_url": "https://www.forbes.com/sites/guneyyildiz/2026/02/28/khamenei-is-dead---irans-missiles-keep-flying-without-him/",
+      "tier": "S3",
+      "value_num": 35.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Iran",
+      "analyst": "Forbes",
+      "staleness_days": 237,
+      "is_stale": false
+    },
+    {
+      "metric": "ECB hold probability October 29",
+      "value": "96",
+      "series": "ECB Watch market-implied",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-29",
+      "geography": "Euro area",
+      "definition": "Market-implied probability of holding deposit rate at 2.50%",
+      "source": "ECB Watch",
+      "value_type": "forecast",
+      "source_url": "https://ecb-watch.eu/",
+      "tier": "S3",
+      "value_num": 96.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Euro area",
+      "analyst": "ECB Watch",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Middle East exports 7-day average",
+      "value": "18.3",
+      "series": "Kpler",
+      "unit": "million bpd",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09-30",
+      "geography": "Middle East",
+      "definition": "Versus roughly 18 million bpd in the twelve pre-war months; Vortexa 14-day 18.6",
+      "source": "Kpler",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/business/energy/middle-east-crude-oil-exports-exceed-pre-war-levels-tanker-attacks-increase-2026-10-05/",
+      "tier": "S2",
+      "value_num": 18.3,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Middle East",
+      "analyst": "Kpler",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Probability-weighted end-2027 Brent",
+      "value": "approximately 91",
+      "series": "This report's scenario weighting",
+      "unit": "$/b",
+      "as_of_date": "2026-10-23",
+      "period_end": "2027-12-31",
+      "geography": "World",
+      "definition": "P10/P50/P90 approximately 70/82/125; 2027 average high-$80s vs EIA's $84/b",
+      "source": "This report",
+      "value_type": "forecast",
+      "value_num": 91.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "This report",
+      "metric_family": "scenario probability",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Probability-weighted end-2027 gold",
+      "value": "approximately 4,150",
+      "series": "This report's scenario weighting",
+      "unit": "U.S. dollars per troy ounce",
+      "as_of_date": "2026-10-23",
+      "period_end": "2027-12-31",
+      "geography": "World",
+      "definition": "Scenario range roughly 3,650-4,800",
+      "source": "This report",
+      "value_type": "forecast",
+      "value_num": 4150.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "This report",
+      "metric_family": "scenario probability",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Probability-weighted end-2027 TTF/EU gas",
+      "value": "approximately 20",
+      "series": "This report's scenario weighting",
+      "unit": "$/MMBtu",
+      "as_of_date": "2026-10-23",
+      "period_end": "2027-12-31",
+      "geography": "Europe",
+      "definition": "Scenario range roughly 10.5-34",
+      "source": "This report",
+      "value_type": "forecast",
+      "value_num": 20.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Europe",
+      "analyst": "This report",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "TA-35 index",
+      "value": "4,131.67",
+      "series": "TA-35",
+      "unit": "index points (intraday)",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "Israel",
+      "definition": "TA-125 down 2.17% over the past month",
+      "source": "Trading Economics cited in report",
+      "value_type": "actual",
+      "source_url": "https://market.tase.co.il/en/market_data/index/142/about",
+      "tier": "S3",
+      "value_num": 4131.67,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Israel",
+      "analyst": "Trading Economics cited in report",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Bank of Israel rate",
+      "value": "3.25",
+      "series": "Bank of Israel policy rate",
+      "unit": "%",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026-10-21",
+      "geography": "Israel",
+      "definition": "Held (reported)",
+      "source": "Bank of Israel (reported)",
+      "value_type": "actual",
+      "source_url": "https://www.boi.org.il/en/communication-and-publications/press-releases/21-10-26ben/",
+      "tier": "S3",
+      "value_num": 3.25,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Israel",
+      "analyst": "Bank of Israel (reported)",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "metric": "Euro-area real broad effective exchange rate",
+      "value": "103.27",
+      "series": "BIS EER",
+      "unit": "Index, 2020 = 100",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "Euro area",
+      "definition": "Down from 104.59 a year earlier",
+      "source": "BIS",
+      "value_type": "actual",
+      "source_url": "https://data.bis.org/topics/EER/BIS,WS_EER,1.0/M.R.B.XM",
+      "tier": "S1",
+      "value_num": 103.27,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Euro area",
+      "analyst": "BIS",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Teapot substitution purchases",
+      "value": "at least 12",
+      "series": "Kpler/Reuters",
+      "unit": "million barrels",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10",
+      "geography": "China",
+      "definition": "Iraqi and Qatari crude for Oct-Nov 2026 delivery (traders estimated 15-20), after 20+ million barrels of West African, Canadian and Colombian crude",
+      "source": "Kpler via Reuters",
+      "value_type": "estimate",
+      "source_url": "https://www.reuters.com/business/energy/chinese-independent-refiners-boost-iraqi-oil-purchases-iranian-flows-fall-2026-10-06/",
+      "tier": "S2",
+      "value_num": 12.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "China",
+      "analyst": "Kpler via Reuters",
+      "metric_family": "annual shipments",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "IEA diesel release",
+      "value": "over 20",
+      "series": "IEA agreement",
+      "unit": "million barrels",
+      "as_of_date": "2026-10-15",
+      "period_end": "2026-10-15",
+      "geography": "Global",
+      "definition": "Agreed release alongside remaining volumes of a record March 2026 emergency-reserve release",
+      "source": "IEA",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/business/energy/oil-prices-fall-investors-weigh-supply-outlook-middle-east-tensions-2026-10-15/",
+      "tier": "S2",
+      "value_num": 20.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "IEA",
+      "staleness_days": 8,
+      "is_stale": false
+    },
+    {
+      "metric": "OFAC shadow-fleet designations",
+      "value": "17",
+      "series": "OFAC action",
+      "unit": "vessels",
+      "as_of_date": "2026-10-08",
+      "period_end": "2026-10-08",
+      "geography": "South and East Asia routes",
+      "definition": "Treasury claims action 'effectively neutralizes the vast majority' of the shadow fleet",
+      "source": "US Treasury/OFAC",
+      "value_type": "actual",
+      "source_url": "https://home.treasury.gov/news/press-releases/sb0653",
+      "tier": "S1",
+      "value_num": 17.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "South and East Asia routes",
+      "analyst": "US Treasury/OFAC",
+      "staleness_days": 15,
+      "is_stale": false
+    }
+  ],
+  "contested_claims": [
+    {
+      "claim": "September 2026 average Brent price",
+      "positions": [
+        {
+          "stance": "102.0181 U.S. dollars per barrel",
+          "sources": [
+            "https://data.imf.org/en/datasets/IMF.RES:PCPS"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "114.1591 Dollars per Barrel",
+          "sources": [
+            "https://fred.stlouisfed.org/series/DCOILBRENTEU"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Source-and-definition gap between the IMF monthly-average series and the EIA/FRED monthly observation for the same month; the report carries both explicitly rather than averaging"
+    },
+    {
+      "claim": "Iranian oil exports in late 2026",
+      "positions": [
+        {
+          "stance": "Loadings of 210 kbd (mid-September); October exports at zero",
+          "sources": [
+            "https://www.vortexa.com/insights/irans-export-floor-disappears",
+            "https://www.reuters.com/business/energy/us-blockade-keeps-iranian-crude-exports-zero-october-report-says-2026-10-13/"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "590,000 bpd still arriving in China in September; 45 million barrels floating outside the blockade",
+          "sources": [
+            "https://www.reuters.com/business/energy/chinese-independent-refiners-boost-iraqi-oil-purchases-iranian-flows-fall-2026-10-06/"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "475,000 bpd in September, stopping after September 26",
+          "sources": [
+            "https://www.facebook.com/oilpricenews/posts/iranian-oil-flows-to-china-fell-from-980000-bpd-in-august-to-475000-bpd-in-septe/1552334526908205/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different measurement points (loadings vs blockade crossings vs Chinese arrivals), tracker methodology, and timing; the aggregator figure is uncorroborated"
+    },
+    {
+      "claim": "Effectiveness of the shadow-fleet sanctions",
+      "positions": [
+        {
+          "stance": "OFAC's October 8 action 'effectively neutralizes the vast majority of Iran's remaining shadow fleet network'",
+          "sources": [
+            "https://home.treasury.gov/news/press-releases/sb0653"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "Kpler still counted 590,000 bpd reaching China in September and 45 million barrels afloat outside the blockade",
+          "sources": [
+            "https://www.reuters.com/business/energy/chinese-independent-refiners-boost-iraqi-oil-purchases-iranian-flows-fall-2026-10-06/"
+          ],
+          "tier": "S2"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Treasury's is an enforcement claim, not an observation; tracker data show flows persisting"
+    },
+    {
+      "claim": "Iran's economic trajectory",
+      "positions": [
+        {
+          "stance": "World Bank projects a 7.7% contraction for fiscal year 2026-27; Bessent warned Iran 'could face economic collapse in months'",
+          "sources": [
+            "https://www.aljazeera.com/news/2026/10/20/iran-denies-collapse-is-close-as-us-claims-irgc-running-out-of-money"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Iranian authorities reject the collapse projection",
+          "sources": [
+            "https://www.aljazeera.com/news/2026/10/20/iran-denies-collapse-is-close-as-us-claims-irgc-running-out-of-money"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Belligerent incentives and opposing analytical baselines; one side's projection is the other's propaganda"
+    },
+    {
+      "claim": "Scale of Hormuz transit flows",
+      "positions": [
+        {
+          "stance": "13.5 million b/d crude 7-day average, at prewar crude parity",
+          "sources": [
+            "https://www.cnbc.com/2026/09/30/iran-war-strait-hormuz-gulf-oil-fuel.html"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "10.9 million b/d September Hormuz flows, up 3.7 million b/d on the month",
+          "sources": [
+            "https://www.iea.org/reports/oil-market-report-october-2026"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "About 20 million b/d of crude and products averaged through the strait in 2025; JP Morgan near 17.5 million b/d crude (98% of pre-war) in early October",
+          "sources": [
+            "https://www.iea.org/about/oil-security-and-emergency-response/strait-of-hormuz",
+            "https://english.elpais.com/international/2026-10-01/tanker-transits-through-strait-of-hormuz-approach-prewar-figures.html"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Definitional: crude-only vs crude-plus-products, different baselines and averaging windows"
+    },
+    {
+      "claim": "Whether Trump blocked a mid-October 2026 Israeli strike",
+      "positions": [
+        {
+          "stance": "Reported US block of a mid-October strike",
+          "sources": [
+            "https://www.npr.org/2026/10/22/nx-s1-6012306/what-we-know-about-war-plans-that-trump-and-netanyahu-are-drawing-up"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Netanyahu denies Trump blocked the strike",
+          "sources": [
+            "https://www.npr.org/2026/10/22/nx-s1-6012306/what-we-know-about-war-plans-that-trump-and-netanyahu-are-drawing-up"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Political sensitivity and deniability around live strike planning"
+    },
+    {
+      "claim": "Remaining 60%-enriched uranium stock",
+      "positions": [
+        {
+          "stance": "'A bit more than 200 kg' of up-to-60% uranium remains in the Isfahan tunnel complex",
+          "sources": [
+            "https://www.reuters.com/world/middle-east/status-irans-uranium-enrichment-programme-2026-10-07/"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "265-287 kg in the Isfahan tunnels, 74-96 kg at Natanz, ~80 kg reported at Fordow",
+          "sources": [
+            "https://isis-online.org/isis-reports/comprehensive-imagery-report-on-nuclear-enrichment-related-sites-post-april-ceasefire"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "All figures are estimates, not measurements, made without IAEA access; different imagery-based methodologies"
+    },
+    {
+      "claim": "Saudi Arabia credit quality / regional spread anchor",
+      "positions": [
+        {
+          "stance": "Saudi 5Y USD CDS at 67.75 bps (Oct 15), sole regional spread in evidence, uncorroborated",
+          "sources": [
+            "https://www.investing.com/rates-bonds/saudi-arabia-cds-5-year-usd-historical-data"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "S&P Global Ratings reported to have upgraded Saudi Arabia to 'A+', date not confirmed on the fetched page",
+          "sources": [
+            "https://www.investing.com/rates-bonds/saudi-arabia-cds-5-year-usd"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Tier-3 aggregator quote with no primary dealer print; upgrade report not confirmed, so the regional anchor is provisional"
+    },
+    {
+      "claim": "2027 oil market balance",
+      "positions": [
+        {
+          "stance": "EIA: 2027 production of 109.6 million b/d against consumption of 104.6 million b/d; Brent averaging $84/b in 2027",
+          "sources": [
+            "https://www.eia.gov/outlooks/steo/report/global_oil.php"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "IEA: 2027 supply up 7.7 million b/d, demand still 620 kb/d below 2025, possible surplus",
+          "sources": [
+            "https://www.iea.org/reports/oil-market-report-october-2026"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Divergent agency demand models and assumptions about export workarounds and shut-in recovery"
+    },
+    {
+      "claim": "Escalation propensity of the Iran dyad vs historical base rates",
+      "positions": [
+        {
+          "stance": "Constructed priors clustered at 0-29% for renewed large-scale strikes within two years (shadow war 1/7; US-Iran near-war 0/4; named ceasefires ~1/5)",
+          "sources": [
+            "https://www.the-independent.com/news/world/middle-east/israel-iran-attack-war-timeline-history-b2769523.html",
+            "https://www.everycrsreport.com/files/20200508_R45795_e1c721b4a175c4ceae643ff55bacb862c0d7fc71.html",
+            "https://acleddata.com/expert-comment/three-years-7-october-how-has-violence-changed-gaza-and-lebanon"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "The June 2025 direct confrontation broke the shadow-war taboo, so pre-2025 base rates understate current escalation propensity",
+          "sources": [
+            "https://www.iss.europa.eu/publications/briefs/israel-and-iran-brink-preventing-next-war"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Doctrinal shift after 2025-26 decapitation precedent and collapsed verification makes historical classes partially inapplicable"
+    },
+    {
+      "claim": "Succession stability in Tehran",
+      "positions": [
+        {
+          "stance": "FRS: the Islamic Republic did not fragment; the coercive apparatus stayed cohesive and killed officials were replaced",
+          "sources": [
+            "https://www.frstrategie.org/en/publications/recherches-et-documents/iran-after-ali-khamenei-power-security-governance-and-emerging-political-order-2026"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Forbes (28 February 2026): protracted power contest at about 30%, popular uprising at 25%",
+          "sources": [
+            "https://www.forbes.com/sites/guneyyildiz/2026/02/28/khamenei-is-dead---irans-missiles-keep-flying-without-him/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Expert odds were opening-day snapshots; later observation of orderly succession and coalition cohesion supports the stability view"
+    },
+    {
+      "claim": "Hezbollah rearmament scale",
+      "positions": [
+        {
+          "stance": "Arsenal of 'up to approximately 25,000 items'; a reported $50 million monthly rearmament budget",
+          "sources": [
+            "https://israel-alma.org/key-points-of-hezbollahs-current-military-status-january-2026-situation-assessment/",
+            "https://www.reuters.com/world/middle-east/hezbollah-saw-new-war-with-israel-inevitable-rearmed-months-sources-say-2026-03-06/"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "The Alma figure is an institute estimate, not a measured inventory, and the budget is unconfirmed",
+          "sources": [
+            "https://israel-alma.org/key-points-of-hezbollahs-current-military-status-january-2026-situation-assessment/",
+            "https://www.yahoo.com/news/world/articles/hezbollah-rebuilds-military-capabilities-upgrades-153557221.html"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Single-origin Israeli-institute estimate lacking independent corroboration"
+    },
+    {
+      "claim": "Gold price print for June 13, 2025",
+      "positions": [
+        {
+          "stance": "About 1.5% on the day of the June 13, 2025 strikes, at a roughly $3,430-3,450 level",
+          "sources": [
+            "https://www.theguardian.com/business/2025/jun/13/oil-and-gold-prices-soar-after-israel-attacks-on-iran"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Guardian's '$34,434 an ounce' print for that date",
+          "sources": [
+            "https://www.theguardian.com/business/2025/jun/13/oil-and-gold-prices-soar-after-israel-attacks-on-iran"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "resolved",
+      "why_they_differ": "The Guardian figure is inconsistent with the prevailing level and is likely a typo; the report resolves toward the Reuters-consistent level"
+    },
+    {
+      "claim": "US capacity to sustain the campaign",
+      "positions": [
+        {
+          "stance": "CRS: US and partner counter-capacity to counter Iranian attacks is finite; Iran may have limited ability to continue attacks",
+          "sources": [
+            "https://www.congress.gov/crs-product/R48887"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "US real exports up 5.837% y/y in 2026-Q2; no visible US-trade contraction from the campaign",
+          "sources": [
+            "https://fred.stlouisfed.org/series/EXPGSC1"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Assessment of finite military capacity versus macro data showing no trade contraction measure different things"
+    }
+  ],
+  "forecast_inputs": {
+    "scenarios": [
+      {
+        "name": "Low-intensity conflict",
+        "probability": 0.45,
+        "narrative": "The blockade, sabotage, cyber and proxy attacks continue without renewed state-on-state strikes, holding Iran suppressed but unresolved; prior: managed-standoff continuation dominates comparable post-strike episodes."
+      },
+      {
+        "name": "Renewed large-scale strikes",
+        "probability": 0.25,
+        "narrative": "Iran's centrifuge reconstruction or breakout progress crosses Israeli or US red lines and re-strikes on nuclear or regime targets trigger Iranian retaliation; shifted up from a single-digit base rate by verified 2025-2026 strike precedent and collapsed IAEA access."
+      },
+      {
+        "name": "Durable ceasefire",
+        "probability": 0.15,
+        "narrative": "Economic exhaustion and blockade attrition push Tehran to accept a durable ceasefire with verification but no nuclear diplomacy, freezing the conflict below the strike threshold."
+      },
+      {
+        "name": "Negotiated framework",
+        "probability": 0.1,
+        "narrative": "US or Chinese-mediated talks convert the ceasefire into a partial nuclear framework with limited sanctions relief and restored IAEA access; requires a signed text, so weighted modestly absent current talks."
+      },
+      {
+        "name": "Regime crisis",
+        "probability": 0.05,
+        "narrative": "Economic collapse under the blockade triggers succession upheaval or internal regime crisis that reshapes the conflict; single-digit weight as a tail absent a visible challenger coalition."
+      }
+    ],
+    "base_rates": [
+      {
+        "reference_class": "Named post-war ceasefires (2006 Lebanon; 2015 Yemen; Oct 2025 Gaza; Mar 2026 and Jun 2026 Lebanon), renewed large-scale state-on-state fighting within 2 years",
+        "outcome_frequency": "≈1/5; Laplace ≈29%",
+        "basis": "Constructed from ACLED and press timelines [S77][S78][S79][S80][S81]"
+      },
+      {
+        "reference_class": "Israeli strikes on Iranian assets in the shadow war, large-scale state-on-state strikes within 2 years of a significant Israeli strike, 2013–2024",
+        "outcome_frequency": "1/7; Laplace ≈22%",
+        "basis": "Constructed from timelines [S72][S73][S74]"
+      },
+      {
+        "reference_class": "US–Iran near-war episodes 2019–2020, same counting rule",
+        "outcome_frequency": "0/4; Laplace ≈17%, or 1 of 4 if the January 8, 2020 Ain al-Asad strike is graded in",
+        "basis": "Constructed from CRS and press [S75][S76]"
+      },
+      {
+        "reference_class": "Civil-war ceasefires, 196 conflicts tracked 1975–2011, any renewed violence",
+        "outcome_frequency": "roughly 80% of ceasefires are followed by renewed conflict or violence",
+        "basis": "Research dataset cited by The World/PRX [S78]"
+      },
+      {
+        "reference_class": "Five distinct Middle-East shock episodes on the stored IMF window (2006-10 to 2026-09), monthly Brent more than $10/b above pre-shock level for six months or longer",
+        "outcome_frequency": "only the two with sustained realized supply loss",
+        "basis": "IMF monthly Brent series [S5]"
+      }
+    ],
+    "drivers": [
+      {
+        "variable": "Post-midterm US-Israeli strike planning",
+        "direction": "up escalation risk",
+        "why_it_matters": "Reported specific plans for a 'short but intensive operation' after the November 3, 2026 midterms convert attrition into campaign-scale strikes [S24]"
+      },
+      {
+        "variable": "Collapsed IAEA verification",
+        "direction": "up escalation risk",
+        "why_it_matters": "No access to declared enrichment sites since early 2026 means red-line breaches are undetectable in advance [S15][S16]"
+      },
+      {
+        "variable": "Iran's preemption doctrine and pre-delegated missile authority",
+        "direction": "up escalation risk",
+        "why_it_matters": "September 2026 doctrine of preemptively raising costs and launch authority delegated to lower-ranking officers compress warning times on both sides [S1][S69]"
+      },
+      {
+        "variable": "Blockade-driven economic collapse",
+        "direction": "toward ceasefire or internal crisis",
+        "why_it_matters": "Loadings at 210 kbd and a World Bank-projected 7.7% FY2026-27 contraction push Tehran toward concession or upheaval [S4][S46]"
+      },
+      {
+        "variable": "Inventory floor and spent effective spare capacity",
+        "direction": "up price sensitivity to any new outage",
+        "why_it_matters": "Observed inventories 509 million barrels below pre-war, on-land lowest since at least 2016, and effective OPEC-8 spare of only 0.04 million b/d leave no buffer [S57][S100]"
+      },
+      {
+        "variable": "US domestic war unpopularity",
+        "direction": "down escalation risk",
+        "why_it_matters": "33% of voters call the war worth it against 62% who do not, suppressing escalation before the midterms [S27]"
+      },
+      {
+        "variable": "Chinese teapot substitution away from Iranian barrels",
+        "direction": "down blockade-erosion risk",
+        "why_it_matters": "At least 12 million barrels of Iraqi and Qatari crude bought for Oct–Nov delivery show Beijing can replace Iranian supply cheaply, removing Tehran's revenue lifeline [S40][S44]"
+      },
+      {
+        "variable": "Proxy reconstitution (Hezbollah, Houthis)",
+        "direction": "sustains low-intensity conflict",
+        "why_it_matters": "Hezbollah rebuilding with upgraded drones and roughly 12 Houthi attacks since July 2026 keep shipping and frontier risk alive below campaign threshold [S83][S48]"
+      }
+    ],
+    "risks": [
+      {
+        "event": "Kpler 7-day Hormuz crude transits fall below 10 million b/d for 14 consecutive days",
+        "probability": "20%",
+        "per": "before end-2027",
+        "source": "Hormuz oil shipments at prewar levels but fuel shipments constrained [S56]",
+        "source_url": "https://www.cnbc.com/2026/09/30/iran-war-strait-hormuz-gulf-oil-fuel.html",
+        "tier": "S3",
+        "effects": [],
+        "affects": [
+          "OPEC+ (Saudi Arabia-led)",
+          "US Central Command",
+          "Gulf Cooperation Council states"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "Iranian crude deliveries to China exceed 1 million b/d in any month",
+        "probability": "25%",
+        "per": "",
+        "source": "Chinese independent refiners boost Iraqi oil purchases as Iranian flows fall, traders say | Reuters [S40]",
+        "source_url": "https://www.reuters.com/business/energy/chinese-independent-refiners-boost-iraqi-oil-purchases-iranian-flows-fall-2026-10-06/",
+        "tier": "S2",
+        "effects": [],
+        "affects": [
+          "Government of China",
+          "IRGC"
+        ],
+        "recurring": true
+      },
+      {
+        "event": "Gold above $5,000 per troy ounce at an LBMA auction",
+        "probability": "30%",
+        "per": "before end-2027",
+        "source": "Gold, US dollars per troy ounce of gold, Unit prices — World [S10]",
+        "source_url": "https://data.imf.org/en/datasets/IMF.RES:PCPS",
+        "tier": "S1",
+        "effects": [],
+        "affects": [
+          "Central banks (gold buyers)"
+        ],
+        "recurring": true
+      },
+      {
+        "event": "Federal funds target above 4% at end-2027",
+        "probability": "25%",
+        "per": "at end-2027",
+        "source": "Federal Reserve Board - Federal Reserve issues FOMC statement [S11]",
+        "source_url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm",
+        "tier": "S1",
+        "effects": [
+          {
+            "metric": "Federal funds target midpoint",
+            "change": "above 4%",
+            "direction": "up"
+          }
+        ],
+        "affects": [
+          "US Federal Reserve"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "IAEA regains access to any declared enrichment site",
+        "probability": "15%",
+        "per": "before end-2027",
+        "source": "IAEA and Iran: Chronology of Key Events | IAEA [S20]",
+        "source_url": "https://www.iaea.org/newscenter/focus/iran/chronology-of-key-events",
+        "tier": "S3",
+        "effects": [],
+        "affects": [
+          "IAEA",
+          "Iranian diplomatic faction (Foreign Ministry)"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "US naval blockade lifted for 90 or more consecutive days",
+        "probability": "25%",
+        "per": "before end-2027",
+        "source": "Iran’s export floor disappears as crude falls to 210kbd | Vortexa [S4]",
+        "source_url": "https://www.vortexa.com/insights/irans-export-floor-disappears",
+        "tier": "S3",
+        "effects": [
+          {
+            "metric": "Iranian loadings",
+            "change": "from 210 kbd",
+            "direction": "up"
+          }
+        ],
+        "affects": [
+          "US Central Command",
+          "IRGC",
+          "Vortexa / Kpler"
+        ],
+        "recurring": false
+      }
+    ],
+    "indicators": [
+      {
+        "indicator": "Brent Crude, US dollars per barrel, Unit prices — World (imf:PCPS/G001.POILBRE.USD.M)",
+        "series": "imf:PCPS/G001.POILBRE.USD.M",
+        "latest_value": 102.0180952380952,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "U.S. dollars per barrel",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S5"
+      },
+      {
+        "indicator": "Consumer Price Index for All Urban Consumers: All Items in U.S. City Average (year-over-year % change) (fred:CPIAUCSL#yoy)",
+        "series": "fred:CPIAUCSL#yoy",
+        "latest_value": 3.7172508442689933,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent change from year ago",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S6"
+      },
+      {
+        "indicator": "Central bank policy rates - United States - Monthly - End of period (bis:WS_CBPOL/M.US)",
+        "series": "bis:WS_CBPOL/M.US",
+        "latest_value": 3.875,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Per cent per year",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S8"
+      },
+      {
+        "indicator": "Global price of Natural gas, EU — Euro area (fred:PNGASEUUSDM)",
+        "series": "fred:PNGASEUUSDM",
+        "latest_value": 25.494,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "U.S. Dollars per Million Metric British Thermal Unit",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S9"
+      },
+      {
+        "indicator": "Gold, US dollars per troy ounce of gold, Unit prices — World (imf:PCPS/G001.PGOLD.USD.M)",
+        "series": "imf:PCPS/G001.PGOLD.USD.M",
+        "latest_value": 4334.746666666667,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "U.S. dollars per troy ounce",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S10"
+      },
+      {
+        "indicator": "Crude Oil Prices: West Texas Intermediate (WTI) - Cushing, Oklahoma — World (fred:DCOILWTICO)",
+        "series": "fred:DCOILWTICO",
+        "latest_value": 97.30809523809523,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Dollars per Barrel",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S18"
+      },
+      {
+        "indicator": "Central bank policy rates - Euro area - Monthly - End of period (bis:WS_CBPOL/M.XM)",
+        "series": "bis:WS_CBPOL/M.XM",
+        "latest_value": 2.5,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Per cent per year",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S28"
+      },
+      {
+        "indicator": "All index, Commodity price index, Index, 2016=100 — World (imf:PCPS/G001.PALLFNF.INDEX.M)",
+        "series": "imf:PCPS/G001.PALLFNF.INDEX.M",
+        "latest_value": 222.4285486100514,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Index 2016=100",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S29"
+      },
+      {
+        "indicator": "Real Exports of Goods and Services — United States (fred:EXPGSC1)",
+        "series": "fred:EXPGSC1",
+        "latest_value": 2814.538,
+        "latest_date": "2026-06-30",
+        "latest_period": "2026-Q2",
+        "status": "observed",
+        "units": "Billions of Chained 2017 Dollars",
+        "frequency": "Q",
+        "date_or_trigger": "next quarterly release after 2026-Q2",
+        "source_ref": "S30"
+      },
+      {
+        "indicator": "Effective exchange rates: Euro area - Real - Broad (64 economies) (bis:WS_EER/M.R.B.XM)",
+        "series": "bis:WS_EER/M.R.B.XM",
+        "latest_value": 103.27,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Index, 2020 = 100",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S31"
+      },
+      {
+        "indicator": "ICE BofA US High Yield Index Option-Adjusted Spread (fred:BAMLH0A0HYM2)",
+        "series": "fred:BAMLH0A0HYM2",
+        "latest_value": 2.755454545454546,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S32"
+      },
+      {
+        "indicator": "Consumer prices: Euro area - Year-on-year changes, in per cent (bis:WS_LONG_CPI/M.XM.771)",
+        "series": "bis:WS_LONG_CPI/M.XM.771",
+        "latest_value": 3.248577,
+        "latest_date": "2026-08-31",
+        "latest_period": "2026-08",
+        "status": "observed",
+        "units": "Per cent, year-on-year change",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-08",
+        "source_ref": "S33"
+      },
+      {
+        "indicator": "Real imports of goods and services — United States (fred:IMPGSC1)",
+        "series": "fred:IMPGSC1",
+        "latest_value": 3913.833,
+        "latest_date": "2026-06-30",
+        "latest_period": "2026-Q2",
+        "status": "observed",
+        "units": "Billions of Chained 2017 Dollars",
+        "frequency": "Q",
+        "date_or_trigger": "next quarterly release after 2026-Q2",
+        "source_ref": "S34"
+      },
+      {
+        "indicator": "Harmonized Index of Consumer Prices: Total for Euro Area (19 Countries) (year-over-year % change) (fred:CP0000EZ19M086NEST#yoy)",
+        "series": "fred:CP0000EZ19M086NEST#yoy",
+        "latest_value": 3.75049741345006,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent change from year ago",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S35"
+      },
+      {
+        "indicator": "Crude Oil Prices: Brent - Europe — World (fred:DCOILBRENTEU)",
+        "series": "fred:DCOILBRENTEU",
+        "latest_value": 114.1590909090909,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Dollars per Barrel",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S36"
+      }
+    ]
+  }
+}

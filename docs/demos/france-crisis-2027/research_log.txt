@@ -1,0 +1,353 @@
+2026-10-21T05:55:47.706968+00:00 [stage] runtime skill bundle: outcome=verified source_manifest_hash=ba7a1d0e41918731a089ea5eea0d69f5b0551bcc18d9d6c259abe7dfe88c1657 deployed_manifest_hash=ba7a1d0e41918731a089ea5eea0d69f5b0551bcc18d9d6c259abe7dfe88c1657 deployed_path=/Users/rogerlin/Downloads/DeepResearchForecast/deer-flow/skills/public
+2026-10-21T05:55:47.707131+00:00 [stage] runtime skill lazy-resource hashes: skill=actor-ontology-research {"references/actor-intelligence-contract.md":"668e01eb87d1c491eca03483e3ff80b0257749d954cada4945fcfc247a8e23aa","references/scoring-rubric.md":"570d71951cb2d3e2122028bdb351a22bd9fe96464e2bfcb157fe552586c82f78"}
+2026-10-21T05:55:47.707146+00:00 [stage] runtime skill lazy-resource hashes: skill=competitive-landscape-forecasting {"references/leadership-metrics.md":"73b4a54678c5b9c7d22b9056d1f34df98c0dfb1a2411370c19b9dd3c0c9904ba","references/persistence-and-share-dynamics.md":"d06d416ad14d8ad47cc804979465ccbacfabc2bf708548882003cc059f951f87","references/tech-race-indicators.md":"c6074ec73b3be65eef186ea655484e5aba6a0c15c3b72a57664855a0ff4514c1"}
+2026-10-21T05:55:47.707160+00:00 [stage] runtime skill lazy-resource hashes: skill=data-sources {"references/catalog-bis.md":"7c5d32739635a95125d853772ff56c4081ae575ad06440dd6154b0c38235236b","references/catalog-bls.md":"385155e89481d84088f960089c82d6909410da66c52ce5277d7b9e83ddad4228","references/catalog-fred.md":"57bc58b69616beb5bf3e03e3aa6ca139f638cc83ce9b956feebde12a39e29206","references/catalog-imf.md":"d3a1a42b44cf79c22e0a45f97032757a3a0df39a280064d9ee86a9ceecba2bc9","references/catalog-usgov.md":"c15282354d3970dd47239d8248ac8d69137ae543556ef8e55362fb172b2beda5","references/catalog-wb.md":"871b0cb84bc59eaef876dedb901db9619b5d9813e35bff5f0aedcd4701d86560","references/series-catalog.md":"569c0ec45ab3f645766c08fc5675591e241122d52c6e962e62b400b224da65cd"}
+2026-10-21T05:55:47.707170+00:00 [stage] runtime skill lazy-resource hashes: skill=data-visuals {"references/chart-patterns.md":"667f9207fb4afaef8d7ab20aa45aca4fbdfefd0b9262e557b3e3c0ddced6859d","scripts/render_data.py":"06ca497078857e15b4f07d1ee8edfc769a2330b2f37f0f6925cf239008b562b2"}
+2026-10-21T05:55:47.707180+00:00 [stage] runtime skill lazy-resource hashes: skill=deep-research {"references/final-dossier-contract.md":"6f2be6ed603ac5a2db7c1a52b581c06d0bfc36cab0de0d3770c870aa6dc0b92e","references/source-tradecraft.md":"e66e5db7d688355dec6bc925ae1812f78e6d390ae3ade40ebdecab127ef48042"}
+2026-10-21T05:55:47.707189+00:00 [stage] runtime skill lazy-resource hashes: skill=election-forecasting {"references/fundamentals-and-polls.md":"278fa9c3523dab981d3fc1bbaa04851621d5b1ea9cc780c308be5e4c03e4b8cc","references/non-us-elections.md":"df7f0d44e753fbae11044a834d8d2073b85eaeb529b8d24d1175c658b52c0938","references/us-election-mechanics.md":"0f3a42fa70c634f8c13cd1c5231c9fd19c402b11fcd398c49398407c645354c9"}
+2026-10-21T05:55:47.707197+00:00 [stage] runtime skill lazy-resource hashes: skill=financial-markets-forecasting {"references/empirical-and-volatility-base-rates.md":"5fcf896beac88fb321a3fd3e4376e08fc1a5c363047e63547b128a6d15098863","references/implied-distributions.md":"146cbd95b28a4f2430fcd5115cc68cca1c23bb801de9381d0bd98c03dd1408bd","references/listings-and-ipos.md":"94311213ac900a88a5367cd1bf48249b5795e7a812351158351cf0c0b554fdc3"}
+2026-10-21T05:55:47.707205+00:00 [stage] runtime skill lazy-resource hashes: skill=forecast-visuals {"references/chart-patterns.md":"a48316244d5293830ae42a5cfe40285a2a38d13f1da52c8949bee9a007130a60","scripts/render.py":"8ca9b27f10c2217ed552f459312ab19178e51cd160a339c2052c23e2978503ea"}
+2026-10-21T05:55:47.707213+00:00 [stage] runtime skill lazy-resource hashes: skill=geopolitical-forecasting {"references/conflict-base-rates.md":"8103207f91012df6800884e78716c40778d498d76d453e635db9b2ab13968d10","references/escalation-and-negotiation.md":"89a56f1988b79dde0e3dbf7073cbdb9b13aab6c79b74f071508ee64e043d307a","references/evidence-under-information-war.md":"5e70295008c764a165e9544bce30dd53f6794ecfaeae7a11c7a2c122026bba81"}
+2026-10-21T05:55:47.707220+00:00 [stage] runtime skill lazy-resource hashes: skill=industry-forecasting {"references/forecasting-methods.md":"d046d2692d510b3f8cf9917a00038ffefe9f9fed059653746ac6b82bdc6b7eff","references/outlook-reconciliation.md":"cd50927fbdb74d1a459d652bbe99504ab7e93afc3bf6ac6643f437e12b9384dd","references/reference-classes-and-lead-times.md":"626f2c50f2eabd7145386a3c3a3b04abc29e52253674e814a6ea9666b1f9d5e3"}
+2026-10-21T05:55:47.707233+00:00 [stage] runtime skill lazy-resource hashes: skill=industry-research {"references/cycles-and-capacity.md":"afdab895c62eb5e13928400809b0ab7a1d8cf8d07049cafe0a6fce6c416a8d43","references/industry-sources.md":"f12dbd5c47617abb290e9aae4ca39ffaf51839021e41df57e8a8273a095d3116","references/sectors-economy.md":"d8554ac27fd06934c6ad99f136ef917dfdcbbc26d827b6cd6ee16fae82f3ed5a","references/sectors-technology.md":"a85911b8b2dd9af422ebcdef16d892f8aa88b07fa55ab01c0eaba3969bdc7380","references/value-chain-and-sizing.md":"037eb1cc3b26701856b42802b2f1d4c52117c957b55342cc4520df34728850f9"}
+2026-10-21T05:55:47.707241+00:00 [stage] runtime skill lazy-resource hashes: skill=macro-research {"references/central-bank-reaction-functions.md":"233563c25b7f65b86497aa988063ca0266cf3f1d40e3d91228460b00d556fd23","references/macro-base-rates.md":"5ca2bcfb6585e3ed1eee40b00d0d67282a1c8b68bf9733bf1befb3512ee5460d","references/nowcasting-and-releases.md":"53ce7929a5c36ae1c934602dd39ec92b1cba77d2c1ca16b85d069b3f21584ba0"}
+2026-10-21T05:55:47.707248+00:00 [stage] runtime skill lazy-resource hashes: skill=policy-and-trade-forecasting {"references/signals-and-credibility.md":"c15e3827b90d6ccbbc90e80a4f32a51b3edb0ebc69e14ccbbbd9c3a529c590bd","references/trade-instruments.md":"242e1290dc4146dff6e1a8cc1b5b262d4542d23c7262e7ca5d29c2495b774293","references/us-process-and-base-rates.md":"f75007c73a6bcf100542995a46ec102aebfc52517d1d4ef1a94d9ca6a5d87936"}
+2026-10-21T05:55:47.707255+00:00 [stage] runtime skill lazy-resource hashes: skill=prediction-markets {}
+2026-10-21T05:55:47.707262+00:00 [stage] runtime skill lazy-resource hashes: skill=reference-class-forecasting {"references/base-rate-recipes.md":"f101b214ef371659423bb1c3d4cf67ca7ab943c48a7bd4949e4934c1d01bf16e","references/prediction-market-anchoring.md":"cb416e7c77a30695fbd4bfdfcb61d4a90679e80b3faba021226947c1b6a0ae38","references/probability-toolkit.md":"73c70e0323c495b56b3937019c0a3fab422ef44e93f4e346c92dd86560e19bff"}
+2026-10-21T05:55:47.707271+00:00 [stage] research engine: v3 (linear_research)
+2026-10-21T05:55:48.690807+00:00 [warn] RESEARCH_LINEAR_MODE=salvage is a legacy knob: v3 resumes its own identity-bound phases and never adopts a research_report.md it did not produce
+2026-10-21T05:55:48.691851+00:00 [stage] research:v3:plan start
+2026-10-21T05:56:03.964230+00:00 [usage] tokens in=1866 out=490 total=2356 phase=plan:plan:scope cached=0 cache_write=0 reasoning=0
+2026-10-21T05:56:03.964477+00:00 [tool] web_search France budget 2027 loi de finances 49.3 censure October 2026
+2026-10-21T05:56:03.964550+00:00 [tool] web_search déficit public France 2026 procédure déficit excessif UE
+2026-10-21T05:56:03.964766+00:00 [tool] web_search France riots 2026 insured losses curfew arrests casualties
+2026-10-21T05:56:03.964859+00:00 [tool] web_search OAT Bund spread 10 year October 2026 CAC 40
+2026-10-21T05:56:22.104124+00:00 [result] web_search → 4 results
+2026-10-21T05:56:22.104191+00:00 [tool] web_search French presidential election 2027 polling first round candidates
+2026-10-21T05:56:22.303185+00:00 [result] web_search → 5 results
+2026-10-21T05:56:22.303253+00:00 [tool] web_search motion de censure 2026 Premier ministre gouvernement France
+2026-10-21T05:56:22.910970+00:00 [result] web_search → 5 results
+2026-10-21T05:56:23.358062+00:00 [result] web_search → 5 results
+2026-10-21T05:56:26.244108+00:00 [result] web_search → 5 results
+2026-10-21T05:56:27.304326+00:00 [result] web_search → 4 results
+2026-10-21T05:57:22.444933+00:00 [usage] tokens in=6965 out=2288 total=9253 phase=plan:plan:plan cached=1600 cache_write=0 reasoning=8
+2026-10-21T05:57:22.445560+00:00 [warn] v3: plan uses deterministic defaults for: unrouted_kiqs
+2026-10-21T05:57:22.462882+00:00 [ok] v3: method skills election-forecasting, macro-research, reference-class-forecasting (planner)
+2026-10-21T05:57:22.464630+00:00 [ok] research:v3:plan done (7 KIQs, 11 sections)
+2026-10-21T05:57:22.620161+00:00 [stage] research:v3:data start (3 series)
+2026-10-21T05:57:38.729190+00:00 [ok] research:v3:data done (stored=3, failed=0)
+2026-10-21T05:57:38.729587+00:00 [stage] research:v3:gather start (7 KIQs, workers=4)
+2026-10-21T05:57:38.729711+00:00 [tool] web_search projet loi finances 2027 France adoption 49.3 censure octobre 2026
+2026-10-21T05:57:38.729816+00:00 [tool] web_search French budget 2027 vote Assemblée nationale Bayrou government majority
+2026-10-21T05:57:38.729909+00:00 [tool] web_search déficit public France 2026 INSEE 5,5 pour cent PIB prévision
+2026-10-21T05:57:38.730013+00:00 [tool] web_search France excessive deficit procedure 2026 2027 Commission européenne correction path
+2026-10-21T05:57:41.736215+00:00 [result] web_search → 5 results
+2026-10-21T05:57:41.736265+00:00 [tool] web_search France October 2026 riots insured losses arrests curfew casualties
+2026-10-21T05:57:41.993727+00:00 [result] web_search → 4 results
+2026-10-21T05:57:41.993811+00:00 [tool] web_search émeutes France 2026 catastrophes naturelles garanties assurance dommages
+2026-10-21T05:57:43.376384+00:00 [result] web_search → 5 results
+2026-10-21T05:57:43.376460+00:00 [tool] web_search motion de censure France 2026 gouvernement survie Assemblée
+2026-10-21T05:57:46.351102+00:00 [result] web_search → 5 results
+2026-10-21T05:57:46.351152+00:00 [tool] web_search French government censure motions history Fifth Republic survival rate
+2026-10-21T05:57:47.883271+00:00 [result] web_search → 4 results
+2026-10-21T05:57:47.883324+00:00 [tool] web_search présidentielle 2027 sondages moyenne Le Pen Bardella premier tour octobre 2026
+2026-10-21T05:57:51.305945+00:00 [result] web_search → 4 results
+2026-10-21T05:57:51.305997+00:00 [tool] web_search French presidential 2027 polling average first round candidates intention de vote
+2026-10-21T05:58:06.638733+00:00 [result] web_search → 5 results
+2026-10-21T05:58:06.638788+00:00 [tool] web_search OAT Bund 10 year spread October 2026 France political crisis
+2026-10-21T05:58:18.197067+00:00 [result] web_search → SEARCH_TEMPORARILY_UNAVAILABLE
+2026-10-21T05:58:18.197118+00:00 [tool] web_search CAC 40 performance October 2026 riots drawdown
+2026-10-21T05:58:41.736312+00:00 [result] web_search → 5 results
+2026-10-21T05:58:41.736359+00:00 [tool] web_search state of emergency France election postponement constitution article 16 loi
+2026-10-21T05:58:42.431867+00:00 [result] web_search → 5 results
+2026-10-21T05:58:42.431934+00:00 [tool] web_search état d'urgence France 2026 élections 2027 report possible juridique
+2026-10-21T05:58:43.338785+00:00 [result] web_search → 4 results
+2026-10-21T05:58:43.859211+00:00 [result] web_search → 5 results
+2026-10-21T05:58:46.043645+00:00 [result] web_search → 5 results
+2026-10-21T05:58:47.189470+00:00 [result] web_search → 5 results
+2026-10-21T05:58:55.613322+00:00 [usage] tokens in=3839 out=3 total=3842 phase=gather:gather:prime cached=0 cache_write=0 reasoning=0
+2026-10-21T05:59:06.474291+00:00 [usage] tokens in=7145 out=111 total=7256 phase=gather:K3:s1 cached=3776 cache_write=0 reasoning=24
+2026-10-21T05:59:06.474555+00:00 [tool] web_fetch https://www.reuters.com/world/europe/france-faces-aftermath-worst-unrest-years-2026-10-18/
+2026-10-21T05:59:06.474611+00:00 [tool] web_search France Assureurs insured losses October 2026 riots estimate euros
+2026-10-21T05:59:06.741154+00:00 [usage] tokens in=6518 out=159 total=6677 phase=gather:K2:s1 cached=3776 cache_write=0 reasoning=51
+2026-10-21T05:59:06.741384+00:00 [tool] web_fetch https://www.insee.fr/fr/statistiques/9053525
+2026-10-21T05:59:06.741445+00:00 [tool] web_search Cour des comptes déficit public France 2026 5,4 % PIB rapport septembre 2026
+2026-10-21T05:59:06.741749+00:00 [tool] web_search European Commission autumn 2026 forecast France deficit 2026 2027 EDP excessive deficit procedure
+2026-10-21T05:59:06.914995+00:00 [usage] tokens in=6194 out=260 total=6454 phase=gather:K1:s1 cached=3776 cache_write=0 reasoning=0
+2026-10-21T05:59:06.915256+00:00 [tool] web_fetch https://www.vie-publique.fr/loi/304797-budget-2027-projet-de-loi-de-finances-plf
+2026-10-21T05:59:06.915446+00:00 [tool] web_fetch https://www.ouest-france.fr/economie/budget-collectivites-etat/budget-2027-calendrier-loi-speciale-recours-au-49-3-quels-sont-les-scenarios-possibles-pour-ladop
+2026-10-21T05:59:06.915719+00:00 [tool] web_fetch https://www.internazionale.it/ultime-notizie-reuters/2026/10/20/explainer-how-france-s-2027-budget-battle-could-play-out
+2026-10-21T05:59:09.400491+00:00 [usage] tokens in=6975 out=274 total=7249 phase=gather:K4:s1 cached=3776 cache_write=0 reasoning=107
+2026-10-21T05:59:09.400748+00:00 [tool] web_fetch https://fr.euronews.com/2026/01/23/budget-2026-le-gouvernement-lecornu-survit-aux-motions-de-censure
+2026-10-21T05:59:09.400816+00:00 [tool] web_fetch https://www.assemblee-nationale.fr/dyn/17/textes/l17b-n24_motion-censure
+2026-10-21T05:59:09.400878+00:00 [tool] web_search motion de censure octobre 2026 gouvernement Lecornu Assemblée nationale
+2026-10-21T05:59:12.697937+00:00 [result] web_search → 5 results
+2026-10-21T05:59:12.843384+00:00 [result] web_fetch → 2588/10817 chars [S1]
+2026-10-21T05:59:13.113020+00:00 [result] web_fetch → 2582/12059 chars [S40]
+2026-10-21T05:59:15.139298+00:00 [result] web_fetch → 2589/10876 chars [S64]
+2026-10-21T05:59:21.495119+00:00 [result] web_fetch → 2593/7848 chars [S39]
+2026-10-21T05:59:26.333843+00:00 [result] web_fetch → 2565/10544 chars [S65]
+2026-10-21T05:59:26.855594+00:00 [result] web_search → 4 results
+2026-10-21T05:59:27.162272+00:00 [result] web_fetch → 2578/12077 chars [S50]
+2026-10-21T05:59:42.887819+00:00 [result] web_search → 5 results
+2026-10-21T05:59:52.091136+00:00 [result] web_search → 5 results
+2026-10-21T05:59:57.156213+00:00 [result] web_fetch → FETCH_FAILED(jina_primary_failed_timeouterror)
+2026-10-21T05:59:57.385695+00:00 [usage] tokens in=8546 out=104 total=8650 phase=gather:K3:s2 cached=7104 cache_write=0 reasoning=0
+2026-10-21T05:59:57.385946+00:00 [tool] web_fetch https://www.euronews.com/2026/10/20/frances-riot-damage-doubles-who-will-pay-for-thousands-of-wrecked-shops
+2026-10-21T05:59:57.386017+00:00 [tool] web_search curfews imposed French cities October 2026 riots list Interior Ministry deaths injured police
+2026-10-21T05:59:57.501100+00:00 [usage] tokens in=9109 out=128 total=9237 phase=gather:K1:s2 cached=6144 cache_write=0 reasoning=0
+2026-10-21T05:59:57.501370+00:00 [tool] web_fetch https://www.touteleurope.eu/economie-et-social/budget-2027-ce-qu-il-faut-retenir-des-mesures-annoncees-par-le-gouvernement-lecornu/
+2026-10-21T05:59:57.501564+00:00 [tool] web_search PLF 2027 Assemblée nationale rejet amendements censure motion Lecornu octobre 2026 majorité relative sièges
+2026-10-21T06:00:02.106058+00:00 [usage] tokens in=9507 out=95 total=9602 phase=gather:K4:s2 cached=6912 cache_write=0 reasoning=0
+2026-10-21T06:00:02.106291+00:00 [tool] web_fetch https://www.assemblee-nationale.fr/dyn/engagements_responsabilite-motions_censures/motions-de-censure-depuis-1958
+2026-10-21T06:00:02.106345+00:00 [tool] web_search motions de censure 2026 gouvernement Lecornu rejetées nombre votes
+2026-10-21T06:00:02.123116+00:00 [result] web_fetch → FETCH_FAILED(no_web_fetch_provider_was_available)
+2026-10-21T06:00:04.417025+00:00 [result] web_fetch → 2583/4095 chars [S42]
+2026-10-21T06:00:04.768021+00:00 [usage] tokens in=7764 out=146 total=7910 phase=gather:K2:s2 cached=6464 cache_write=0 reasoning=0
+2026-10-21T06:00:04.768340+00:00 [tool] web_fetch https://ec.europa.eu/commission/presscorner/detail/en/ip_25_2760
+2026-10-21T06:00:04.768445+00:00 [tool] web_fetch https://www.ccomptes.fr/sites/default/files/2026-02/20260219-synthese-situation-des-finances-publiques-debut-2026_0.pdf
+2026-10-21T06:00:05.728633+00:00 [result] web_fetch → 2580/12088 chars [S4]
+2026-10-21T06:00:06.002909+00:00 [result] web_search → 4 results
+2026-10-21T06:00:07.051479+00:00 [result] web_search → 3 results
+2026-10-21T06:00:08.095951+00:00 [result] web_fetch → FETCH_FAILED(too_short)
+2026-10-21T06:00:09.428945+00:00 [result] web_fetch → 308/308 chars [S95]
+2026-10-21T06:00:12.680314+00:00 [usage] tokens in=9953 out=97 total=10050 phase=gather:K3:s3 cached=8512 cache_write=0 reasoning=0
+2026-10-21T06:00:12.680580+00:00 [tool] web_fetch https://www.cnn.com/2026/10/19/europe/france-protests-violence-wwk-intl-hnk
+2026-10-21T06:00:12.680657+00:00 [tool] web_search 2005 French riots deaths arrests cost insured losses gilets jaunes 2018 cost France Assureurs
+2026-10-21T06:00:14.600636+00:00 [usage] tokens in=10611 out=103 total=10714 phase=gather:K1:s3 cached=9088 cache_write=0 reasoning=0
+2026-10-21T06:00:14.600834+00:00 [tool] web_fetch https://www.lemonde.fr/politique/article/2026/10/19/budget-2027-le-vote-solennel-sur-la-premiere-partie-du-plf-repousse_6797526_823448.html
+2026-10-21T06:00:14.600917+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-10-21T06:00:16.035999+00:00 [result] web_search → 5 results
+2026-10-21T06:00:18.785283+00:00 [usage] tokens in=8087 out=119 total=8206 phase=gather:K2:s3 cached=7744 cache_write=0 reasoning=0
+2026-10-21T06:00:18.785519+00:00 [tool] web_fetch https://www.tresor.economie.gouv.fr/Articles/2026/09/21/finances-publiques-une-situation-degradee-un-redressement-necessaire
+2026-10-21T06:00:18.785581+00:00 [tool] web_search PLF 2027 déficit 5 % cible gouvernement France octobre 2026
+2026-10-21T06:00:20.018573+00:00 [usage] tokens in=10738 out=42 total=10780 phase=gather:K1:s4 cached=10560 cache_write=0 reasoning=0
+2026-10-21T06:00:20.018747+00:00 [tool] web_fetch https://www.lemonde.fr/politique/article/2026/10/19/budget-2027-le-vote-solennel-sur-la-premiere-partie-du-plf-repousse_6797526_823448.html
+2026-10-21T06:00:20.018829+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-10-21T06:00:20.984305+00:00 [result] web_fetch → 2593/12117 chars [S3]
+2026-10-21T06:00:22.021609+00:00 [result] web_fetch → 2591/12075 chars [S94]
+2026-10-21T06:00:22.487949+00:00 [usage] tokens in=10219 out=126 total=10345 phase=gather:K4:s3 cached=9472 cache_write=0 reasoning=0
+2026-10-21T06:00:22.488655+00:00 [tool] web_fetch https://www.touteleurope.eu/vie-politique-des-etats-membres/budget-2026-rejet-des-deux-nouvelles-motions-de-censure-apres-le-recours-au-49-3-sur-la-partie-depen
+2026-10-21T06:00:22.488791+00:00 [tool] web_search gouvernement Lecornu investi date octobre 2025 nombre voix majorité relative
+2026-10-21T06:00:26.624043+00:00 [result] web_search → 4 results
+2026-10-21T06:00:27.508457+00:00 [result] web_search → 5 results
+2026-10-21T06:00:29.283671+00:00 [result] web_search → 4 results
+2026-10-21T06:00:36.113687+00:00 [usage] tokens in=11211 out=74 total=11285 phase=gather:K3:s4 cached=9920 cache_write=0 reasoning=0
+2026-10-21T06:00:36.113924+00:00 [tool] web_fetch https://global.morningstar.com/en-eu/economy/frances-latest-riots-will-test-insurers-ahead-new-state-backed-riot-insurance-mechanism
+2026-10-21T06:00:37.286762+00:00 [usage] tokens in=9636 out=143 total=9779 phase=gather:K2:s4 cached=8064 cache_write=0 reasoning=0
+2026-10-21T06:00:37.287043+00:00 [tool] web_fetch https://www.vie-publique.fr/loi/304797-budget-2027-projet-de-loi-de-finances-plf
+2026-10-21T06:00:37.287138+00:00 [tool] web_fetch https://economy-finance.ec.europa.eu/economic-governance-framework/stability-and-growth-pact/corrective-arm-excessive-deficit-procedure/excessive-deficit-proced
+2026-10-21T06:00:37.287327+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-10-21T06:00:37.296549+00:00 [result] web_fetch → 2592/12059 chars [S40] (stored copy)
+2026-10-21T06:00:41.683022+00:00 [result] web_fetch → 2586/11357 chars [S100]
+2026-10-21T06:00:48.643941+00:00 [usage] tokens in=10826 out=1557 total=12383 phase=gather:K1:final cached=10688 cache_write=0 reasoning=0
+2026-10-21T06:00:48.673524+00:00 [ok] research:v3:gather K1 facts=15 verified=6 sources=6
+2026-10-21T06:00:56.176926+00:00 [usage] tokens in=6165 out=191 total=6356 phase=gather:K5:s1 cached=3776 cache_write=0 reasoning=24
+2026-10-21T06:00:56.177229+00:00 [tool] web_fetch https://en.wikipedia.org/wiki/Opinion_polling_for_the_2027_French_presidential_election
+2026-10-21T06:00:56.177297+00:00 [tool] web_fetch https://www.reuters.com/world/le-pen-melenchon-gain-momentum-ahead-french-2027-election-poll-shows-2026-10-14/
+2026-10-21T06:01:05.541933+00:00 [usage] tokens in=10730 out=1216 total=11946 phase=gather:K2:s5 cached=9600 cache_write=0 reasoning=0
+2026-10-21T06:01:05.554476+00:00 [ok] research:v3:gather K2 facts=14 verified=0 sources=11
+2026-10-21T06:01:14.994457+00:00 [usage] tokens in=6912 out=229 total=7141 phase=gather:K6:s1 cached=3776 cache_write=0 reasoning=96
+2026-10-21T06:01:14.994723+00:00 [tool] web_fetch https://www.reuters.com/markets/us/french-bond-yields-near-24-year-high-new-protests-loom-2026-10-20/
+2026-10-21T06:01:14.994921+00:00 [tool] web_fetch https://www.reuters.com/markets/europe/french-stocks-slide-after-violent-protests-2026-10-19/
+2026-10-21T06:01:16.680054+00:00 [result] web_fetch → 2494/4096 chars [S23]
+2026-10-21T06:01:16.722887+00:00 [usage] tokens in=11874 out=1439 total=13313 phase=gather:K3:s5 cached=11200 cache_write=0 reasoning=75
+2026-10-21T06:01:16.763560+00:00 [ok] research:v3:gather K3 facts=15 verified=9 sources=10
+2026-10-21T06:01:16.836320+00:00 [result] web_fetch → FETCH_FAILED(too_short)
+2026-10-21T06:01:24.910622+00:00 [usage] tokens in=6899 out=209 total=7108 phase=gather:K7:s1 cached=3776 cache_write=0 reasoning=45
+2026-10-21T06:01:24.910947+00:00 [tool] web_fetch https://en.wikipedia.org/wiki/States_of_emergency_in_France
+2026-10-21T06:01:24.911045+00:00 [tool] web_fetch https://www.constituteproject.org/constitution/France_2008
+2026-10-21T06:01:24.911362+00:00 [tool] web_fetch https://www.afp.com/en/french-pm-says-could-declare-state-emergency-over-unrest-if-needed
+2026-10-21T06:01:25.023477+00:00 [result] web_fetch → 2581/12067 chars [S70]
+2026-10-21T06:01:26.392699+00:00 [usage] tokens in=11654 out=235 total=11889 phase=gather:K4:s4 cached=10176 cache_write=0 reasoning=171
+2026-10-21T06:01:26.392832+00:00 [tool] web_search "motion de censure" 1962 Pompidu seule adoptée depuis 1958 Fifth Republic only successful
+2026-10-21T06:01:26.392904+00:00 [tool] web_search motion de censure octobre 2026 dépôt Assemblée nationale gouvernement menaces budget 2027
+2026-10-21T06:01:26.393014+00:00 [result] web_search → SEARCH_BUDGET_EXHAUSTED
+2026-10-21T06:01:26.723012+00:00 [result] web_fetch → FETCH_FAILED(jina_api_returned_status_403_data_null_code_403)
+2026-10-21T06:01:28.835873+00:00 [result] web_fetch → 2570/4096 chars [S91]
+2026-10-21T06:01:30.445783+00:00 [result] web_search → 5 results
+2026-10-21T06:01:30.661214+00:00 [result] web_fetch → 2527/4096 chars [S90]
+2026-10-21T06:01:31.645141+00:00 [usage] tokens in=7817 out=93 total=7910 phase=gather:K6:s2 cached=6848 cache_write=0 reasoning=0
+2026-10-21T06:01:31.645404+00:00 [tool] web_fetch https://www.cnbc.com/2026/10/19/france-protests-bond-yields-markets.html
+2026-10-21T06:01:31.645467+00:00 [tool] web_search OAT Bund spread basis points 19 October 2026 France 10-year
+2026-10-21T06:01:37.525117+00:00 [result] web_fetch → 2589/12055 chars [S79]
+2026-10-21T06:01:37.773270+00:00 [result] web_search → 5 results
+2026-10-21T06:01:38.726537+00:00 [usage] tokens in=8431 out=127 total=8558 phase=gather:K7:s2 cached=6848 cache_write=0 reasoning=0
+2026-10-21T06:01:38.726878+00:00 [tool] web_fetch https://www.constituteproject.org/constitution/France_2008?lang=en
+2026-10-21T06:01:38.727092+00:00 [tool] web_fetch https://en.wikipedia.org/wiki/States_of_emergency_in_France
+2026-10-21T06:01:38.735805+00:00 [result] web_fetch → 2574/4096 chars [S91] (stored copy)
+2026-10-21T06:01:39.558559+00:00 [result] web_fetch → 2569/6740 chars [S27]
+2026-10-21T06:01:46.933750+00:00 [usage] tokens in=9166 out=82 total=9248 phase=gather:K6:s3 cached=7808 cache_write=0 reasoning=0
+2026-10-21T06:01:46.934002+00:00 [tool] web_fetch https://www.ideal-investisseur.fr/en/markets/oat-bund-spread.html
+2026-10-21T06:01:46.934057+00:00 [tool] web_search CAC 40 level October 2026 year-to-date drawdown percent
+2026-10-21T06:01:56.447454+00:00 [usage] tokens in=12259 out=1263 total=13522 phase=gather:K4:s5 cached=11648 cache_write=0 reasoning=0
+2026-10-21T06:01:56.454376+00:00 [ok] research:v3:gather K4 facts=13 verified=1 sources=12
+2026-10-21T06:01:57.948325+00:00 [result] web_fetch → 2580/6504 chars [S16]
+2026-10-21T06:02:01.321735+00:00 [result] web_fetch → 2573/12072 chars [S26]
+2026-10-21T06:02:09.860309+00:00 [usage] tokens in=7842 out=161 total=8003 phase=gather:K5:s2 cached=6144 cache_write=0 reasoning=0
+2026-10-21T06:02:09.860665+00:00 [tool] web_fetch https://en.wikipedia.org/wiki/Opinion_polling_for_the_2027_French_presidential_election
+2026-10-21T06:02:09.860754+00:00 [tool] web_fetch https://www.reuters.com/world/le-pen-melenchon-gain-momentum-ahead-french-2027-election-poll-shows-2026-10-14/
+2026-10-21T06:02:09.871535+00:00 [result] web_fetch → 2581/12072 chars [S26] (stored copy)
+2026-10-21T06:02:09.878958+00:00 [result] web_fetch → 2565/6740 chars [S27] (stored copy)
+2026-10-21T06:02:10.289477+00:00 [result] web_search → 5 results
+2026-10-21T06:02:15.456875+00:00 [usage] tokens in=10501 out=55 total=10556 phase=gather:K6:s4 cached=9152 cache_write=0 reasoning=0
+2026-10-21T06:02:15.457028+00:00 [tool] web_fetch https://www.cnbc.com/2026/10/19/france-protests-bond-yields-markets.html
+2026-10-21T06:02:15.464130+00:00 [result] web_fetch → 2598/12055 chars [S79] (stored copy)
+2026-10-21T06:02:21.391536+00:00 [usage] tokens in=11369 out=30 total=11399 phase=gather:K6:s5 cached=10496 cache_write=0 reasoning=0
+2026-10-21T06:02:21.391586+00:00 [tool] web_search "Moody's" OR "Fitch" France banks downgrade outlook October 2026 riot
+2026-10-21T06:02:22.609677+00:00 [usage] tokens in=9750 out=427 total=10177 phase=gather:K5:s3 cached=7808 cache_write=0 reasoning=357
+2026-10-21T06:02:22.609798+00:00 [tool] web_search sondage présidentielle 2027 moyenne intentions de vote Le Pen Mélenchon Philippe octobre 2026 participation abstention
+2026-10-21T06:02:22.609845+00:00 [tool] web_search French riots 2023 Nahel gilets jaunes effect on polls vote share Rassemblement National security salience
+2026-10-21T06:02:26.718367+00:00 [result] web_search → 5 results
+2026-10-21T06:02:27.123561+00:00 [result] web_search → 4 results
+2026-10-21T06:02:31.473082+00:00 [result] web_fetch → 2557/12053 chars [S151]
+2026-10-21T06:02:32.158545+00:00 [result] web_search → 4 results
+2026-10-21T06:02:32.647451+00:00 [usage] tokens in=11937 out=59 total=11996 phase=gather:K6:s6 cached=11328 cache_write=0 reasoning=0
+2026-10-21T06:02:32.647790+00:00 [tool] web_fetch https://admiralmarkets.com/analytics/traders-blog/france-riots-stock-market
+2026-10-21T06:02:32.647895+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-10-21T06:02:38.967495+00:00 [usage] tokens in=10767 out=151 total=10918 phase=gather:K5:s4 cached=9728 cache_write=0 reasoning=0
+2026-10-21T06:02:38.967843+00:00 [tool] web_fetch https://www.politico.eu/article/first-post-riot-poll-shows-stable-french-presidential-voting-intentions/
+2026-10-21T06:02:38.967988+00:00 [tool] web_fetch https://www.connexionfrance.com/news/latest-poll-shows-marine-le-pen-widening-lead-in-2027-election/821510
+2026-10-21T06:02:55.191324+00:00 [usage] tokens in=12020 out=1309 total=13329 phase=gather:K6:s7 cached=11904 cache_write=0 reasoning=0
+2026-10-21T06:02:55.234771+00:00 [ok] research:v3:gather K6 facts=13 verified=7 sources=9
+2026-10-21T06:02:56.871029+00:00 [usage] tokens in=10060 out=1323 total=11383 phase=gather:K7:s3 cached=8384 cache_write=0 reasoning=137
+2026-10-21T06:02:56.878934+00:00 [ok] research:v3:gather K7 facts=11 verified=2 sources=7
+2026-10-21T06:03:06.792977+00:00 [result] web_fetch → 2533/3311 chars [S147]
+2026-10-21T06:03:16.669455+00:00 [result] web_fetch → 2579/12069 chars [S28]
+2026-10-21T06:03:45.640353+00:00 [usage] tokens in=12405 out=1407 total=13812 phase=gather:K5:s5 cached=10752 cache_write=0 reasoning=61
+2026-10-21T06:03:45.663022+00:00 [ok] research:v3:gather K5 facts=13 verified=5 sources=7
+2026-10-21T06:03:45.666002+00:00 [stage] research:v3:gap round 1
+2026-10-21T06:03:58.521824+00:00 [usage] tokens in=5526 out=651 total=6177 phase=gap:gap:r1 cached=1280 cache_write=0 reasoning=62
+2026-10-21T06:03:58.526452+00:00 [stage] research:v3:gather start (3 KIQs, workers=4)
+2026-10-21T06:03:58.526614+00:00 [tool] web_search Lecornu motion de censure 6 juillet 2026 résultat vote Assemblée nationale
+2026-10-21T06:03:58.526756+00:00 [tool] web_search PLF 2027 article 49.3 annonce gouvernement Lecornu
+2026-10-21T06:03:58.526836+00:00 [tool] web_search 10-year OAT Bund spread basis points October 2026
+2026-10-21T06:03:58.526907+00:00 [tool] web_search CAC 40 level 20 October 2026 year-to-date performance
+2026-10-21T06:04:02.902377+00:00 [result] web_search → 5 results
+2026-10-21T06:04:02.902444+00:00 [tool] web_search European Commission autumn 2026 forecast France deficit 2026 2027 percent GDP
+2026-10-21T06:04:04.058739+00:00 [result] web_search → 5 results
+2026-10-21T06:04:04.058785+00:00 [tool] web_search Cour des comptes déficit 2026 France estimation octobre 2026
+2026-10-21T06:04:05.644013+00:00 [result] web_search → 4 results
+2026-10-21T06:04:05.644052+00:00 [result] web_search → 5 results
+2026-10-21T06:04:07.537741+00:00 [result] web_search → 5 results
+2026-10-21T06:04:07.537966+00:00 [result] web_search → 4 results
+2026-10-21T06:04:10.450707+00:00 [usage] tokens in=3839 out=3 total=3842 phase=gap:gather:prime cached=3776 cache_write=0 reasoning=0
+2026-10-21T06:04:16.461026+00:00 [usage] tokens in=6187 out=143 total=6330 phase=gap:G1F3:s1 cached=3776 cache_write=0 reasoning=24
+2026-10-21T06:04:16.461277+00:00 [tool] web_fetch https://economy-finance.ec.europa.eu/economic-surveillance-eu-member-states/country-pages-including-country-reports/france/economic-forecast-france_en
+2026-10-21T06:04:16.461387+00:00 [tool] web_search European Commission Autumn 2026 forecast France deficit 2026 2027 percent GDP
+2026-10-21T06:04:16.461749+00:00 [tool] web_search INSEE déficit public 2026 estimation troisième trimestre rapport Cour des comptes
+2026-10-21T06:04:16.461819+00:00 [result] web_search → cached
+2026-10-21T06:04:16.565798+00:00 [usage] tokens in=5994 out=168 total=6162 phase=gap:G1F2:s1 cached=3776 cache_write=0 reasoning=0
+2026-10-21T06:04:16.566227+00:00 [tool] web_fetch https://www.reuters.com/markets/us/french-bond-yields-near-24-year-high-new-protests-loom-2026-10-20/
+2026-10-21T06:04:16.566333+00:00 [tool] web_fetch https://www.ideal-investisseur.fr/en/markets/oat-bund-spread.html
+2026-10-21T06:04:16.566381+00:00 [tool] web_search CAC 40 level October 20 2026 year-to-date performance
+2026-10-21T06:04:16.566446+00:00 [result] web_fetch → FETCH_FAILED(too_short) (already failed in this run)
+2026-10-21T06:04:16.578211+00:00 [result] web_fetch → 2550/6504 chars [S16] (stored copy)
+2026-10-21T06:04:18.603288+00:00 [usage] tokens in=6153 out=182 total=6335 phase=gap:G1F1:s1 cached=3776 cache_write=0 reasoning=24
+2026-10-21T06:04:18.603594+00:00 [tool] web_fetch https://www.assemblee-nationale.fr/dyn/17/scrutins/7979
+2026-10-21T06:04:18.603708+00:00 [tool] web_fetch https://www.lemonde.fr/politique/article/2026/07/06/la-motion-de-censure-des-ecologistes-contre-l-inaction-climatique-du-gouvernement-lecornu-est-rejetee-par-le
+2026-10-21T06:04:21.355567+00:00 [result] web_fetch → 2586/8206 chars [S159]
+2026-10-21T06:04:21.935261+00:00 [result] web_search → 5 results
+2026-10-21T06:04:22.561424+00:00 [result] web_search → 5 results
+2026-10-21T06:04:28.354555+00:00 [usage] tokens in=7617 out=102 total=7719 phase=gap:G1F2:s2 cached=5952 cache_write=0 reasoning=51
+2026-10-21T06:04:28.354692+00:00 [tool] web_search Moody's review French banks BNP Paribas outlook downgrade October 2026 sovereign
+2026-10-21T06:04:28.354737+00:00 [tool] web_search CAC 40 close December 31 2025 year-end level
+2026-10-21T06:04:28.649079+00:00 [result] web_fetch → 2529/12069 chars [S171]
+2026-10-21T06:04:29.888293+00:00 [result] web_fetch → 2503/12125 chars [S169]
+2026-10-21T06:04:33.124896+00:00 [usage] tokens in=8320 out=207 total=8527 phase=gap:G1F3:s2 cached=6144 cache_write=0 reasoning=87
+2026-10-21T06:04:33.125222+00:00 [tool] web_fetch https://www.insee.fr/fr/statistiques/9053525
+2026-10-21T06:04:33.125447+00:00 [tool] web_fetch https://www.vie-publique.fr/rapport/302139-cour-des-comptes-rapport-situation-des-finances-publiques-debut-2026
+2026-10-21T06:04:41.418126+00:00 [result] web_fetch → 2590/11264 chars [S167]
+2026-10-21T06:04:50.332259+00:00 [result] web_fetch → 2590/12131 chars [S37]
+2026-10-21T06:05:00.011694+00:00 [usage] tokens in=10333 out=165 total=10498 phase=gap:G1F3:s3 cached=8256 cache_write=0 reasoning=123
+2026-10-21T06:05:00.011764+00:00 [tool] web_search PLF 2027 France déficit public 2026 révisé 5,4% émeutes dépenses exceptionnelles octobre 2026
+2026-10-21T06:05:01.381669+00:00 [result] web_search → 5 results
+2026-10-21T06:05:01.438293+00:00 [result] web_search → 5 results
+2026-10-21T06:05:03.596501+00:00 [result] web_search → 5 results
+2026-10-21T06:05:04.646600+00:00 [usage] tokens in=8632 out=57 total=8689 phase=gap:G1F2:s3 cached=7616 cache_write=0 reasoning=0
+2026-10-21T06:05:04.646791+00:00 [tool] web_fetch https://ratings.moodys.com/ratings-news/434683
+2026-10-21T06:05:08.121435+00:00 [usage] tokens in=11055 out=76 total=11131 phase=gap:G1F3:s4 cached=10304 cache_write=0 reasoning=0
+2026-10-21T06:05:08.121690+00:00 [tool] web_fetch https://www.vie-publique.fr/loi/304797-budget-2027-projet-de-loi-de-finances-plf
+2026-10-21T06:05:08.131382+00:00 [result] web_fetch → 2592/12059 chars [S40] (stored copy)
+2026-10-21T06:05:12.420481+00:00 [result] web_fetch → 2582/12042 chars [S182]
+2026-10-21T06:05:18.334212+00:00 [usage] tokens in=9390 out=31 total=9421 phase=gap:G1F2:s4 cached=8576 cache_write=0 reasoning=0
+2026-10-21T06:05:18.334272+00:00 [tool] web_search Moody's France sovereign rating review "October 2026" Aa3 outlook negative decision Friday
+2026-10-21T06:05:22.965019+00:00 [result] web_search → 5 results
+2026-10-21T06:05:29.086405+00:00 [usage] tokens in=9947 out=53 total=10000 phase=gap:G1F2:s5 cached=9344 cache_write=0 reasoning=0
+2026-10-21T06:05:29.086608+00:00 [tool] web_fetch https://www.aft.gouv.fr/en/frances-credit-ratings
+2026-10-21T06:05:31.427585+00:00 [result] web_fetch → 1236/1236 chars [S190]
+2026-10-21T06:05:39.659076+00:00 [usage] tokens in=12050 out=1558 total=13608 phase=gap:G1F3:s5 cached=11008 cache_write=0 reasoning=202
+2026-10-21T06:05:39.691556+00:00 [ok] research:v3:gather G1F3 facts=10 verified=3 sources=6
+2026-10-21T06:05:56.875987+00:00 [usage] tokens in=10475 out=1523 total=11998 phase=gap:G1F2:s6 cached=9920 cache_write=0 reasoning=0
+2026-10-21T06:05:56.888431+00:00 [ok] research:v3:gather G1F2 facts=14 verified=4 sources=14
+2026-10-21T06:06:06.922022+00:00 [warn] gateway: G1F1:s2: primary attempt 1/5 failed (transient: APIConnectionError: Connection error.); retry in 8s
+2026-10-21T06:06:23.106818+00:00 [usage] tokens in=8169 out=109 total=8278 phase=gap:G1F1:s2 cached=8128 cache_write=0 reasoning=49
+2026-10-21T06:06:23.106961+00:00 [tool] web_search groupe EPR Ensemble pour la République sièges Assemblée nationale octobre 2026 gouvernement Lecornu
+2026-10-21T06:06:23.107070+00:00 [tool] web_search PLF 2027 Lecornu 49.3 annonce budget octobre 2026
+2026-10-21T06:06:26.362189+00:00 [result] web_search → 5 results
+2026-10-21T06:06:26.812554+00:00 [result] web_search → 5 results
+2026-10-21T06:06:33.073222+00:00 [usage] tokens in=9476 out=168 total=9644 phase=gap:G1F1:s3 cached=8128 cache_write=0 reasoning=0
+2026-10-21T06:06:33.073520+00:00 [tool] web_fetch https://www2.assemblee-nationale.fr/17/les-groupes-politiques/ensemble-pour-la-republique
+2026-10-21T06:06:33.073633+00:00 [tool] web_fetch https://www.ouest-france.fr/economie/budget-collectivites-etat/budget-2027-calendrier-loi-speciale-recours-au-49-3-quels-sont-les-scenarios-possibles-pour-ladop
+2026-10-21T06:06:33.079104+00:00 [result] web_fetch → 2589/7848 chars [S39] (stored copy)
+2026-10-21T06:06:37.019287+00:00 [result] web_fetch → 2576/12074 chars [S199]
+2026-10-21T06:06:42.401490+00:00 [usage] tokens in=11603 out=119 total=11722 phase=gap:G1F1:s4 cached=9472 cache_write=0 reasoning=0
+2026-10-21T06:06:42.401735+00:00 [tool] web_fetch https://lcp.fr/actualites/budget-de-l-etat-apres-avoir-largement-detricote-le-projet-du-gouvernement-l-assemblee
+2026-10-21T06:06:42.401912+00:00 [tool] web_search "vote" "première partie" budget 2027 Assemblée 20 octobre 2026 rejet 49.3 motion de censure voix
+2026-10-21T06:06:45.976661+00:00 [result] web_fetch → 2587/5695 chars [S154]
+2026-10-21T06:06:48.308470+00:00 [result] web_search → 4 results
+2026-10-21T06:07:01.162143+00:00 [usage] tokens in=13182 out=151 total=13333 phase=gap:G1F1:s5 cached=11584 cache_write=0 reasoning=98
+2026-10-21T06:07:01.162390+00:00 [tool] web_fetch https://fr.wikipedia.org/wiki/Groupe_Ensemble_pour_la_R%C3%A9pubique
+2026-10-21T06:07:01.162516+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-10-21T06:07:43.823641+00:00 [usage] tokens in=13259 out=46 total=13305 phase=gap:G1F1:s6 cached=13120 cache_write=0 reasoning=0
+2026-10-21T06:07:43.823799+00:00 [tool] web_fetch https://fr.wikipedia.org/wiki/Groupe_Ensemble_pour_la_R%C3%A9publique
+2026-10-21T06:07:43.823886+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-10-21T06:08:15.556222+00:00 [usage] tokens in=13351 out=1605 total=14956 phase=gap:G1F1:final cached=0 cache_write=0 reasoning=0
+2026-10-21T06:08:15.579295+00:00 [ok] research:v3:gather G1F1 facts=15 verified=1 sources=13
+2026-10-21T06:08:15.582021+00:00 [warn] v3: evidence digest dropped 1 lower-priority lines to fit its caps
+2026-10-21T06:08:15.617928+00:00 [stage] research:v3:synthesize start (8 groups)
+2026-10-21T06:08:18.660669+00:00 [usage] tokens in=20410 out=16 total=20426 phase=synthesize:synth:prime cached=0 cache_write=0 reasoning=14
+2026-10-21T06:09:35.359788+00:00 [usage] tokens in=21547 out=5231 total=26778 phase=synthesize:synth:g4 cached=20352 cache_write=0 reasoning=4399
+2026-10-21T06:09:35.360209+00:00 [ok] research:v3:synthesize G4 written=1 fallback=0
+2026-10-21T06:11:28.138105+00:00 [usage] tokens in=21646 out=13475 total=35121 phase=synthesize:synth:g3 cached=20416 cache_write=0 reasoning=11983
+2026-10-21T06:11:28.139615+00:00 [ok] research:v3:synthesize G3 written=2 fallback=0
+2026-10-21T06:11:53.251531+00:00 [usage] tokens in=21600 out=9443 total=31043 phase=synthesize:synth:g5 cached=20416 cache_write=0 reasoning=8103
+2026-10-21T06:11:53.252178+00:00 [ok] research:v3:synthesize G5 written=1 fallback=0
+2026-10-21T06:12:03.362937+00:00 [usage] tokens in=21686 out=16327 total=38013 phase=synthesize:synth:g2 cached=20416 cache_write=0 reasoning=14524
+2026-10-21T06:12:03.363692+00:00 [ok] research:v3:synthesize G2 written=2 fallback=0
+2026-10-21T06:12:42.217920+00:00 [usage] tokens in=21719 out=19291 total=41010 phase=synthesize:synth:g1 cached=20352 cache_write=0 reasoning=17150
+2026-10-21T06:12:42.218580+00:00 [ok] research:v3:synthesize G1 written=2 fallback=0
+2026-10-21T06:13:46.649328+00:00 [usage] tokens in=21629 out=7050 total=28679 phase=synthesize:synth:g8 cached=20416 cache_write=0 reasoning=5838
+2026-10-21T06:13:46.649669+00:00 [ok] research:v3:synthesize G8 written=1 fallback=0
+2026-10-21T06:14:47.469296+00:00 [usage] tokens in=21605 out=14600 total=36205 phase=synthesize:synth:g6 cached=20416 cache_write=0 reasoning=13328
+2026-10-21T06:14:47.469726+00:00 [ok] research:v3:synthesize G6 written=1 fallback=0
+2026-10-21T06:16:00.531184+00:00 [usage] tokens in=22076 out=18065 total=40141 phase=synthesize:synth:g7 cached=20416 cache_write=0 reasoning=16649
+2026-10-21T06:16:00.531745+00:00 [ok] research:v3:synthesize G7 written=1 fallback=0
+2026-10-21T06:18:58.358351+00:00 [usage] tokens in=5250 out=12540 total=17790 phase=synthesize:synth:exec cached=2944 cache_write=0 reasoning=11504
+2026-10-21T06:18:58.360902+00:00 [ok] research:v3:synthesize done
+2026-10-21T06:18:58.362125+00:00 [stage] research:v3:qa start
+2026-10-21T06:18:59.526520+00:00 [ok] research:v3:qa passed=True failures=0 repaired=1
+2026-10-21T06:18:59.529239+00:00 [stage] research:v3:finalize start
+2026-10-21T06:18:59.543882+00:00 [ok] wrote research_report.md (63477 chars)
+2026-10-21T06:18:59.543907+00:00 [ok] wrote sources.json (73 sources)
+2026-10-21T06:19:04.601501+00:00 [usage] tokens in=16340 out=3 total=16343 phase=finalize:extract:prime cached=0 cache_write=0 reasoning=0
+2026-10-21T06:19:40.201461+00:00 [usage] tokens in=16591 out=1126 total=17717 phase=finalize:extract:frame cached=16320 cache_write=0 reasoning=0
+2026-10-21T06:20:46.274398+00:00 [usage] tokens in=16634 out=8022 total=24656 phase=finalize:extract:facts cached=16320 cache_write=0 reasoning=6
+2026-10-21T06:21:29.285974+00:00 [usage] tokens in=16944 out=10822 total=27766 phase=finalize:extract:actors cached=16320 cache_write=0 reasoning=93
+2026-10-21T06:21:29.305149+00:00 [ok] actor-cast discipline: 15 extracted → 14 main actors kept (cap=20, media demoted=1, rank-cut=0, off-cast edges dropped=0)
+2026-10-21T06:21:29.312554+00:00 [ok] wrote actors.json (14 actors)
+2026-10-21T06:21:29.313011+00:00 [ok] wrote timeline.json (36 events)
+2026-10-21T06:21:29.313647+00:00 [ok] wrote quantitative.json (51 rows)
+2026-10-21T06:21:29.314003+00:00 [ok] wrote contested.json (9 claims)
+2026-10-21T06:21:29.314242+00:00 [warn] v3: research degraded (1 event(s)): actor extraction failed; the planner's actor list was used
+2026-10-21T06:21:29.314255+00:00 [ok] research_quality=0.277 (grounding=0.438)
+2026-10-21T06:21:34.624422+00:00 [usage] tokens in=591 out=167 total=758 phase=prediction-market-query-derivation cached=0 cache_write=0 reasoning=0
+2026-10-21T06:21:34.624616+00:00 [ok] prediction markets: LLM derived 16 market-title queries
+2026-10-21T06:21:53.788393+00:00 [usage] tokens in=878 out=184 total=1062 phase=prediction-market-relevance cached=0 cache_write=0 reasoning=0
+2026-10-21T06:21:53.788537+00:00 [ok] prediction markets: LLM relevance-scored 20/20 markets
+2026-10-21T06:21:53.789924+00:00 [ok] wrote prediction_markets.json (3 markets, 16 queries) + appended report section
+2026-10-21T06:21:53.790323+00:00 [stage] research charts: rendering via /Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python render.py (out=/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_d129e1956e73/handoff)
+2026-10-21T06:22:17.100756+00:00 [ok] research charts: embedded 5 chart(s) into research_report.md (Visual Annex)
+2026-10-21T06:22:17.100805+00:00 [ok] wrote charts.json (5 charts) + charts/ files
+2026-10-21T06:22:17.103900+00:00 [ok] wrote quantitative.json (58 rows, 7 from official data)
+2026-10-21T06:22:17.105778+00:00 [done] research complete (v3: 10 KIQs, 73 sources, 64650 chars)

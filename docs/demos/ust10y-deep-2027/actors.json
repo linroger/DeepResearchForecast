@@ -1,0 +1,2650 @@
+{
+  "central_question": "截至2027年12月31日，美国10年期国债收益率（DGS10日频收盘）将处于什么水平？",
+  "as_of_date": "2026-10-26",
+  "situation_brief": {
+    "current_situation": "10年期收益率月均4.989%（2026-09），最新日度4.96%（2026-10-22）至5.00%（2026-10-23），10月7日盘中触及5.35%为2002年以来最高；政策利率3.875%（2026年9月加息25bp后），曲线正斜率（2s10s约+0.31%，3M10Y约+0.78%），衰退概率0.62%处于低位。",
+    "context": "近12个月收益率上行0.869个百分点几乎全部由实际利率（DFII10升至2.638%）与期限溢价（Kim–Wright 0.96%创近5年新高）驱动，盈亏平衡通胀反而回落至2.351%；QT已于2025年12月前后结束，美联储总资产约6.75万亿美元企稳；CBO基线FY2026赤字1.9万亿美元（GDP的5.8%），公共债务约40.2万亿美元，2026年票据净供给约8270亿美元；中国持仓降至5907亿美元多年低点，日本持仓10683亿美元连续回落，10年期JGB自1996年来首触3%。",
+    "dynamics": "期货定价到2027年9月累计再加息约65.5bp（约2–3次）；通胀顽固与赤字供给压力推高长端，与衰退概率极低、通胀预期锚定互相牵制，收益率易上难下但趋势性突破需触发条件；BOJ正常化压缩美日利差、加剧日本资金回流风险。",
+    "fault_lines": [
+      "通胀路径：SEP预计2027年PCE降至2.4%，但密歇根1年预期4.6%、PIIE警告年底或超4%",
+      "期限溢价能否稳在1%附近：供给（票据依赖、附息券指引）与境外需求（中日减持）拉锯",
+      "债务上限：BPC估计2027年冬末至仲夏再度触限，X日或在2027年底至2028年",
+      "政府资金持续决议2026年12月11日到期，停摆风险",
+      "曲线信号可靠性：2022–24年倒挂为历史第三次假阳性"
+    ],
+    "catalysts": [
+      "2026-10-28 FOMC（维持概率90.6%）",
+      "2026-11-04 财政部季度再融资声明",
+      "2026-12-09 FOMC（加息概率72.8%）",
+      "2026-12-11 持续决议到期",
+      "2027-01-15 再融资文件；2027-03-16/17与6/8-9带SEP的FOMC",
+      "BOJ 2027年各次会议（尤其7月21-22日）",
+      "2027年冬末至仲夏债务上限触限窗口"
+    ]
+  },
+  "actors": [
+    {
+      "name": "美联储（FOMC）",
+      "type": "Government",
+      "role": "货币政策制定者：决定政策利率路径与资产负债表政策",
+      "stance": "2026年9月以12–0加息25bp至3.875%，声明称通胀仍处高位；点阵图多数预计2027年底目标区间4.00%–4.50%",
+      "description": "2026年2–8月利率维持3.625%，9月加息至3.875%；SEP预计2026年PCE 3.7%、2027年2.4%，失业率4.1%；QT已于2025年12月前后结束，总资产企稳于6,753,604百万美元（2026-10-21）",
+      "stated_vs_revealed": "声明称加息支持回归2%目标；点阵图与市场定价（至2027-09再加息约65.5bp）显示紧缩倾向延续",
+      "memory": "2025年降息至3.625%后因通胀顽固于2026年9月转向加息",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "FOMC",
+        "Fed"
+      ],
+      "goals": [
+        "将通胀回归2%",
+        "维持就业与物价双重使命平衡",
+        "维持银行体系充足储备"
+      ],
+      "constraints": [
+        "通胀顽固（2026年PCE预计3.7%）",
+        "劳动力市场无明显闲置限制降息空间",
+        "中期选举等政治日历影响会议节奏"
+      ],
+      "assets": [
+        "政策利率工具",
+        "资产负债表与储备管理购买",
+        "SEP点阵图沟通渠道"
+      ],
+      "vulnerabilities": [
+        "通胀预期上漂风险（密歇根4.6%）",
+        "期限溢价脱离政策控制的定价"
+      ],
+      "incentives": [
+        {
+          "driver": "通胀回归2%目标",
+          "gains_if": "通胀沿SEP路径2027年回落至2.4%",
+          "loses_if": "通胀重返4%以上（PIIE情景）",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "物价稳定",
+          "数据依赖",
+          "政策信誉"
+        ],
+        "beliefs": [
+          "通胀偏高但就业稳定",
+          "2027年通胀将降至2.4%"
+        ],
+        "identity": "美国央行",
+        "frame": "抗通胀中后周期的谨慎紧缩"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "主导短端利率与预期成分，是收益率路径首要驱动者"
+      }
+    },
+    {
+      "name": "鲍威尔及FOMC投票委员",
+      "type": "Person",
+      "role": "投票决定政策利率；报告提及现任主席为沃什",
+      "stance": "委员会对通胀上行意外的容忍度下降（主席为沃什）",
+      "description": "2026年9月会议12–0一致投票加息；SEP上调2026、2027年增长预测各0.1个百分点至2.3%和2.4%",
+      "stated_vs_revealed": "一致投票加息与鹰派点阵图显示言行一致",
+      "memory": "9月由暂停转向加息",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "沃什",
+        "FOMC投票委员"
+      ],
+      "goals": [
+        "恢复价格稳定",
+        "维护委员会共识"
+      ],
+      "constraints": [
+        "12–0投票显示共识但内部分歧历史不明"
+      ],
+      "assets": [
+        "投票权与沟通平台"
+      ],
+      "vulnerabilities": [
+        "通胀数据反复将损害信誉"
+      ],
+      "incentives": [
+        {
+          "driver": "政策信誉",
+          "gains_if": "加息后通胀回落",
+          "loses_if": "通胀再加速",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "抗通胀"
+        ],
+        "beliefs": [
+          "对通胀上行意外的容忍度下降"
+        ],
+        "identity": "FOMC决策核心",
+        "frame": "紧缩优先"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.9,
+        "basis": "直接决定政策路径"
+      }
+    },
+    {
+      "name": "美国财政部",
+      "type": "Government",
+      "role": "国债发行规模与久期结构决定者，影响期限溢价",
+      "stance": "2026年8月指引：未来至少几个季度维持名义附息券与FRN拍卖规模不变；财长贝森特以票据为主要融资工具",
+      "description": "2026年8月5日再融资发行1250亿美元；TGA预计2026年10月下旬峰值约1.05万亿美元；高盛估计2026年票据净供给约8270亿美元；SIFMA转述前9个月发行24.6万亿美元（同比+10.2%）",
+      "stated_vs_revealed": "宣称维持附息券规模不变，但持续评估潜在调整；行为上重票据融资",
+      "memory": "2025年7月债务上限上调5万亿美元至41.1万亿后受限债务已增约2.9万亿",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "财政部"
+      ],
+      "goals": [
+        "以最低成本稳定融资",
+        "维持市场运转顺畅"
+      ],
+      "constraints": [
+        "赤字高企（FY2026预计1.9万亿美元）",
+        "票据依赖放大利率上行时滚动再融资风险"
+      ],
+      "assets": [
+        "发行结构选择权",
+        "TGA现金管理"
+      ],
+      "vulnerabilities": [
+        "境外需求走弱时附息券承销压力",
+        "债务上限约束"
+      ],
+      "incentives": [
+        {
+          "driver": "融资成本控制",
+          "gains_if": "期限溢价保持低位",
+          "loses_if": "被迫上调附息券规模推高溢价",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "融资稳定"
+        ],
+        "beliefs": [
+          "票据需求可暂时吸收赤字"
+        ],
+        "identity": "美国债务管理人",
+        "frame": "短久期过渡策略"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.9,
+        "basis": "供给端是期限溢价的核心变量"
+      }
+    },
+    {
+      "name": "美国国会",
+      "type": "Government",
+      "role": "税收、支出与债务上限立法决定财政路径",
+      "stance": "参议院选前未完成任何FY2027拨款法案院会表决、众议院仅通过12项中的3项；持续决议维持资金至2026-12-11",
+      "description": "2025年调解法案增赤4.7万亿、更高关税减赤3.0万亿（CBO分解）；2026年初曾发生DHS部分停摆",
+      "stated_vs_revealed": "未公布对12月11日前停摆的官方概率",
+      "memory": "2011与2013年债务上限事件曾推升短端收益率",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "国会"
+      ],
+      "goals": [
+        "通过拨款与财政立法",
+        "政治议程优先"
+      ],
+      "constraints": [
+        "两院分歧",
+        "债务上限政治僵局"
+      ],
+      "assets": [
+        "立法权",
+        "债务上限调整权"
+      ],
+      "vulnerabilities": [
+        "停摆与触限引发市场重定价"
+      ],
+      "incentives": [
+        {
+          "driver": "财政与政治利益",
+          "gains_if": "按期处理拨款与上限",
+          "loses_if": "僵局引发尾部事件",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "党派议程"
+        ],
+        "beliefs": [],
+        "identity": "立法机构",
+        "frame": "财政僵局风险源"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.7,
+        "basis": "尾部情景（极端突破5%）的主要来源"
+      }
+    },
+    {
+      "name": "国会预算办公室（CBO）",
+      "type": "Organization",
+      "role": "赤字与债务基线预测，塑造财政预期",
+      "stance": "基线：FY2026赤字1.9万亿（5.8% of GDP），2026–2035累计赤字23.1万亿，债务/GDP 2036年达120%；假设10年期收益率2027年前逐步上升",
+      "description": "2026年2月基线；净利息支出2026年1.0万亿升至2036年2.1万亿",
+      "stated_vs_revealed": "基线假设本身隐含10年期收益率2027年前继续上行",
+      "memory": "—",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "amplifier",
+      "aliases": [
+        "CBO"
+      ],
+      "goals": [
+        "客观基线测算"
+      ],
+      "constraints": [
+        "非决策机构"
+      ],
+      "assets": [
+        "官方预测权威性"
+      ],
+      "incentives": [
+        {
+          "driver": "测算职责",
+          "gains_if": "—",
+          "loses_if": "—",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "无党派测算"
+        ],
+        "beliefs": [
+          "增长自2027年起放缓至1.8%"
+        ],
+        "identity": "国会预算机构",
+        "frame": "财政可持续性警示"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "通过预期渠道间接影响期限溢价"
+      }
+    },
+    {
+      "name": "日本银行（BOJ）",
+      "type": "Government",
+      "role": "政策正常化改变日本资金回流与全球债券利差",
+      "stance": "加息路径推进中；市场押注加快加息；牛津经济研究院预测至2027年4月加至1.75%、或7月至2%",
+      "description": "10年期JGB于2026-09-01触及3.005%为1996年来首次；20年期3.885%、30年期4.18%纪录高位；2027年7月会议安排在两名鹰派委员任期届满前",
+      "stated_vs_revealed": "—",
+      "memory": "2026年7月美日联合汇市干预效果短暂",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "BOJ",
+        "日本央行"
+      ],
+      "goals": [
+        "实现通胀目标与金融稳定",
+        "遏制日元过度走弱"
+      ],
+      "constraints": [
+        "财政扩张引发的JGB抛售压力",
+        "政府债务可持续性疑虑"
+      ],
+      "assets": [
+        "政策利率",
+        "购债操作"
+      ],
+      "vulnerabilities": [
+        "JGB收益率失控上行"
+      ],
+      "incentives": [
+        {
+          "driver": "通胀与汇率",
+          "gains_if": "渐进加息稳定日元与通胀",
+          "loses_if": "过快正常化引发JGB动荡",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "通胀目标"
+        ],
+        "beliefs": [],
+        "identity": "日本央行",
+        "frame": "退出超宽松"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.8,
+        "basis": "美日利差收窄至200bp内，直接改变日本对美债需求"
+      }
+    },
+    {
+      "name": "中国国家外汇管理局",
+      "type": "Government",
+      "role": "外储配置决定对美债官方需求",
+      "stance": "未宣布减持立场，但TIC显示持仓持续下降",
+      "description": "中国大陆持仓2026年8月为590.7（十亿美元），自1月695.3累计减约1046亿美元，同比降约1090亿，处多年低点",
+      "stated_vs_revealed": "官方未表态减持，行为显示持续减持",
+      "memory": "TIC月度序列显示自2026年初以来趋势性下降",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "外管局"
+      ],
+      "goals": [
+        "外储安全与多元化"
+      ],
+      "assets": [
+        "约数千亿美元级美债持仓"
+      ],
+      "incentives": [
+        {
+          "driver": "外储多元化与地缘考量",
+          "gains_if": "—",
+          "loses_if": "—",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "储备安全"
+        ],
+        "beliefs": [],
+        "identity": "外储管理机构",
+        "frame": "渐进多元化"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "边际需求走弱支撑期限溢价上行"
+      }
+    },
+    {
+      "name": "纽约联储（ACM模型团队）",
+      "type": "Organization",
+      "role": "发布权威期限溢价估算与衰退概率模型",
+      "stance": "ACM 10年期期限溢价经转引约0.72%–0.73%（2026-10-21，未核实）；平滑衰退概率0.62%（2026-08）",
+      "description": "其FEDS Notes指出资产负债表合意稳态规模仍是开放问题；FRED的THREEFYTP10为Kim–Wright模型而非ACM",
+      "stated_vs_revealed": "—",
+      "memory": "—",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "arbiter",
+      "aliases": [
+        "纽约联储"
+      ],
+      "goals": [
+        "提供市场监测与政策分析"
+      ],
+      "assets": [
+        "ACM模型、DSGE与衰退概率模型"
+      ],
+      "incentives": [
+        {
+          "driver": "分析职能",
+          "gains_if": "—",
+          "loses_if": "—",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "数据透明"
+        ],
+        "beliefs": [],
+        "identity": "联储研究与市场职能机构",
+        "frame": "市场监测者"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "提供关键监测指标而非直接决策"
+      }
+    },
+    {
+      "name": "摩根大通与美国银行利率策略团队",
+      "type": "Organization",
+      "role": "华尔街主要预测者，影响市场预期形成",
+      "stance": "摩根大通财富管理：2027年中基准约5.25%，牛市约4.50%、熊市约5.75%、柴油冲击情景5.50%–6.00%",
+      "description": "记录10月7日盘中5.35%为2002年以来最高、9月单月+50bp位列1962年以来前10%波动；摩根大通全球研究2026年展望给出衰退概率35%",
+      "stated_vs_revealed": "—",
+      "memory": "2026年展望已上修",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "amplifier",
+      "aliases": [
+        "JPM策略团队"
+      ],
+      "goals": [
+        "准确的利率预测与客户配置建议"
+      ],
+      "assets": [
+        "研究影响力、客户资金流"
+      ],
+      "vulnerabilities": [
+        "卖方分布左尾可能偏厚（嘉信4%–4.5%预测已被证伪）"
+      ],
+      "incentives": [
+        {
+          "driver": "预测声誉",
+          "gains_if": "预测命中",
+          "loses_if": "行情证伪",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [
+          "通胀粘性持续"
+        ],
+        "identity": "卖方策略机构",
+        "frame": "高位区间基准"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.55,
+        "basis": "预期放大渠道"
+      }
+    },
+    {
+      "name": "主要国债一级交易商",
+      "type": "Organization",
+      "role": "承接国债发行，反映需求弹性的边际定价",
+      "stance": "—",
+      "description": "在英国等私人托管渠道承接官方需求回落的背景下，承接约8270亿美元票据净供给与不变规模的附息券拍卖",
+      "stated_vs_revealed": "—",
+      "memory": "—",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "intermediary",
+      "aliases": [
+        "一级交易商"
+      ],
+      "goals": [
+        "承销利润与库存风险控制"
+      ],
+      "constraints": [
+        "资产负债表容量",
+        "拍卖疲弱将推高期限溢价"
+      ],
+      "assets": [
+        "做市与承销能力"
+      ],
+      "vulnerabilities": [
+        "需求走弱时的尾部风险"
+      ],
+      "incentives": [
+        {
+          "driver": "承销价差",
+          "gains_if": "需求稳定",
+          "loses_if": "拍卖疲弱被迫吃库存",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [],
+        "identity": "市场中介",
+        "frame": "供需边际定价者"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "拍卖结果直接检验期限溢价承载力"
+      }
+    },
+    {
+      "name": "美国劳工统计局（BLS）",
+      "type": "Government",
+      "role": "发布CPI与就业数据，驱动通胀预期",
+      "stance": "—",
+      "description": "其数据决定通胀是否沿SEP的2027年PCE 2.4%路径回落",
+      "stated_vs_revealed": "—",
+      "memory": "—",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "aliases": [
+        "BLS"
+      ],
+      "goals": [
+        "统计准确"
+      ],
+      "assets": [
+        "官方数据发布"
+      ],
+      "incentives": [
+        {
+          "driver": "统计职能",
+          "gains_if": "—",
+          "loses_if": "—",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "数据质量"
+        ],
+        "beliefs": [],
+        "identity": "统计机构",
+        "frame": "数据供给者"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "数据发布是路径重定价节点"
+      }
+    },
+    {
+      "name": "穆迪与标普等评级机构",
+      "type": "Organization",
+      "role": "主权评级行动影响财政风险定价",
+      "stance": "穆迪已于2025-05-16将美国评级由Aaa下调至Aa1、展望稳定",
+      "description": "历史上2011、2023年债务上限事件后标普与惠誉分别下调评级",
+      "stated_vs_revealed": "—",
+      "memory": "2025年已行动一次",
+      "influence": "medium",
+      "simulation_tier": 4,
+      "role_class": "amplifier",
+      "aliases": [
+        "评级机构"
+      ],
+      "goals": [
+        "信用风险评估"
+      ],
+      "assets": [
+        "评级权威性"
+      ],
+      "incentives": [
+        {
+          "driver": "信用判断",
+          "gains_if": "—",
+          "loses_if": "—",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "信用纪律"
+        ],
+        "beliefs": [],
+        "identity": "评级机构",
+        "frame": "财政风险定价放大器"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 4,
+        "score": 0.4,
+        "basis": "评级行动为尾部放大事件"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source": "美联储（FOMC）",
+      "target": "美国财政部",
+      "type": "INFLUENCES",
+      "relation_label": "货币政策影响国债融资成本",
+      "basis": "政策利率与储备管理购买（监测SOMA票据购买）影响发行环境",
+      "valence": "neutral",
+      "polarity": 0.0,
+      "strength": 0.6
+    },
+    {
+      "source": "美国财政部",
+      "target": "主要国债一级交易商",
+      "type": "SUPPLIES",
+      "relation_label": "拍卖发行国债由交易商承接",
+      "basis": "再融资声明与拍卖结构",
+      "valence": "transactional",
+      "polarity": 0.3,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "日本银行（BOJ）",
+      "target": "美联储（FOMC）",
+      "type": "COMPETES_WITH",
+      "relation_label": "政策正常化压缩美日利差、分流美债需求",
+      "basis": "JGB 10年触3%，美日利差收窄至200bp内，日本机构需求回流本国",
+      "valence": "adversarial",
+      "polarity": -0.4,
+      "strength": 0.6,
+      "sign": "-"
+    },
+    {
+      "source": "中国国家外汇管理局",
+      "target": "美国财政部",
+      "type": "CUSTOMER_OF",
+      "relation_label": "持有并持续减持美债",
+      "basis": "TIC显示2026年8月持仓590.7（十亿美元）多年低点、同比减约1090亿美元",
+      "valence": "transactional",
+      "polarity": -0.3,
+      "strength": 0.6,
+      "sign": "-"
+    },
+    {
+      "source": "国会预算办公室（CBO）",
+      "target": "美国国会",
+      "type": "INFLUENCES",
+      "relation_label": "基线预测塑造财政立法预期",
+      "basis": "CBO基线为立法讨论提供成本估算",
+      "valence": "directional",
+      "polarity": 0.2,
+      "strength": 0.4,
+      "sign": "+"
+    },
+    {
+      "source": "美国国会",
+      "target": "美国财政部",
+      "type": "REGULATES",
+      "relation_label": "设定支出、税收与债务上限",
+      "basis": "2025年7月法案上调上限5万亿至41.1万亿美元；持续决议维持资金至2026-12-11",
+      "valence": "neutral",
+      "polarity": 0.0,
+      "strength": 0.8
+    },
+    {
+      "source": "纽约联储（ACM模型团队）",
+      "target": "美联储（FOMC）",
+      "type": "SUPPORTS",
+      "relation_label": "提供期限溢价与衰退模型分析",
+      "basis": "FEDS Notes与衰退概率模型服务政策分析",
+      "valence": "allied",
+      "polarity": 0.5,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "穆迪与标普等评级机构",
+      "target": "美国财政部",
+      "type": "INFLUENCES",
+      "relation_label": "主权评级影响财政风险定价",
+      "since": "2025-05-16",
+      "basis": "穆迪将美国降至Aa1",
+      "valence": "adversarial",
+      "polarity": -0.4,
+      "strength": 0.4,
+      "sign": "-"
+    },
+    {
+      "source": "美国劳工统计局（BLS）",
+      "target": "美联储（FOMC）",
+      "type": "SUPPLIES",
+      "relation_label": "提供CPI与就业数据",
+      "basis": "数据决定加息路径重估",
+      "valence": "directional",
+      "polarity": 0.3,
+      "strength": 0.6,
+      "sign": "+"
+    }
+  ],
+  "hot_topics": [
+    "美联储2026–2027加息路径与点阵图",
+    "期限溢价能否稳在1%附近（Kim–Wright 0.96%）",
+    "财政部附息券规模指引与票据依赖",
+    "债务上限2027年触限窗口",
+    "政府停摆与持续决议到期",
+    "BOJ加息与日本资金回流",
+    "中日减持美债（TIC）",
+    "通胀预期锚定vs密歇根1年4.6%",
+    "衰退概率分歧（0.62%官方vs卖方15–35%）",
+    "2026-11-04再融资声明"
+  ],
+  "key_events": [
+    {
+      "date": "2026-10-23",
+      "event": "财政部CMT口径10年期收益率为5.00%（最新可得交易日）",
+      "staleness_days": 3,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-22",
+      "event": "FRED DGS10最新日度值4.96%，10年期较前一日下行17个基点",
+      "staleness_days": 4,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-07",
+      "event": "10年期国债收益率盘中触及5.35%，为2002年以来最高（摩根大通记录）",
+      "staleness_days": 19,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-21",
+      "event": "美联储总资产为6,753,604百万美元",
+      "staleness_days": 5,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-26",
+      "event": "CME FedWatch快照：10月28日会议维持3.75%–4.00%区间概率90.6%",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-28",
+      "event": "FOMC会议（待开）",
+      "staleness_days": -2,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-29",
+      "event": "日本银行会议及十月经济与物价展望（10月29–30日）",
+      "staleness_days": -3,
+      "is_stale": false
+    },
+    {
+      "date": "2026-11-02",
+      "event": "财政部借款估计发布",
+      "staleness_days": -7,
+      "is_stale": false
+    },
+    {
+      "date": "2026-11-04",
+      "event": "财政部季度再融资政策声明",
+      "staleness_days": -9,
+      "is_stale": false
+    },
+    {
+      "date": "2026-12-09",
+      "event": "FOMC会议；期货隐含加息概率72.8%",
+      "staleness_days": -44,
+      "is_stale": false
+    },
+    {
+      "date": "2026-12-11",
+      "event": "拨款持续决议到期",
+      "staleness_days": -46,
+      "is_stale": false
+    },
+    {
+      "date": "2027-01-15",
+      "event": "下一批财政部再融资文件",
+      "staleness_days": -81,
+      "is_stale": false
+    },
+    {
+      "date": "2027-03-16",
+      "event": "FOMC带SEP会议（3月16–17日）",
+      "staleness_days": -141,
+      "is_stale": false
+    },
+    {
+      "date": "2027-06-08",
+      "event": "FOMC带SEP会议（6月8–9日）",
+      "staleness_days": -225,
+      "is_stale": false
+    },
+    {
+      "date": "2025-12-01",
+      "event": "多方材料称QT于该日结束（未经原始文件逐字核实）",
+      "staleness_days": 329,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-01",
+      "event": "10年期JGB收益率盘中触及3.005%，为1996年9月以来首次升破3%",
+      "staleness_days": 55,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-10",
+      "event": "美联储9月会议以12–0投票加息25个基点至3.875%（区间中值）",
+      "staleness_days": 46,
+      "is_stale": false
+    },
+    {
+      "date": "2026-08-05",
+      "event": "财政部季度再融资声明：发行1250亿美元，指引附息券规模维持不变",
+      "staleness_days": 82,
+      "is_stale": false
+    },
+    {
+      "date": "2026-06-22",
+      "event": "高盛将美国未来12个月衰退概率从25%下调至15%",
+      "staleness_days": 126,
+      "is_stale": false
+    },
+    {
+      "date": "2025-11-19",
+      "event": "路透报道会议纪要显示“几乎所有”决策者支持12月1日停止缩表",
+      "staleness_days": 341,
+      "is_stale": false
+    },
+    {
+      "date": "2025-07",
+      "event": "P.L. 119-21将债务上限提高5.0万亿美元至41.1万亿美元",
+      "staleness_days": 482,
+      "is_stale": true
+    },
+    {
+      "date": "2025-05-16",
+      "event": "穆迪将美国评级由Aaa下调至Aa1、展望稳定",
+      "staleness_days": 528,
+      "is_stale": true
+    },
+    {
+      "date": "2027-07-21",
+      "event": "BOJ会议（7月21–22日），路透指其安排在两名鹰派委员任期届满之前",
+      "staleness_days": -268,
+      "is_stale": false
+    },
+    {
+      "date": "2027-12-31",
+      "event": "预测结算日：按DGS10日频官方收盘值结算",
+      "staleness_days": -431,
+      "is_stale": false
+    }
+  ],
+  "quantitative_facts": [
+    {
+      "metric": "10年期国债收益率",
+      "value": "4.989",
+      "series": "DGS10月均",
+      "unit": "%",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "美国",
+      "definition": "FRED月度平均，较2025年9月4.12%上升0.869个百分点",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 4.989,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "FRED",
+      "staleness_days": 26,
+      "is_stale": false
+    },
+    {
+      "metric": "10年期国债收益率",
+      "value": "4.96",
+      "series": "DGS10日度",
+      "unit": "%",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "美国",
+      "definition": "FRED最新日度值",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 4.96,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "FRED",
+      "staleness_days": 4,
+      "is_stale": false
+    },
+    {
+      "metric": "10年期国债收益率",
+      "value": "5.00",
+      "series": "财政部CMT日频",
+      "unit": "%",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "美国",
+      "definition": "官方日频收盘口径",
+      "source": "美国财政部",
+      "value_type": "actual",
+      "source_url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/2026/all?type=daily_treasury_yield_curve&field_tdr_date_value=2026&page&_format=csv",
+      "tier": "S1",
+      "value_num": 5.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "美国财政部",
+      "staleness_days": 3,
+      "is_stale": false
+    },
+    {
+      "metric": "10年期国债收益率月均",
+      "value": "5.186",
+      "series": "DGS10部分月",
+      "unit": "%",
+      "as_of_date": "2026-10-26",
+      "period_end": "2026-10",
+      "geography": "美国",
+      "definition": "部分月数据，待月末确认",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 5.186,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "FRED",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "央行政策利率",
+      "value": "3.875",
+      "series": "BIS CBPOL",
+      "unit": "% 年率",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "美国",
+      "definition": "目标区间中值，9月加息25个基点后",
+      "source": "国际清算银行",
+      "value_type": "actual",
+      "source_url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US",
+      "tier": "S1",
+      "value_num": 3.875,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "国际清算银行",
+      "staleness_days": 26,
+      "is_stale": false
+    },
+    {
+      "metric": "10年期TIPS实际收益率",
+      "value": "2.638",
+      "series": "DFII10月度",
+      "unit": "%",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "美国",
+      "definition": "同比+0.889个百分点",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DFII10",
+      "tier": "S1",
+      "value_num": 2.638,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "FRED",
+      "staleness_days": 26,
+      "is_stale": false
+    },
+    {
+      "metric": "期限溢价",
+      "value": "0.96",
+      "series": "THREEFYTP10（Kim–Wright）月度",
+      "unit": "%",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "美国",
+      "definition": "同比+0.499个百分点，近5年区间0.101%–0.96%上沿",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/THREEFYTP10",
+      "tier": "S1",
+      "value_num": 0.96,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "FRED",
+      "staleness_days": 26,
+      "is_stale": false
+    },
+    {
+      "metric": "10年期盈亏平衡通胀率",
+      "value": "2.351",
+      "series": "T10YIE月度",
+      "unit": "%",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "美国",
+      "definition": "同比−0.02个百分点",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/T10YIE",
+      "tier": "S1",
+      "value_num": 2.351,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "FRED",
+      "staleness_days": 26,
+      "is_stale": false
+    },
+    {
+      "metric": "5年后5年远期通胀预期",
+      "value": "2.34",
+      "series": "T5YIFR月度",
+      "unit": "%",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "美国",
+      "definition": "同比+0.022个百分点",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/T5YIFR",
+      "tier": "S1",
+      "value_num": 2.34,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "FRED",
+      "staleness_days": 26,
+      "is_stale": false
+    },
+    {
+      "metric": "联邦财政盈余或赤字占GDP比率",
+      "value": "-5.769",
+      "series": "FYFSGDA188S",
+      "unit": "% 占GDP",
+      "as_of_date": "2025-12-31",
+      "period_end": "2025财年",
+      "geography": "美国",
+      "definition": "FY2024为−6.196%",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/FYFSGDA188S",
+      "tier": "S1",
+      "value_num": -5.769,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "FRED",
+      "staleness_days": 299,
+      "is_stale": false
+    },
+    {
+      "metric": "联邦公共债务总额",
+      "value": "40171825101340.31",
+      "series": "FRED日度",
+      "unit": "美元",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "美国",
+      "definition": "同比+6.733%",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/",
+      "tier": "S1",
+      "value_num": 40171825101340.31,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "FRED",
+      "staleness_days": 26,
+      "is_stale": false
+    },
+    {
+      "metric": "联邦公共债务总额",
+      "value": "40444342709389.15",
+      "series": "FRED日度",
+      "unit": "美元",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "美国",
+      "definition": "日度存量",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/",
+      "tier": "S1",
+      "value_num": 40444342709389.15,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "FRED",
+      "staleness_days": 4,
+      "is_stale": false
+    },
+    {
+      "metric": "平滑衰退概率",
+      "value": "0.62",
+      "series": "RECPROUSM156N",
+      "unit": "%",
+      "as_of_date": "2026-08-31",
+      "period_end": "2026-08",
+      "geography": "美国",
+      "definition": "近5年区间0.02%–2.32%下沿附近",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/RECPROUSM156N",
+      "tier": "S1",
+      "value_num": 0.62,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "FRED",
+      "staleness_days": 56,
+      "is_stale": false
+    },
+    {
+      "metric": "2s10s利差",
+      "value": "0.338",
+      "series": "T10Y2Y月度",
+      "unit": "%",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "美国",
+      "definition": "同比−0.214个百分点；2026-10-23日度0.31%",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/T10Y2Y",
+      "tier": "S1",
+      "value_num": 0.338,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "FRED",
+      "staleness_days": 26,
+      "is_stale": false
+    },
+    {
+      "metric": "3M10Y利差",
+      "value": "0.896",
+      "series": "T10Y3M月度",
+      "unit": "%",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "美国",
+      "definition": "同比+0.841个百分点；2026-10-23日度0.78%",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/T10Y3M",
+      "tier": "S1",
+      "value_num": 0.896,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "FRED",
+      "staleness_days": 26,
+      "is_stale": false
+    },
+    {
+      "metric": "密歇根一年期通胀预期",
+      "value": "4.6",
+      "series": "MICH",
+      "unit": "%",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "美国",
+      "definition": "NSA中位数；年内区间3.4%–4.8%",
+      "source": "密歇根大学",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/MICH",
+      "tier": "S1",
+      "value_num": 4.6,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "密歇根大学",
+      "staleness_days": 26,
+      "is_stale": false
+    },
+    {
+      "metric": "美联储资产负债表总资产",
+      "value": "6753604",
+      "series": "WALCL",
+      "unit": "百万美元",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026-10-21",
+      "geography": "美国",
+      "definition": "周度",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/WALCL",
+      "tier": "S1",
+      "value_num": 6753604.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "FRED",
+      "staleness_days": 5,
+      "is_stale": false
+    },
+    {
+      "metric": "12个月隐含加息幅度",
+      "value": "+65.5",
+      "series": "联邦基金期货",
+      "unit": "基点",
+      "as_of_date": "2026-10-26",
+      "period_end": "2027-09",
+      "geography": "美国",
+      "definition": "累计约2–3次加息；2027年1/3/6/9月隐含会后利率4.18%/4.30%/4.49%/4.53%",
+      "source": "RateProbability",
+      "value_type": "forecast",
+      "source_url": "https://rateprobability.com/fed",
+      "tier": "S3",
+      "value_num": 65.5,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "RateProbability",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "10月28日会议维持概率",
+      "value": "90.6",
+      "series": "CME FedWatch",
+      "unit": "%",
+      "as_of_date": "2026-10-26",
+      "period_end": "2026-10-28",
+      "geography": "美国",
+      "definition": "维持3.75%–4.00%区间；加息概率9.4%",
+      "source": "CME FedWatch",
+      "value_type": "forecast",
+      "source_url": "https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html",
+      "tier": "S3",
+      "value_num": 90.6,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "CME FedWatch",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "12月9日会议加息概率",
+      "value": "72.8",
+      "series": "RateProbability",
+      "unit": "%",
+      "as_of_date": "2026-10-26",
+      "period_end": "2026-12-09",
+      "geography": "美国",
+      "definition": "隐含会后利率4.08%",
+      "source": "RateProbability",
+      "value_type": "forecast",
+      "source_url": "https://rateprobability.com/fed",
+      "tier": "S3",
+      "value_num": 72.8,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "RateProbability",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "SEP PCE通胀中值（2026）",
+      "value": "3.7",
+      "series": "FOMC 9月SEP",
+      "unit": "%",
+      "as_of_date": "2026-09-10",
+      "period_end": "2026",
+      "geography": "美国",
+      "definition": "2027年2.4%、2028年2.2%、2029年2.0%；核心PCE 2026年3.4%、2027年2.5%",
+      "source": "FOMC",
+      "value_type": "forecast",
+      "source_url": "https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf",
+      "tier": "S1",
+      "value_num": 3.7,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "FOMC",
+      "staleness_days": 46,
+      "is_stale": false
+    },
+    {
+      "metric": "SEP失业率（2026–2027）",
+      "value": "4.1",
+      "series": "FOMC 9月SEP",
+      "unit": "%",
+      "as_of_date": "2026-09-10",
+      "period_end": "2026-2027",
+      "geography": "美国",
+      "definition": "长期估计4.2%",
+      "source": "FOMC",
+      "value_type": "forecast",
+      "source_url": "https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf",
+      "tier": "S1",
+      "value_num": 4.1,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "FOMC",
+      "staleness_days": 46,
+      "is_stale": false
+    },
+    {
+      "metric": "外资持有美国国债总量",
+      "value": "9.299",
+      "series": "TIC",
+      "unit": "万亿美元",
+      "as_of_date": "2026-06-30",
+      "period_end": "2026-06",
+      "geography": "美国",
+      "definition": "5月为9.371万亿；同比+2.3%",
+      "source": "美国财政部TIC",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/world/china/foreign-holdings-us-treasuries-fall-june-led-by-japan-uk-china-data-shows-2026-08-17/",
+      "tier": "S2",
+      "value_num": 9.299,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "美国财政部TIC",
+      "staleness_days": 118,
+      "is_stale": false
+    },
+    {
+      "metric": "中国大陆美债持仓",
+      "value": "590.7",
+      "series": "TIC表5",
+      "unit": "十亿美元",
+      "as_of_date": "2026-08-31",
+      "period_end": "2026-08",
+      "geography": "中国大陆",
+      "definition": "同比由699.7降至590.7，净减约1,090亿美元；自2026年1月695.3累计减少约1,046亿美元",
+      "source": "美国财政部TIC",
+      "value_type": "actual",
+      "source_url": "https://ticdata.treasury.gov/resource-center/data-chart-center/tic/Documents/slt_table5.html",
+      "tier": "S1",
+      "value_num": 590.7,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "中国大陆",
+      "analyst": "美国财政部TIC",
+      "staleness_days": 56,
+      "is_stale": false
+    },
+    {
+      "metric": "日本美债持仓",
+      "value": "1068.3",
+      "series": "TIC表5",
+      "unit": "十亿美元",
+      "as_of_date": "2026-08-31",
+      "period_end": "2026-08",
+      "geography": "日本",
+      "definition": "同比由1,183.9降至1,068.3，净减约1,156亿美元；自2026年2月峰值1,239.3连续六个月下降",
+      "source": "美国财政部TIC",
+      "value_type": "actual",
+      "source_url": "https://ticdata.treasury.gov/resource-center/data-chart-center/tic/Documents/slt_table5.html",
+      "tier": "S1",
+      "value_num": 1068.3,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "日本",
+      "analyst": "美国财政部TIC",
+      "staleness_days": 56,
+      "is_stale": false
+    },
+    {
+      "metric": "10年期JGB收益率盘中高点",
+      "value": "3.005",
+      "series": "JGB",
+      "unit": "%",
+      "as_of_date": "2026-09-01",
+      "period_end": "2026-09-01",
+      "geography": "日本",
+      "definition": "1996年9月以来首次升破3%；20年期3.885%、30年期收于4.18%纪录高位",
+      "source": "路透（报告转述）",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/world/asia-pacific/japans-benchmark-bond-yield-rises-3-first-time-30-years-2026-09-01/",
+      "tier": "S2",
+      "value_num": 3.005,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "日本",
+      "analyst": "路透（报告转述）",
+      "staleness_days": 55,
+      "is_stale": false
+    },
+    {
+      "metric": "BOJ加息路径预测",
+      "value": "1.75",
+      "series": "牛津经济研究院预测",
+      "unit": "%",
+      "as_of_date": "2026-08-31",
+      "period_end": "2027-04",
+      "geography": "日本",
+      "definition": "2026年9月、12月及2027年4月加息至1.75%；若日元走弱2027年7月或至2%；数字未经直接核实",
+      "source": "牛津经济研究院",
+      "value_type": "forecast",
+      "source_url": "https://www.oxfordeconomics.com/resource/the-boj-will-likely-hike-higher-and-faster/",
+      "tier": "S3",
+      "value_num": 1.75,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "日本",
+      "analyst": "牛津经济研究院",
+      "staleness_days": 56,
+      "is_stale": false
+    },
+    {
+      "metric": "FY2026赤字预测",
+      "value": "1.9",
+      "series": "CBO基线（2026年2月）",
+      "unit": "万亿美元",
+      "as_of_date": "2026-02-28",
+      "period_end": "FY2026",
+      "geography": "美国",
+      "definition": "占GDP 5.8%；过去50年赤字均值3.8%",
+      "source": "CBO",
+      "value_type": "forecast",
+      "source_url": "https://www.cbo.gov/publication/62105",
+      "tier": "S1",
+      "value_num": 1.9,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "CBO",
+      "staleness_days": 240,
+      "is_stale": false
+    },
+    {
+      "metric": "2026–2035累计赤字预测",
+      "value": "23.1",
+      "series": "CBO基线",
+      "unit": "万亿美元",
+      "as_of_date": "2026-02-28",
+      "period_end": "2026-2035",
+      "geography": "美国",
+      "definition": "较2025年1月基线多1.4万亿；公众持有债务2036年达GDP的120%",
+      "source": "CBO",
+      "value_type": "forecast",
+      "source_url": "https://www.cbo.gov/publication/62050",
+      "tier": "S1",
+      "value_num": 23.1,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "CBO",
+      "staleness_days": 240,
+      "is_stale": false
+    },
+    {
+      "metric": "净利息支出预测",
+      "value": "1.0",
+      "series": "CBO基线",
+      "unit": "万亿美元",
+      "as_of_date": "2026-02-28",
+      "period_end": "2026",
+      "geography": "美国",
+      "definition": "占GDP 3.3%；2036年2.1万亿（4.6%）",
+      "source": "CBO",
+      "value_type": "forecast",
+      "source_url": "https://www.cbo.gov/publication/62050",
+      "tier": "S1",
+      "value_num": 1.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "CBO",
+      "staleness_days": 240,
+      "is_stale": false
+    },
+    {
+      "metric": "季度再融资发行规模",
+      "value": "1250",
+      "series": "财政部再融资声明",
+      "unit": "亿美元",
+      "as_of_date": "2026-08-05",
+      "period_end": "2026-08",
+      "geography": "美国",
+      "definition": "3年期580亿、10年期420亿、30年期250亿；净筹新资金约287亿美元",
+      "source": "美国财政部",
+      "value_type": "actual",
+      "source_url": "https://home.treasury.gov/news/press-releases/sb0590",
+      "tier": "S1",
+      "value_num": 1250.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "美国财政部",
+      "staleness_days": 82,
+      "is_stale": false
+    },
+    {
+      "metric": "2026年票据净供给估计",
+      "value": "8270",
+      "series": "高盛估计",
+      "unit": "亿美元",
+      "as_of_date": "2026-10-26",
+      "period_end": "2026",
+      "geography": "美国",
+      "definition": "远高于2025年约3600亿；路透报道",
+      "source": "高盛（路透报道）",
+      "value_type": "estimate",
+      "source_url": "https://www.reuters.com/legal/transactional/us-treasury-bill-issuance-grows-heightens-long-term-risk-2026-07-23/",
+      "tier": "S2",
+      "value_num": 8270.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "高盛（路透报道）",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "2026年前9个月国债发行",
+      "value": "24.6",
+      "series": "SIFMA统计（转述）",
+      "unit": "万亿美元",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026年前9个月",
+      "geography": "美国",
+      "definition": "同比+10.2%；9月末存量31.8万亿（+7.1%）",
+      "source": "SIFMA",
+      "value_type": "actual",
+      "source_url": "https://www.sifma.org/research/statistics/us-treasury-securities-statistics",
+      "tier": "S3",
+      "value_num": 24.6,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "SIFMA",
+      "staleness_days": 26,
+      "is_stale": false
+    },
+    {
+      "metric": "债务上限上调幅度",
+      "value": "5.0",
+      "series": "P.L. 119-21",
+      "unit": "万亿美元",
+      "as_of_date": "2025-07-31",
+      "period_end": "2025-07",
+      "geography": "美国",
+      "definition": "上限升至41.1万亿美元；此后受限债务已增加约2.9万亿",
+      "source": "美国国会立法/BPC",
+      "value_type": "actual",
+      "source_url": "https://bipartisanpolicy.org/article/when-will-we-reach-the-debt-limit-again/",
+      "tier": "S3",
+      "value_num": 5.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "美国国会立法/BPC",
+      "staleness_days": 452,
+      "is_stale": true
+    },
+    {
+      "metric": "12个月变动|Δ|>50bp频率",
+      "value": "10/19",
+      "series": "DGS10月均计数（非重叠）",
+      "unit": "≈53%",
+      "as_of_date": "2026-10-26",
+      "period_end": "2007-11至2025-11",
+      "geography": "美国",
+      "definition": "非重叠11月对11月计数；重叠口径约54%",
+      "source": "本运行对FRED存储序列的计数",
+      "value_type": "estimate",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 10.0,
+      "year": 2007,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "本运行对FRED存储序列的计数",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "12个月变动|Δ|>100bp频率",
+      "value": "3/19",
+      "series": "DGS10月均计数",
+      "unit": "≈16%",
+      "as_of_date": "2026-10-26",
+      "period_end": "2007-11至2025-11",
+      "geography": "美国",
+      "definition": "重叠口径约14%；>150bp仅2022年一例（+233bp）",
+      "source": "本运行计数",
+      "value_type": "estimate",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 3.0,
+      "year": 2007,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "本运行计数",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "12个月变动均值/标准差",
+      "value": "-2.6 / 约82",
+      "series": "DGS10月均计数",
+      "unit": "基点",
+      "as_of_date": "2026-10-26",
+      "period_end": "2007-11至2025-11",
+      "geography": "美国",
+      "definition": "非重叠窗口统计",
+      "source": "本运行计数",
+      "value_type": "estimate",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": -2.6,
+      "year": 2007,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "本运行计数",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "月均≥5.0%的月份占比",
+      "value": "2/239",
+      "series": "DGS10月均计数",
+      "unit": "≈0.8%",
+      "as_of_date": "2026-10-26",
+      "period_end": "2006-11至2026-09",
+      "geography": "美国",
+      "definition": "仅2007-06（5.1%）与2007-07（5.0%）",
+      "source": "本运行计数",
+      "value_type": "estimate",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 2.0,
+      "year": 2006,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "本运行计数",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "MOVE指数收盘",
+      "value": "103.31",
+      "series": "MOVE指数",
+      "unit": "点",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "美国",
+      "definition": "52周高点115.02；年初以来+52.60%",
+      "source": "Yahoo Finance快照",
+      "value_type": "actual",
+      "source_url": "https://finance.yahoo.com/quote/%5EMOVE/",
+      "tier": "S3",
+      "value_num": 103.31,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "Yahoo Finance快照",
+      "staleness_days": 3,
+      "is_stale": false
+    },
+    {
+      "metric": "WSJ调查2027年底10年期中值",
+      "value": "4.78",
+      "series": "WSJ经济学家调查",
+      "unit": "%",
+      "as_of_date": "2026-10-11",
+      "period_end": "2027年底",
+      "geography": "美国",
+      "definition": "71位受访者；2027年中4.96%；7月调查为4.3%/4.26%",
+      "source": "WSJ调查",
+      "value_type": "forecast",
+      "source_url": "https://www.wsj.com/finance/investing/economists-bond-yields-forecast-aaa2ff5c",
+      "tier": "S2",
+      "value_num": 4.78,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "WSJ调查",
+      "staleness_days": 15,
+      "is_stale": false
+    },
+    {
+      "metric": "摩根大通财富管理2027年中基准",
+      "value": "5.25",
+      "series": "卖方预测",
+      "unit": "%",
+      "as_of_date": "2026-10-21",
+      "period_end": "2027年中",
+      "geography": "美国",
+      "definition": "牛市约4.50%至熊市约5.75%；柴油冲击情景5.50%–6.00%",
+      "source": "摩根大通财富管理",
+      "value_type": "forecast",
+      "source_url": "https://www.chase.com/personal/investments/learning-and-insights/article/could-10-year-treasury-yield-reach-5-75-in-2027-what-jpmorgan-strategists-think",
+      "tier": "S3",
+      "value_num": 5.25,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "摩根大通财富管理",
+      "staleness_days": 5,
+      "is_stale": false
+    },
+    {
+      "metric": "摩根士丹利12–15个月目标",
+      "value": "4.7",
+      "series": "卖方预测",
+      "unit": "%",
+      "as_of_date": "2026-10-14",
+      "period_end": "12–15个月内",
+      "geography": "美国",
+      "definition": "假设到2027年12月仅加息两次",
+      "source": "摩根士丹利",
+      "value_type": "forecast",
+      "source_url": "https://www.morganstanley.com/insights/articles/rising-bond-yields-investment-opportunities",
+      "tier": "S3",
+      "value_num": 4.7,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "摩根士丹利",
+      "staleness_days": 12,
+      "is_stale": false
+    },
+    {
+      "metric": "富国银行10年期预测区间上限",
+      "value": "5.25–5.75",
+      "series": "卖方预测（媒体报道）",
+      "unit": "%",
+      "as_of_date": "2026-10-31",
+      "period_end": "2027",
+      "geography": "美国",
+      "definition": "自4.50%–5.00%上调；政策利率4.75%–5.00%；数值未经原始文件核实",
+      "source": "富国银行投资研究所",
+      "value_type": "forecast",
+      "source_url": "https://finance.yahoo.com/economy/policy/articles/wells-fargo-warns-rates-could-122439871.html",
+      "tier": "S3",
+      "value_num": 5.5,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "富国银行投资研究所",
+      "staleness_days": -5,
+      "is_stale": false
+    },
+    {
+      "metric": "StreetStats综合期限溢价",
+      "value": "0.92",
+      "series": "StreetStats三模型合成",
+      "unit": "%",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "美国",
+      "definition": "10年期；5年期0.53%、2年期0.31%",
+      "source": "StreetStats",
+      "value_type": "actual",
+      "source_url": "https://streetstats.finance/rates/term-premiums",
+      "tier": "S3",
+      "value_num": 0.92,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "StreetStats",
+      "staleness_days": 4,
+      "is_stale": false
+    },
+    {
+      "metric": "ACM期限溢价（转引）",
+      "value": "0.72",
+      "series": "ACM（MacroMicro转引）",
+      "unit": "%",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026-10-21",
+      "geography": "美国",
+      "definition": "另见0.73%读数；未从原始数据文件核实",
+      "source": "纽约联储ACM（MacroMicro转引）",
+      "value_type": "actual",
+      "source_url": "https://en.macromicro.me/charts/45452/us-10-treasury-term-premium",
+      "tier": "S3",
+      "value_num": 0.72,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "纽约联储ACM（MacroMicro转引）",
+      "staleness_days": 5,
+      "is_stale": false
+    },
+    {
+      "metric": "SPF未来10年PCE通胀中位数",
+      "value": "2.20",
+      "series": "费城联储SPF三季度调查",
+      "unit": "%",
+      "as_of_date": "2026-08-31",
+      "period_end": "未来10年",
+      "geography": "美国",
+      "definition": "32位预测者；较上期−0.02个百分点；CPI中位数2.30%",
+      "source": "费城联储",
+      "value_type": "forecast",
+      "source_url": "https://www.philadelphiafed.org/surveys-and-data/real-time-data-research/spf-q3-2026",
+      "tier": "S3",
+      "value_num": 2.2,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "费城联储",
+      "staleness_days": 56,
+      "is_stale": false
+    },
+    {
+      "metric": "高盛未来12个月衰退概率",
+      "value": "15",
+      "series": "机构预测",
+      "unit": "%",
+      "as_of_date": "2026-06-22",
+      "period_end": "未来12个月",
+      "geography": "美国",
+      "definition": "由25%下调",
+      "source": "高盛",
+      "value_type": "forecast",
+      "source_url": "https://www.wsj.com/livecoverage/stock-market-today-dow-sp-500-nasdaq-06-22-2026/card/goldman-cuts-u-s-recession-forecast-ea7eDTnMXU5XPx87BRLC",
+      "tier": "S2",
+      "value_num": 15.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "高盛",
+      "staleness_days": 126,
+      "is_stale": false
+    },
+    {
+      "metric": "摩根大通2026年衰退概率",
+      "value": "35",
+      "series": "机构预测（转述）",
+      "unit": "%",
+      "as_of_date": "2026-10-26",
+      "period_end": "2026",
+      "geography": "美国/全球",
+      "definition": "全球研究2026年展望，转述",
+      "source": "摩根大通全球研究",
+      "value_type": "forecast",
+      "source_url": "https://www.jpmorgan.com/insights/global-research/outlook/market-outlook",
+      "tier": "S3",
+      "value_num": 35.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "美国/全球",
+      "analyst": "摩根大通全球研究",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Polymarket衰退合约概率",
+      "value": "9",
+      "series": "预测市场",
+      "unit": "%",
+      "as_of_date": "2026-10-26",
+      "period_end": "2026年底前",
+      "geography": "美国",
+      "definition": "“2026年底前美国衰退”合约",
+      "source": "Polymarket",
+      "value_type": "forecast",
+      "source_url": "https://polymarket.com/event/us-recession-by-end-of-2026",
+      "tier": "S3",
+      "value_num": 9.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "Polymarket",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "2026年9月单月财政赤字",
+      "value": "-26900347102.02",
+      "series": "FRED月度财政",
+      "unit": "美元",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "美国",
+      "definition": "约-269亿美元；上年同期为盈余约1979亿美元；7月赤字约4323亿美元为近5年最深",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/",
+      "tier": "S1",
+      "value_num": -26900347102.02,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "FRED",
+      "staleness_days": 26,
+      "is_stale": false
+    },
+    {
+      "metric": "DGS10近5年区间",
+      "value": "1.37–4.989",
+      "series": "DGS10月均",
+      "unit": "%",
+      "as_of_date": "2026-10-26",
+      "period_end": "2021-09至2026-09",
+      "geography": "美国",
+      "definition": "2021-09为低点1.37%，2026-09为高点",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 3.1795,
+      "year": 2021,
+      "value_kind": "actual",
+      "region": "美国",
+      "analyst": "FRED",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "CBO 10年期收益率假设",
+      "value": "4.1–4.4",
+      "series": "CRFB转述CBO",
+      "unit": "%",
+      "as_of_date": "2026-10-26",
+      "period_end": "2026–2031年起",
+      "geography": "美国",
+      "definition": "2026年4.1%→2031年起4.4%；CBO称2027年前逐步上升",
+      "source": "CBO（CRFB转述）",
+      "value_type": "forecast",
+      "source_url": "https://www.crfb.org/papers/cbos-february-2026-budget-and-economic-outlook",
+      "tier": "S3",
+      "value_num": 4.25,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "CBO（CRFB转述）",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Kalshi 2026年12月停摆定价",
+      "value": "34",
+      "series": "预测市场（转引）",
+      "unit": "%",
+      "as_of_date": "2026-10-26",
+      "period_end": "2026-12",
+      "geography": "美国",
+      "definition": "片段转引，与官方合约口径存在冲突，未获核实",
+      "source": "predictionmarketspicks.com（转引Kalshi）",
+      "value_type": "forecast",
+      "source_url": "https://predictionmarketspicks.com/tools/shutdown-tracker",
+      "tier": "S3",
+      "value_num": 34.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "predictionmarketspicks.com（转引Kalshi）",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "2026年通胀年底或超过4%",
+      "value": "4",
+      "series": "PIIE观点",
+      "unit": "%",
+      "as_of_date": "2026-10-26",
+      "period_end": "2026年底",
+      "geography": "美国",
+      "definition": "观点研究，非模型点估计；理由含关税滞后、赤字或超GDP 7%",
+      "source": "PIIE",
+      "value_type": "forecast",
+      "source_url": "https://www.piie.com/blogs/realtime-economics/2026/risk-higher-us-inflation-2026",
+      "tier": "S2",
+      "value_num": 4.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "PIIE",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "点阵图2027年底目标区间（解读）",
+      "value": "4.00–4.50",
+      "series": "BondSavvy解读9月SEP",
+      "unit": "%",
+      "as_of_date": "2026-09-10",
+      "period_end": "2027年底",
+      "geography": "美国",
+      "definition": "18个点中绝大多数预计4.00%–4.25%或4.25%–4.50%、3位预计降息",
+      "source": "BondSavvy",
+      "value_type": "forecast",
+      "source_url": "https://www.bondsavvy.com/fixed-income-investments-blog/fed-dot-plot",
+      "tier": "S3",
+      "value_num": 4.25,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "美国",
+      "analyst": "BondSavvy",
+      "staleness_days": 46,
+      "is_stale": false
+    }
+  ],
+  "contested_claims": [
+    {
+      "claim": "9月SEP点阵图中值读数",
+      "positions": [
+        {
+          "stance": "2026–2028年末均为4.25%、2029年3.75%、长期3.0%",
+          "sources": [
+            "https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "2026年4.1%、2027年4.1%、2028年3.9%、长期3.2%",
+          "sources": [
+            "https://am.jpmorgan.com/us/en/asset-management/adv/insights/portfolio-insights/fixed-income/fixed-income-perspectives/fomc-statement-september-2026/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "两者均未经原始文件逐字核实，可能为不同口径（区间中值vs均值）或转述错误"
+    },
+    {
+      "claim": "期限溢价水平",
+      "positions": [
+        {
+          "stance": "Kim–Wright 0.96%（2026-09）",
+          "sources": [
+            "https://fred.stlouisfed.org/series/THREEFYTP10"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "StreetStats三模型合成0.92%（2026-10-22）",
+          "sources": [
+            "https://streetstats.finance/rates/term-premiums"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "ACM约0.72%–0.73%（2026-10-21，MacroMicro转引，未核实）",
+          "sources": [
+            "https://en.macromicro.me/charts/45452/us-10-treasury-term-premium"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "不同模型（Kim–Wright、ACM、Christensen–Rudebusch）方法与样本不同，水平相差约25bp但方向一致"
+    },
+    {
+      "claim": "2027年衰退概率",
+      "positions": [
+        {
+          "stance": "平滑衰退概率0.62%（2026-08），低位",
+          "sources": [
+            "https://fred.stlouisfed.org/series/RECPROUSM156N"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "高盛未来12个月15%",
+          "sources": [
+            "https://www.wsj.com/livecoverage/stock-market-today-dow-sp-500-nasdaq-06-22-2026/card/goldman-cuts-u-s-recession-forecast-ea7eDTnMXU5XPx87BRLC"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "摩根大通2026年35%（转述）",
+          "sources": [
+            "https://www.jpmorgan.com/insights/global-research/outlook/market-outlook"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "纽约联储曲线Probit 2027年约15%（未核实）",
+          "sources": [
+            "https://www.newyorkfed.org/medialibrary/media/research/capital_markets/prob_rec.pdf"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "克利夫兰联储模型11.4%（未核实）",
+          "sources": [
+            "https://www.clevelandfed.org/indicators-and-data/yield-curve-and-predicted-gdp-growth"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Polymarket 9%",
+          "sources": [
+            "https://polymarket.com/event/us-recession-by-end-of-2026"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "定义与方法不同（曲线Probit、DSGE增长动量定义、银行主观概率、预测市场），且多数针对未来12个月而非2027年窗口"
+    },
+    {
+      "claim": "中国大陆持仓“2008年9月以来最低”表述",
+      "positions": [
+        {
+          "stance": "2026年6月6334亿美元为2008年9月以来最低、同比降逾13%",
+          "sources": [
+            "https://www.reuters.com/world/china/foreign-holdings-us-treasuries-fall-june-led-by-japan-uk-china-data-shows-2026-08-17/"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "2026年8月590.7十亿美元已为多年低点，跌破2008年9月6182亿参照，旧表述不再适用，且无法核验2008年前序列",
+          "sources": [
+            "https://ticdata.treasury.gov/resource-center/data-chart-center/tic/Documents/slt_table5.html"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "数据更新时点不同（6月vs8月），且历史序列可得范围有限"
+    },
+    {
+      "claim": "2027年底10年期收益率预测",
+      "positions": [
+        {
+          "stance": "WSJ调查中值4.78%",
+          "sources": [
+            "https://www.wsj.com/finance/investing/economists-bond-yields-forecast-aaa2ff5c"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "摩根士丹利约4.7%（12–15个月内）",
+          "sources": [
+            "https://www.morganstanley.com/insights/articles/rising-bond-yields-investment-opportunities"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "摩根大通财富管理2027年中基准5.25%",
+          "sources": [
+            "https://www.chase.com/personal/investments/learning-and-insights/article/could-10-year-treasury-yield-reach-5-75-in-2027-what-jpmorgan-strategists-think"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "富国银行5.25%–5.75%（未核实）",
+          "sources": [
+            "https://finance.yahoo.com/economy/policy/articles/wells-fargo-warns-rates-could-122439871.html"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "预测时点与口径不同（年中vs年底vs12–15个月），加息次数假设不同（摩根士丹利2次vs期货约3次），富国读数未经原始文件核实"
+    },
+    {
+      "claim": "9月单月50个基点上行的历史分位",
+      "positions": [
+        {
+          "stance": "位列1962年以来前10%的月度波动",
+          "sources": [
+            "https://www.chase.com/personal/investments/learning-and-insights/article/could-10-year-treasury-yield-reach-5-75-in-2027-what-jpmorgan-strategists-think"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "仅摩根大通记录，无第二来源交叉验证"
+    },
+    {
+      "claim": "QT于2025年12月1日结束",
+      "positions": [
+        {
+          "stance": "会议纪要显示“几乎所有”决策者支持12月1日停止缩表",
+          "sources": [
+            "https://www.reuters.com/business/fed-minutes-show-support-ending-quantitative-tightening-2025-11-19/"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "多方材料称QT结束并随后宣布储备管理购买，但时点未经原始文件逐字核实",
+          "sources": [
+            "https://www.federalreserve.gov/econres/notes/feds-notes/the-central-bank-balance-sheet-trilemma-20260114.html"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "路透纪要报道为单一转述来源，结束时点未获官方文件直接核实"
+    },
+    {
+      "claim": "2027年底通胀路径",
+      "positions": [
+        {
+          "stance": "FOMC SEP：2027年PCE降至2.4%",
+          "sources": [
+            "https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "PIIE：2026年年底或“超过4%”，通胀更可能超预期",
+          "sources": [
+            "https://www.piie.com/blogs/realtime-economics/2026/risk-higher-us-inflation-2026"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "家庭预期：密歇根1年4.6%，显著高于市场定价",
+          "sources": [
+            "https://fred.stlouisfed.org/series/MICH"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "期限与受访者差异：FOMC与专业预测者的中期锚定vs PIIE的政策外推vs家庭短端情绪"
+    },
+    {
+      "claim": "12月9日会议是否加息",
+      "positions": [
+        {
+          "stance": "期货隐含加息概率72.8%",
+          "sources": [
+            "https://rateprobability.com/fed"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "MUFG预计美联储跳过10月会议，市场此后持续定价1–2次额外加息",
+          "sources": [
+            "https://www.mufgresearch.com/rates/september-2026-fed-rates-call-update/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "CME FedWatch显示10月会议加息概率已从64.2%回落至9.4%",
+          "sources": [
+            "https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "市场定价随时间快速变动，机构对加息周期起点判断与期货快照存在时点差"
+    },
+    {
+      "claim": "2026年12月政府停摆概率",
+      "positions": [
+        {
+          "stance": "Kalshi对2026年12月停摆定价34%（转引，与官方口径冲突）",
+          "sources": [
+            "https://predictionmarketspicks.com/tools/shutdown-tracker"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "无任何权威来源发布官方概率，仅有预测市场合约",
+          "sources": [
+            "https://www.hklaw.com/en/insights/publications/2026/10/beyond-the-midterms-congress-faces-converging-year-end-deadlines"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "片段转引与官方合约口径不一致，最新报价未取得"
+    },
+    {
+      "claim": "5%以上收益率的持续性",
+      "positions": [
+        {
+          "stance": "2006-11以来月均≥5%仅2/239个月，占比0.8%，且两个月即回落",
+          "sources": [
+            "https://fred.stlouisfed.org/series/DGS10"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "财政部单年页面显示2000年多数交易日处于5.0%–6.0%区间（未逐行核实）",
+          "sources": [
+            "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/2000/all?type=daily_treasury_yield_curve&field_tdr_date_value=2000&page&_format=csv"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "统计窗口不同：存储序列不含1996–2006年高利率制度，基率仅代表2006年后"
+    }
+  ],
+  "forecast_inputs": {
+    "scenarios": [
+      {
+        "name": "高位企稳",
+        "probability": 0.4,
+        "narrative": "收益率维持4.75%–5.50%区间：通胀顽固、赤字供给压力与美联储缓慢降息互相抵消，延续当前水平（先验：±1σ年波动约1个百分点，当前约5.0%）。"
+      },
+      {
+        "name": "回落走低",
+        "probability": 0.3,
+        "narrative": "收益率降至3.75%–4.75%：经济走弱或衰退兑现，美联储加速降息并结束QT，期限溢价收窄。"
+      },
+      {
+        "name": "再度上行",
+        "probability": 0.25,
+        "narrative": "收益率升至5.50%–6.50%：通胀再加速或财政担忧推高期限溢价，缩表延长叠加境外需求走弱。"
+      },
+      {
+        "name": "极端突破",
+        "probability": 0.05,
+        "narrative": "收益率升破6.50%或跌破3.75%：债务上限/地缘危机等尾部冲击或深度衰退引发剧烈重定价。"
+      }
+    ],
+    "base_rates": [
+      {
+        "reference_class": "DGS10月均12个月变动（非重叠11月对11月，2007-11至2025-11）绝对值>50bp",
+        "outcome_frequency": "10/19≈53%",
+        "basis": "FRED DGS10月均序列计数（非官方统计）[S1]"
+      },
+      {
+        "reference_class": "同窗口12个月变动绝对值>100bp",
+        "outcome_frequency": "3/19≈16%",
+        "basis": "FRED DGS10月均序列计数 [S1]"
+      },
+      {
+        "reference_class": "同窗口12个月变动绝对值>150bp",
+        "outcome_frequency": "1/19≈5%",
+        "basis": "FRED DGS10月均序列计数（仅2022年一例+233bp）[S1]"
+      },
+      {
+        "reference_class": "月均收益率≥5.0%的月份（2006-11至2026-09，239个月）",
+        "outcome_frequency": "2/239≈0.8%",
+        "basis": "FRED DGS10月均序列计数（仅2007-06/07，两个月即回落）[S1]"
+      },
+      {
+        "reference_class": "重叠月度12个月变动|Δ|>50bp / >100bp（同窗口）",
+        "outcome_frequency": "约127个，占比约54%；>100bp约34个，占比约14%",
+        "basis": "FRED DGS10月均序列（窗口自2006-11起）[S1]"
+      },
+      {
+        "reference_class": "12个月变动均值／标准差（同窗口）",
+        "outcome_frequency": "约−2.6bp／约82bp",
+        "basis": "FRED DGS10月均序列 [S1]"
+      }
+    ],
+    "drivers": [
+      {
+        "variable": "期限溢价（Kim–Wright THREEFYTP10）",
+        "direction": "up",
+        "why_it_matters": "0.96%（2026-09）处五年区间0.101%–0.96%上沿，一年内接近翻倍，长端对供给与资产负债表操作的弹性上升 [S4][S42]"
+      },
+      {
+        "variable": "10年期TIPS实际收益率（DFII10）",
+        "direction": "up",
+        "why_it_matters": "2.638%（2026-09，五年高点），本轮名义收益率12个月上升0.869pp几乎全部由实际利率贡献 [S3][S1]"
+      },
+      {
+        "variable": "美联储政策路径与加息定价",
+        "direction": "up",
+        "why_it_matters": "期货定价到2027年9月累计再加息约65.5bp（2–3次），SEP点阵多数参与者预计2027年底目标区间4.00%–4.50% [S14][S16]"
+      },
+      {
+        "variable": "财政赤字与票据供给",
+        "direction": "up",
+        "why_it_matters": "CBO基线FY2026赤字1.9万亿美元（GDP的5.8%），高盛估计2026年票据净供给约8270亿美元，为期限溢价的结构性支撑 [S45][S49]"
+      },
+      {
+        "variable": "境外官方需求（日本与中国）",
+        "direction": "up",
+        "why_it_matters": "TIC显示2025-08→2026-08日本净减约1,156亿、中国净减约1,090亿美元，JGB 10年期自1996年来首触3%加速日本资金回流 [S8][S53]"
+      },
+      {
+        "variable": "盈亏平衡通胀与远期通胀预期",
+        "direction": "up（若脱锚）",
+        "why_it_matters": "T10YIE为2.351%、T5YIFR为2.34%（2026-09）仍锚定，升破五年上沿2.88%/2.46%是再度上行情景的警报 [S5][S22]"
+      },
+      {
+        "variable": "衰退概率与增长",
+        "direction": "down",
+        "why_it_matters": "平滑衰退概率0.62%（2026-08）处低位、SEP上调2027年增长至2.4%，不支持即期增长恶化驱动的下行 [S9][S33]"
+      },
+      {
+        "variable": "收益率曲线形态（2s10s/3M10Y）",
+        "direction": "信号",
+        "why_it_matters": "正斜率且3M10Y达0.896%（2026-09）符合扩张延续的中后周期组合，重返倒挂则指向回落 [S10][S11]"
+      }
+    ],
+    "risks": [
+      {
+        "event": "美国经济衰退",
+        "probability": "35%",
+        "per": "2026年",
+        "source": "2026 Market Outlook | J.P. Morgan Global Research [S27]",
+        "source_url": "https://www.jpmorgan.com/insights/global-research/outlook/market-outlook",
+        "tier": "S3",
+        "effects": [],
+        "affects": [
+          "美联储（FOMC）",
+          "美国10年期国债收益率"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "美国经济衰退（高盛下调后的评估）",
+        "probability": "15%",
+        "per": "",
+        "source": "Goldman Cuts U.S. Recession Forecast [S26]",
+        "source_url": "https://www.wsj.com/livecoverage/stock-market-today-dow-sp-500-nasdaq-06-22-2026/card/goldman-cuts-u-s-recession-forecast-ea7eDTnMXU5XPx87BRLC",
+        "tier": "S2",
+        "effects": [],
+        "affects": [
+          "美联储（FOMC）"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "2026年底前美国衰退（预测市场）",
+        "probability": "9%",
+        "per": "",
+        "source": "US recession by end of 2026? Trading Odds & Predictions | Polymarket [S28]",
+        "source_url": "https://polymarket.com/event/us-recession-by-end-of-2026",
+        "tier": "S3",
+        "effects": [
+          {
+            "metric": "CBO 10年期收益率假设",
+            "change": "",
+            "direction": "down"
+          }
+        ],
+        "affects": [
+          "美联储（FOMC）"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "2026年12月政府停摆（Kalshi定价，转引）",
+        "probability": "34%",
+        "per": "2026年12月",
+        "source": "Government Shutdown Odds December 2026: 34% on Kalshi, Live [S70]",
+        "source_url": "https://predictionmarketspicks.com/tools/shutdown-tracker",
+        "tier": "S3",
+        "effects": [],
+        "affects": [
+          "美国国会",
+          "美国财政部"
+        ],
+        "recurring": true
+      }
+    ],
+    "indicators": [
+      {
+        "indicator": "美国10年期国债收益率 (fred:DGS10)",
+        "series": "fred:DGS10",
+        "latest_value": 4.989047619047619,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "2026-09之后的下一次月度发布",
+        "source_ref": "S1"
+      },
+      {
+        "indicator": "美国央行政策利率 (bis:WS_CBPOL/M.US)",
+        "series": "bis:WS_CBPOL/M.US",
+        "latest_value": 3.875,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Per cent per year",
+        "frequency": "M",
+        "date_or_trigger": "2026-09之后的下一次月度发布",
+        "source_ref": "S2"
+      },
+      {
+        "indicator": "美国10年期通胀保值国债实际收益率 (fred:DFII10)",
+        "series": "fred:DFII10",
+        "latest_value": 2.638095238095238,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "2026-09之后的下一次月度发布",
+        "source_ref": "S3"
+      },
+      {
+        "indicator": "Term Premium on a 10 Year Zero Coupon Bond — 美国 (fred:THREEFYTP10)",
+        "series": "fred:THREEFYTP10",
+        "latest_value": 0.9601285714285714,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "2026-09之后的下一次月度发布",
+        "source_ref": "S4"
+      },
+      {
+        "indicator": "美国10年期盈亏平衡通胀率 (fred:T10YIE)",
+        "series": "fred:T10YIE",
+        "latest_value": 2.3509523809523807,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "2026-09之后的下一次月度发布",
+        "source_ref": "S5"
+      },
+      {
+        "indicator": "美国联邦公共债务总额（每日） (usgov:treasury/debt_to_penny)",
+        "series": "usgov:treasury/debt_to_penny",
+        "latest_value": 40171825101340.31,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "U.S. dollars",
+        "frequency": "M",
+        "date_or_trigger": "2026-09之后的下一次月度发布",
+        "source_ref": "S6"
+      },
+      {
+        "indicator": "美国衰退概率（平滑） (fred:RECPROUSM156N)",
+        "series": "fred:RECPROUSM156N",
+        "latest_value": 0.62,
+        "latest_date": "2026-08-31",
+        "latest_period": "2026-08",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "2026-08之后的下一次月度发布",
+        "source_ref": "S9"
+      },
+      {
+        "indicator": "美国10年期与2年期国债利差 (fred:T10Y2Y)",
+        "series": "fred:T10Y2Y",
+        "latest_value": 0.3376190476190476,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "2026-09之后的下一次月度发布",
+        "source_ref": "S10"
+      },
+      {
+        "indicator": "美国10年期与3个月期国债利差 (fred:T10Y3M)",
+        "series": "fred:T10Y3M",
+        "latest_value": 0.8961904761904762,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "2026-09之后的下一次月度发布",
+        "source_ref": "S11"
+      },
+      {
+        "indicator": "美联储资产负债表总资产 (fred:WALCL)",
+        "series": "fred:WALCL",
+        "latest_value": 6753604.0,
+        "latest_date": "2026-10-21",
+        "latest_period": "2026-10-21",
+        "status": "observed",
+        "units": "Millions of U.S. Dollars",
+        "frequency": "W",
+        "date_or_trigger": "2026-10-21之后的下一次周度发布",
+        "source_ref": "S13"
+      },
+      {
+        "indicator": "密歇根大学一年期通胀预期 — 美国 (fred:MICH)",
+        "series": "fred:MICH",
+        "latest_value": 4.6,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "2026-09之后的下一次月度发布",
+        "source_ref": "S18"
+      },
+      {
+        "indicator": "美国5年后5年远期通胀预期 (fred:T5YIFR)",
+        "series": "fred:T5YIFR",
+        "latest_value": 2.3395238095238096,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "2026-09之后的下一次月度发布",
+        "source_ref": "S22"
+      },
+      {
+        "indicator": "美国联邦财政盈余或赤字占GDP比率 (fred:FYFSGDA188S)",
+        "series": "fred:FYFSGDA188S",
+        "latest_value": -5.76906,
+        "latest_date": "2025-12-31",
+        "latest_period": "2025",
+        "status": "observed",
+        "units": "Percent of GDP",
+        "frequency": "A",
+        "date_or_trigger": "2025之后的下一次年度发布",
+        "source_ref": "S23"
+      },
+      {
+        "indicator": "美国联邦财政月度盈余（+）或赤字（-） (usgov:treasury/mts_deficit)",
+        "series": "usgov:treasury/mts_deficit",
+        "latest_value": -26900347102.02,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "U.S. dollars",
+        "frequency": "M",
+        "date_or_trigger": "2026-09之后的下一次月度发布",
+        "source_ref": "S24"
+      }
+    ]
+  }
+}

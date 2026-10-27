@@ -1,0 +1,659 @@
+{
+ "entity_types": [
+  {
+   "name": "Government",
+   "description": "US government bodies: FOMC, Congress/President, Fed banks, statistical agencies",
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Any US federal government body, central bank committee, or Fed district bank that sets or publishes policy/data moving the forecast.",
+   "agency_class": "sovereign_government",
+   "levers": [
+    "调整联邦基金目标区间",
+    "发布SEP利率点阵",
+    "修订关税(Section 301)",
+    "公布官方统计与衰退模型"
+   ],
+   "attributes": [
+    {
+     "name": "branch_role",
+     "type": "text",
+     "description": "monetary / fiscal / statistical / judiciary function"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "US or sub-agency scope"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence on forecast"
+    }
+   ],
+   "examples": [
+    "Federal Open Market Committee",
+    "US Congress and President",
+    "New York Fed",
+    "Cleveland Fed",
+    "US Bureau of Economic Analysis"
+   ]
+  },
+  {
+   "name": "Organization",
+   "description": "Corporations and research publishers driving earnings and narratives",
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Named companies (hyperscalers, mega-caps, chipmakers) or sell-side/research publishers whose actions causally affect index earnings or consensus.",
+   "anti_examples": [
+    "abstract themes like 'AI capex cycle'"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "调整年度资本开支指引",
+    "发布财报与EPS指引",
+    "发布指数目标价或EPS预测",
+    "削减/扩张AI投资"
+   ],
+   "attributes": [
+    {
+     "name": "sector",
+     "type": "text",
+     "description": "e.g., semiconductors, cloud, research"
+    },
+    {
+     "name": "index_weight_tier",
+     "type": "text",
+     "description": "top-10 weight / other-493 / non-index"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "examples": [
+    "NVIDIA",
+    "Microsoft",
+    "Alphabet (Google)",
+    "Amazon",
+    "Meta Platforms",
+    "Apple",
+    "Micron",
+    "Goldman Sachs Research",
+    "RBC Wealth Management",
+    "S&P Dow Jones Indices"
+   ]
+  },
+  {
+   "name": "Other",
+   "description": "Neutral consensus aggregators anchoring valuation baselines",
+   "archetype": "source",
+   "simulation_tier": 3,
+   "role_class": "intermediary",
+   "selection_rule": "Entities publishing consensus/aggregation data that anchor binaries but do not act on outcomes.",
+   "anti_examples": [
+    "media outlets cited once",
+    "abstract 'consensus' concept"
+   ],
+   "attributes": [
+    {
+     "name": "data_role",
+     "type": "text",
+     "description": "consensus aggregator / resolver"
+    },
+    {
+     "name": "publication_cadence",
+     "type": "text",
+     "description": "weekly / monthly / per season"
+    }
+   ],
+   "examples": [
+    "FactSet Earnings Insight"
+   ]
+  },
+  {
+   "name": "Platform",
+   "description": "Market/prediction platforms quoting prices and event probabilities",
+   "archetype": "actor",
+   "simulation_tier": 2,
+   "role_class": "amplifier",
+   "selection_rule": "Trading, derivatives, or prediction-market platforms whose quoted prices/probabilities condition the forecast.",
+   "agency_class": "financial_institution",
+   "levers": [
+    "更新期货隐含利率定价",
+    "更新事件合约报价",
+    "波动率定价"
+   ],
+   "attributes": [
+    {
+     "name": "market_type",
+     "type": "text",
+     "description": "prediction market / derivatives / volatility"
+    },
+    {
+     "name": "signal_role",
+     "type": "text",
+     "description": "implied probability source"
+    }
+   ],
+   "examples": [
+    "Cboe / VIX market",
+    "Polymarket"
+   ]
+  },
+  {
+   "name": "MarketIndex",
+   "description": "The S&P 500 index, the tradable object being forecast",
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "The specific index or index-level object whose closing level and drawdown are forecast.",
+   "anti_examples": [
+    "individual stocks",
+    "abstract 'market sentiment'"
+   ],
+   "attributes": [
+    {
+     "name": "current_level",
+     "type": "text",
+     "description": "anchor close, e.g., 7,662.54 (2026-10-22)"
+    },
+    {
+     "name": "valuation_snapshot",
+     "type": "text",
+     "description": "trailing/forward P/E figures"
+    },
+    {
+     "name": "concentration_metric",
+     "type": "text",
+     "description": "top-10 weight, Mag7 vs other-493 growth"
+    }
+   ],
+   "examples": [
+    "S&P 500 Index"
+   ]
+  },
+  {
+   "name": "MacroIndicator",
+   "description": "Trackable macro series signaling recession, rates, wages, tariffs",
+   "archetype": "signal",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Named time series (Sahm rule, 10Y-3M spread, AHE, effective tariff rate) with thresholds that discriminate scenarios.",
+   "anti_examples": [
+    "unnamed 'macro backdrop'",
+    "one-off commentary"
+   ],
+   "attributes": [
+    {
+     "name": "latest_value",
+     "type": "text",
+     "description": "most recent observation with period"
+    },
+    {
+     "name": "trigger_threshold",
+     "type": "text",
+     "description": "discriminating threshold"
+    },
+    {
+     "name": "publisher",
+     "type": "text",
+     "description": "source agency"
+    }
+   ],
+   "examples": [
+    "Real-time Sahm Rule Indicator",
+    "10Y-3M Treasury Spread",
+    "Effective Tariff Rate",
+    "Average Hourly Earnings YoY",
+    "Smoothed US Recession Probabilities"
+   ]
+  },
+  {
+   "name": "PolicyEvent",
+   "description": "Dated decision points that can shift the trajectory (FOMC, earnings season)",
+   "archetype": "event",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Specific dated calendar events with published odds that discriminate between scenarios.",
+   "anti_examples": [
+    "vague 'policy risk'",
+    "undated speculation"
+   ],
+   "attributes": [
+    {
+     "name": "event_date",
+     "type": "text",
+     "description": "scheduled date/window"
+    },
+    {
+     "name": "market_implied_odds",
+     "type": "text",
+     "description": "published probabilities"
+    },
+    {
+     "name": "discriminates_scenario",
+     "type": "text",
+     "description": "which scenario it separates"
+    }
+   ],
+   "examples": [
+    "FOMC meeting 2026-10-27/28",
+    "FOMC meeting with SEP 2026-12-08/09",
+    "Q4 2026 earnings season (Feb 2027)",
+    "Hyperscaler 2027 capex guidance window"
+   ]
+  },
+  {
+   "name": "ForecastScenario",
+   "description": "Mutually exclusive end-2027 scenarios with probabilities",
+   "archetype": "scenario",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "The five canonical mutually exclusive scenarios with fixed probabilities.",
+   "anti_examples": [
+    "generic bull/bear labels outside the frame"
+   ],
+   "attributes": [
+    {
+     "name": "probability",
+     "type": "text",
+     "description": "assigned probability"
+    },
+    {
+     "name": "index_path",
+     "type": "text",
+     "description": "implied end-2027 level and drawdown"
+    },
+    {
+     "name": "falsifier",
+     "type": "text",
+     "description": "killing signpost"
+    }
+   ],
+   "examples": [
+    "AI-driven reacceleration (35%)",
+    "Melt-up then correction (30%)",
+    "Bear market and drawdown (20%)",
+    "Hard landing recession (10%)",
+    "Stagnant sideways grind (5%)"
+   ]
+  },
+  {
+   "name": "ResearchSource",
+   "description": "Cited data/report providers used as evidence, not actors",
+   "archetype": "source",
+   "simulation_tier": 3,
+   "role_class": "amplifier",
+   "selection_rule": "Tier-2/3 cited publications (Multpl, StreetStats, WSJ, Macrotrends) providing baseline data.",
+   "anti_examples": [
+    "actors like FOMC or NVIDIA; these are passive data providers"
+   ],
+   "attributes": [
+    {
+     "name": "data_scope",
+     "type": "text",
+     "description": "valuation / returns / rates"
+    },
+    {
+     "name": "tier",
+     "type": "text",
+     "description": "evidence tier 1-3"
+    }
+   ],
+   "examples": [
+    "Multpl",
+    "StreetStats",
+    "WSJ Market Data",
+    "CME FedWatch",
+    "Yale Budget Lab",
+    "Penn Wharton Budget Model"
+   ]
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "CUSTOMER_OF",
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "source is a customer/buyer of target's products (e.g., hyperscaler buying NVIDIA chips)",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "spend_scale",
+     "type": "text",
+     "description": "e.g., share of $800bn 2026 capex"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low dependence"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/neutral/negative"
+    }
+   ],
+   "description": ""
+  },
+  {
+   "name": "INFLUENCES",
+   "family": "influence",
+   "valence": "directional",
+   "direction_semantics": "source shapes target's views, forecasts, or decisions",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Other",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Platform"
+    },
+    {
+     "source": "Organization",
+     "target": "MarketIndex"
+    },
+    {
+     "source": "Government",
+     "target": "MarketIndex"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "channel",
+     "type": "text",
+     "description": "rates / consensus data / model estimates"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "transmission lag"
+    }
+   ],
+   "description": ""
+  },
+  {
+   "name": "REGULATES",
+   "family": "governance",
+   "valence": "directional",
+   "direction_semantics": "source governs/imposes policy (tariffs, law) on target",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "MarketIndex"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "instrument",
+     "type": "text",
+     "description": "e.g., Section 301 tariffs, IEEPA ruling"
+    },
+    {
+     "name": "burden_level",
+     "type": "text",
+     "description": "tariff rate or restriction level"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "effective date"
+    }
+   ],
+   "description": ""
+  },
+  {
+   "name": "OPPOSES",
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "source publishes risk warnings/critical analysis against target's valuation or narrative",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Organization",
+     "target": "MarketIndex"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "basis",
+     "type": "text",
+     "description": "e.g., concentration risk, unvalidated capex claims"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "description": ""
+  },
+  {
+   "name": "PARTNERS_WITH",
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "source is supply-chain partner allied with target in AI cycle",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "supply_scope",
+     "type": "text",
+     "description": "e.g., memory for AI servers"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "description": ""
+  },
+  {
+   "name": "BACKS",
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "source endorses/supports target's outlook or stock with forecasts/targets",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Organization",
+     "target": "MarketIndex"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "constructive/cautious"
+    },
+    {
+     "name": "published_view",
+     "type": "text",
+     "description": "e.g., 8,700 target, $800bn capex"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "publication date"
+    }
+   ],
+   "description": ""
+  },
+  {
+   "name": "OFFICIAL_CLOSES_SETTLE_RELATED_CONTRACTS",
+   "family": "information",
+   "valence": "neutral",
+   "direction_semantics": "source's official closes settle contracts quoted on target platform/index",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Platform"
+    },
+    {
+     "source": "Organization",
+     "target": "MarketIndex"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "settlement_basis",
+     "type": "text",
+     "description": "official closing value, price basis"
+    }
+   ],
+   "description": ""
+  },
+  {
+   "name": "CONSTRAINS",
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source (indicator/rate/policy) constrains target's valuation or earnings path",
+   "source_targets": [
+    {
+     "source": "MacroIndicator",
+     "target": "MarketIndex"
+    },
+    {
+     "source": "Government",
+     "target": "MarketIndex"
+    },
+    {
+     "source": "PolicyEvent",
+     "target": "ForecastScenario"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "negative/positive pressure"
+    },
+    {
+     "name": "threshold",
+     "type": "text",
+     "description": "level at which constraint binds"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "months to transmission"
+    }
+   ],
+   "description": ""
+  },
+  {
+   "name": "TRIGGERS",
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source event/indicator triggers target scenario's realization",
+   "source_targets": [
+    {
+     "source": "PolicyEvent",
+     "target": "ForecastScenario"
+    },
+    {
+     "source": "MacroIndicator",
+     "target": "ForecastScenario"
+    },
+    {
+     "source": "Organization",
+     "target": "ForecastScenario"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "direction of scenario shift"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "reaction lag"
+    }
+   ],
+   "description": ""
+  },
+  {
+   "name": "CAUSES",
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source's actions/earnings causally drive target index level or drawdown",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "MarketIndex"
+    },
+    {
+     "source": "Government",
+     "target": "MacroIndicator"
+    },
+    {
+     "source": "ForecastScenario",
+     "target": "MarketIndex"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "positive/negative"
+    },
+    {
+     "name": "magnitude",
+     "type": "text",
+     "description": "e.g., EPS contribution pp"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "transmission lag"
+    }
+   ],
+   "description": ""
+  }
+ ],
+ "analysis_summary": "本预测问题围绕标普500指数2027年末收盘点位与20%回撤概率展开，核心传导链为：Fed政策路径(SEP 4.1% vs 期货隐含~4.56-4.7%)与AI资本开支宽度(NVIDIA及超大规模云厂商$800bn capex)共同决定盈利能否延续(32.8%→15.8%)，而估值(PE>22持续34个月)与集中度(前十大权重40.7% vs 32%盈利)决定均值回归风险。本体保留种子类型(Government/Organization/Other/Platform)，并补充客体与信号类型：MarketIndex(预测标的)、MacroIndicator(Sahm/利差/关税等判别信号)、PolicyEvent(带赔率的决策日)、ForecastScenario(五情景)、ResearchSource(被动信息源，tier=3)。关系覆盖经济(CUSTOMER_OF)、治理(REGULATES)、对抗(OPPOSES)、结盟(PARTNERS_WITH/BACKS)、影响(INFLUENCES)、结算(OFFICIAL_CLOSES_SETTLE_RELATED_CONTRACTS)及因果族(CONSTRAINS/TRIGGERS/CAUSES，带sign/lag/strength)，使图谱兼具索引与传导模型功能，媒体/数据商均标注为source不被误当能动actor。"
+}

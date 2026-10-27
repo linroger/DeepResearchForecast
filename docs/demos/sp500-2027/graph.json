@@ -1,0 +1,1987 @@
+{
+ "nodes": [
+  {
+   "id": "f194842e-1579-4366-bf1a-6d6432ee0618",
+   "name": "2027 FOMC meetings",
+   "labels": [
+    "PolicyEvent"
+   ],
+   "summary": "J.P. Morgan's read of the September 2026 SEP projects a median fed funds rate of 4.1% through 2027 for the 2027 FOMC meetings (dates unpublished), versus a market-implied ~4.56%–4.7% for late 2027."
+  },
+  {
+   "id": "f0c48c2e-14de-4a40-81f1-e8a5f5696789",
+   "name": "fred:SP500 daily close",
+   "labels": [
+    "ResearchSource"
+   ],
+   "summary": "A fred:SP500 daily close 20% below any 2026–2027 closing peak would settle the breach question, discriminating the Bear market and drawdown (20%) and Hard landing recession (10%) scenarios.\nfred:SP500 stores the S&P 500 at 7669.4143 Index for 2026-09 (latest daily value 7757.17 on 2026-10-21), with a year-over-year change of 16.485%."
+  },
+  {
+   "id": "ef705099-7deb-4a62-9e2a-659d0f8c6c6a",
+   "name": "FOMC meeting of October 27–28, 2026",
+   "labels": [
+    "PolicyEvent"
+   ],
+   "summary": "The FOMC meeting of October 27–28, 2026 is a leading policy indicator constraining the forecast scenarios for the S&P 500.\nCME FedWatch (as of 21 Oct 2026) prices an 83.9% probability of no change and 16.1% probability of a hike for the 28 October 2026 FOMC meeting.\nA hike at the 27–28 October 2026 FOMC meeting would tighten the multiple constraint on the AI-driven reacceleration scenario (35%).\nHike odds for the October 2026 FOMC meeting repricing beyond 16.1% would confirm the Bear market and drawdown scenario.\nPolicy binaries for the FOMC 2026-10-27/28 meeting resolve on the FRED target-ran"
+  },
+  {
+   "id": "eac39ecb-8f8c-4ed9-9ffa-3233cbfe7303",
+   "name": "Effective tariff rate",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "Effective tariff rate back above the 10.1% pre-substitution mark would revive the cost-shock channel behind a bear market and drawdown in the S&P 500.\nThe Penn Wharton Budget Model publishes the Effective Tariff Rates and Revenues analysis, updated October 14, 2026.\nThe Budget Lab (at Yale) publishes Tracking the Economic Effects of Tariffs, a related analysis of effective tariff rates and revenues."
+  },
+  {
+   "id": "ea785287-0428-4b36-8ae6-a76328870135",
+   "name": "US Bureau of Economic Analysis",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "No official GDP print retrieved for the report; SEP and SIFMA panel medians (GDP ~2.0-2.2%) serve as growth proxies"
+  },
+  {
+   "id": "e839da17-de79-46a2-832f-e15f41940974",
+   "name": "Federal Open Market Committee",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Target-range upper limit 4% as of 2026-10-23; remaining 2026 meetings 27-28 Oct and 8-9 Dec (with SEP); 2027 dates unpublished; projections revised toward stronger growth, higher inflation and lower u\nThe September 2026 FOMC meeting raised the Federal Funds Target Range upper limit by a unanimous 25 bp hike.\nJ.P. Morgan's summary of the September 2026 FOMC statement records a unanimous 25 bp hike.\nThe FOMC's remaining 2026 meetings are October 27–28 and December 8–9 (the latter with a Summary of Economic Projections); 2027 dates are not yet published on the Federal Reserve's calendar.\nA Sahm i"
+  },
+  {
+   "id": "e61a4f80-c23d-455c-9198-46ce9c4ec099",
+   "name": "Investing.com",
+   "labels": [
+    "ResearchSource"
+   ],
+   "summary": "Investing.com shows an S&P 500 close of 7,639.06 for the as-of date (23 October 2026), a gap from the WSJ close likely reflecting snapshot timing or settlement differences.\nInvesting.com publishes S&P 500 (SPX) historical data."
+  },
+  {
+   "id": "e1a15d8c-50ae-49bd-9bf1-96df0163b8f6",
+   "name": "BIS",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Records the US policy rate (end of period) at 3.875% per year in September 2026, versus 4.125% in September 2025, after 3.625% from February through August 2026.\nBIS records the US policy rate (end of period) at 3.875% per year for end-of-September 2026, related to the fed funds policy rate.\nBIS records the end-September 2026 US policy-rate midpoint at 3.875%, while the effective federal funds rate averaged 3.75% in September 2026.\nThe Bank for International Settlements publishes the Central bank policy rates - United States, monthly end-of-period series.\nCentral bank policy rates - United Sta"
+  },
+  {
+   "id": "e03a24f5-ba7b-4de2-b46d-937af5f1c345",
+   "name": "Morgan Stanley",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Morgan Stanley's 1985–2024 study of more than 6,500 single stocks found a median maximum drawdown of -85.4%, bounding the idiosyncratic de-rating channel behind the Bear market and drawdown scenario (20%)\nMorgan Stanley publishes the Counterpoint Global Insights publication (drawdowns and recoveries study) as a PDF on morganstanley.com.\nMorgan Stanley publishes the Counterpoint Global Insights publication (drawdowns and recoveries study) as a PDF on morganstanley.com."
+  },
+  {
+   "id": "d3f33052-91a5-4ef8-874b-e9253c93c9bf",
+   "name": "Federal funds target-range upper limit",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The federal funds target-range upper limit of 4% (September 2026, daily value on 2026-10-23) constrains the S&P 500 outlook, with policy tight but recession signals quiet supporting a modal path up.\nJ.P. Morgan's summary reports the unanimous 25 bp September (2026) hike that brought the federal funds target-range upper limit to 4%.\nThe September 2026 FOMC meeting raised the Federal Funds Target Range upper limit by a unanimous 25 bp hike.\nBIS records the US policy rate (end of period) at 3.875% per year for end-of-September 2026, related to the fed funds policy rate.\nThe September 2026 FOMC un"
+  },
+  {
+   "id": "d0c9737e-7533-4d43-bbb0-3d307069b167",
+   "name": "Macrotrends",
+   "labels": [
+    "ResearchSource"
+   ],
+   "summary": "Macrotrends reports S&P 500 price-only returns of 23.31% in 2024 and 16.39% in 2025, versus total-return figures of 25.02% and 17.88%.\nMacrotrends publishes S&P 500 historical annual returns covering 1927-2026."
+  },
+  {
+   "id": "cf23466a-1f54-434a-a262-e296ccf1a033",
+   "name": "Mag 7 vs other-493 EPS growth",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "If the other 493 companies outgrow the Mag 7 in Q4 2026 EPS reports, it confirms the breadth behind the AI-driven reacceleration scenario (35% probability)\nThe February 2027 Mag 7 vs 493 EPS comparison tests the breadth of the earnings leg for the S&P 500."
+  },
+  {
+   "id": "cb278786-0d95-49b3-a745-aaa1c0771f33",
+   "name": "Guinness Global Investors",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Guinness Global Investors (as of 31 December 2025) reports the ten largest S&P 500 stocks grew market value 29% over the trailing period versus roughly 19% for the index and 13% for the rest, while arguing mega-cap earnings dominance is \"now fading\".\nGuinness Global Investors' argument that mega-cap earnings dominance is \"now fading\" is an offset to RBC Wealth Management's concentration-risk framing."
+  },
+  {
+   "id": "cabfd04e-2369-4626-9e44-4864d31104c8",
+   "name": "September 2026 FOMC statement",
+   "labels": [
+    "PolicyEvent"
+   ],
+   "summary": "J.P. Morgan's summary of the September 2026 FOMC statement reports a unanimous 25 bp hike.\nThe September 2026 FOMC statement's unanimous 25 bp hike caused the effective federal funds rate to average 3.75% in September 2026, up from 3.63% in June 2026.\nJ.P. Morgan Asset Management published a summary of the FOMC Statement for September 2026."
+  },
+  {
+   "id": "caa36760-513e-41dc-81a1-4f4bd23cab56",
+   "name": "Yahoo Finance",
+   "labels": [
+    "ResearchSource"
+   ],
+   "summary": "Yahoo Finance puts the S&P 500 52-week intraday range at 6,316.91–7,844.52.\nYahoo Finance publishes S&P 500 (^GSPC) charts, data and news."
+  },
+  {
+   "id": "ca626c28-12d6-4678-8b15-a8ffb324b0d5",
+   "name": "WSJ",
+   "labels": [
+    "ResearchSource"
+   ],
+   "summary": "WSJ is a Tier-1 source used for index closing price data (data scope: index closing price). Its close of 7,662.54 on 2026-10-22 [S1] served as the anchor price for an S&P 500 forecast through December 31, 2027; the forecast's central thesis of an end-2027 level near 8,700 sits roughly 14% above the WSJ close [S3][S1].\nWSJ reports an S&P 500 close of 7,623.68 on 23 October 2026.\nThe Wall Street Journal publishes S&P 500 Index (SPX) price and news data used as a vendor close source."
+  },
+  {
+   "id": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "name": "NVIDIA",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Top index weight alongside Apple; Q3 2026 index EPS contribution $2.47 vs $1.30 a year earlier; excluding Micron and NVIDIA alone, blended Q3 2026 earnings growth falls from 29.0% to 20.0%\nHyperscaler capex guidance from NVIDIA is a leading indicator influencing the S&P 500 outlook.\nJensen Huang is the chief executive of NVIDIA and has claimed $600 billion in annual hyperscaler capex.\nThe Cube Research says the leading hyperscalers do not validate NVIDIA chief executive Jensen Huang's claimed $600 billion in annual hyperscaler capex.\nExcluding Micron and NVIDIA alone, S&P 500 blended Q3 2026 b"
+  },
+  {
+   "id": "c7b25a4c-8a1a-4b3a-a244-bf17af17d461",
+   "name": "SIFMA economist panel",
+   "labels": [
+    "Other"
+   ],
+   "summary": "SIFMA's economist panel posts median US GDP growth of 2.2% for Q4 2026 and 2.0% for Q4 2027 over Q4 2026."
+  },
+  {
+   "id": "c792742a-fb9c-4911-bad0-5eb3f518c0b8",
+   "name": "Jensen Huang",
+   "labels": [],
+   "summary": "Jensen Huang is the chief executive of NVIDIA and has claimed $600 billion in annual hyperscaler capex.\nThe Cube Research says the leading hyperscalers do not validate NVIDIA CEO Jensen Huang's claim of $600 billion in annual hyperscaler capex."
+  },
+  {
+   "id": "c5c58bc9-245d-44b3-8a81-16b5bbc6ba7f",
+   "name": "trailing as-reported P/E of the S&P 500",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The trailing as-reported P/E was 26.15 on 2026-10-22 and has exceeded 22 continuously since January 2024, making valuation the key vulnerability of the S&P 500.\nThe S&P 500 trailing as-reported P/E, at 26.15 on 22 October 2026 and above 22 every month since January 2024, constrains the S&P 500's valuation-carry risk.\nMultpl's Shiller-derived data puts the S&P 500 trailing as-reported P/E at 26.15 on 22 October 2026, exceeding 22 every month since January 2024.\nA Multpl trailing as-reported P/E below 22 without a 20% closing drawdown would indicate compression via earnings and support the AI-dr"
+  },
+  {
+   "id": "bdcf0a2c-7478-4440-94e3-f8a572bb8fff",
+   "name": "Slickcharts",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "A Slickcharts SPY-holdings snapshot of 2026-10-23 implies a top-10 weight of roughly 38%–39%, a derived sum whose holdings figures could not be verified."
+  },
+  {
+   "id": "bd526411-8651-451d-8d96-a8044a1b85fa",
+   "name": "Top-10 index weight",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "A Slickcharts snapshot implies a top-10 S&P 500 index weight of roughly 38–39%, below the record 40.7%\nThe top-10 index weight rising above the record 40.7% by end-2027 is the concentration leg of the Melt-up then correction scenario (30% probability)\nThe S&P 500 top-10 index weight, at a record 40.7% in 2025, is monitored for whether it remains at or above 38% at end-2027 (50% assessed chance), using S&P DJI constituent data."
+  },
+  {
+   "id": "b6b22b90-af28-4c4e-9b1b-7aee13559c55",
+   "name": "Magnificent 7",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Mega-cap tech group within the S&P 500. Estimated Q3 2026 earnings growth of 33.2% versus 27.7% for the other 493 companies, an unusually narrow gap. For Q4 2026, analysts predict 23.6% growth versus 30.6% for the other 493, which would be the first Mag 7 underperformance since Q4 2022.\nFactSet's data shows Magnificent 7 estimated Q3 2026 earnings growth of 33.2% versus 27.7% for the other 493 companies, with Q4 2026 predicted at 23.6% versus 30.6% — the first Mag 7 underperformance since Q4 2022 if realised\nThe Magnificent 7 versus other-493 growth gap (33.2% vs 27.7% in Q3 2026) measures the"
+  },
+  {
+   "id": "b621c72c-37ca-4d54-b6df-1da1918588d4",
+   "name": "hyperscaler capex",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "Hyperscaler capex near $800bn in 2026 (+94% over 2025) would confirm the AI-driven reacceleration scenario, while 2027 capex cuts would falsify it.\nA hyperscaler capex guidance cut versus the $800bn 2026 track in H1 2027 would feed the 'Bear market and drawdown' scenario (20% probability)."
+  },
+  {
+   "id": "b3dc0c9b-9b65-4e72-85f2-5ed38454914e",
+   "name": "Platform",
+   "labels": [
+    "Organization"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "b3a1edb7-199e-406c-82a9-dc10398ed3ee",
+   "name": "Stagnant sideways grind scenario",
+   "labels": [
+    "ForecastScenario"
+   ],
+   "summary": "The stagnant sideways grind scenario (5% probability) leaves the S&P 500 in 2027 within a few percent of current levels due to flat revisions and multiple compression.\nThe Stagnant sideways grind scenario (5%) requires the trailing multiple compressing toward 22 with prices roughly flat, per the Multpl trailing as-reported P/E falsifier.\nUnrealized private-company gains of roughly $150 billion (12% of Q2 2026 EPS) shrinking materially through 2027 reports supports the Stagnant sideways grind scenario (5% probability) if index EPS flattens"
+  },
+  {
+   "id": "adc1be00-ec77-46d7-90f8-c34e2ffdfa88",
+   "name": "US recession probability (smoothed)",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The smoothed US recession probability of 0.62% (August 2026) is quiet, supporting the modal upward path for the S&P 500 through 2027.\nThe Smoothed U.S. Recession Probabilities series is an official series from FRED, with the latest observation down from a year earlier, near the bottom of the charted range.\nA smoothed recession probability rising toward its January 2024 high of 2.32% would be the first labour-model support for Hard landing recession (10%); it stood at 0.62% in August 2026.\nA smoothed recession probability of 0.62% in August 2026 serves as downward-adjusting evidence against the"
+  },
+  {
+   "id": "a018377f-f733-4b66-b73a-b83903a97f60",
+   "name": "EchoStar",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "S&P 500 constituent; among the largest year-over-year index EPS contributors in Q3 2026 with EPS contribution of 0.17 versus -44.37 a year earlier, one of the biggest positive swings.\nEchoStar contributed $0.17 to Q3 2026 S&P 500 EPS versus -$44.37 in Q3 2025, ranking among the top five index earnings contributors"
+  },
+  {
+   "id": "9fa0b815-8a03-4c4c-8b3e-af10f0415770",
+   "name": "30 Day Federal Funds Futures",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "The 30 Day Federal Funds Futures quotes on CME Group reflect market expectations for the Fed Funds Rate."
+  },
+  {
+   "id": "9e979755-f49d-42f8-b215-b9e8b820b216",
+   "name": "The Cube Research",
+   "labels": [
+    "ResearchSource"
+   ],
+   "summary": "The Cube Research says the leading hyperscalers do not validate NVIDIA chief executive Jensen Huang's claimed $600 billion in annual hyperscaler capex.\nThe Cube Research says the leading hyperscalers do not validate NVIDIA CEO Jensen Huang's claim of $600 billion in annual hyperscaler capex.\nThe Cube Research flags NVIDIA CEO's claim of $600 billion in annual hyperscaler capex as unvalidated by the leading hyperscalers\nThe Cube Research published 'Jensen Claims $600B in Annual CAPEX Spend - Wait, What?' examining hyperscaler capex claims affecting S&P 500 earnings narratives."
+  },
+  {
+   "id": "9bad5af4-928f-474e-9864-6902ccce3669",
+   "name": "StreetStats",
+   "labels": [
+    "ResearchSource"
+   ],
+   "summary": "StreetStats valuation snapshot for the S&P 500 is based on the 7,662.54 close on 22 October 2026, showing a trailing P/E of 22.28 on trailing 12-month actual earnings of $343.87 per share and a forward P/E of 18.87 on estimated forward 12-month earnings of $406.12 per share.\nStreetStats' futures-implied policy rate path (as of the 20 October 2026 close), rising to about 4.1% by January 2027 and roughly 4.7% by October 2027, is a blend of SOFR futures and term premia rather than pure policy expectations.\nStreetStats provides a Stock Market Valuation snapshot for the S&P 500, used as the anchor "
+  },
+  {
+   "id": "98d3d805-537b-493d-8bc5-d5968cf2fa3a",
+   "name": "Federal Reserve Bank of St. Louis",
+   "labels": [
+    "Government"
+   ],
+   "summary": "The Federal Reserve Bank of St. Louis (FRED) publishes the Smoothed U.S. Recession Probabilities series.\nThe Federal Reserve Bank of St. Louis (FRED) publishes the Real-time Sahm Rule Recession Indicator for the United States.\nThe Federal Reserve Bank of St. Louis (FRED) publishes the 10-Year minus 3-Month Treasury Constant Maturity spread series for the United States.\nThe Federal Reserve Bank of St. Louis (FRED) publishes the Average Hourly Earnings of All Employees, Total Private series for the United States."
+  },
+  {
+   "id": "9816909e-5791-422f-8056-03b3f5449e9f",
+   "name": "J.P. Morgan",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "J.P. Morgan's summary reports the unanimous 25 bp September (2026) hike that brought the federal funds target-range upper limit to 4%.\nJ.P. Morgan's summary of the September 2026 FOMC statement records a unanimous 25 bp hike.\nJ.P. Morgan's summary of the September 2026 FOMC statement reports a unanimous 25 bp hike.\nJ.P. Morgan Asset Management published a summary of the FOMC Statement for September 2026."
+  },
+  {
+   "id": "96a60a1c-ee7f-4e7b-8ffb-b8fa31ccda68",
+   "name": "Cboe / VIX market",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Volatility pricing conditions the drawdown-risk assessment; the report notes high-yield spreads around 3.33% (78th percentile) as a related market proxy"
+  },
+  {
+   "id": "96720b6f-3e68-41c7-9519-bcd1c0ae6716",
+   "name": "S&P Dow Jones Indices",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Official daily closes settle index level and drawdown legs; monthly series showed 7669.4143 for 2026-09; Top 10 factsheet tables did not render\nThe official S&P 500 closing level on 31 December 2027 (last trading day) is fixed by S&P Dow Jones Indices and used for contract settlement.\nS&P Dow Jones Indices maintains and publishes the S&P 500 Top 10 Index.\nS&P Dow Jones Indices publishes the S&P 500 index, whose official closes are referenced across the research."
+  },
+  {
+   "id": "951e7846-3d0a-4969-aade-9b9d5e596401",
+   "name": "Goldman Sachs Research",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Estimates AI investment drives almost half of 2026 EPS growth; hyperscalers to spend $800bn capex in 2026 (+94%); flags ~$150bn unrealized private-company gains (12% of Q2 2026 EPS) fading in 2027\nGoldman Sachs Research (23 Sep 2026) forecasts S&P 500 EPS of $415 for CY2027 and $460 for CY2028 (~11% per year) and a next-12-month index target of 8,700, from 7,764 on 21 Sep 2026.\nGoldman Sachs Research attributes 'almost half' of 2026 S&P 500 index EPS growth to AI investment, with the largest US hyperscalers spending an estimated $800 billion on capex in 2026 (+94% over 2025).\nGoldman Sachs Res"
+  },
+  {
+   "id": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "AI-driven reacceleration scenario",
+   "labels": [
+    "ForecastScenario"
+   ],
+   "summary": "AI-driven reacceleration scenario (35% probability): roughly 10–15% annual S&P 500 annual earnings growth and stable multiples, no 20% drawdown; the modal path alongside an advance to end-2027 near 8,700 (Goldman Sachs 12-month target from 7,764 on 21 Sep 2026). Requires broadening of earnings growth away from Micron/NVIDIA dependence; FactSet Q3 2026 Mag 7 vs other-493 growth of 33.2% vs 27.7%, with Q4 2026 predicted at 23.6% vs 30.6% — the first Mag 7 underperformance since Q4 2022 if realised — measures the required broadening. GoldSman attributes almost half of 2026 index EPS growth to AI "
+  },
+  {
+   "id": "8c10ce4d-9e1d-4ddd-a5f1-2f8da551c535",
+   "name": "Q3 2026 earnings season",
+   "labels": [
+    "PolicyEvent"
+   ],
+   "summary": "Per FactSet as of 16 October 2026, blended Q3 2026 earnings growth is 29.0% (29.2% at 30 September); of the 9% of companies reported, 84% beat EPS estimates versus a 78% five-year average, but the aggregate surprise of +2.6% trails the +7.5% five-year average; calendar-2026 consensus is +32.8%."
+  },
+  {
+   "id": "884f723d-7f3b-4ae4-96ea-b506df59103f",
+   "name": "September 2026 Summary of Economic Projections",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "J.P. Morgan's read of the September 2026 Summary of Economic Projections reports a median fed funds rate of 4.1% at end-2026, unchanged through 2027, with a 2027 participant range of 3.125% to 4.375%.\nThe September 2026 SEP's own medians show PCE inflation of 2.3% in 2026 and 2.4% in 2027.\nA hawkish revision to the September SEP — whose median is 4.1% at end-2026 holding through 2027, with 16 of 18 participants expecting one more 2026 hike — would feed the Melt-up then correction scenario (30%).\nChair Warsh submitted no dot for the Summary of Economic Projections for a second consecutive SEP.\n"
+  },
+  {
+   "id": "8765acf3-d944-49d0-96ef-ff32140bc34b",
+   "name": "FedWatch",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "As of 21 October 2026, FedWatch prices an 83.9% probability of no change and 16.1% probability of a hike for the 27–28 October 2026 FOMC meeting."
+  },
+  {
+   "id": "8692bf4a-0e19-44a4-b9fa-b1fae91615d3",
+   "name": "US Congress and President",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Effective tariff rate 7.1% in August 2026 vs 2.3% in January 2025; Yale estimates ~$165bn may be refunded; customs duties swung from -$25.6bn (Jun 2026) to +$5.9bn (Sep 2026)"
+  },
+  {
+   "id": "813af227-6bf4-46f1-8964-cbd75201945c",
+   "name": "RBC Wealth Management",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Documents one-for-one transmission of a top-10 de-rating through index weight, amplified by passive flows\nRBC documents that S&P 500 concentration means diversification increasingly functions as a concentrated allocation in a single thematic outcome, so a top-10 de-rating passes one-for-one through index weight, amplified by passive flows"
+  },
+  {
+   "id": "7b3f97e7-e458-4ff2-95d6-1f4aa40fe794",
+   "name": "Median real GDP",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The September 2026 FOMC materials report median real GDP of 2.0% (2026) and 2.1% (2027).\nSIFMA's economist panel posts median US GDP growth of 2.2% for Q4 2026 and 2.0% for Q4 2027 over Q4 2026.\nGoldman Sachs Research ties its 2027 earnings path to solid GDP growth."
+  },
+  {
+   "id": "7935947c-cf08-48eb-a5a0-35945a2c23cc",
+   "name": "Q3 2026 blended net margin",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The Q3 2026 blended net margin of 14.9%, the second-highest in more than 15 years, reflects high S&P 500 earnings concentration.\nExcluding Micron and NVIDIA alone, Q3 2026 blended earnings growth falls from 29.0% to 20.0%, showing Micron's outsized influence on index earnings.\nExcluding NVIDIA and Micron alone, Q3 2026 blended earnings growth falls from 29.0% to 20.0%, showing NVIDIA's outsized influence on index earnings."
+  },
+  {
+   "id": "77c72bb5-dbd9-4032-9dff-e962911bc9a2",
+   "name": "Polymarket US recession by end of 2026 contract",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "Polymarket prediction market contract \"US recession by end of 2026?\" quoted at an 8% chance [S42]. Serves as an implied-probability source pricing event risk, distinguished from contemporaneous state probabilities (smoothed recession series) and twelve-month-ahead Fed-bank term-spread models.\nRecession by end-2027, required under the Hard landing recession scenario, must be no less likely than recession by end-2026, quoted at 8% on the Polymarket contract.\nThe Federal Reserve Bank of New York's yield-curve leading indicator page provides recession probabilities used to assess the US recession "
+  },
+  {
+   "id": "76be37bc-ea15-4d39-9cf3-03d20c37630b",
+   "name": "GuruFocus",
+   "labels": [
+    "ResearchSource"
+   ],
+   "summary": "GuruFocus shows an S&P 500 P/E of 25.943 on GAAP as-reported earnings as of 22 October 2026, higher than the StreetStats basis due to a definitional gap from depressed GAAP earnings.\nGuruFocus publishes the S&P 500 PE Ratio, reported at 25.943 as of 2026-10-22.\nGuruFocus publishes the S&P 500 PE Ratio, reported at 25.943 as of 2026-10-22."
+  },
+  {
+   "id": "725671f0-621e-4750-beab-bcd24dfe07e0",
+   "name": "Alphabet (Google)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Dual share classes imply a combined weight of about 5.63% (unverified Slickcharts snapshot), ranking third behind Nvidia and Apple\nHyperscaler capex guidance from Alphabet is a leading indicator influencing the S&P 500 outlook.\nAlphabet's dual share classes give a combined weight of about 5.63% in the S&P 500 (per an unverified Slickcharts snapshot), which would rank third behind Nvidia and Apple"
+  },
+  {
+   "id": "713e82ee-4944-42d5-a013-3177abcae922",
+   "name": "CY2026 consensus EPS growth",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "FactSet's CY2026 consensus EPS growth was 32.8% on 16 October 2026, underpinning the earnings-carried advance thesis for the S&P 500."
+  },
+  {
+   "id": "7138c1c2-c0f8-42d2-9fe6-ac155acf3243",
+   "name": "S&P DJI official monthly series",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The S&P DJI official monthly series shows a September 2026 observation of 7669.4143 Index versus 6584.0181 a year earlier, a 16.485% year-over-year rise; a daily reading of 7757.17 on 2026-10-21 is unconfirmed and inconsistent with vendor closes."
+  },
+  {
+   "id": "7116e1c0-9dc9-4413-bc4c-61ddf605b76d",
+   "name": "Microsoft",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "One of the largest US hyperscalers on track for a share of $800bn 2026 capex (+94% over 2025)\nHyperscaler capex guidance from Microsoft is a leading indicator influencing the S&P 500 outlook."
+  },
+  {
+   "id": "6f936451-3169-4815-88b0-100799e03e44",
+   "name": "Hard landing recession scenario",
+   "labels": [
+    "ForecastScenario"
+   ],
+   "summary": "The hard landing recession scenario (10% probability), driven by a policy or credit shock, produces a 25–35% drawdown and a 2027 S&P 500 close well below 2026.\nSAHMREALTIME at or above its 0.50pp trigger would confirm the labor signature of the Hard landing recession scenario; it stood at 0 percentage points in 2026-09.\nA zero Sahm rule reading (September 2026), together with a positive 10-year minus 3-month curve, fits the no-recession scenarios and would have to break — or be overridden by non-curve shocks — for the Hard landing recession scenario (10%) to play out.\nThe 8–9 December 2026 FOM"
+  },
+  {
+   "id": "6ab8a6c7-30c9-4a5f-86ac-81d03d27021c",
+   "name": "Cleveland Fed's yield-curve model",
+   "labels": [
+    "ResearchSource"
+   ],
+   "summary": "The Cleveland Fed's yield-curve model put the probability of a US recession within one year at 11.4% for September 2026.\nThe Federal Reserve Bank of Cleveland's 'Yield Curve and Predicted GDP Growth' indicator provides recession probability estimates relevant to the US recession by end of 2026 forecast scenario.\nThe Federal Reserve Bank of Cleveland publishes the Yield Curve and Predicted GDP Growth indicator on its indicators and data pages."
+  },
+  {
+   "id": "69b8bc32-f974-4b3e-ba72-1f37fd51341d",
+   "name": "Average Hourly Earnings of All Employees, Total Private",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "Average Hourly Earnings of All Employees, Total Private were 37.81 Dollars per Hour in the United States in 2026-09, up from 36.7 a year earlier. Year-over-year growth of 3.025% is down 0.824 pp from 3.848% (2025-09) and sits at the bottom of a five-year range topped by 4.214% (2025-03). Easing wage growth supports the near-record S&P 500 net margin (14.9% blended Q3 2026).\nAverage Hourly Earnings YoY back above its five-year high of 4.214% (set 2025-03) would create cost pressure challenging AI-driven reacceleration and the S&P 500 outlook.\nFRED is the official series source for Average Hourl"
+  },
+  {
+   "id": "65204351-ef9b-4c8b-9cb2-3c20b20d3557",
+   "name": "Boeing",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "S&P 500 constituent; year-over-year index EPS contributor of -0.24 in Q3 2026 versus -7.47 a year earlier, a large improvement from prior losses.\nBoeing contributed -$0.24 to Q3 2026 S&P 500 EPS versus -$7.47 in Q3 2025, ranking among the top five index earnings contributors"
+  },
+  {
+   "id": "60a4e448-2d9c-44df-a698-934598ede8e6",
+   "name": "10-year minus 3-month Treasury curve",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The 10-year minus 3-month Treasury curve at 0.896% (September 2026) is a leading indicator to watch for the S&P 500 outlook.\nA negative T10Y3M would lift the NY Fed recession model's 12-month-ahead probability, challenging the discount-rate assumption in the AI-driven reacceleration scenario.\nThe 10Y–3M spread's 0.896% September 2026 average holds curve-model recession probabilities down; a negative T10Y3M would challenge the discount-rate assumption in AI-driven reacceleration (35%).\nThe positive 10Y–3M Treasury spread of +0.896% in September 2026 is cited as evidence not in the historical cl"
+  },
+  {
+   "id": "608c6939-69d3-4867-8b4e-eb71724da2a2",
+   "name": "Unrealized private-company gains",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "Unrealized private-company gains of roughly $150 billion (12% of Q2 2026 EPS) shrinking materially through 2027 reports supports the Stagnant sideways grind scenario (5% probability) if index EPS flattens"
+  },
+  {
+   "id": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "Bear market and drawdown scenario",
+   "labels": [
+    "ForecastScenario"
+   ],
+   "summary": "The bear market and drawdown scenario (20% probability) is triggered by an AI-capex disappointment or mild recession, producing a 20%+ drawdown and a negative two-year return for the S&P 500.\nRECPROUSM156N (Smoothed US Recession Probabilities) sustained above its five-year high of 2.32% would signal recession onset consistent with the Bear market and drawdown scenario.\nMorgan Stanley's 1985–2024 study of more than 6,500 single stocks found a median maximum drawdown of -85.4%, bounding the idiosyncratic de-rating channel behind the Bear market and drawdown scenario (20%)\nA fred:SP500 daily clos"
+  },
+  {
+   "id": "5d1eccee-c546-45e7-8570-408c15f32cc1",
+   "name": "Meta Platforms",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Q3 2026 index EPS contribution $6.58 vs $1.05 a year earlier, among the top five year-over-year contributors\nHyperscaler capex guidance from Meta is a leading indicator influencing the S&P 500 outlook.\nMeta Platforms contributed $6.58 to Q3 2026 S&P 500 EPS versus $1.05 in Q3 2025, ranking among the top five index earnings contributors"
+  },
+  {
+   "id": "5c99c74d-0ed3-42c2-8461-bdae3bf033a0",
+   "name": "Cleveland Fed",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Estimate based on 3-month bill at 4.20% and +88 bp slope\nThe New York Fed's and Cleveland Fed's recession-probability models are twelve-month-ahead term-spread predictions that the New York Fed explicitly disclaims as forecasts, unlike contemporaneous smoothed state probabilities.\nThe Federal Reserve Bank of Cleveland publishes the Yield Curve and Predicted GDP Growth indicator on its indicators and data pages."
+  },
+  {
+   "id": "537f1a5e-e360-4ae7-92eb-ff6cd5af2a93",
+   "name": "FactSet blended net margin",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "FactSet blended net margin for CY2027 falling below the 13.9% CY2026 projection would erode earnings support for the S&P 500 in a melt-up then correction scenario."
+  },
+  {
+   "id": "4f445a6f-bbd1-45fe-84a4-2e5f4453774d",
+   "name": "Apple",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Top index weight behind Nvidia per Slickcharts snapshot; exposed to China tariff rate of 24.3% and consumer-demand cycles"
+  },
+  {
+   "id": "49b9e8a9-af82-4752-a5cb-33ce9d155e7e",
+   "name": "New York Fed",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Updates model within the first two weeks of each month\nThe New York Fed's and Cleveland Fed's recession-probability models are twelve-month-ahead term-spread predictions that the New York Fed explicitly disclaims as forecasts, unlike contemporaneous smoothed state probabilities.\nThe New York Fed publishes the Probability of US Recession Predicted by Treasury Spread model (PDF)."
+  },
+  {
+   "id": "45ebd434-8ea9-4f58-a51b-8350996b7850",
+   "name": "Oak Harvest",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Oak Harvest (21 Aug 2026), citing FactSet, reports CY2026 EPS of $358.66 and CY2027 EPS of $405.17 for the S&P 500.\nOak Harvest Financial Group published 'Earnings Up, Rates Up: Who Wins the Tug-of-War?' (Stock Talk Update, Aug 21, 2026) discussing S&P 500 earnings and rates."
+  },
+  {
+   "id": "3f99abc9-5c96-4a5d-9ee8-5108f9870d25",
+   "name": "Melt-up then correction scenario",
+   "labels": [
+    "ForecastScenario"
+   ],
+   "summary": "The melt-up then correction scenario (30% probability) has earnings deliver and multiples overshoot, then a mid-horizon 10–19% correction resets them, with the S&P 500 ending 2027 modestly higher.\nRenewed dependence on NVIDIA (with Micron) would mark the fragility central to the Melt-up then correction (30%) scenario.\nRenewed dependence on Micron (with NVIDIA) would mark the fragility central to the Melt-up then correction (30%) scenario.\nA hawkish revision to the September SEP — whose median is 4.1% at end-2026 holding through 2027, with 16 of 18 participants expecting one more 2026 hike — wo"
+  },
+  {
+   "id": "3e4a40d7-09c6-4ff2-b35a-7167a4572f5b",
+   "name": "Micron",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Q3 2026 index EPS contribution $33.42 vs $3.03 a year earlier; excluding Micron and NVIDIA, blended Q3 2026 growth falls from 29.0% to 20.0%\nExcluding Micron and NVIDIA alone, Q3 2026 blended earnings growth falls from 29.0% to 20.0%, showing Micron's outsized influence on index earnings.\nExcluding Micron and NVIDIA alone, S&P 500 blended Q3 2026 earnings growth falls from 29.0% to 20.0%, so margin resilience is concentrated rather than broad-based.\nRenewed dependence on Micron (with NVIDIA) would mark the fragility central to the Melt-up then correction (30%) scenario.\nBroadening of S&P 500 e"
+  },
+  {
+   "id": "38611601-4773-4f0e-bbc6-0ef288017973",
+   "name": "Federal Reserve",
+   "labels": [
+    "Government"
+   ],
+   "summary": "The Federal Reserve's target-range upper limit is 4% as of 2026-10-23, with the effective federal funds rate averaging 3.75% in September 2026 (3.88% daily on 2026-10-22) and BIS recording a 3.875% end-September policy-rate midpoint after 3.625% from February through August 2026. The September 2026 FOMC delivered a unanimous 25 bp hike. The September 2026 Summary of Economic Projections shows a median fed funds rate of 4.1% at end-2026, unchanged through 2027 (participant range 3.125%–4.375%), with 16 of 18 participants seeing one more 2026 hike and projections revised toward stronger growth, "
+  },
+  {
+   "id": "34ba27a1-a1e2-4641-81dc-3f740af9f9c0",
+   "name": "Federal Funds Effective Rate — United States",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "Federal Funds Effective Rate stood at 3.747% (2026-09, stored observation). The federal funds target-range upper limit was 4% in September 2026 and on 2026-10-23, following a unanimous 25 bp September hike per J.P. Morgan's summary.\nThe Federal Funds Effective Rate averaged 3.75% in September 2026 with a daily effective rate of 3.88% on 2026-10-22, constraining the S&P 500 environment.\nThe September 2026 FOMC 25 bp hike moved the effective fed funds rate up from 3.63% in June 2026 to an average of 3.75% in September 2026, printing 3.88% on 2026-10-22.\nBIS records the end-September 2026 US poli"
+  },
+  {
+   "id": "2f7a24c4-0368-46b4-be0c-d003a567149f",
+   "name": "Hyperscaler 2027 capex guidance",
+   "labels": [
+    "PolicyEvent"
+   ],
+   "summary": "Q4 2026–Q1 2027 hyperscaler 2027 capex guidance (from NVIDIA, Microsoft, Alphabet, Amazon, Meta) discriminates between Bear market and drawdown (20%) and AI-driven reacceleration (35%); two or more hyperscalers cutting guidance would feed Bear market and drawdown."
+  },
+  {
+   "id": "2c669d73-e3c5-4a68-8279-e1c246784e55",
+   "name": "FRED",
+   "labels": [
+    "ResearchSource"
+   ],
+   "summary": "The Smoothed U.S. Recession Probabilities series is an official series from FRED, with the latest observation down from a year earlier, near the bottom of the charted range.\nTwo-year returns from P/E>22 starts were computed from FRED's SP500 monthly means for the S&P 500.\nFRED publishes the SAHMREALTIME series, the resolution source for the Sahm rule recession-trigger binary B11.\nFRED publishes the S&P 500 series (SP500), used as a tier-1 source for index observations.\nThe S&P 500 (United States) monthly observation of 7669.4143 Index for 2026-09 was reported by FRED (monthly mean of daily dat"
+  },
+  {
+   "id": "24ebe58c-e4fd-4493-bd9a-50927987d19b",
+   "name": "Federal Reserve Bank of New York Treasury-spread model",
+   "labels": [
+    "ResearchSource"
+   ],
+   "summary": "The NY Fed's Treasury-spread model averages 0.15 recession probability for 2027 (model estimate, not observation), informing the S&P 500 outlook.\nA negative T10Y3M would lift the NY Fed recession model's 12-month-ahead probability, challenging the discount-rate assumption in the AI-driven reacceleration scenario.\nThe monthly NY Fed recession-model update (first two weeks of each month) is a monitored decision point that discriminates the Hard landing recession scenario (10%).\nThe New York Fed publishes the Probability of US Recession Predicted by Treasury Spread model (PDF)."
+  },
+  {
+   "id": "231c548d-8bda-421c-9817-89ff57886954",
+   "name": "Polymarket",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Only event-risk market price in the evidence; no index-level market on the settlement quantity exists\nPolymarket's 'US recession by end of 2026?' contract was quoted at an 8% chance, bounding the recession-by-end-2027 probability that underlies the Hard landing recession scenario (10%) and Bear market and drawdown (20%).\nPolymarket hosts prediction market contracts tied to US macro outcomes (e.g., 'US recession by end of 2026?') that relate to the S&P 500 outlook in the research."
+  },
+  {
+   "id": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "name": "S&P 500 index",
+   "labels": [
+    "MarketIndex"
+   ],
+   "summary": "All index levels settle on S&P Dow Jones Indices official closing values of the S&P 500 on a price basis.\nThe trailing as-reported P/E was 26.15 on 2026-10-22 and has exceeded 22 continuously since January 2024, making valuation the key vulnerability of the S&P 500.\nFactSet's CY2026 consensus EPS growth was 32.8% on 16 October 2026, underpinning the earnings-carried advance thesis for the S&P 500.\nThe Q3 2026 blended net margin of 14.9%, the second-highest in more than 15 years, reflects high S&P 500 earnings concentration.\nThe AI-driven reacceleration scenario (35% probability) implies roughl"
+  },
+  {
+   "id": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "name": "Sahm rule",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The real-time Sahm rule, currently 0 percentage points (September 2026), is a leading indicator to watch for the S&P 500 path; a rising Sahm rule would confirm a Bear market and drawdown.\nSAHMREALTIME at or above its 0.50pp trigger would confirm the labor signature of the Hard landing recession scenario; it stood at 0 percentage points in 2026-09.\nSAHMREALTIME at or above its 0.50pp trigger would confirm the labor signature of the Hard landing recession scenario; it stood at 0 percentage points in 2026-09.\nA zero Sahm rule reading (September 2026), together with a positive 10-year minus 3-mont"
+  },
+  {
+   "id": "1824df34-d0df-4ecc-bb23-61b52ad08fbe",
+   "name": "Oxford Economics",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Oxford Economics forecasts global GDP growth back into a 2.8%–3.0% range (cited in Stage 1 research report chunk 18, October 2026).\nGoldman Sachs Research documents an endogenous AI hazard (AI investment driving almost half of 2026 EPS growth, fading forward, plus ~$150 billion of unrealized private-company gains that should shrink materially in 2027), consistent with Oxford Economics' 2027 outlook naming a disorderly end to the AI boom as a principal risk."
+  },
+  {
+   "id": "149ebd4d-c7b0-4442-a9c0-c9e62e6f9cae",
+   "name": "Multpl",
+   "labels": [
+    "ResearchSource"
+   ],
+   "summary": "Multpl's Shiller-derived data puts the S&P 500 trailing as-reported P/E at 26.15 on 22 October 2026, exceeding 22 every month since January 2024.\nMultpl publishes S&P 500 historical prices by year."
+  },
+  {
+   "id": "106742af-9da0-4a66-bed6-97cc700def8c",
+   "name": "Amazon",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Hyperscaler capex participant; retail arm exposed to AHE wage growth (3.025% YoY, 2026-09) and tariff pass-through (effective rate 7.1%, Aug 2026)\nHyperscaler capex guidance from Amazon is a leading indicator influencing the S&P 500 outlook."
+  },
+  {
+   "id": "10578d58-3414-4e78-8cd2-8d82d75f54be",
+   "name": "CME FedWatch",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "CME FedWatch (as of 21 Oct 2026) prices an 83.9% probability of no change and 16.1% probability of a hike for the 28 October 2026 FOMC meeting.\nThe CME FedWatch Tool (cmegroup.com) provides market-implied probabilities for Fed Funds Rate decisions."
+  },
+  {
+   "id": "0f37ce32-1f61-4f33-8cd8-06ff5a9da8ca",
+   "name": "FOMC meeting of December 8–9, 2026 with Summary of Economic Projections",
+   "labels": [
+    "PolicyEvent"
+   ],
+   "summary": "The FOMC meeting of December 8–9, 2026, which includes a Summary of Economic Projections, is a leading indicator constraining the forecast scenarios for the S&P 500.\nJ.P. Morgan's official-projection column for the 8–9 December 2026 FOMC meeting (with SEP) cites a median fed funds rate of 4.1% at end-2026; a hawkish revision there feeds the Melt-up then correction scenario.\nA hawkish surprise at the FOMC December 8–9, 2026 meeting with SEP (fresh dots, 2027 span 3.125%–4.375%) would trigger the Bear market and drawdown scenario (20%).\nThe FOMC 8–9 December 2026 meeting (with SEP) constrains th"
+  },
+  {
+   "id": "0d71aa9c-6704-4ba5-8eef-2a85405a6951",
+   "name": "FactSet CY2027 growth estimate",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "A FactSet CY2027 growth estimate below 10% by mid-2027 would kill the 'AI-driven reacceleration' scenario (35% probability)."
+  },
+  {
+   "id": "09692b98-58b7-4c05-b3ab-ce8024cb8963",
+   "name": "Government",
+   "labels": [
+    "Organization"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "06d04c0a-fd0c-427f-8536-14d6f60abd85",
+   "name": "World PE Ratio",
+   "labels": [
+    "Other"
+   ],
+   "summary": "World PE Ratio publishes the current P/E ratio of the S&P 500 index."
+  },
+  {
+   "id": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "name": "FactSet Earnings Insight",
+   "labels": [
+    "ResearchSource"
+   ],
+   "summary": "Bottom-up consensus source; blended Q3 2026 net margin 14.9%, second-highest in 15+ years; Mag 7 vs other-493 tracking\nFactSet Earnings Insight revisions to CY2026's 32.8% earnings growth and to CY2027 are leading indicators constraining the S&P 500 forecast scenarios; sustained negative CY2027 revisions would kill AI-driven reacceleration.\nFactSet reports the S&P 500 forward 12-month P/E of 19.0 as of 16 October 2026, below its 5-year (19.8) and 10-year (19.1) averages.\nPer FactSet as of 16 October 2026, blended Q3 2026 earnings growth is 29.0% (29.2% at 30 September); of the 9% of companies "
+  }
+ ],
+ "links": [
+  {
+   "source": "8765acf3-d944-49d0-96ef-ff32140bc34b",
+   "target": "ef705099-7deb-4a62-9e2a-659d0f8c6c6a",
+   "name": "PRICES_PROBABILITY_OF",
+   "fact": "As of 21 October 2026, FedWatch prices an 83.9% probability of no change and 16.1% probability of a hike for the 27–28 October 2026 FOMC meeting."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "name": "BACKS",
+   "fact": "FactSet Earnings Insight publishes S&P 500 earnings-season updates and blended earnings growth data."
+  },
+  {
+   "source": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "target": "6f936451-3169-4815-88b0-100799e03e44",
+   "name": "TRIGGERS",
+   "fact": "A Sahm indicator reading at or above 0.30pp during 2027 would confirm the 'Hard landing recession' scenario (10% probability)."
+  },
+  {
+   "source": "9816909e-5791-422f-8056-03b3f5449e9f",
+   "target": "0f37ce32-1f61-4f33-8cd8-06ff5a9da8ca",
+   "name": "PROVIDES_PROJECTION_FOR",
+   "fact": "J.P. Morgan's official-projection column for the 8–9 December 2026 FOMC meeting (with SEP) cites a median fed funds rate of 4.1% at end-2026; a hawkish revision there feeds the Melt-up then correction scenario."
+  },
+  {
+   "source": "231c548d-8bda-421c-9817-89ff57886954",
+   "target": "6f936451-3169-4815-88b0-100799e03e44",
+   "name": "INFLUENCES",
+   "fact": "Polymarket's 'US recession by end of 2026?' contract was quoted at an 8% chance, bounding the recession-by-end-2027 probability that underlies the Hard landing recession scenario (10%) and Bear market and drawdown (20%)."
+  },
+  {
+   "source": "608c6939-69d3-4867-8b4e-eb71724da2a2",
+   "target": "b3a1edb7-199e-406c-82a9-dc10398ed3ee",
+   "name": "TRIGGERS",
+   "fact": "Unrealized private-company gains of roughly $150 billion (12% of Q2 2026 EPS) shrinking materially through 2027 reports supports the Stagnant sideways grind scenario (5% probability) if index EPS flattens"
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "CAUSES",
+   "fact": "The AI-driven reacceleration scenario (35% probability) is the modal path carrying the S&P 500 to a close near 8,700 by end-2027, about 14% above the WSJ close of 7,623.68 on 2026-10-23."
+  },
+  {
+   "source": "3f99abc9-5c96-4a5d-9ee8-5108f9870d25",
+   "target": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "name": "CAUSES",
+   "fact": "The melt-up then correction scenario (30% probability) has earnings deliver and multiples overshoot, then a mid-horizon 10–19% correction resets them, with the S&P 500 ending 2027 modestly higher."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "725671f0-621e-4750-beab-bcd24dfe07e0",
+   "name": "INFLUENCES",
+   "fact": "Alphabet's dual share classes give a combined weight of about 5.63% in the S&P 500 (per an unverified Slickcharts snapshot), which would rank third behind Nvidia and Apple"
+  },
+  {
+   "source": "adc1be00-ec77-46d7-90f8-c34e2ffdfa88",
+   "target": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "TRIGGERS",
+   "fact": "RECPROUSM156N (Smoothed US Recession Probabilities) sustained above its five-year high of 2.32% would signal recession onset consistent with the Bear market and drawdown scenario."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "name": "PUBLISHES_RESEARCH_ON",
+   "fact": "FactSet published 'S&P 500 Reporting Highest Net Profit Margin in More Than 15 Years' about S&P 500 margins."
+  },
+  {
+   "source": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "target": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "name": "MEASURED_BY",
+   "fact": "Recession-trigger binary B11 (Sahm rule trigger of at least 0.50pp before 2028-01-01, assigned 15% probability) resolves on FRED SAHMREALTIME monthly data, which stood at 0 percentage points in September 2026."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "106742af-9da0-4a66-bed6-97cc700def8c",
+   "name": "INFLUENCES",
+   "fact": "Hyperscaler capex guidance from Amazon is a leading indicator influencing the S&P 500 outlook."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "537f1a5e-e360-4ae7-92eb-ff6cd5af2a93",
+   "name": "CONSTRAINS",
+   "fact": "FactSet blended net margin for CY2027 falling below the 13.9% CY2026 projection would erode earnings support for the S&P 500 in a melt-up then correction scenario."
+  },
+  {
+   "source": "2c669d73-e3c5-4a68-8279-e1c246784e55",
+   "target": "adc1be00-ec77-46d7-90f8-c34e2ffdfa88",
+   "name": "PUBLISHES",
+   "fact": "The Smoothed U.S. Recession Probabilities series is an official series from FRED, with the latest observation down from a year earlier, near the bottom of the charted range."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "76be37bc-ea15-4d39-9cf3-03d20c37630b",
+   "name": "REPORTS_VALUATION_FOR",
+   "fact": "GuruFocus shows an S&P 500 P/E of 25.943 on GAAP as-reported earnings as of 22 October 2026, higher than the StreetStats basis due to a definitional gap from depressed GAAP earnings."
+  },
+  {
+   "source": "725671f0-621e-4750-beab-bcd24dfe07e0",
+   "target": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "name": "CUSTOMER_OF",
+   "fact": "Hyperscaler capex cohort [S31]（sign=+，strength=0.7，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "06d04c0a-fd0c-427f-8536-14d6f60abd85",
+   "name": "PUBLISHES_DATA_FOR",
+   "fact": "World PE Ratio publishes the current P/E ratio of the S&P 500 index."
+  },
+  {
+   "source": "60a4e448-2d9c-44df-a698-934598ede8e6",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "CONSTRAINS",
+   "fact": "The 10Y–3M spread's 0.896% September 2026 average holds curve-model recession probabilities down; a negative T10Y3M would challenge the discount-rate assumption in AI-driven reacceleration (35%)."
+  },
+  {
+   "source": "9816909e-5791-422f-8056-03b3f5449e9f",
+   "target": "d3f33052-91a5-4ef8-874b-e9253c93c9bf",
+   "name": "BACKS",
+   "fact": "J.P. Morgan's summary reports the unanimous 25 bp September (2026) hike that brought the federal funds target-range upper limit to 4%."
+  },
+  {
+   "source": "f0c48c2e-14de-4a40-81f1-e8a5f5696789",
+   "target": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "CONSTRAINS",
+   "fact": "A fred:SP500 daily close 20% below any 2026–2027 closing peak would settle the breach question, discriminating the Bear market and drawdown (20%) and Hard landing recession (10%) scenarios."
+  },
+  {
+   "source": "c7b25a4c-8a1a-4b3a-a244-bf17af17d461",
+   "target": "7b3f97e7-e458-4ff2-95d6-1f4aa40fe794",
+   "name": "FORECASTS",
+   "fact": "SIFMA's economist panel posts median US GDP growth of 2.2% for Q4 2026 and 2.0% for Q4 2027 over Q4 2026."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "a018377f-f733-4b66-b73a-b83903a97f60",
+   "name": "CAUSES",
+   "fact": "EchoStar contributed $0.17 to Q3 2026 S&P 500 EPS versus -$44.37 in Q3 2025, ranking among the top five index earnings contributors"
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "9bad5af4-928f-474e-9864-6902ccce3669",
+   "name": "BACKS",
+   "fact": "StreetStats provides a Stock Market Valuation snapshot for the S&P 500, used as the anchor valuation source."
+  },
+  {
+   "source": "60a4e448-2d9c-44df-a698-934598ede8e6",
+   "target": "2c669d73-e3c5-4a68-8279-e1c246784e55",
+   "name": "REPORTED_BY",
+   "fact": "The 10-Year minus 3-Month Treasury Constant Maturity spread of 0.896% for 2026-09 was reported by FRED (monthly mean of daily data; latest daily 2026-10-23: 0.78%)."
+  },
+  {
+   "source": "adc1be00-ec77-46d7-90f8-c34e2ffdfa88",
+   "target": "2c669d73-e3c5-4a68-8279-e1c246784e55",
+   "name": "REPORTED_BY",
+   "fact": "Smoothed U.S. Recession Probabilities of 0.62% for 2026-08 was reported by FRED."
+  },
+  {
+   "source": "9bad5af4-928f-474e-9864-6902ccce3669",
+   "target": "34ba27a1-a1e2-4641-81dc-3f740af9f9c0",
+   "name": "FORECASTS",
+   "fact": "StreetStats publishes a Fed Funds Rate forecast for 2026-2031 at streetstats.finance/rates/fedfunds."
+  },
+  {
+   "source": "e839da17-de79-46a2-832f-e15f41940974",
+   "target": "34ba27a1-a1e2-4641-81dc-3f740af9f9c0",
+   "name": "CAUSES",
+   "fact": "The Fed's resumed tightening drove the effective federal funds rate to average 3.75% in September 2026 (up from 3.63% in June 2026) and print 3.88% on 2026-10-22."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "5d1eccee-c546-45e7-8570-408c15f32cc1",
+   "name": "INFLUENCES",
+   "fact": "Hyperscaler capex guidance from Meta is a leading indicator influencing the S&P 500 outlook."
+  },
+  {
+   "source": "884f723d-7f3b-4ae4-96ea-b506df59103f",
+   "target": "34ba27a1-a1e2-4641-81dc-3f740af9f9c0",
+   "name": "CONSTRAINS",
+   "fact": "The September 16, 2026 FOMC Projections materials include the projected path for the Fed Funds Rate."
+  },
+  {
+   "source": "98d3d805-537b-493d-8bc5-d5968cf2fa3a",
+   "target": "adc1be00-ec77-46d7-90f8-c34e2ffdfa88",
+   "name": "PUBLISHES",
+   "fact": "The Federal Reserve Bank of St. Louis (FRED) publishes the Smoothed U.S. Recession Probabilities series."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "caa36760-513e-41dc-81a1-4f4bd23cab56",
+   "name": "PUBLISHES_DATA_FOR",
+   "fact": "Yahoo Finance publishes S&P 500 (^GSPC) charts, data and news."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "3e4a40d7-09c6-4ff2-b35a-7167a4572f5b",
+   "name": "INFLUENCES",
+   "fact": "Excluding Micron and NVIDIA alone, S&P 500 blended Q3 2026 earnings growth falls from 29.0% to 20.0%, so margin resilience is concentrated rather than broad-based."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "65204351-ef9b-4c8b-9cb2-3c20b20d3557",
+   "name": "CAUSES",
+   "fact": "Boeing contributed -$0.24 to Q3 2026 S&P 500 EPS versus -$7.47 in Q3 2025, ranking among the top five index earnings contributors"
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "e61a4f80-c23d-455c-9198-46ce9c4ec099",
+   "name": "PUBLISHES_DATA_FOR",
+   "fact": "Investing.com publishes S&P 500 (SPX) historical data."
+  },
+  {
+   "source": "106742af-9da0-4a66-bed6-97cc700def8c",
+   "target": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "name": "CUSTOMER_OF",
+   "fact": "Hyperscaler capex cohort [S31]（sign=+，strength=0.6，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "69b8bc32-f974-4b3e-ba72-1f37fd51341d",
+   "target": "2c669d73-e3c5-4a68-8279-e1c246784e55",
+   "name": "REPORTED_BY",
+   "fact": "Average Hourly Earnings of All Employees, Total Private at 37.81 Dollars per Hour for 2026-09 was reported by FRED."
+  },
+  {
+   "source": "884f723d-7f3b-4ae4-96ea-b506df59103f",
+   "target": "3f99abc9-5c96-4a5d-9ee8-5108f9870d25",
+   "name": "TRIGGERS",
+   "fact": "A hawkish revision to the September SEP — whose median is 4.1% at end-2026 holding through 2027, with 16 of 18 participants expecting one more 2026 hike — would feed the Melt-up then correction scenario (30%)."
+  },
+  {
+   "source": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "target": "6f936451-3169-4815-88b0-100799e03e44",
+   "name": "TRIGGERS",
+   "fact": "SAHMREALTIME at or above its 0.50pp trigger would confirm the labor signature of the Hard landing recession scenario; it stood at 0 percentage points in 2026-09."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "name": "REPORTS_VALUATION_FOR",
+   "fact": "FactSet reports the S&P 500 forward 12-month P/E of 19.0 as of 16 October 2026, below its 5-year (19.8) and 10-year (19.1) averages."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "149ebd4d-c7b0-4442-a9c0-c9e62e6f9cae",
+   "name": "PUBLISHES_DATA_FOR",
+   "fact": "Multpl publishes S&P 500 historical prices by year."
+  },
+  {
+   "source": "cf23466a-1f54-434a-a262-e296ccf1a033",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "TRIGGERS",
+   "fact": "If the other 493 companies outgrow the Mag 7 in Q4 2026 EPS reports, it confirms the breadth behind the AI-driven reacceleration scenario (35% probability)"
+  },
+  {
+   "source": "ea785287-0428-4b36-8ae6-a76328870135",
+   "target": "09692b98-58b7-4c05-b3ab-ce8024cb8963",
+   "name": "IS_A",
+   "fact": "Official GDP and corporate-profits data for recession and margin calls；- 角色定位: Official GDP and corporate-profits data for recession and margin calls；- 立场: Neutral statistical agency；- 影响力: medium；- 目标/动机: Official statistics；- 资源/能力: National accounts；- 言行差异: —；- 已知事实/记忆: —（simulation_tier=3，salience=0.45）"
+  },
+  {
+   "source": "cabfd04e-2369-4626-9e44-4864d31104c8",
+   "target": "34ba27a1-a1e2-4641-81dc-3f740af9f9c0",
+   "name": "TRIGGERS",
+   "fact": "The September 2026 FOMC statement's unanimous 25 bp hike caused the effective federal funds rate to average 3.75% in September 2026, up from 3.63% in June 2026."
+  },
+  {
+   "source": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "target": "e839da17-de79-46a2-832f-e15f41940974",
+   "name": "INFLUENCES",
+   "fact": "A Sahm indicator of 0 percentage points (September 2026) and smoothed recession probability of 0.62% (August 2026) leave the FOMC Committee room to hold or hike."
+  },
+  {
+   "source": "96720b6f-3e68-41c7-9519-bcd1c0ae6716",
+   "target": "231c548d-8bda-421c-9817-89ff57886954",
+   "name": "OFFICIAL_CLOSES_SETTLE_RELATED_CONTRACTS",
+   "fact": "Settlement basis conventions [S2][S42]（sign=+，strength=0.3，valence=neutral，polarity=0.20）"
+  },
+  {
+   "source": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "target": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "CAUSES",
+   "fact": "Ex-Micron/NVIDIA blended Q3 2026 S&P 500 earnings growth sliding from 20.0% toward zero would confirm the Bear market and drawdown scenario."
+  },
+  {
+   "source": "3e4a40d7-09c6-4ff2-b35a-7167a4572f5b",
+   "target": "7935947c-cf08-48eb-a5a0-35945a2c23cc",
+   "name": "INFLUENCES",
+   "fact": "Excluding Micron and NVIDIA alone, Q3 2026 blended earnings growth falls from 29.0% to 20.0%, showing Micron's outsized influence on index earnings."
+  },
+  {
+   "source": "98d3d805-537b-493d-8bc5-d5968cf2fa3a",
+   "target": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "name": "PUBLISHES",
+   "fact": "The Federal Reserve Bank of St. Louis (FRED) publishes the Real-time Sahm Rule Recession Indicator for the United States."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "9e979755-f49d-42f8-b215-b9e8b820b216",
+   "name": "PUBLISHES_RESEARCH_ON",
+   "fact": "The Cube Research published 'Jensen Claims $600B in Annual CAPEX Spend - Wait, What?' examining hyperscaler capex claims affecting S&P 500 earnings narratives."
+  },
+  {
+   "source": "9816909e-5791-422f-8056-03b3f5449e9f",
+   "target": "cabfd04e-2369-4626-9e44-4864d31104c8",
+   "name": "SUMMARIZES",
+   "fact": "J.P. Morgan's summary of the September 2026 FOMC statement reports a unanimous 25 bp hike."
+  },
+  {
+   "source": "149ebd4d-c7b0-4442-a9c0-c9e62e6f9cae",
+   "target": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "name": "PROVIDES_DATA_FOR",
+   "fact": "A wider Multpl-based set (2003–2021 calendar starts) shows S&P 500 two-year price returns of ≈+34%, +20%, +12%, +21%, +37% and −1%, with a median ≈+20% and no episode worse than about −1%."
+  },
+  {
+   "source": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "target": "3f99abc9-5c96-4a5d-9ee8-5108f9870d25",
+   "name": "SUPPORTS",
+   "fact": "The zero Sahm reading (September 2026) fits the no-recession scenarios, including Melt-up then correction (30%)."
+  },
+  {
+   "source": "24ebe58c-e4fd-4493-bd9a-50927987d19b",
+   "target": "77c72bb5-dbd9-4032-9dff-e962911bc9a2",
+   "name": "TRIGGERS",
+   "fact": "The Federal Reserve Bank of New York's yield-curve leading indicator page provides recession probabilities used to assess the US recession by end of 2026 forecast scenario."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "951e7846-3d0a-4969-aade-9b9d5e596401",
+   "name": "FORECASTS",
+   "fact": "Goldman Sachs Research (23 Sep 2026) forecasts S&P 500 EPS of $415 for CY2027 and $460 for CY2028 (~11% per year) and a next-12-month index target of 8,700, from 7,764 on 21 Sep 2026."
+  },
+  {
+   "source": "9816909e-5791-422f-8056-03b3f5449e9f",
+   "target": "e839da17-de79-46a2-832f-e15f41940974",
+   "name": "SUMMARIZED",
+   "fact": "J.P. Morgan's summary of the September 2026 FOMC statement records a unanimous 25 bp hike."
+  },
+  {
+   "source": "c5c58bc9-245d-44b3-8a81-16b5bbc6ba7f",
+   "target": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "name": "CONSTRAINS",
+   "fact": "The trailing as-reported P/E was 26.15 on 2026-10-22 and has exceeded 22 continuously since January 2024, making valuation the key vulnerability of the S&P 500."
+  },
+  {
+   "source": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "target": "3f99abc9-5c96-4a5d-9ee8-5108f9870d25",
+   "name": "TRIGGERS",
+   "fact": "Renewed Micron/NVIDIA dependence in S&P 500 earnings growth would mark the fragility central to the Melt-up then correction scenario (30%)"
+  },
+  {
+   "source": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "CONSTRAINS",
+   "fact": "Broadening of S&P 500 earnings growth away from NVIDIA and Micron dependence is required by the AI-driven reacceleration (35%) scenario."
+  },
+  {
+   "source": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "target": "9e979755-f49d-42f8-b215-b9e8b820b216",
+   "name": "DISPUTED_BY",
+   "fact": "The Cube Research flags NVIDIA CEO's claim of $600 billion in annual hyperscaler capex as unvalidated by the leading hyperscalers"
+  },
+  {
+   "source": "ef705099-7deb-4a62-9e2a-659d0f8c6c6a",
+   "target": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "TRIGGERS",
+   "fact": "Hike odds for the October 2026 FOMC meeting repricing beyond 16.1% would confirm the Bear market and drawdown scenario."
+  },
+  {
+   "source": "9816909e-5791-422f-8056-03b3f5449e9f",
+   "target": "cabfd04e-2369-4626-9e44-4864d31104c8",
+   "name": "BACKS",
+   "fact": "J.P. Morgan Asset Management published a summary of the FOMC Statement for September 2026."
+  },
+  {
+   "source": "3e4a40d7-09c6-4ff2-b35a-7167a4572f5b",
+   "target": "3f99abc9-5c96-4a5d-9ee8-5108f9870d25",
+   "name": "TRIGGERS",
+   "fact": "Renewed Micron/NVIDIA dependence in S&P 500 earnings growth would mark the fragility central to the Melt-up then correction scenario (30%)"
+  },
+  {
+   "source": "951e7846-3d0a-4969-aade-9b9d5e596401",
+   "target": "7b3f97e7-e458-4ff2-95d6-1f4aa40fe794",
+   "name": "BASES_FORECAST_ON",
+   "fact": "Goldman Sachs Research ties its 2027 earnings path to solid GDP growth."
+  },
+  {
+   "source": "0f37ce32-1f61-4f33-8cd8-06ff5a9da8ca",
+   "target": "3f99abc9-5c96-4a5d-9ee8-5108f9870d25",
+   "name": "CONSTRAINS",
+   "fact": "The FOMC 8–9 December 2026 meeting (with SEP) constrains the forecast paths; a hike delivered there would steepen the discount-rate leg of every path, pressuring the Melt-up then correction scenario."
+  },
+  {
+   "source": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "target": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "TRIGGERS",
+   "fact": "Earnings concentration in NVIDIA (and Micron) — with ex-Micron/NVIDIA blended growth of 20.0% versus 29.0% — is upward-adjusting evidence supporting the Bear market and drawdown scenario."
+  },
+  {
+   "source": "b621c72c-37ca-4d54-b6df-1da1918588d4",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "TRIGGERS",
+   "fact": "Hyperscaler capex near $800bn in 2026 (+94% over 2025) would confirm the AI-driven reacceleration scenario, while 2027 capex cuts would falsify it."
+  },
+  {
+   "source": "49b9e8a9-af82-4752-a5cb-33ce9d155e7e",
+   "target": "e839da17-de79-46a2-832f-e15f41940974",
+   "name": "INFLUENCES",
+   "fact": "Monthly recession-model updates [S14][S40]（sign=+，strength=0.4，valence=directional，polarity=0.30）"
+  },
+  {
+   "source": "3e4a40d7-09c6-4ff2-b35a-7167a4572f5b",
+   "target": "3f99abc9-5c96-4a5d-9ee8-5108f9870d25",
+   "name": "TRIGGERS",
+   "fact": "Renewed dependence on Micron (with NVIDIA) would mark the fragility central to the Melt-up then correction (30%) scenario."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "60a4e448-2d9c-44df-a698-934598ede8e6",
+   "name": "CONSTRAINS",
+   "fact": "The 10-year minus 3-month Treasury curve at 0.896% (September 2026) is a leading indicator to watch for the S&P 500 outlook."
+  },
+  {
+   "source": "bd526411-8651-451d-8d96-a8044a1b85fa",
+   "target": "3f99abc9-5c96-4a5d-9ee8-5108f9870d25",
+   "name": "TRIGGERS",
+   "fact": "The top-10 index weight rising above the record 40.7% by end-2027 is the concentration leg of the Melt-up then correction scenario (30% probability)"
+  },
+  {
+   "source": "5c99c74d-0ed3-42c2-8461-bdae3bf033a0",
+   "target": "09692b98-58b7-4c05-b3ab-ce8024cb8963",
+   "name": "IS_A",
+   "fact": "Publishes alternative yield-curve recession-probability model；- 角色定位: Publishes alternative yield-curve recession-probability model；- 立场: Model put 1-year-ahead recession probability at 11.4% for September 2026, down from 12.3% in August；- 影响力: medium；- 目标/动机: Macro surveillance；- 约束: Same curve-only scope limits；- 资源/能力: Recession model；- 言行差异: —；- 已知事实/记忆: —（simulation_tier=3，salience=0.50）"
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "3e4a40d7-09c6-4ff2-b35a-7167a4572f5b",
+   "name": "CAUSES",
+   "fact": "Micron is a top EPS contributor to S&P 500 Q3 2026 earnings ($33.42 vs $3.03 a year earlier); excluding Micron and NVIDIA alone drops FactSet's blended Q3 2026 index earnings growth from 29.0% to 20.0%"
+  },
+  {
+   "source": "76be37bc-ea15-4d39-9cf3-03d20c37630b",
+   "target": "76be37bc-ea15-4d39-9cf3-03d20c37630b",
+   "name": "PUBLISHES",
+   "fact": "GuruFocus publishes the S&P 500 PE Ratio, reported at 25.943 as of 2026-10-22."
+  },
+  {
+   "source": "2c669d73-e3c5-4a68-8279-e1c246784e55",
+   "target": "69b8bc32-f974-4b3e-ba72-1f37fd51341d",
+   "name": "BACKS",
+   "fact": "FRED is the official series source for Average Hourly Earnings of All Employees, Total Private — United States, whose latest observation was up from a year earlier and the highest in the charted period."
+  },
+  {
+   "source": "9fa0b815-8a03-4c4c-8b3e-af10f0415770",
+   "target": "34ba27a1-a1e2-4641-81dc-3f740af9f9c0",
+   "name": "PRICES",
+   "fact": "The 30 Day Federal Funds Futures quotes on CME Group reflect market expectations for the Fed Funds Rate."
+  },
+  {
+   "source": "cabfd04e-2369-4626-9e44-4864d31104c8",
+   "target": "d3f33052-91a5-4ef8-874b-e9253c93c9bf",
+   "name": "CAUSES",
+   "fact": "The September 2026 FOMC unanimous decision raised the fed funds target-range upper limit by 25 bp to 4% as of 2026-09, still 4% on the daily reading of 2026-10-23."
+  },
+  {
+   "source": "e1a15d8c-50ae-49bd-9bf1-96df0163b8f6",
+   "target": "34ba27a1-a1e2-4641-81dc-3f740af9f9c0",
+   "name": "REPORTS_ON",
+   "fact": "BIS records the end-September 2026 US policy-rate midpoint at 3.875%, while the effective federal funds rate averaged 3.75% in September 2026."
+  },
+  {
+   "source": "9816909e-5791-422f-8056-03b3f5449e9f",
+   "target": "884f723d-7f3b-4ae4-96ea-b506df59103f",
+   "name": "SUMMARIZES",
+   "fact": "J.P. Morgan's read of the September 2026 Summary of Economic Projections reports a median fed funds rate of 4.1% at end-2026, unchanged through 2027, with a 2027 participant range of 3.125% to 4.375%."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "name": "INFLUENCES",
+   "fact": "Excluding Micron and NVIDIA alone, S&P 500 blended Q3 2026 blended earnings growth falls from 29.0% to 20.0%, so margin resilience is concentrated rather than broad-based."
+  },
+  {
+   "source": "8692bf4a-0e19-44a4-b9fa-b1fae91615d3",
+   "target": "4f445a6f-bbd1-45fe-84a4-2e5f4453774d",
+   "name": "REGULATES",
+   "fact": "China tariff rate 24.3%; Section 301 tariffs [S51]（sign=-，strength=0.6，valence=directional，polarity=-0.50）"
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "951e7846-3d0a-4969-aade-9b9d5e596401",
+   "name": "PUBLISHES_RESEARCH_ON",
+   "fact": "Goldman Sachs published an article 'Can AI Investment Drive S&P 500 Earnings Even Higher?' on the S&P 500."
+  },
+  {
+   "source": "24ebe58c-e4fd-4493-bd9a-50927987d19b",
+   "target": "6f936451-3169-4815-88b0-100799e03e44",
+   "name": "CONSTRAINS",
+   "fact": "The monthly NY Fed recession-model update (first two weeks of each month) is a monitored decision point that discriminates the Hard landing recession scenario (10%)."
+  },
+  {
+   "source": "98d3d805-537b-493d-8bc5-d5968cf2fa3a",
+   "target": "69b8bc32-f974-4b3e-ba72-1f37fd51341d",
+   "name": "PUBLISHES",
+   "fact": "The Federal Reserve Bank of St. Louis (FRED) publishes the Average Hourly Earnings of All Employees, Total Private series for the United States."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "6f936451-3169-4815-88b0-100799e03e44",
+   "name": "CAUSES",
+   "fact": "The Hard landing recession scenario (10% probability) is a breach scenario that would drive a 25–35% S&P 500 drawdown, together with Bear market and drawdown giving 30% combined breach weight."
+  },
+  {
+   "source": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "TRIGGERS",
+   "fact": "FactSet's CY2027 earnings growth projection of 15.8% is cited as upward-adjusting evidence supporting the AI-driven reacceleration scenario."
+  },
+  {
+   "source": "cabfd04e-2369-4626-9e44-4864d31104c8",
+   "target": "34ba27a1-a1e2-4641-81dc-3f740af9f9c0",
+   "name": "CAUSES",
+   "fact": "The September 2026 FOMC 25 bp hike moved the effective fed funds rate up from 3.63% in June 2026 to an average of 3.75% in September 2026, printing 3.88% on 2026-10-22."
+  },
+  {
+   "source": "45ebd434-8ea9-4f58-a51b-8350996b7850",
+   "target": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "name": "CITES",
+   "fact": "Oak Harvest (21 Aug 2026), citing FactSet, reports CY2026 EPS of $358.66 and CY2027 EPS of $405.17 for the S&P 500."
+  },
+  {
+   "source": "ef705099-7deb-4a62-9e2a-659d0f8c6c6a",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "CONSTRAINS",
+   "fact": "The 27–28 October 2026 FOMC meeting (FedWatch, 21 Oct 2026: 83.9% no change / 16.1% hike) discriminates between AI-driven reacceleration (35%) and Melt-up then correction (30%)."
+  },
+  {
+   "source": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "target": "8c10ce4d-9e1d-4ddd-a5f1-2f8da551c535",
+   "name": "REPORTS_RESULTS_OF",
+   "fact": "Per FactSet as of 16 October 2026, blended Q3 2026 earnings growth is 29.0% (29.2% at 30 September); of the 9% of companies reported, 84% beat EPS estimates versus a 78% five-year average, but the aggregate surprise of +2.6% trails the +7.5% five-year average; calendar-2026 consensus is +32.8%."
+  },
+  {
+   "source": "b6b22b90-af28-4c4e-9b1b-7aee13559c55",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "TRIGGERS",
+   "fact": "The Magnificent 7 versus other-493 growth gap (33.2% vs 27.7% in Q3 2026) measures the broadening that the AI-driven reacceleration scenario requires"
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "c5c58bc9-245d-44b3-8a81-16b5bbc6ba7f",
+   "name": "CONSTRAINS",
+   "fact": "The S&P 500 trailing as-reported P/E, at 26.15 on 22 October 2026 and above 22 every month since January 2024, constrains the S&P 500's valuation-carry risk."
+  },
+  {
+   "source": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "target": "6f936451-3169-4815-88b0-100799e03e44",
+   "name": "CONSTRAINS",
+   "fact": "A zero Sahm rule reading (September 2026), together with a positive 10-year minus 3-month curve, fits the no-recession scenarios and would have to break — or be overridden by non-curve shocks — for the Hard landing recession scenario (10%) to play out."
+  },
+  {
+   "source": "b3a1edb7-199e-406c-82a9-dc10398ed3ee",
+   "target": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "name": "CAUSES",
+   "fact": "The stagnant sideways grind scenario (5% probability) leaves the S&P 500 in 2027 within a few percent of current levels due to flat revisions and multiple compression."
+  },
+  {
+   "source": "9816909e-5791-422f-8056-03b3f5449e9f",
+   "target": "f194842e-1579-4366-bf1a-6d6432ee0618",
+   "name": "PROVIDES_PROJECTION_FOR",
+   "fact": "J.P. Morgan's read of the September 2026 SEP projects a median fed funds rate of 4.1% through 2027 for the 2027 FOMC meetings (dates unpublished), versus a market-implied ~4.56%–4.7% for late 2027."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "e61a4f80-c23d-455c-9198-46ce9c4ec099",
+   "name": "REPORTS_CLOSE_OF",
+   "fact": "Investing.com shows an S&P 500 close of 7,639.06 for the as-of date (23 October 2026), a gap from the WSJ close likely reflecting snapshot timing or settlement differences."
+  },
+  {
+   "source": "77c72bb5-dbd9-4032-9dff-e962911bc9a2",
+   "target": "6f936451-3169-4815-88b0-100799e03e44",
+   "name": "CONSTRAINS",
+   "fact": "Recession by end-2027, required under the Hard landing recession scenario, must be no less likely than recession by end-2026, quoted at 8% on the Polymarket contract."
+  },
+  {
+   "source": "96720b6f-3e68-41c7-9519-bcd1c0ae6716",
+   "target": "96720b6f-3e68-41c7-9519-bcd1c0ae6716",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "S&P Dow Jones Indices 亦称 S&P DJI"
+  },
+  {
+   "source": "b3a1edb7-199e-406c-82a9-dc10398ed3ee",
+   "target": "0f37ce32-1f61-4f33-8cd8-06ff5a9da8ca",
+   "name": "CONSTRAINS",
+   "fact": "The FOMC meeting of December 8–9, 2026, which includes a Summary of Economic Projections, is a leading indicator constraining the forecast scenarios for the S&P 500."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "ca626c28-12d6-4678-8b15-a8ffb324b0d5",
+   "name": "BACKS",
+   "fact": "The Wall Street Journal publishes S&P 500 Index (SPX) price and news data used as a vendor close source."
+  },
+  {
+   "source": "0f37ce32-1f61-4f33-8cd8-06ff5a9da8ca",
+   "target": "6f936451-3169-4815-88b0-100799e03e44",
+   "name": "TRIGGERS",
+   "fact": "The 8–9 December 2026 FOMC meeting with SEP is a decision point that discriminates the Hard landing recession scenario (10%)."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "0f37ce32-1f61-4f33-8cd8-06ff5a9da8ca",
+   "name": "CONSTRAINS",
+   "fact": "The December 8–9, 2026 FOMC meeting with SEP tests the 4.1% 2027 median fed funds rate projection, bearing on the S&P 500 outlook."
+  },
+  {
+   "source": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "target": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "CONSTRAINS",
+   "fact": "The Sahm rule at 0 percentage points in September 2026 serves as downward-adjusting evidence against the Bear market and drawdown scenario."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "2c669d73-e3c5-4a68-8279-e1c246784e55",
+   "name": "REPORTED_BY",
+   "fact": "The S&P 500 (United States) monthly observation of 7669.4143 Index for 2026-09 was reported by FRED (monthly mean of daily data; latest daily 2026-10-21: 7757.17)."
+  },
+  {
+   "source": "e1a15d8c-50ae-49bd-9bf1-96df0163b8f6",
+   "target": "d3f33052-91a5-4ef8-874b-e9253c93c9bf",
+   "name": "RECORDS",
+   "fact": "BIS records the US policy rate (end of period) at 3.875% per year for end-of-September 2026, related to the fed funds policy rate."
+  },
+  {
+   "source": "49b9e8a9-af82-4752-a5cb-33ce9d155e7e",
+   "target": "24ebe58c-e4fd-4493-bd9a-50927987d19b",
+   "name": "PUBLISHES",
+   "fact": "The New York Fed publishes the Probability of US Recession Predicted by Treasury Spread model (PDF)."
+  },
+  {
+   "source": "adc1be00-ec77-46d7-90f8-c34e2ffdfa88",
+   "target": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "CONSTRAINS",
+   "fact": "A smoothed recession probability of 0.62% in August 2026 serves as downward-adjusting evidence against the Bear market and drawdown scenario."
+  },
+  {
+   "source": "c5c58bc9-245d-44b3-8a81-16b5bbc6ba7f",
+   "target": "b3a1edb7-199e-406c-82a9-dc10398ed3ee",
+   "name": "CONSTRAINS",
+   "fact": "The Stagnant sideways grind scenario (5%) requires the trailing multiple compressing toward 22 with prices roughly flat, per the Multpl trailing as-reported P/E falsifier."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "bd526411-8651-451d-8d96-a8044a1b85fa",
+   "name": "CONSTRAINS",
+   "fact": "The S&P 500 top-10 index weight, at a record 40.7% in 2025, is monitored for whether it remains at or above 38% at end-2027 (50% assessed chance), using S&P DJI constituent data."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "CAUSES",
+   "fact": "The Bear market and drawdown scenario (20% probability) involves a 20%-or-greater closing-basis drawdown of the S&P 500, which would falsify the AI-driven reacceleration scenario."
+  },
+  {
+   "source": "149ebd4d-c7b0-4442-a9c0-c9e62e6f9cae",
+   "target": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "name": "BACKS",
+   "fact": "Multpl provides S&P 500 PE Ratio tables by year and by month used as valuation evidence."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "name": "FORECASTS",
+   "fact": "FactSet Earnings Insight's bottom-up consensus (16 Oct 2026) projects +32.8% YoY earnings growth for CY2026, +28.6% YoY for Q4 2026, and +15.8% YoY for CY2027 (9 Oct 2026 vintage) for the S&P 500."
+  },
+  {
+   "source": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "target": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "name": "CAUSES",
+   "fact": "The AI-driven reacceleration scenario (35% probability) implies roughly 10–15% annual earnings growth and stable multiples for the S&P 500 with no 20% drawdown."
+  },
+  {
+   "source": "c5c58bc9-245d-44b3-8a81-16b5bbc6ba7f",
+   "target": "3f99abc9-5c96-4a5d-9ee8-5108f9870d25",
+   "name": "CONSTRAINS",
+   "fact": "The Multpl trailing P/E, at 26.15 on 2026-10-22, discriminates the Melt-up then correction (30%) scenario if sustained above ~30."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "2c669d73-e3c5-4a68-8279-e1c246784e55",
+   "name": "OFFICIAL_CLOSES_SETTLE_RELATED_CONTRACTS",
+   "fact": "FRED publishes the S&P 500 series (SP500), used as a tier-1 source for index observations."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "725671f0-621e-4750-beab-bcd24dfe07e0",
+   "name": "INFLUENCES",
+   "fact": "Hyperscaler capex guidance from Alphabet is a leading indicator influencing the S&P 500 outlook."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "bdcf0a2c-7478-4440-94e3-f8a572bb8fff",
+   "name": "PROVIDES_DATA_FOR",
+   "fact": "A Slickcharts SPY-holdings snapshot of 2026-10-23 implies a top-10 weight of roughly 38%–39%, a derived sum whose holdings figures could not be verified."
+  },
+  {
+   "source": "ef705099-7deb-4a62-9e2a-659d0f8c6c6a",
+   "target": "d3f33052-91a5-4ef8-874b-e9253c93c9bf",
+   "name": "CAUSES",
+   "fact": "Policy binaries for the FOMC 2026-10-27/28 meeting resolve on the FRED target-range upper limit (4% as of 2026-10-23), with futures pricing a 16.1% probability of a hike."
+  },
+  {
+   "source": "0f37ce32-1f61-4f33-8cd8-06ff5a9da8ca",
+   "target": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "TRIGGERS",
+   "fact": "A hawkish surprise at the FOMC December 8–9, 2026 meeting with SEP (fresh dots, 2027 span 3.125%–4.375%) would trigger the Bear market and drawdown scenario (20%)."
+  },
+  {
+   "source": "3e4a40d7-09c6-4ff2-b35a-7167a4572f5b",
+   "target": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "CAUSES",
+   "fact": "Ex-Micron/NVIDIA blended Q3 2026 S&P 500 earnings growth sliding from 20.0% toward zero would confirm the Bear market and drawdown scenario."
+  },
+  {
+   "source": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "CONSTRAINS",
+   "fact": "A FactSet CY2027 EPS growth estimate revised below ~10% (October 2026 level: 15.8%) would falsify the AI-driven reacceleration scenario (35%)."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "951e7846-3d0a-4969-aade-9b9d5e596401",
+   "name": "CAUSES",
+   "fact": "Goldman Sachs Research projects hyperscaler capex of $800 billion in 2026 (+94% over 2025) driving EPS of $415 for 2027 and $460 for 2028, which carries the S&P 500 to roughly 8,700 by end-2027."
+  },
+  {
+   "source": "0d71aa9c-6704-4ba5-8eef-2a85405a6951",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "TRIGGERS",
+   "fact": "A FactSet CY2027 growth estimate below 10% by mid-2027 would kill the 'AI-driven reacceleration' scenario (35% probability)."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "951e7846-3d0a-4969-aade-9b9d5e596401",
+   "name": "CAUSES",
+   "fact": "Goldman Sachs Research attributes 'almost half' of 2026 S&P 500 index EPS growth to AI investment, with the largest US hyperscalers spending an estimated $800 billion on capex in 2026 (+94% over 2025)."
+  },
+  {
+   "source": "5c99c74d-0ed3-42c2-8461-bdae3bf033a0",
+   "target": "6ab8a6c7-30c9-4a5f-86ac-81d03d27021c",
+   "name": "PUBLISHES",
+   "fact": "The Federal Reserve Bank of Cleveland publishes the Yield Curve and Predicted GDP Growth indicator on its indicators and data pages."
+  },
+  {
+   "source": "cabfd04e-2369-4626-9e44-4864d31104c8",
+   "target": "7b3f97e7-e458-4ff2-95d6-1f4aa40fe794",
+   "name": "PUBLISHES_PROJECTION",
+   "fact": "The September 2026 FOMC materials report median real GDP of 2.0% (2026) and 2.1% (2027)."
+  },
+  {
+   "source": "ef705099-7deb-4a62-9e2a-659d0f8c6c6a",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "CONSTRAINS",
+   "fact": "A hike at the 27–28 October 2026 FOMC meeting would tighten the multiple constraint on the AI-driven reacceleration scenario (35%)."
+  },
+  {
+   "source": "98d3d805-537b-493d-8bc5-d5968cf2fa3a",
+   "target": "60a4e448-2d9c-44df-a698-934598ede8e6",
+   "name": "PUBLISHES",
+   "fact": "The Federal Reserve Bank of St. Louis (FRED) publishes the 10-Year minus 3-Month Treasury Constant Maturity spread series for the United States."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "adc1be00-ec77-46d7-90f8-c34e2ffdfa88",
+   "name": "CONSTRAINS",
+   "fact": "The smoothed US recession probability of 0.62% (August 2026) is quiet, supporting the modal upward path for the S&P 500 through 2027."
+  },
+  {
+   "source": "2c669d73-e3c5-4a68-8279-e1c246784e55",
+   "target": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the SAHMREALTIME series, the resolution source for the Sahm rule recession-trigger binary B11."
+  },
+  {
+   "source": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "target": "7935947c-cf08-48eb-a5a0-35945a2c23cc",
+   "name": "INFLUENCES",
+   "fact": "Excluding NVIDIA and Micron alone, Q3 2026 blended earnings growth falls from 29.0% to 20.0%, showing NVIDIA's outsized influence on index earnings."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "96720b6f-3e68-41c7-9519-bcd1c0ae6716",
+   "name": "OFFICIAL_CLOSES_SETTLE_RELATED_CONTRACTS",
+   "fact": "S&P Dow Jones Indices publishes the S&P 500 index, whose official closes are referenced across the research."
+  },
+  {
+   "source": "ef705099-7deb-4a62-9e2a-659d0f8c6c6a",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "CONSTRAINS",
+   "fact": "The FOMC 27–28 October 2026 meeting, with a 16.1% priced probability of a hike (CME FedWatch, 21 Oct 2026), constrains scenarios: a delivered hike would steepen the discount-rate leg of every path including AI-driven reacceleration."
+  },
+  {
+   "source": "49b9e8a9-af82-4752-a5cb-33ce9d155e7e",
+   "target": "49b9e8a9-af82-4752-a5cb-33ce9d155e7e",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "New York Fed 亦称 NY Fed"
+  },
+  {
+   "source": "60a4e448-2d9c-44df-a698-934598ede8e6",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "CONSTRAINS",
+   "fact": "A negative T10Y3M (10-year minus 3-month Treasury spread) would lift the NY Fed model's 12-month-ahead recession probability and challenge the discount-rate assumption in the AI-driven reacceleration scenario; the spread was 0.78% on 2026-10-23."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "69b8bc32-f974-4b3e-ba72-1f37fd51341d",
+   "name": "CONSTRAINS",
+   "fact": "Average Hourly Earnings YoY back above its five-year high of 4.214% (set 2025-03) would create cost pressure challenging AI-driven reacceleration and the S&P 500 outlook."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "d0c9737e-7533-4d43-bbb0-3d307069b167",
+   "name": "PUBLISHES_DATA_FOR",
+   "fact": "Macrotrends publishes S&P 500 historical annual returns covering 1927-2026."
+  },
+  {
+   "source": "cb278786-0d95-49b3-a745-aaa1c0771f33",
+   "target": "813af227-6bf4-46f1-8964-cbd75201945c",
+   "name": "OPPOSES",
+   "fact": "Guinness Global Investors' argument that mega-cap earnings dominance is \"now fading\" is an offset to RBC Wealth Management's concentration-risk framing."
+  },
+  {
+   "source": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "target": "b3a1edb7-199e-406c-82a9-dc10398ed3ee",
+   "name": "SUPPORTS",
+   "fact": "The zero Sahm reading (September 2026) fits the no-recession scenarios, including Stagnant sideways grind (5%)."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "eac39ecb-8f8c-4ed9-9ffa-3233cbfe7303",
+   "name": "CONSTRAINS",
+   "fact": "Effective tariff rate back above the 10.1% pre-substitution mark would revive the cost-shock channel behind a bear market and drawdown in the S&P 500."
+  },
+  {
+   "source": "ea785287-0428-4b36-8ae6-a76328870135",
+   "target": "ea785287-0428-4b36-8ae6-a76328870135",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "US Bureau of Economic Analysis 亦称 BEA"
+  },
+  {
+   "source": "c792742a-fb9c-4911-bad0-5eb3f518c0b8",
+   "target": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "name": "REPRESENTS",
+   "fact": "Jensen Huang is the chief executive of NVIDIA and has claimed $600 billion in annual hyperscaler capex."
+  },
+  {
+   "source": "adc1be00-ec77-46d7-90f8-c34e2ffdfa88",
+   "target": "6f936451-3169-4815-88b0-100799e03e44",
+   "name": "TRIGGERS",
+   "fact": "A smoothed recession probability rising toward its January 2024 high of 2.32% would be the first labour-model support for Hard landing recession (10%); it stood at 0.62% in August 2026."
+  },
+  {
+   "source": "bdcf0a2c-7478-4440-94e3-f8a572bb8fff",
+   "target": "bd526411-8651-451d-8d96-a8044a1b85fa",
+   "name": "REPORTS",
+   "fact": "A Slickcharts snapshot implies a top-10 S&P 500 index weight of roughly 38–39%, below the record 40.7%"
+  },
+  {
+   "source": "60a4e448-2d9c-44df-a698-934598ede8e6",
+   "target": "24ebe58c-e4fd-4493-bd9a-50927987d19b",
+   "name": "INFLUENCES",
+   "fact": "A negative T10Y3M would lift the NY Fed recession model's 12-month-ahead probability, challenging the discount-rate assumption in the AI-driven reacceleration scenario."
+  },
+  {
+   "source": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "target": "2c669d73-e3c5-4a68-8279-e1c246784e55",
+   "name": "REPORTED_BY",
+   "fact": "The Real-time Sahm Rule Recession Indicator value of 0 Percentage Points for 2026-09 was reported by FRED."
+  },
+  {
+   "source": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "target": "813af227-6bf4-46f1-8964-cbd75201945c",
+   "name": "INFLUENCES",
+   "fact": "Both used for breadth tracking [S7][S9]（sign=+，strength=0.3，valence=directional，polarity=0.30）"
+  },
+  {
+   "source": "bdcf0a2c-7478-4440-94e3-f8a572bb8fff",
+   "target": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "name": "PUBLISHES_DATA_FOR",
+   "fact": "Slickcharts publishes S&P 500 total returns by year since 1926."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "2c669d73-e3c5-4a68-8279-e1c246784e55",
+   "name": "PROVIDES_DATA_FOR",
+   "fact": "Two-year returns from P/E>22 starts were computed from FRED's SP500 monthly means for the S&P 500."
+  },
+  {
+   "source": "e03a24f5-ba7b-4de2-b46d-937af5f1c345",
+   "target": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "CONSTRAINS",
+   "fact": "Morgan Stanley's 1985–2024 study of more than 6,500 single stocks found a median maximum drawdown of -85.4%, bounding the idiosyncratic de-rating channel behind the Bear market and drawdown scenario (20%)"
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "cf23466a-1f54-434a-a262-e296ccf1a033",
+   "name": "CONSTRAINS",
+   "fact": "The February 2027 Mag 7 vs 493 EPS comparison tests the breadth of the earnings leg for the S&P 500."
+  },
+  {
+   "source": "3e4a40d7-09c6-4ff2-b35a-7167a4572f5b",
+   "target": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "TRIGGERS",
+   "fact": "Earnings concentration in Micron (and NVIDIA) — with ex-Micron/NVIDIA blended growth of 20.0% versus 29.0% — is upward-adjusting evidence supporting the Bear market and drawdown scenario."
+  },
+  {
+   "source": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "target": "b6b22b90-af28-4c4e-9b1b-7aee13559c55",
+   "name": "PUBLISHES_RESEARCH_ON",
+   "fact": "FactSet published analysis titled 'Are \"Magnificent 7\" Companies Still Top Contributors to S&P 500 Earnings Growth for Q3?' covering the Magnificent 7 companies."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "name": "INFLUENCES",
+   "fact": "Hyperscaler capex guidance from NVIDIA is a leading indicator influencing the S&P 500 outlook."
+  },
+  {
+   "source": "725671f0-621e-4750-beab-bcd24dfe07e0",
+   "target": "725671f0-621e-4750-beab-bcd24dfe07e0",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Alphabet (Google) 亦称 Google"
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "951e7846-3d0a-4969-aade-9b9d5e596401",
+   "name": "BACKS",
+   "fact": "Goldman Sachs Research's 12-month S&P 500 target of 8,700 (from 7,764 on 21 September 2026), implying a forward P/E near 19x, is the cited forecaster view most consistent with no near-term mean reversion."
+  },
+  {
+   "source": "96a60a1c-ee7f-4e7b-8ffb-b8fa31ccda68",
+   "target": "b3dc0c9b-9b65-4e72-85f2-5ed38454914e",
+   "name": "IS_A",
+   "fact": "Volatility pricing signalling drawdown risk conditioning；- 角色定位: Volatility pricing signalling drawdown risk conditioning；- 立场: Market-based signal; no specific VIX level retrieved；- 影响力: medium；- 目标/动机: Price risk；- 资源/能力: Options market；- 言行差异: —；- 已知事实/记忆: —（simulation_tier=3，salience=0.50）"
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "813af227-6bf4-46f1-8964-cbd75201945c",
+   "name": "INFLUENCES",
+   "fact": "RBC documents that S&P 500 concentration means diversification increasingly functions as a concentrated allocation in a single thematic outcome, so a top-10 de-rating passes one-for-one through index weight, amplified by passive flows"
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "name": "CONSTRAINS",
+   "fact": "The real-time Sahm rule, currently 0 percentage points (September 2026), is a leading indicator to watch for the S&P 500 path; a rising Sahm rule would confirm a Bear market and drawdown."
+  },
+  {
+   "source": "7116e1c0-9dc9-4413-bc4c-61ddf605b76d",
+   "target": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "name": "CUSTOMER_OF",
+   "fact": "Hyperscaler capex driving AI-chip demand [S31]（sign=+，strength=0.8，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "7116e1c0-9dc9-4413-bc4c-61ddf605b76d",
+   "name": "INFLUENCES",
+   "fact": "Hyperscaler capex guidance from Microsoft is a leading indicator influencing the S&P 500 outlook."
+  },
+  {
+   "source": "9e979755-f49d-42f8-b215-b9e8b820b216",
+   "target": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "name": "DISPUTES",
+   "fact": "The Cube Research says the leading hyperscalers do not validate NVIDIA chief executive Jensen Huang's claimed $600 billion in annual hyperscaler capex."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "9bad5af4-928f-474e-9864-6902ccce3669",
+   "name": "REPORTS_VALUATION_FOR",
+   "fact": "StreetStats valuation snapshot for the S&P 500 is based on the 7,662.54 close on 22 October 2026, showing a trailing P/E of 22.28 on trailing 12-month actual earnings of $343.87 per share and a forward P/E of 18.87 on estimated forward 12-month earnings of $406.12 per share."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "24ebe58c-e4fd-4493-bd9a-50927987d19b",
+   "name": "CONSTRAINS",
+   "fact": "The NY Fed's Treasury-spread model averages 0.15 recession probability for 2027 (model estimate, not observation), informing the S&P 500 outlook."
+  },
+  {
+   "source": "60a4e448-2d9c-44df-a698-934598ede8e6",
+   "target": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "CONSTRAINS",
+   "fact": "The positive 10Y–3M Treasury spread of +0.896% in September 2026 is cited as evidence not in the historical class of breaches, constraining the Bear market and drawdown scenario."
+  },
+  {
+   "source": "951e7846-3d0a-4969-aade-9b9d5e596401",
+   "target": "1824df34-d0df-4ecc-bb23-61b52ad08fbe",
+   "name": "CORROBORATES",
+   "fact": "Goldman Sachs Research documents an endogenous AI hazard (AI investment driving almost half of 2026 EPS growth, fading forward, plus ~$150 billion of unrealized private-company gains that should shrink materially in 2027), consistent with Oxford Economics' 2027 outlook naming a disorderly end to the AI boom as a principal risk."
+  },
+  {
+   "source": "e839da17-de79-46a2-832f-e15f41940974",
+   "target": "951e7846-3d0a-4969-aade-9b9d5e596401",
+   "name": "INFLUENCES",
+   "fact": "SEP median vs futures divergence is the calendar's central tension [S12][S37]（sign=+，strength=0.6，valence=directional，polarity=0.30）"
+  },
+  {
+   "source": "b3a1edb7-199e-406c-82a9-dc10398ed3ee",
+   "target": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "name": "CONSTRAINS",
+   "fact": "FactSet Earnings Insight revisions to CY2026's 32.8% earnings growth and to CY2027 are leading indicators constraining the S&P 500 forecast scenarios; sustained negative CY2027 revisions would kill AI-driven reacceleration."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "813af227-6bf4-46f1-8964-cbd75201945c",
+   "name": "ANALYZES",
+   "fact": "RBC Wealth Management's \"Great Narrowing\" analysis puts the S&P 500 top-10 weight at a record 40.7% in 2025 versus roughly 19% at end-2015 and an 18%–23% band from 1990 to 2015, with the top 10 about 41% of index weight but expected to generate only about 32% of index earnings in 2025."
+  },
+  {
+   "source": "813af227-6bf4-46f1-8964-cbd75201945c",
+   "target": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "name": "OPPOSES",
+   "fact": "Top-10 weight 40.7% vs ~32% of earnings [S9]（sign=-，strength=0.4，valence=adversarial，polarity=-0.40）"
+  },
+  {
+   "source": "e839da17-de79-46a2-832f-e15f41940974",
+   "target": "d3f33052-91a5-4ef8-874b-e9253c93c9bf",
+   "name": "RAISED",
+   "fact": "The September 2026 FOMC meeting raised the Federal Funds Target Range upper limit by a unanimous 25 bp hike."
+  },
+  {
+   "source": "9e979755-f49d-42f8-b215-b9e8b820b216",
+   "target": "c792742a-fb9c-4911-bad0-5eb3f518c0b8",
+   "name": "DISPUTES_CLAIM_BY",
+   "fact": "The Cube Research says the leading hyperscalers do not validate NVIDIA CEO Jensen Huang's claim of $600 billion in annual hyperscaler capex."
+  },
+  {
+   "source": "96720b6f-3e68-41c7-9519-bcd1c0ae6716",
+   "target": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "name": "OFFICIAL_CLOSES_SETTLE_RELATED_CONTRACTS",
+   "fact": "All index levels settle on S&P Dow Jones Indices official closing values of the S&P 500 on a price basis."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "96720b6f-3e68-41c7-9519-bcd1c0ae6716",
+   "name": "PUBLISHES",
+   "fact": "S&P Dow Jones Indices maintains and publishes the S&P 500 Top 10 Index."
+  },
+  {
+   "source": "5d1eccee-c546-45e7-8570-408c15f32cc1",
+   "target": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "name": "CUSTOMER_OF",
+   "fact": "Hyperscaler capex cohort [S31]（sign=+，strength=0.6，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "38611601-4773-4f0e-bbc6-0ef288017973",
+   "target": "e839da17-de79-46a2-832f-e15f41940974",
+   "name": "GOVERNS",
+   "fact": "The Federal Reserve publishes FOMC meeting calendars and information."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "7138c1c2-c0f8-42d2-9fe6-ac155acf3243",
+   "name": "MEASURES",
+   "fact": "The S&P DJI official monthly series shows a September 2026 observation of 7669.4143 Index versus 6584.0181 a year earlier, a 16.485% year-over-year rise; a daily reading of 7757.17 on 2026-10-21 is unconfirmed and inconsistent with vendor closes."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "f0c48c2e-14de-4a40-81f1-e8a5f5696789",
+   "name": "STORES_OBSERVATION_FOR",
+   "fact": "fred:SP500 stores the S&P 500 at 7669.4143 Index for 2026-09 (latest daily value 7757.17 on 2026-10-21), with a year-over-year change of 16.485%."
+  },
+  {
+   "source": "951e7846-3d0a-4969-aade-9b9d5e596401",
+   "target": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "name": "BACKS",
+   "fact": "AI investment drives almost half of 2026 EPS growth [S31]（sign=+，strength=0.6，valence=directional，polarity=0.50）"
+  },
+  {
+   "source": "49b9e8a9-af82-4752-a5cb-33ce9d155e7e",
+   "target": "5c99c74d-0ed3-42c2-8461-bdae3bf033a0",
+   "name": "DISTINGUISHED_FROM",
+   "fact": "The New York Fed's and Cleveland Fed's recession-probability models are twelve-month-ahead term-spread predictions that the New York Fed explicitly disclaims as forecasts, unlike contemporaneous smoothed state probabilities."
+  },
+  {
+   "source": "10578d58-3414-4e78-8cd2-8d82d75f54be",
+   "target": "ef705099-7deb-4a62-9e2a-659d0f8c6c6a",
+   "name": "PRICES_PROBABILITY_FOR",
+   "fact": "CME FedWatch (as of 21 Oct 2026) prices an 83.9% probability of no change and 16.1% probability of a hike for the 28 October 2026 FOMC meeting."
+  },
+  {
+   "source": "b621c72c-37ca-4d54-b6df-1da1918588d4",
+   "target": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "TRIGGERS",
+   "fact": "A hyperscaler capex guidance cut versus the $800bn 2026 track in H1 2027 would feed the 'Bear market and drawdown' scenario (20% probability)."
+  },
+  {
+   "source": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "target": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "FactSet Earnings Insight 亦称 FactSet Earnings Insight consensus"
+  },
+  {
+   "source": "e839da17-de79-46a2-832f-e15f41940974",
+   "target": "e839da17-de79-46a2-832f-e15f41940974",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Federal Open Market Committee 亦称 FOMC"
+  },
+  {
+   "source": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "target": "3f99abc9-5c96-4a5d-9ee8-5108f9870d25",
+   "name": "TRIGGERS",
+   "fact": "Renewed dependence on NVIDIA (with Micron) would mark the fragility central to the Melt-up then correction (30%) scenario."
+  },
+  {
+   "source": "713e82ee-4944-42d5-a013-3177abcae922",
+   "target": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "name": "CONSTRAINS",
+   "fact": "FactSet's CY2026 consensus EPS growth was 32.8% on 16 October 2026, underpinning the earnings-carried advance thesis for the S&P 500."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "45ebd434-8ea9-4f58-a51b-8350996b7850",
+   "name": "PUBLISHES_RESEARCH_ON",
+   "fact": "Oak Harvest Financial Group published 'Earnings Up, Rates Up: Who Wins the Tug-of-War?' (Stock Talk Update, Aug 21, 2026) discussing S&P 500 earnings and rates."
+  },
+  {
+   "source": "e03a24f5-ba7b-4de2-b46d-937af5f1c345",
+   "target": "e03a24f5-ba7b-4de2-b46d-937af5f1c345",
+   "name": "PUBLISHES",
+   "fact": "Morgan Stanley publishes the Counterpoint Global Insights publication (drawdowns and recoveries study) as a PDF on morganstanley.com."
+  },
+  {
+   "source": "6f936451-3169-4815-88b0-100799e03e44",
+   "target": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "name": "CAUSES",
+   "fact": "The hard landing recession scenario (10% probability), driven by a policy or credit shock, produces a 25–35% drawdown and a 2027 S&P 500 close well below 2026."
+  },
+  {
+   "source": "951e7846-3d0a-4969-aade-9b9d5e596401",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "TRIGGERS",
+   "fact": "Goldman Sachs' EPS estimate of $415 in 2027 is cited as upward-adjusting evidence supporting the AI-driven reacceleration scenario."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "ca626c28-12d6-4678-8b15-a8ffb324b0d5",
+   "name": "REPORTS_CLOSE_OF",
+   "fact": "WSJ reports an S&P 500 close of 7,623.68 on 23 October 2026."
+  },
+  {
+   "source": "3e4a40d7-09c6-4ff2-b35a-7167a4572f5b",
+   "target": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "name": "PARTNERS_WITH",
+   "fact": "Both dominate Q3 2026 index EPS contributions [S8]（sign=+，strength=0.5，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "149ebd4d-c7b0-4442-a9c0-c9e62e6f9cae",
+   "target": "c5c58bc9-245d-44b3-8a81-16b5bbc6ba7f",
+   "name": "BACKS",
+   "fact": "Multpl's Shiller-derived data puts the S&P 500 trailing as-reported P/E at 26.15 on 22 October 2026, exceeding 22 every month since January 2024."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "5d1eccee-c546-45e7-8570-408c15f32cc1",
+   "name": "CAUSES",
+   "fact": "Meta Platforms contributed $6.58 to Q3 2026 S&P 500 EPS versus $1.05 in Q3 2025, ranking among the top five index earnings contributors"
+  },
+  {
+   "source": "951e7846-3d0a-4969-aade-9b9d5e596401",
+   "target": "3f99abc9-5c96-4a5d-9ee8-5108f9870d25",
+   "name": "TRIGGERS",
+   "fact": "Goldman Sachs' 12-month index target of 8,700 implies overshoot room, supporting the Melt-up then correction scenario."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "96720b6f-3e68-41c7-9519-bcd1c0ae6716",
+   "name": "OFFICIAL_CLOSES_SETTLE_RELATED_CONTRACTS",
+   "fact": "The official S&P 500 closing level on 31 December 2027 (last trading day) is fixed by S&P Dow Jones Indices and used for contract settlement."
+  },
+  {
+   "source": "8692bf4a-0e19-44a4-b9fa-b1fae91615d3",
+   "target": "106742af-9da0-4a66-bed6-97cc700def8c",
+   "name": "REGULATES",
+   "fact": "Retail margin sensitivity to tariffs and wages [S51][S29]（sign=-，strength=0.5，valence=directional，polarity=-0.30）"
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "cb278786-0d95-49b3-a745-aaa1c0771f33",
+   "name": "ANALYZES",
+   "fact": "Guinness Global Investors (as of 31 December 2025) reports the ten largest S&P 500 stocks grew market value 29% over the trailing period versus roughly 19% for the index and 13% for the rest, while arguing mega-cap earnings dominance is \"now fading\"."
+  },
+  {
+   "source": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "target": "b6b22b90-af28-4c4e-9b1b-7aee13559c55",
+   "name": "REPORTS_ON",
+   "fact": "FactSet's data shows Magnificent 7 estimated Q3 2026 earnings growth of 33.2% versus 27.7% for the other 493 companies, with Q4 2026 predicted at 23.6% versus 30.6% — the first Mag 7 underperformance since Q4 2022 if realised"
+  },
+  {
+   "source": "b3a1edb7-199e-406c-82a9-dc10398ed3ee",
+   "target": "ef705099-7deb-4a62-9e2a-659d0f8c6c6a",
+   "name": "CONSTRAINS",
+   "fact": "The FOMC meeting of October 27–28, 2026 is a leading policy indicator constraining the forecast scenarios for the S&P 500."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "d3f33052-91a5-4ef8-874b-e9253c93c9bf",
+   "name": "CONSTRAINS",
+   "fact": "The federal funds target-range upper limit of 4% (September 2026, daily value on 2026-10-23) constrains the S&P 500 outlook, with policy tight but recession signals quiet supporting a modal path up."
+  },
+  {
+   "source": "6ab8a6c7-30c9-4a5f-86ac-81d03d27021c",
+   "target": "77c72bb5-dbd9-4032-9dff-e962911bc9a2",
+   "name": "TRIGGERS",
+   "fact": "The Federal Reserve Bank of Cleveland's 'Yield Curve and Predicted GDP Growth' indicator provides recession probability estimates relevant to the US recession by end of 2026 forecast scenario."
+  },
+  {
+   "source": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "target": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "name": "CAUSES",
+   "fact": "The bear market and drawdown scenario (20% probability) is triggered by an AI-capex disappointment or mild recession, producing a 20%+ drawdown and a negative two-year return for the S&P 500."
+  },
+  {
+   "source": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "SUPPORTS",
+   "fact": "The zero Sahm reading (September 2026) fits the no-recession scenarios, including AI-driven reacceleration (35%)."
+  },
+  {
+   "source": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "target": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "FALSIFIES",
+   "fact": "The Sahm rule indicator holding at 0 percentage points would falsify the Bear market and drawdown scenario (alongside CY2027 consensus holding 15.8%)."
+  },
+  {
+   "source": "c5c58bc9-245d-44b3-8a81-16b5bbc6ba7f",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "CONSTRAINS",
+   "fact": "A Multpl trailing as-reported P/E below 22 without a 20% closing drawdown would indicate compression via earnings and support the AI-driven reacceleration scenario (35%)."
+  },
+  {
+   "source": "e1a15d8c-50ae-49bd-9bf1-96df0163b8f6",
+   "target": "e1a15d8c-50ae-49bd-9bf1-96df0163b8f6",
+   "name": "RECORDS",
+   "fact": "BIS records the end-of-September 2026 US policy rate at 3.875% per year."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "231c548d-8bda-421c-9817-89ff57886954",
+   "name": "OFFERS_CONTRACTS_ON",
+   "fact": "Polymarket hosts prediction market contracts tied to US macro outcomes (e.g., 'US recession by end of 2026?') that relate to the S&P 500 outlook in the research."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "c8400749-13b0-4f6a-8c72-214dccd230f4",
+   "name": "CAUSES",
+   "fact": "NVIDIA is a top EPS contributor to S&P 500 Q3 2026 earnings ($2.47 vs $1.30 a year earlier); excluding Micron and NVIDIA alone drops FactSet's blended Q3 2026 index earnings growth from 29.0% to 20.0%"
+  },
+  {
+   "source": "7935947c-cf08-48eb-a5a0-35945a2c23cc",
+   "target": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "name": "CONSTRAINS",
+   "fact": "The Q3 2026 blended net margin of 14.9%, the second-highest in more than 15 years, reflects high S&P 500 earnings concentration."
+  },
+  {
+   "source": "3e4a40d7-09c6-4ff2-b35a-7167a4572f5b",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "CONSTRAINS",
+   "fact": "Broadening of S&P 500 earnings growth away from Micron and NVIDIA dependence is required by the AI-driven reacceleration (35%) scenario."
+  },
+  {
+   "source": "bdcf0a2c-7478-4440-94e3-f8a572bb8fff",
+   "target": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "name": "PUBLISHES_DATA_ON",
+   "fact": "Slickcharts publishes S&P 500 companies by weight data used to derive a top-10 weight estimate of roughly 38%–39%."
+  },
+  {
+   "source": "cabfd04e-2369-4626-9e44-4864d31104c8",
+   "target": "9816909e-5791-422f-8056-03b3f5449e9f",
+   "name": "SUMMARIZES",
+   "fact": "J.P. Morgan's summary of the September 2026 FOMC statement reports a unanimous 25 bp hike."
+  },
+  {
+   "source": "e839da17-de79-46a2-832f-e15f41940974",
+   "target": "ef705099-7deb-4a62-9e2a-659d0f8c6c6a",
+   "name": "HOSTS",
+   "fact": "The FOMC's remaining 2026 meetings are October 27–28 and December 8–9 (the latter with a Summary of Economic Projections); 2027 dates are not yet published on the Federal Reserve's calendar."
+  },
+  {
+   "source": "e839da17-de79-46a2-832f-e15f41940974",
+   "target": "8cb368e2-1656-4153-95c7-c5238b74b162",
+   "name": "CONSTRAINS",
+   "fact": "The October 27–28, 2026 FOMC meeting (with CME pricing a 16.1% hike and 83.9% hold as of 2026-10-21) discriminates between the 'AI-driven reacceleration' scenario and rate-pressure paths."
+  },
+  {
+   "source": "1a037526-236e-4a37-9bcf-a6dedc1c66a3",
+   "target": "6f936451-3169-4815-88b0-100799e03e44",
+   "name": "TRIGGERS",
+   "fact": "The Sahm Rule reading would have to break (or be overridden by non-curve shocks) for the Hard landing recession scenario (10%) to materialize."
+  },
+  {
+   "source": "10578d58-3414-4e78-8cd2-8d82d75f54be",
+   "target": "34ba27a1-a1e2-4641-81dc-3f740af9f9c0",
+   "name": "PRICES",
+   "fact": "The CME FedWatch Tool (cmegroup.com) provides market-implied probabilities for Fed Funds Rate decisions."
+  },
+  {
+   "source": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "target": "951e7846-3d0a-4969-aade-9b9d5e596401",
+   "name": "INFLUENCES",
+   "fact": "Both track index EPS estimates [S7][S31]（sign=+，strength=0.5，valence=directional，polarity=0.40）"
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "34ba27a1-a1e2-4641-81dc-3f740af9f9c0",
+   "name": "CONSTRAINS",
+   "fact": "The Federal Funds Effective Rate averaged 3.75% in September 2026 with a daily effective rate of 3.88% on 2026-10-22, constraining the S&P 500 environment."
+  },
+  {
+   "source": "2f7a24c4-0368-46b4-be0c-d003a567149f",
+   "target": "5f3eb348-e382-427f-9db5-344f011d0ba5",
+   "name": "TRIGGERS",
+   "fact": "Q4 2026–Q1 2027 hyperscaler 2027 capex guidance (from NVIDIA, Microsoft, Alphabet, Amazon, Meta) discriminates between Bear market and drawdown (20%) and AI-driven reacceleration (35%); two or more hyperscalers cutting guidance would feed Bear market and drawdown."
+  },
+  {
+   "source": "22c5cd7b-2d0d-414f-bf0e-ea21a4dfc5d6",
+   "target": "062955f1-a17b-4fbd-84d0-7076a36db8b9",
+   "name": "MEASURES",
+   "fact": "Per FactSet Earnings Insight, blended S&P 500 Q3 2026 earnings growth of 29.0% marks a third consecutive quarter above 25%."
+  }
+ ],
+ "graph_id": "mirofish_32eb3361925041bc"
+}

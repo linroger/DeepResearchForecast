@@ -1,0 +1,719 @@
+{
+ "entity_types": [
+  {
+   "name": "Organization",
+   "description": "Corporate or non-governmental actor influencing AI capex and power supply",
+   "attributes": [
+    {
+     "name": "sector",
+     "type": "text",
+     "description": "Industry sector (cloud, power equipment, utility, AI lab, finance)"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "High/medium/low influence on the 2027 forecast outcome"
+    },
+    {
+     "name": "capex_posture",
+     "type": "text",
+     "description": "Expanding / plateau / cutting stance on 2027 capacity buildout"
+    }
+   ],
+   "examples": [
+    "OpenAI",
+    "Goldman Sachs"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 2,
+   "role_class": "stakeholder",
+   "selection_rule": "Non-government organization that is not a hyperscaler, grid operator, utility or equipment supplier but whose actions causally affect 2027 capex, demand or interconnection outcomes.",
+   "anti_examples": [
+    "Reuters (reporting outlet)",
+    "CNBC (media)",
+    "I/O Fund (analysis source)"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "Sign long-term compute commitments",
+    "Issue datacenter-linked debt",
+    "Publish capex forecasts",
+    "Adjust analyst estimates"
+   ]
+  },
+  {
+   "name": "Government",
+   "description": "Government body, regulator or statistical agency shaping grid rules and demand outlooks",
+   "attributes": [
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "US federal / state / international scope"
+    },
+    {
+     "name": "authority_type",
+     "type": "text",
+     "description": "Regulator, enforcement, or statistical/forecasting agency"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "High/medium/low influence on forecast"
+    }
+   ],
+   "examples": [
+    "FERC",
+    "EIA",
+    "Texas governor's office"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "arbiter",
+   "selection_rule": "Any governmental body that issues binding interconnection rules, orders pauses, or publishes the settling demand outlook series.",
+   "anti_examples": [
+    "IEA (intergovernmental outlook publisher, better typed OutlookAgency)",
+    "Berkeley Lab dataset (source)"
+   ],
+   "agency_class": "regulator_agency",
+   "levers": [
+    "Issue large-load interconnection orders",
+    "Order connection pauses",
+    "Revise STEO demand forecasts",
+    "Set show-cause deadlines for RTOs"
+   ]
+  },
+  {
+   "name": "Hyperscaler",
+   "description": "Big-four cloud/AI platform firm whose combined capex is the forecast target",
+   "attributes": [
+    {
+     "name": "capex_2026_guidance_usd_bn",
+     "type": "text",
+     "description": "2026 capex guidance in USD billions"
+    },
+    {
+     "name": "capex_2027_consensus_usd_bn",
+     "type": "text",
+     "description": "2027 analyst consensus capex in USD billions"
+    },
+    {
+     "name": "financing_mix",
+     "type": "text",
+     "description": "Cash flow / bond / SPV off-balance-sheet funding approach"
+    }
+   ],
+   "examples": [
+    "Amazon (AWS)",
+    "Microsoft",
+    "Alphabet (Google)",
+    "Meta Platforms"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "One of the four firms (Amazon, Microsoft, Alphabet, Meta) whose calendar-year combined capex defines the forecast variable.",
+   "anti_examples": [
+    "Oracle (non-hyperscaler spender, type as Organization)",
+    "NVIDIA (chip supplier)"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "Raise or cut capex guidance on earnings calls",
+    "Issue bonds or SPV debt for datacenters",
+    "Sign nuclear/gas PPAs",
+    "Delay or accelerate site energization"
+   ]
+  },
+  {
+   "name": "GridOperator",
+   "description": "Regional transmission organization managing interconnection queues and load rules",
+   "attributes": [
+    {
+     "name": "region",
+     "type": "text",
+     "description": "Served market region (PJM Mid-Atlantic, ERCOT Texas, etc.)"
+    },
+    {
+     "name": "queue_status",
+     "type": "text",
+     "description": "State of interconnection queue and large-load vetting rules"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "High/medium/low influence on GW-delay probability"
+    }
+   ],
+   "examples": [
+    "PJM Interconnection",
+    "ERCOT"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "arbiter",
+   "selection_rule": "RTO/ISO that operates the transmission queue and large-load interconnection protocols determining whether planned 2027 capacity slips.",
+   "anti_examples": [
+    "Dominion Energy (utility, not queue operator)",
+    "FERC (federal regulator)"
+   ],
+   "agency_class": "regulator_agency",
+   "levers": [
+    "Cut peak-load forecasts",
+    "Sign or stall GIAs",
+    "Impose bring-your-own-capacity rules",
+    "Open expedited interconnection tracks"
+   ]
+  },
+  {
+   "name": "ElectricUtility",
+   "description": "Regulated utility serving major datacenter load pockets",
+   "attributes": [
+    {
+     "name": "service_territory",
+     "type": "text",
+     "description": "Service territory and load pocket"
+    },
+    {
+     "name": "contracted_dc_pipeline_gw",
+     "type": "text",
+     "description": "Contracted datacenter capacity pipeline in GW"
+    },
+    {
+     "name": "load_growth_outlook",
+     "type": "text",
+     "description": "Expected annual load growth"
+    }
+   ],
+   "examples": [
+    "Dominion Energy"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "intermediary",
+   "selection_rule": "Regulated utility delivering power to datacenter clusters whose conversion pace signals whether capacity energizes on time.",
+   "anti_examples": [
+    "Constellation Energy (merchant nuclear generator)",
+    "PJM Interconnection (grid operator)"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "Build transmission upgrades",
+    "Pre-pay for long-lead transformers",
+    "Vet or defer datacenter delivery-point requests",
+    "Raise rate-base spending plans"
+   ]
+  },
+  {
+   "name": "PowerEquipmentSupplier",
+   "description": "Supplier of gas turbines, transformers and grid equipment gating buildout",
+   "attributes": [
+    {
+     "name": "product_lines",
+     "type": "text",
+     "description": "Turbines, transformers, switchgear, electrification equipment"
+    },
+    {
+     "name": "backlog_status",
+     "type": "text",
+     "description": "Contracted backlog and slot reservation status (GW, USD)"
+    },
+    {
+     "name": "lead_time",
+     "type": "text",
+     "description": "Typical delivery lead time for key equipment"
+    }
+   ],
+   "examples": [
+    "GE Vernova",
+    "NVIDIA"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "intermediary",
+   "selection_rule": "Hardware supplier whose delivery slots and lead times physically gate whether 2027 datacenter capacity energizes on schedule.",
+   "anti_examples": [
+    "Wood Mackenzie (analyst source)",
+    "Chevron (fuel partner, low causal role unless contracted)"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "Allocate turbine delivery slots",
+    "Sell slot reservations",
+    "Raise equipment prices",
+    "Ramp electrification production"
+   ]
+  },
+  {
+   "name": "OutlookAgency",
+   "description": "Intergovernmental forecasting agency publishing reference demand outlooks",
+   "attributes": [
+    {
+     "name": "scope",
+     "type": "text",
+     "description": "Global or US demand coverage"
+    },
+    {
+     "name": "latest_projection",
+     "type": "text",
+     "description": "Central projection values and vintage"
+    },
+    {
+     "name": "series_role",
+     "type": "text",
+     "description": "Whether its series settles or informs the forecast"
+    }
+   ],
+   "examples": [
+    "IEA"
+   ],
+   "archetype": "institution_rule",
+   "simulation_tier": 3,
+   "role_class": "amplifier",
+   "selection_rule": "Intergovernmental agency whose published TWh path anchors the global >20% growth question.",
+   "anti_examples": [
+    "EIA (US government, typed Government)",
+    "Goldman Sachs (bank forecast, Organization)"
+   ],
+   "selection_note": "Passive outlook publisher; informs rather than decides."
+  },
+  {
+   "name": "DatacenterAsset",
+   "description": "Trackable datacenter campus or capacity pipeline object",
+   "attributes": [
+    {
+     "name": "capacity_gw",
+     "type": "text",
+     "description": "Planned or contracted capacity in GW"
+    },
+    {
+     "name": "target_online_year",
+     "type": "text",
+     "description": "Scheduled energization year"
+    },
+    {
+     "name": "power_arrangement",
+     "type": "text",
+     "description": "Grid, behind-the-meter, PPA or co-located generation"
+    }
+   ],
+   "examples": [
+    "Meta Hyperion (Louisiana)",
+    "Oracle Stargate campuses",
+    "US 2027 scheduled additions (36.3 GW pipeline)"
+   ],
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Named datacenter campus or aggregated capacity pipeline whose energization timing resolves the >5 GW delay question.",
+   "anti_examples": [
+    "'Datacenter demand' as abstract concept",
+    "Interconnection queue as abstract topic"
+   ]
+  },
+  {
+   "name": "MacroeconomicIndicator",
+   "description": "Official demand or GDP series used as forecast baseline signal",
+   "attributes": [
+    {
+     "name": "series_id",
+     "type": "text",
+     "description": "Official series identifier (EIA, FRED, IMF)"
+    },
+    {
+     "name": "latest_value",
+     "type": "text",
+     "description": "Latest observed value and period"
+    },
+    {
+     "name": "yoy_change",
+     "type": "text",
+     "description": "Year-over-year change"
+    }
+   ],
+   "examples": [
+    "EIA US commercial retail sales",
+    "EIA Virginia commercial sales YoY",
+    "IMF US GDP growth projection"
+   ],
+   "archetype": "signal",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Numeric official series tracked as leading indicator for the demand-growth question.",
+   "anti_examples": [
+    "Press tallies of capex (claim, not series)",
+    "Analyst notes"
+   ]
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "COMPETES_WITH",
+   "description": "Rivalry between hyperscalers for AI capacity and cloud share",
+   "source_targets": [
+    {
+     "source": "Hyperscaler",
+     "target": "Hyperscaler"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "adversarial/neutral"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low intensity of rivalry"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Rivalry onset if known"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "Source competes head-to-head with target in AI/cloud capacity buildout; symmetric rivalry."
+  },
+  {
+   "name": "SUPPLIES",
+   "description": "Supply of GPUs, turbines, transformers or nuclear power to buyers",
+   "source_targets": [
+    {
+     "source": "PowerEquipmentSupplier",
+     "target": "Hyperscaler"
+    },
+    {
+     "source": "PowerEquipmentSupplier",
+     "target": "Organization"
+    },
+    {
+     "source": "Organization",
+     "target": "Hyperscaler"
+    },
+    {
+     "source": "Organization",
+     "target": "DatacenterAsset"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "good_supplied",
+     "type": "text",
+     "description": "GPUs / gas turbines / transformers / nuclear power"
+    },
+    {
+     "name": "contract_volume",
+     "type": "text",
+     "description": "GW or USD volume of contract"
+    },
+    {
+     "name": "lead_time",
+     "type": "text",
+     "description": "Delivery lead time (lag to capacity)"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low reliance"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "Source supplies equipment or power to target; supply tightness constrains target's 2027 buildout."
+  },
+  {
+   "name": "DEPENDS_ON",
+   "description": "Dependency on a bottleneck supplier, grid or capacity provider",
+   "source_targets": [
+    {
+     "source": "Hyperscaler",
+     "target": "PowerEquipmentSupplier"
+    },
+    {
+     "source": "ElectricUtility",
+     "target": "GridOperator"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "constraint_type",
+     "type": "text",
+     "description": "Turbine slots / transformers / interconnection / compute"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low binding severity"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Typical delay the dependency imposes"
+    }
+   ],
+   "family": "dependency",
+   "valence": "directional",
+   "direction_semantics": "Source's buildout depends on target's capacity/queue; target is the potential bottleneck."
+  },
+  {
+   "name": "REGULATES",
+   "description": "Regulatory authority over grid operators and interconnection rules",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "GridOperator"
+    },
+    {
+     "source": "Government",
+     "target": "ElectricUtility"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "instrument",
+     "type": "text",
+     "description": "Order, protocol requirement, show-cause deadline"
+    },
+    {
+     "name": "effective_date",
+     "type": "text",
+     "description": "When the rule bites"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low binding force"
+    }
+   ],
+   "family": "governance",
+   "valence": "directional",
+   "direction_semantics": "Source regulates target's interconnection protocols and large-load rules."
+  },
+  {
+   "name": "INFLUENCES",
+   "description": "Shaping of decisions via forecasts, orders or market pressure",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "GridOperator"
+    },
+    {
+     "source": "Organization",
+     "target": "Hyperscaler"
+    },
+    {
+     "source": "OutlookAgency",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "channel",
+     "type": "text",
+     "description": "Analyst estimate contagion / policy order / outlook revision"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/negative/neutral direction"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "influence",
+   "valence": "directional",
+   "direction_semantics": "Source sways target's guidance, rules or forecasts without formal authority."
+  },
+  {
+   "name": "PARTNERS_WITH",
+   "description": "Alliance for power procurement or AI compute buildout",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Hyperscaler",
+     "target": "Organization"
+    },
+    {
+     "source": "PowerEquipmentSupplier",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "purpose",
+     "type": "text",
+     "description": "Nuclear PPA / Stargate buildout / fast gas delivery"
+    },
+    {
+     "name": "contract_volume",
+     "type": "text",
+     "description": "GW or USD scale"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Partnership start"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "Source and target jointly pursue power or compute capacity; symmetric alliance."
+  },
+  {
+   "name": "CUSTOMER_OF",
+   "description": "Commercial customer relationship for compute or power",
+   "source_targets": [
+    {
+     "source": "Hyperscaler",
+     "target": "Organization"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Hyperscaler",
+     "target": "DatacenterAsset"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "offering",
+     "type": "text",
+     "description": "Compute commitments / nuclear power / cloud"
+    },
+    {
+     "name": "contract_value",
+     "type": "text",
+     "description": "Deal size if known"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low reliance"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "Source buys compute or power from target, underwriting demand."
+  },
+  {
+   "name": "PARALLEL_AGENCY_DEMAND_OUTLOOKS",
+   "description": "Cross-referenced demand outlooks between IEA and EIA",
+   "source_targets": [
+    {
+     "source": "OutlookAgency",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "alignment",
+     "type": "text",
+     "description": "Consistency of central growth paths"
+    },
+    {
+     "name": "growth_band",
+     "type": "text",
+     "description": "Implied annual growth range"
+    }
+   ],
+   "family": "information",
+   "valence": "neutral",
+   "direction_semantics": "Source's outlook series is cross-referenced with target's forecast; both inform the demand question."
+  },
+  {
+   "name": "CONSTRAINS",
+   "description": "Causal gating of capex-to-capacity conversion by physical bottlenecks",
+   "source_targets": [
+    {
+     "source": "PowerEquipmentSupplier",
+     "target": "DatacenterAsset"
+    },
+    {
+     "source": "GridOperator",
+     "target": "DatacenterAsset"
+    },
+    {
+     "source": "ElectricUtility",
+     "target": "DatacenterAsset"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "negative (delays/slips capacity)"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Delay imposed (months/years into 2028)"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low binding severity"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "Source's lead times or queue rules delay target's energization, driving GW slippage."
+  },
+  {
+   "name": "ACCELERATES",
+   "description": "Causal enablement of faster buildout via financing or fast-track rules",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "DatacenterAsset"
+    },
+    {
+     "source": "Organization",
+     "target": "DatacenterAsset"
+    },
+    {
+     "source": "PowerEquipmentSupplier",
+     "target": "DatacenterAsset"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "positive (speeds energization)"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Time to effect"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "Source's debt funding, fast-track protocol or fast gas units accelerates target's on-time energization."
+  }
+ ],
+ "analysis_summary": "该预测问题聚焦2027年四大超大规模云厂商合计资本开支（70%置信区间）、全球数据中心用电增速是否超20%、以及美国并网约束导致超过5GW计划产能推迟至2028的概率。领域为AI基础设施投资与电力供应链交叉地带：核心能动主体是四家超大规模厂商（决定capex）、GE Vernova/NVIDIA等设备供应商（涡轮/变压器/GPU交付时滞为物理硬约束）、PJM/ERCOT等电网运营方（并网队列与大负荷规则）、Dominion等受监管公用事业（负荷口袋转化进度）、FERC/EIA等政府机构（规则与预测口径）、以及OpenAI/Oracle/Goldman Sachs等关键利益相关方。本体保留种子类型Organization与Government，并为高频主体新增Hyperscaler、GridOperator、ElectricUtility、PowerEquipmentSupplier等可区分类型；客体侧引入OutlookAgency（IEA路径）、DatacenterAsset（36.3GW管线与命名园区）与MacroeconomicIndicator（EIA/IMF领先指标序列）。关系上保留全部种子边并新增CONSTRAINS/ACCELERATES因果边（带sign/lag/strength），刻画设备交付与并网规则如何把capex传导为实际通电产能——这是三个子问题的共同传导机制。媒体与分析师（Reuters、I/O Fund等）仅作为信息来源，未被实例化为能动主体。"
+}

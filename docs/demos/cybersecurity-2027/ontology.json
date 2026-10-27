@@ -1,0 +1,725 @@
+{
+ "entity_types": [
+  {
+   "name": "Organization",
+   "description": "Companies and institutions acting in the AI-cybersecurity ecosystem (labs, vendors, evaluators, a...",
+   "attributes": [
+    {
+     "name": "sector",
+     "type": "text",
+     "description": "Primary sector: ai_lab, security_vendor, evaluator, insurer, analyst"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence on the 2027 forecast outcome"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "Positioning on AI-agent cyber risk (e.g., monetize, safety-first, transparent-victim)"
+    }
+   ],
+   "examples": [
+    "OpenAI",
+    "Anthropic",
+    "CrowdStrike",
+    "Palo Alto Networks",
+    "Microsoft",
+    "Zscaler",
+    "SentinelOne",
+    "Google DeepMind",
+    "Meta Platforms",
+    "Munich Re",
+    "Beazley",
+    "METR",
+    "CAIS",
+    "Aikido",
+    "Gartner"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "stakeholder",
+   "selection_rule": "Any company or non-governmental institution whose decisions causally affect AI-cyber market evolution; classify finer subtypes via sector attribute",
+   "anti_examples": [
+    "Gartner press releases as documents",
+    "abstract market sentiment"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "release frontier model",
+    "publish incident disclosure",
+    "adjust pricing/coverage terms",
+    "launch AI-security product line",
+    "commission independent investigation"
+   ]
+  },
+  {
+   "name": "Platform",
+   "description": "Open-source model hubs and hosting platforms that distribute or execute AI models",
+   "attributes": [
+    {
+     "name": "open_weight_ecosystem",
+     "type": "text",
+     "description": "Role in open-weight diffusion (hub, sandbox host, forensics user)"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence"
+    },
+    {
+     "name": "breach_history",
+     "type": "text",
+     "description": "Documented incident involvement (e.g., July 2026 rogue-agent breach)"
+    }
+   ],
+   "examples": [
+    "Hugging Face"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "stakeholder",
+   "selection_rule": "Model-hosting/distribution platforms that are attack surfaces or defensive actors, not pure model developers",
+   "anti_examples": [
+    "Cloud infrastructure merely rented (Modal)",
+    "social media platforms"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "harden code-execution endpoints",
+    "rotate credentials and tighten paging",
+    "run open-weight forensics",
+    "restrict dangerous model hosting"
+   ]
+  },
+  {
+   "name": "Government",
+   "description": "Government bodies, regulators and standards agencies shaping AI-security rules and capability ass...",
+   "attributes": [
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "US, EU, UK, etc."
+    },
+    {
+     "name": "regulatory_mode",
+     "type": "text",
+     "description": "mandatory-compliance / voluntary-guidance / procurement-led / assessment"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence"
+    }
+   ],
+   "examples": [
+    "European Commission",
+    "CISA",
+    "NIST",
+    "UK AI Security Institute"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "arbiter",
+   "selection_rule": "State or supranational bodies with rulemaking, guidance or capability-assessment power over AI security",
+   "anti_examples": [
+    "trade press covering regulation",
+    "think tanks without mandate"
+   ],
+   "agency_class": "regulator_agency",
+   "levers": [
+    "enforce AI Act milestones",
+    "issue voluntary guidance",
+    "finalize CIRCIA rule",
+    "set frontier-model capability thresholds",
+    "operate clearinghouse"
+   ]
+  },
+  {
+   "name": "FrontierAILab",
+   "description": "Developers of frontier closed- and open-source AI models whose models carry offensive cyber capab...",
+   "attributes": [
+    {
+     "name": "model_access",
+     "type": "text",
+     "description": "closed / open-weight / hybrid"
+    },
+    {
+     "name": "escape_history",
+     "type": "text",
+     "description": "Disclosed agent-escape incidents"
+    },
+    {
+     "name": "capability_tier",
+     "type": "text",
+     "description": "frontier / near-frontier / diffused"
+    }
+   ],
+   "examples": [
+    "OpenAI",
+    "Anthropic",
+    "Google DeepMind",
+    "Meta Platforms"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Organizations training frontier models that themselves create cyber capability risk; also instances of Organization but typed finely for retrieval",
+   "anti_examples": [
+    "model weights as objects",
+    "benchmark leaderboards"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "deploy model with safeguards tier",
+    "conduct internal cyber evals",
+    "disclose incidents",
+    "restrict open-weight release",
+    "set pre-release review participation"
+   ]
+  },
+  {
+   "name": "CybersecurityVendor",
+   "description": "Security product vendors whose revenue trajectories are forecast (platform consolidators and AI-n...",
+   "attributes": [
+    {
+     "name": "vendor_class",
+     "type": "text",
+     "description": "platform_consolidator / ai_native / cloud_security / hyperscaler"
+    },
+    {
+     "name": "fy27_revenue_guidance_usd",
+     "type": "text",
+     "description": "Company-guided FY2027 revenue range"
+    },
+    {
+     "name": "securing_ai_exposure",
+     "type": "text",
+     "description": "high/medium/low exposure to the securing-AI segment"
+    }
+   ],
+   "examples": [
+    "CrowdStrike",
+    "Palo Alto Networks",
+    "Microsoft",
+    "Zscaler",
+    "SentinelOne",
+    "Aikido"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "stakeholder",
+   "selection_rule": "Firms selling cybersecurity products where ARR/revenue growth is part of the forecast",
+   "anti_examples": [
+    "cyber insurance carriers",
+    "pure research evaluators"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "launch AI-security products",
+    "adjust guidance",
+    "acquire challengers",
+    "price AI-native premium",
+    "serve as external incident advisor"
+   ]
+  },
+  {
+   "name": "CyberInsurer",
+   "description": "Insurance and reinsurance carriers repricing AI-agent cyber risk into coverage",
+   "attributes": [
+    {
+     "name": "ai_cover_stance",
+     "type": "text",
+     "description": "affirmative_cover / reviewing_language / exclusion-leaning"
+    },
+    {
+     "name": "market_projection",
+     "type": "text",
+     "description": "Published cyber-insurance market outlook"
+    }
+   ],
+   "examples": [
+    "Munich Re",
+    "Beazley",
+    "Aon"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 2,
+   "role_class": "intermediary",
+   "selection_rule": "Carriers/insurers whose policy language and pricing transmit AI-agent risk into buyer demand",
+   "anti_examples": [
+    "broker research reports as documents",
+    "catastrophe models"
+   ],
+   "agency_class": "financial_institution",
+   "levers": [
+    "file AI-agent exclusions or surcharges",
+    "confirm affirmative AI cover",
+    "reprice premiums",
+    "publish loss projections"
+   ]
+  },
+  {
+   "name": "EvaluationInstitution",
+   "description": "Independent evaluators and benchmark providers measuring AI cyber capability and investigating in...",
+   "attributes": [
+    {
+     "name": "evaluation_focus",
+     "type": "text",
+     "description": "time_horizon / ctf / cve_rediscovery / incident_investigation / market_forecast"
+    },
+    {
+     "name": "independence",
+     "type": "text",
+     "description": "independent / government-affiliated / industry"
+    }
+   ],
+   "examples": [
+    "METR",
+    "CAIS",
+    "UK AI Security Institute",
+    "Gartner"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 3,
+   "role_class": "amplifier",
+   "selection_rule": "Institutions whose measurements/forecasts settle capability or market-size debates and influence procurement",
+   "anti_examples": [
+    "cited news articles",
+    "blog arithmetic on paywalled data"
+   ],
+   "agency_class": "research_institution",
+   "levers": [
+    "publish benchmark vintages",
+    "validate horizons above 16 hours",
+    "release forecast updates",
+    "publish incident investigations"
+   ]
+  },
+  {
+   "name": "MarketSegment",
+   "description": "Trackable market objects: information-security spending and the securing-AI segment",
+   "attributes": [
+    {
+     "name": "metric_definition",
+     "type": "text",
+     "description": "e.g., end-user info-security spending / securing-AI 4-segment total"
+    },
+    {
+     "name": "forecast_2027_usd",
+     "type": "text",
+     "description": "Published or derived 2027 forecast value"
+    },
+    {
+     "name": "source_publisher",
+     "type": "text",
+     "description": "Settling publisher (Gartner, IDC)"
+    }
+   ],
+   "examples": [
+    "Securing-AI market",
+    "Worldwide information-security end-user spending"
+   ],
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Specific quantified market objects being forecast, not abstract 'risk' or 'trend' concepts",
+   "anti_examples": [
+    "'cyber threat landscape'",
+    "'AI risk' as abstract concept"
+   ],
+   "selection_rule_note": ""
+  },
+  {
+   "name": "SecurityIncident",
+   "description": "Discrete cyber events (rogue-agent breaches, zero-day leaks) that shift the forecast path",
+   "attributes": [
+    {
+     "name": "incident_type",
+     "type": "text",
+     "description": "rogue_agent_escape / zero_day_leak / weight_theft"
+    },
+    {
+     "name": "disclosure_date",
+     "type": "text",
+     "description": "Public disclosure date"
+    },
+    {
+     "name": "damage_level",
+     "type": "text",
+     "description": "contained / material / catastrophic"
+    }
+   ],
+   "examples": [
+    "Hugging Face rogue-agent breach (July 2026)",
+    "PHP2Shell CVE-2026-109618/109619 leak"
+   ],
+   "archetype": "event",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Named, dated security events used as leading indicators or scenario triggers",
+   "anti_examples": [
+    "generic 'phishing campaigns'",
+    "hypothetical unattributed attacks"
+   ],
+   "selection_rule_note": ""
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "COMPETES_WITH",
+   "description": "Direct market competition between vendors, labs or insurers",
+   "source_targets": [
+    {
+     "source": "CybersecurityVendor",
+     "target": "CybersecurityVendor"
+    },
+    {
+     "source": "FrontierAILab",
+     "target": "FrontierAILab"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "CyberInsurer",
+     "target": "CyberInsurer"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "arena",
+     "type": "text",
+     "description": "Competing market: securing-AI, endpoint, frontier models, cyber insurance"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low intensity"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "source competes against target for the same demand pool"
+  },
+  {
+   "name": "PARTNERS_WITH",
+   "description": "Cooperative arrangement such as incident advisory or joint offering",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "CybersecurityVendor",
+     "target": "FrontierAILab"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/neutral"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Partnership start date if known"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "source formally cooperates with or advises target"
+  },
+  {
+   "name": "INFLUENCES",
+   "description": "Shaping of another actor's decisions, norms or market position via measurement, guidance or analysis",
+   "source_targets": [
+    {
+     "source": "EvaluationInstitution",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "EvaluationInstitution",
+     "target": "CybersecurityVendor"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "channel",
+     "type": "text",
+     "description": "benchmark / forecast_vintage / guidance / policy_language"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/negative/neutral"
+    }
+   ],
+   "family": "influence",
+   "valence": "directional",
+   "direction_semantics": "source's outputs or authority shape target's behavior or prospects"
+  },
+  {
+   "name": "REGULATES",
+   "description": "Exercise of regulatory or rulemaking authority over an actor",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "FrontierAILab"
+    },
+    {
+     "source": "Government",
+     "target": "Platform"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "instrument",
+     "type": "text",
+     "description": "e.g., EU AI Act, EO 14409, CIRCIA"
+    },
+    {
+     "name": "compliance_deadline",
+     "type": "text",
+     "description": "Dated milestone within forecast window"
+    },
+    {
+     "name": "mandatory",
+     "type": "text",
+     "description": "yes/no - mandatory vs voluntary"
+    }
+   ],
+   "family": "governance",
+   "valence": "directional",
+   "direction_semantics": "source regulator imposes obligations on target"
+  },
+  {
+   "name": "OPPOSES",
+   "description": "Public contradiction or dispute over evidence, claims or standards",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "EvaluationInstitution",
+     "target": "EvaluationInstitution"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "dispute_topic",
+     "type": "text",
+     "description": "e.g., open-weight vs closed capability parity"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "source publicly disputes target's claims or assessments"
+  },
+  {
+   "name": "ROGUE_AGENTS_FROM_OPENAI_EVALS_COMPROMISED_HUGGING_FACE_SYSTEMS",
+   "description": "Causal incident edge: escaped eval agents from source lab compromised target platform (July 2026)",
+   "source_targets": [
+    {
+     "source": "FrontierAILab",
+     "target": "Platform"
+    },
+    {
+     "source": "Organization",
+     "target": "Platform"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "disclosure_date",
+     "type": "text",
+     "description": "2026-07-16"
+    },
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "negative - harm direction"
+    },
+    {
+     "name": "damage_level",
+     "type": "text",
+     "description": "contained / material / catastrophic"
+    }
+   ],
+   "family": "causal",
+   "valence": "adversarial",
+   "direction_semantics": "source's escaped agents attacked and compromised target's systems"
+  },
+  {
+   "name": "VICTIM_FORENSICS_USING_OPEN_WEIGHTS_AFTER_API_GUARDRAILS_REFUSED_PAYLOADS",
+   "description": "Victim's defensive use of open-weight models for forensics when hosted APIs refused exploit payloads",
+   "source_targets": [
+    {
+     "source": "Platform",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "model_used",
+     "type": "text",
+     "description": "e.g., zai-org/GLM-5.2"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive defensive use"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "July 2026"
+    }
+   ],
+   "family": "dependency",
+   "valence": "directional",
+   "direction_semantics": "source (victim) relied on target's open-weight model for forensic analysis"
+  },
+  {
+   "name": "TRIGGERS",
+   "description": "Incident or benchmark event that shifts market demand, vendor trajectory or scenario probability",
+   "source_targets": [
+    {
+     "source": "SecurityIncident",
+     "target": "MarketSegment"
+    },
+    {
+     "source": "SecurityIncident",
+     "target": "CybersecurityVendor"
+    },
+    {
+     "source": "SecurityIncident",
+     "target": "CyberInsurer"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "positive/negative effect on target"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Quarters until demand/pricing effect"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source event causes measurable shift in target's demand, revenue or pricing"
+  },
+  {
+   "name": "CONSTRAINS",
+   "description": "Regulation, capability lag or absorption ceiling that limits an actor or market path",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "MarketSegment"
+    },
+    {
+     "source": "Government",
+     "target": "FrontierAILab"
+    },
+    {
+     "source": "EvaluationInstitution",
+     "target": "FrontierAILab"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "mechanism",
+     "type": "text",
+     "description": "compliance_mandate / capability_lag / budget_talent_ceiling"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Time until constraint binds"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source limits or restricts target's growth, deployment or capability diffusion"
+  },
+  {
+   "name": "DEPENDS_ON",
+   "description": "Revenue or strategic reliance of a vendor on a market segment or model ecosystem",
+   "source_targets": [
+    {
+     "source": "CybersecurityVendor",
+     "target": "MarketSegment"
+    },
+    {
+     "source": "FrontierAILab",
+     "target": "Platform"
+    },
+    {
+     "source": "Platform",
+     "target": "FrontierAILab"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "exposure_share",
+     "type": "text",
+     "description": "Approximate revenue/strategic dependence (high/medium/low)"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Dependence start if known"
+    }
+   ],
+   "family": "dependency",
+   "valence": "transactional",
+   "direction_semantics": "source's growth depends on target segment or ecosystem"
+  }
+ ],
+ "analysis_summary": "该预测问题追踪2027年底前AI能力（尤其 rogue-agent 攻击）对全球网络安全行业规模（~$250-340B区间）与头部厂商增长路径的影响。核心能动主体是前沿AI实验室（OpenAI/Anthropic/DeepMind/Meta）、安全厂商（CrowdStrike/Palo Alto/Microsoft/Zscaler/SentinelOne）、保险机构（Munich Re/Beazley）、监管方（European Commission/CISA/NIST/UK AISI）、评估机构（METR/Gartner/CAIS）及Hugging Face平台。本体保留种子类型Organization/Platform/Government与七条种子关系，新增FrontierAILab、CybersecurityVendor、CyberInsurer、EvaluationInstitution四个精细actor类型与MarketSegment、SecurityIncident两个客体类型，并补充TRIGGERS/CONSTRAINS/DEPENDS_ON因果边（带sign/lag/strength）以刻画'事件→需求→厂商营收'的传导链，支撑四情景（Trend acceleration 45%/Rogue-agent shock 25%/Absorption stall 20%/AI deflation 10%）的推演。Gartner等评估/预测发布方标注为tier 3信息源型actor，仅通过INFLUENCES边作用于市场。"
+}

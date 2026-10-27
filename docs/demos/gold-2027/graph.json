@@ -1,0 +1,1219 @@
+{
+ "nodes": [
+  {
+   "id": "f88cd4a2-4065-4c17-b9c4-c5c0eb2e5bba",
+   "name": "Poland",
+   "labels": [
+    "Government"
+   ],
+   "summary": "WGC central-bank commentary listed Poland among the leading buyers in August 2026's +39t of net central-bank gold purchases"
+  },
+  {
+   "id": "ee74bd7a-2ad8-41f1-9546-9943f6eb25bd",
+   "name": "People's Bank of China",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Reported reserves 2,346.43t at end-Q2 2026, up from 2,313.46t in Q1. Led August 2026 buying. Reported figures likely understate accumulation. Operates with a dovish domestic stance (China policy rate \nPBoC added about 10 tonnes of gold in May 2026, its nineteenth consecutive month of purchases and longest streak since 2015; reported reserves reached 2,346.43 tonnes in Q2 2026."
+  },
+  {
+   "id": "e1c2272f-3647-4999-9bae-bd0d5310b7f5",
+   "name": "FRED",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "FRED publishes the official Nominal Broad U.S. Dollar Index series used in the report, whose latest observation is down from a year earlier.\nFRED distributes the University of Michigan Inflation Expectation series (MICH) as a fetched tier-1 source [S31].\nFRED publishes the Global price of Copper series (PCOPPUSDM) as a fetched tier-1 source [S33].\nThe 10-year TIPS yield series (2.638% in 2026-09, latest daily 2.77% on 2026-10-20) is published by FRED as a monthly mean of daily data.\nThe Nominal Broad U.S. Dollar Index (119.2152 for 2026-09, latest daily 121.4048 on 2026-10-16) is published by "
+  },
+  {
+   "id": "da9c1a12-66ff-4135-a6c1-f4af82c96a91",
+   "name": "Goldman Sachs",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Estimates each 50bp of Fed easing adds roughly $120/oz of support; hawkish repricing since June is a several-hundred-dollar headwind\nGoldman Sachs Research expects central-bank gold buying of roughly 50 tonnes per month (about 600t a year) in 2026, below the >1,000t/year pace of 2022–2024, drawing on WGC survey pages that record 1,082t in 2022 and 1,037t in 2023\nplaceholder\nGoldman Sachs and JPMorgan (J.P. Morgan) hold diverging gold price forecasts, as reported in the article 'Goldman Sachs Gold Target Cut: What the $1,400 Gap Means' and the JPMorgan-divergence coverage."
+  },
+  {
+   "id": "d9ed6905-5ed7-4675-8c37-9a641886939b",
+   "name": "Central Bank Gold Reserves Survey 2026",
+   "labels": [
+    "MarketEvent"
+   ],
+   "summary": "The World Gold Council published the Central Bank Gold Reserves Survey 2026 on its Goldhub research site."
+  },
+  {
+   "id": "d69c3663-c129-4027-84c5-08c872e132b5",
+   "name": "Fed Rate Monitor",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "As of 21 October 2026, Fed Rate Monitor put 83.9% odds on the Federal Reserve holding at 3.75–4.00% and 16.1% on a hike to 4.00–4.25% at the 28 October 2026 FOMC meeting, and 73.3% on ending December at 4.00–4.25% with 13.6% at 4.25–4.50%.\nFed Rate Monitor (83.9% hold) and FedWatch (89.5% hold) provided competing market-implied probability estimates for the 28 October 2026 FOMC decision as of 21 October 2026.\nInvesting.com operates the Fed Rate Monitor Tool, a source of market-implied Fed rate path probabilities."
+  },
+  {
+   "id": "ccb02e10-42f8-4319-950d-6828d2c9d23c",
+   "name": "Government",
+   "labels": [
+    "Organization"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "cae3176e-af56-44ea-bc02-c9975bb126b1",
+   "name": "28 October 2026 FOMC meeting",
+   "labels": [
+    "MarketEvent"
+   ],
+   "summary": "The 28 October 2026 FOMC meeting, with market-implied odds of 83.9% on a hold and 73.3% on ending December at 4.00–4.25%, is a key indicator shaping gold price outcomes.\nAs of 21 October 2026, Fed Rate Monitor put 83.9% odds on the Federal Reserve holding at 3.75–4.00% and 16.1% on a hike to 4.00–4.25% at the 28 October 2026 FOMC meeting, and 73.3% on ending December at 4.00–4.25% with 13.6% at 4.25–4.50%.\nFedWatch showed 89.5% probability of the Federal Reserve holding rates at the 28 October 2026 FOMC meeting, versus Fed Rate Monitor's 83.9% hold odds.\nThe Federal Reserve will decide whether"
+  },
+  {
+   "id": "c9235004-3e14-4305-907a-18c5207d8e6b",
+   "name": "FOMC Statement September 2026",
+   "labels": [
+    "MarketEvent"
+   ],
+   "summary": "JPMorgan Asset Management published the FOMC Statement: September 2026 commentary on its fixed income perspectives page [S35]."
+  },
+  {
+   "id": "c32bfc32-c578-45e4-93a6-046f821b8b15",
+   "name": "Gold-to-Silver Ratio",
+   "labels": [
+    "MacroSignal"
+   ],
+   "summary": "JM Bullion publishes Gold-to-Silver Ratio price charts.\nLongtermTrends publishes an updated Gold-to-Silver Ratio chart.\nThe Gold-to-Silver Ratio is used as a macro signal bearing on the gold price forecast."
+  },
+  {
+   "id": "b8ccd17d-ba4a-4a5d-9e69-4a002f29e253",
+   "name": "IMF",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Listed actor for official reserve composition data; no specific COFER figure appears in the evidence"
+  },
+  {
+   "id": "b19de7b8-d4fe-439c-9cc0-da09e819c1e6",
+   "name": "Reserve Bank of India",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Custodial shift signals operational de-dollarization motive per FT/WGC report relayed by LBMA"
+  },
+  {
+   "id": "acca6422-d9a3-4669-9396-99571664214f",
+   "name": "US President and administration",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Tariff policy fed inflation fears and safe-haven gold demand per Reuters; sanctions regimes contribute to Russia's gold liquidation"
+  },
+  {
+   "id": "a8d0d703-62c1-4c8b-9e73-6131d03686c7",
+   "name": "Fed funds futures market-implied rate odds",
+   "labels": [
+    "MacroSignal"
+   ],
+   "summary": "The September 2026 SEP median holds the policy rate midpoint at 4.25% from end-2026 through end-2028, while Central Bank Watch tabulates roughly 77bp of cumulative tightening priced across meetings through 27 October 2027; this market-versus-SEP gap is itself a leading indicator, where repricing toward cuts would mark the turn toward the Bull scenario.\nCentral Bank Watch tabulates roughly 77bp of cumulative Fed tightening priced across meetings through 27 October 2027, based on market-implied rate odds."
+  },
+  {
+   "id": "a75e9848-a031-46b9-a214-01e45e2fd366",
+   "name": "WGC central-bank commentary",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Monthly WGC central-bank commentary tracks the NBP gold buying programme; an NBP halt at its 700t target (648t held end-Aug, 98t YTD) would remove a key buyer from the monthly flow data.\nThe WGC monthly ETF report (early November 2026) and the monthly WGC central-bank commentary together monitor demand flows: September 2026 ETF inflows of +67t to a record 4,256t, and August 2026 central-bank net buying of +39t led by China, Uzbekistan and Poland."
+  },
+  {
+   "id": "a6b49a68-fded-4924-86f0-27782138d965",
+   "name": "CFTC",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "COT report of 13 October 2026 showed managed-money net long of +107,089 contracts in COMEX gold, down 3,898 w/w\nWeekly CFTC Commitments of Traders reports (13 October 2026: managed-money net long +107,089 contracts) serve as a positioning check alongside FOMC meetings on the catalyst calendar; falling length would support the Range-bound consolidation scenario."
+  },
+  {
+   "id": "a594a54a-7239-4594-b87b-aedff59fbfb9",
+   "name": "J.P. Morgan Research",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Kasman team's 40% recession probability is the principal trigger evidence for the Bull scenario; its targets anchor the high bank-consensus cluster\nJ.P. Morgan carried a $6,000 end-2026 gold price target as a publisher forecast referencing the LBMA Gold Price benchmark.\nJ.P. Morgan and Deutsche Bank both published $6,000 end-2026 gold price forecasts, competing as publisher forecasters.\nPolymarket's 'US recession by end of 2027' contract traded around a 65% market-implied probability, far above J.P. Morgan Research's roughly 40% recession probability estimate\nGoldman Sachs and JPMorgan (J.P. M"
+  },
+  {
+   "id": "a531e1a9-225b-4b1f-a6ff-d1c909667cb7",
+   "name": "Czech National Bank",
+   "labels": [
+    "Government"
+   ],
+   "summary": "The Czech National Bank maintained a 42-month buying streak of gold, contributing to August 2026's 39t of net central-bank purchases alongside Uzbekistan (~50t year-to-date) and China."
+  },
+  {
+   "id": "a4f20934-7253-4e31-b591-e1d095aec3af",
+   "name": "Goldman Sachs Gold Target Cut",
+   "labels": [
+    "MarketEvent"
+   ],
+   "summary": "The World Gold Council is covered in the goldsilver.com article on the Goldman Sachs gold target cut and JPMorgan divergence (coverage relationship via industry news)."
+  },
+  {
+   "id": "a4cacb4f-e9cd-4388-8a56-a31751e3ad7f",
+   "name": "WGC monthly ETF report",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The WGC monthly ETF report (early November 2026) and the monthly WGC central-bank commentary together monitor demand flows: September 2026 ETF inflows of +67t to a record 4,256t, and August 2026 central-bank net buying of +39t led by China, Uzbekistan and Poland."
+  },
+  {
+   "id": "9c551e7f-f9ec-47a9-9d5f-495a729e91de",
+   "name": "September 2026 SEP median",
+   "labels": [
+    "MacroSignal"
+   ],
+   "summary": "The September 2026 SEP median, an FOMC projection holding 4.25% through 2028, versus roughly 77bp of cumulative tightening priced through October 2027, is a key indicator for gold price forecasting.\nThe September 2026 SEP median holds the policy rate midpoint at 4.25% from end-2026 through end-2028, while Central Bank Watch tabulates roughly 77bp of cumulative tightening priced across meetings through 27 October 2027; this market-versus-SEP gap is itself a leading indicator, where repricing toward cuts would mark the turn toward the Bull scenario.\nThe Federal Reserve published the Summary of E"
+  },
+  {
+   "id": "9a8439c8-3a7a-4aa6-aacf-cc8b986034f6",
+   "name": "ETF holdings",
+   "labels": [
+    "MacroSignal"
+   ],
+   "summary": "Record global gold ETF holdings of 4,256t with GLD at 1,053.91t on 15 October 2026 support gold; multi-month outflows would undercut the base grind-higher scenario"
+  },
+  {
+   "id": "999840c8-66b5-4554-851d-58e112135e44",
+   "name": "Iran war",
+   "labels": [
+    "MarketEvent"
+   ],
+   "summary": "Forex.com's 13 March 2026 note cited the Iran war as the driver behind DXY surging more than 5% off its 2026 lows.\nThe Iran war caused the ICE DXY index to surge more than 5% off its 2026 lows and test the 100 handle, per a Forex.com note of 13 March 2026.\nThe Iran War outbreak in April 2026 triggered the Central Bank of Turkey to sell/lent roughly $20bn in gold over five weeks, making it the largest downside swing factor; Turkey later bought +3t in August 2026 after three net-sale months"
+  },
+  {
+   "id": "9643f0a4-b327-406e-876f-2f5387645aea",
+   "name": "Uzbekistan central bank gold reserves",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Uzbekistan bought roughly 50t of gold year-to-date (through October 2026), with its reserves already 90% gold, leading August 2026's 39t of net central-bank purchases."
+  },
+  {
+   "id": "91549699-0df8-4c1a-ade3-5f8017765f0c",
+   "name": "Probability of US Recession Predicted by Treasury Spread",
+   "labels": [
+    "MacroSignal"
+   ],
+   "summary": "New York Fed research PDF (nyfederalreserve.org, tier 3) modeling US recession probability from the Treasury yield spread. Cited as source [S49] in a Stage 1 gold-price forecast (22 Oct 2026) as one of the macro indicators informing recession-risk assessment for the end-2027 gold outlook; no specific probability values, spread levels, or dates from the PDF appear in the provided research chunks.\nThe New York Fed publishes the 'Probability of US Recession Predicted by Treasury Spread' PDF underlying the Treasury spread recession probability model.\nThe New York Fed's Treasury-spread recession pr"
+  },
+  {
+   "id": "86ec8371-1f5f-48c1-85c2-b3f99c4b5048",
+   "name": "CPI",
+   "labels": [
+    "MacroSignal"
+   ],
+   "summary": "CPI at 3.717% year over year in September 2026, far above the 10-year breakeven of 2.351%, creates a wedge that either feeds the gold hedge bid or, if it closes through disinflation and higher real rates, removes it\nCPI was 3.717% year over year in September 2026, far above the 10-year breakeven of 2.351% for the same month\nCPI YoY of 3.717% in September 2026 versus the 2.391% low in January 2026: convergence toward the January low supports Fed easing while persistence above 3% confirms the bear real-yield squeeze for gold\nThe CPI for All Urban Consumers: All Items in U.S. City Average (year-o"
+  },
+  {
+   "id": "8423eb6b-290e-4edf-a945-b25784f0406b",
+   "name": "DXY",
+   "labels": [
+    "MacroSignal"
+   ],
+   "summary": "Morgan Stanley, relayed second-hand, sees DXY at 104 by mid-2027, consistent with the Bear real-yield squeeze scenario implying a stronger dollar.\nDXY losing the 100 handle would signal dollar relief for gold, cutting against a dollar-breakout regime; elasticities calibrated on DXY overstate the breadth of the dollar–gold link versus the Fed's 26-currency broad index."
+  },
+  {
+   "id": "80c1a98e-86db-4405-a318-3315d87c6af0",
+   "name": "10-year TIPS yield",
+   "labels": [
+    "MacroSignal"
+   ],
+   "summary": "The 10-year TIPS yield is the cleanest discriminator between Base and Bear gold price scenarios."
+  },
+  {
+   "id": "7a02fa2e-1956-48d5-9002-653636bbb70a",
+   "name": "Polymarket",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "Polymarket's 'US recession by end of 2027' contract traded around a 65% market-implied probability, far above J.P. Morgan Research's roughly 40% recession probability estimate\nPolymarket hosts the 'US recession by end of 2027' prediction market for trading odds and predictions."
+  },
+  {
+   "id": "781478e6-efc8-4110-ab82-95e5210fd055",
+   "name": "COMEX",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "COMEX settlements ($4,092.50/ozt for GCZ6 on 22 October 2026, −1.39%) serve as a futures cross-check against the LBMA Gold Price auction, with small gaps reflecting fixing-versus-settlement timing.\nThe Czech National Bank maintained a 42-month buying streak of gold, contributing to August 2026's 39t of net central-bank purchases alongside Uzbekistan (~50t year-to-date) and China.\nUzbekistan bought roughly 50t of gold year-to-date (through October 2026), with its reserves already 90% gold, leading August 2026's 39t of net central-bank purchases.\nSPDR Gold Shares held 1,053.91 tonnes of gold on "
+  },
+  {
+   "id": "77a889a5-2dbb-4a27-a5b9-015c5ac78d96",
+   "name": "Forex.com",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "A Forex.com note of 13 March 2026 reported DXY surging more than 5% off its 2026 lows and testing the 100 handle.\nForex.com's 13 March 2026 note cited the Iran war as the driver behind DXY surging more than 5% off its 2026 lows."
+  },
+  {
+   "id": "7449fe06-06b8-415e-9608-cb9ba7a06fd5",
+   "name": "National Bank of Poland",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Holdings 648t end-August 2026 after 51t in Q2 and 8t in August; reaching the 700t target implies its flow tapers, removing the largest buyer's bid\nPoland held 648 tonnes of gold after buying 98 tonnes year-to-date through August 2026, putting its 700-tonne target within reach.\nWGC central-bank commentary reported that an NBP halt at its 700t target (648t held end-Aug, 98t YTD through August) would remove a key central-bank gold buyer\nNBP (Poland, 648t held end-Aug, +98t YTD) and China are rival leading central-bank gold buyers; an NBP halt at its 700t target would remove a key buyer"
+  },
+  {
+   "id": "73493c35-49a9-4ed9-81f8-4e887c468b6e",
+   "name": "2027 elections",
+   "labels": [
+    "MarketEvent"
+   ],
+   "summary": "The 2027 elections (France presidential, Argentina/Switzerland, Poland and Italy votes, per RankiaPro's '2027, year of elections' report) are cited as a transmission channel affecting gold prices via sovereign spreads and fiscal risk premia.\nRankiaPro published the report '2027, year of elections. Which countries will go to the polls and how will the market react?' covering the 2027 elections."
+  },
+  {
+   "id": "6e8fc26f-8432-4a6f-95b7-d03ffc163ad3",
+   "name": "Dec 2027 gold futures (GCZ7)",
+   "labels": [
+    "GoldInstrument"
+   ],
+   "summary": "Dec 2027 gold futures (GCZ7) settled at $4,363.70/ozt on 21 October 2026, serving as the horizon anchor for the gold price forecast through December 2027. The forecast cross-checks against LBMA Gold Price auctions (USD/ozt) and COMEX front-month Dec 2026 (GCZ6) settled $4,092.50/ozt on 22 October 2026 (−1.39%).\nGCZ7 (Dec 2027) gold futures settled at $4,363.70/ozt on 21 October 2026, with small gaps versus LBMA spot prints reflecting fixing-versus-settlement timing rather than genuine disagreement."
+  },
+  {
+   "id": "682087ea-7cbd-44ba-a361-f684c9023af1",
+   "name": "goldprice.org",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "goldprice.org lists gold spot at $4,083.55 on 31 December 2025, while the exact LBMA p.m. close for that day remains unconfirmed."
+  },
+  {
+   "id": "67e2f9cf-f9fe-4e3f-870b-db60c3a746ba",
+   "name": "SPDR Gold Shares (GLD)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Part of a global ETF complex at a record 4,256t (September 2026) with ~US$10bn of contrarian monthly inflows; AUM fell 7% m/m to US$574bn\nGlobal gold ETF holdings reached a record 4,256 tonnes in September 2026, absorbing roughly US$10bn of inflows into a falling price, providing an unusually firm floor\nSPDR Gold Shares held 1,053.91 tonnes of gold on 15 October 2026.\nA sustained fall of at least 0.5pp in the 10-yr TIPS real yield (2.638% in 2026-09 monthly, 2.77% on 2026-10-20 daily) would confirm a gold-friendly base scenario, while new highs would confirm the bear real-yield squeeze scenari"
+  },
+  {
+   "id": "66c27634-dfe1-454d-a6b3-53a33f5ef84d",
+   "name": "Macrotrends",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Macrotrends' daily composite printed $4,132 on 21 October 2026, tracking the spot gold price\nMacrotrends' daily-close record for gold was $5,379 on 29 January 2026, and its composite shows gold down 4.4% year-to-date and 23.2% below its record as of 21 October 2026, implying an end-2025 level near $4,322."
+  },
+  {
+   "id": "663b5622-2355-44c3-9ec5-35b62c4f9904",
+   "name": "SEP 2027 PCE median",
+   "labels": [
+    "MacroSignal"
+   ],
+   "summary": "The 9 December 2026 FOMC meeting will publish the SEP, whose 2027 PCE median of 2.4% could be revised upward; an upward revision would favour the Bear real-yield squeeze scenario."
+  },
+  {
+   "id": "5e37544d-d2e0-429e-8cc0-04849163c365",
+   "name": "China Gold Association",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Listed actor; current retail demand level unknown from the evidence"
+  },
+  {
+   "id": "5e1d2bec-5333-40c4-8d1a-c33c8174749e",
+   "name": "DTWEXBGS",
+   "labels": [
+    "MacroSignal"
+   ],
+   "summary": "A daily DTWEXBGS close above its five-year high of 128.837 (set January 2025) would confirm a genuine dollar-breakout regime, a signpost bearing on gold."
+  },
+  {
+   "id": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "name": "Federal Reserve (FOMC)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Policy rate 3.875% end-September 2026; September 2026 SEP projects PCE 3.7% (2026) falling to 2.4% (2027), unemployment 4.1%, GDP 2.3-2.4%. Chair Warsh's Jackson Hole speech drove the hawkish turn. Ma\nThe Fed has stopped easing, holding the US policy rate at 3.875% per year at end-September 2026\nThe Federal Reserve's broad trade-weighted dollar index covers 26 currencies, in contrast to the ICE DXY's 6-currency basket.\nThe 9 December 2026 FOMC meeting will publish the SEP, whose 2027 PCE median of 2.4% could be revised upward; an upward revision would favour the Bear real-yield squeeze scenari"
+  },
+  {
+   "id": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "name": "LBMA Gold Price auction",
+   "labels": [
+    "GoldInstrument"
+   ],
+   "summary": "The September 2026 SEP median, an FOMC projection holding 4.25% through 2028, versus roughly 77bp of cumulative tightening priced through October 2027, is a key indicator for gold price forecasting.\nThe 10-year TIPS yield is the cleanest discriminator between Base and Bear gold price scenarios.\nThe World Gold Council spot page provides the baseline spot print of $4,099.20/ozt on 21 October 2026, cross-checking the LBMA Gold Price auction benchmark.\nCOMEX settlements ($4,092.50/ozt for GCZ6 on 22 October 2026, −1.39%) serve as a futures cross-check against the LBMA Gold Price auction, with smal"
+  },
+  {
+   "id": "55225a6e-ec4f-4d12-b04c-e0b38155ae8b",
+   "name": "Central Bank of Russia",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Liquidating official gold amid sanctions, adding marginal physical supply\nRussia remained a net gold seller with -56 tonnes year-to-date in 2026, while holding 2,271 tonnes of reserves.\nplaceholder"
+  },
+  {
+   "id": "55153b65-9cd2-4937-b4ac-3ba08f2964f0",
+   "name": "Kitco News",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Kitco News's October 6, 2026 report on central banks adding 39 net tonnes of gold in August relies on World Gold Council data."
+  },
+  {
+   "id": "4a50f50b-052e-4551-bd83-2da8223576cd",
+   "name": "Polymarket traders",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The only tradeable probability comparison in the report; exceeds Bull's 25% weight because it prices a recession event, not a gold print"
+  },
+  {
+   "id": "4689f9d2-add5-4c2e-81b4-9ae6e7969930",
+   "name": "US policy rate",
+   "labels": [
+    "MacroSignal"
+   ],
+   "summary": "The Fed has stopped easing, holding the US policy rate at 3.875% per year at end-September 2026\nThe Fed holding the US policy rate at 3.875% (having stopped easing) is a bearish force contesting the gold price through 2027\nThe US central bank policy rate series (3.875% at end of September 2026, monthly end-of-period) is published by the Bank for International Settlements."
+  },
+  {
+   "id": "44b5b779-1eac-466c-841c-e0471d34601f",
+   "name": "Organization",
+   "labels": [
+    "Organization"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "41b735cd-e0b4-4bb4-bca2-fbb06dcab959",
+   "name": "CME Group",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "CME Gold Futures quotes are published and sourced from the CME Group website (cmegroup.com)."
+  },
+  {
+   "id": "3f958402-2ad5-47cf-ab3d-43ce5add6d1c",
+   "name": "Central Bank of Turkey",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Swings between large purchases and crisis-driven liquidation; its 2026 sales dragged H1 official demand to the weakest since 2022\nTurkey was a net seller of gold, with -82 tonnes year-to-date as of August 2026.\nThe Iran War outbreak in April 2026 triggered the Central Bank of Turkey to sell/lent roughly $20bn in gold over five weeks, making it the largest downside swing factor; Turkey later bought +3t in August 2026 after three net-sale months"
+  },
+  {
+   "id": "3a8fc141-bee4-4fa9-99c1-05a88f863141",
+   "name": "Uzbekistan",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Uzbekistan bought roughly 50 tonnes of gold year-to-date 2026; its reserves are already 90% gold.\nWGC central-bank commentary listed Uzbekistan among the leading buyers in August 2026's +39t of net central-bank gold purchases"
+  },
+  {
+   "id": "35a6969a-9d98-4e37-88d6-19fbff4f7b97",
+   "name": "Dec 2026 gold futures (GCZ6)",
+   "labels": [
+    "GoldInstrument"
+   ],
+   "summary": "The 28 October 2026 FOMC meeting, with market-implied odds of 83.9% on a hold and 73.3% on ending December at 4.00–4.25%, is a key indicator shaping gold price outcomes.\nWSJ (Wall Street Journal) provides market-data quotes and contract information for the GCZ26 Gold Dec 2026 futures contract."
+  },
+  {
+   "id": "30c841f2-61c6-44d4-9961-3ff9294cd0cb",
+   "name": "China",
+   "labels": [
+    "Government"
+   ],
+   "summary": "China led August 2026's 39 tonnes of net central bank gold purchases, alongside Uzbekistan and the Czech National Bank.\nWGC central-bank commentary reported August 2026 net central-bank gold purchases of +39t, led by China, Uzbekistan and Poland\nNBP (Poland, 648t held end-Aug, +98t YTD) and China are rival leading central-bank gold buyers; an NBP halt at its 700t target would remove a key buyer"
+  },
+  {
+   "id": "307f4aab-65f4-4295-8b5e-ff399e13aea2",
+   "name": "Newmont",
+   "labels": [
+    "GoldSupplier"
+   ],
+   "summary": "Newmont's annual report shows a 2025 gold price range of $2,633–$4,449/oz with a $3,432/oz average.\nNewmont publishes the Newmont 2025 Annual Report filed with the SEC (nem-20251231xars.pdf)."
+  },
+  {
+   "id": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "name": "World Gold Council",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Source for Q2 2026 record 289t official buying, H1 345t, record ETF holdings 4,256t, record H1 mine output 1,867t, and the 2026 central bank survey\nThe World Gold Council spot page provides the baseline spot print of $4,099.20/ozt on 21 October 2026, cross-checking the LBMA Gold Price auction benchmark.\nThe World Gold Council reports central banks bought a record for a second quarter — 289 tonnes net in Q2 2026 after a revised 57t in Q1, leaving H1 2026 at 345t, the weakest first half since 2022 — and that they intend to continue buying over the next 12 months.\nGoldman Sachs Research expects c"
+  },
+  {
+   "id": "267d5241-deac-49fe-b285-048c3a40fb10",
+   "name": "US Treasury",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Debt issuance and TIPS supply shape the 10-year TIPS yield at 2.638% (September 2026), the report's key Bear driver"
+  },
+  {
+   "id": "22c82f89-d19a-4b7e-851f-d82fdfd93ba9",
+   "name": "FRED DTWEXBGS nominal broad dollar index",
+   "labels": [
+    "MacroSignal"
+   ],
+   "summary": "The Federal Reserve's broad trade-weighted dollar index covers 26 currencies, in contrast to the ICE DXY's 6-currency basket.\nFRED publishes the official Nominal Broad U.S. Dollar Index series used in the report, whose latest observation is down from a year earlier.\nThe Nominal Broad U.S. Dollar Index (119.2152 for 2026-09, latest daily 121.4048 on 2026-10-16) is published by FRED as a monthly mean of daily data."
+  },
+  {
+   "id": "1effa149-0178-4b6f-8eb5-1d0c7623cb42",
+   "name": "WGC Gold Demand Trends Q3 2026",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The WGC Gold Demand Trends Q3 2026 report is due end-October 2026, around the same time as the 28 October 2026 FOMC meeting; both are key catalysts in the same week."
+  },
+  {
+   "id": "1e1c696a-d37f-48b8-aa4f-7dd498afb4a3",
+   "name": "COMEX gold managed-money traders",
+   "labels": [
+    "Other"
+   ],
+   "summary": "Falling length supports Range-bound consolidation; thin far-dated open interest means long-dated conviction is absent\nManaged-money net long positions in COMEX gold stood at 107,089 contracts on 13 October 2026, down 3,898 week-on-week."
+  },
+  {
+   "id": "1b0dc34b-c358-4626-9e77-a583567aa1e9",
+   "name": "Polymarket US recession by end of 2027 contract",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "Prediction-market contract on Polymarket titled \"US recession by end of 2027\", trading around a 65% market-implied probability per the report. Contrasts with J.P. Morgan Research's roughly 40% probability estimate for a US and global recession. A realised US downturn is the principal trigger for the Bull: policy and crisis premium scenario (25%), in which a recession, geopolitical or debt-crisis shock drives aggressive Fed easing and gold above $5,500.\nPolymarket hosts the 'US recession by end of 2027' prediction market for trading odds and predictions."
+  },
+  {
+   "id": "1350642f-4392-4e76-ae4e-102a16577f35",
+   "name": "10-year breakeven",
+   "labels": [
+    "MacroSignal"
+   ],
+   "summary": "CPI was 3.717% year over year in September 2026, far above the 10-year breakeven of 2.351% for the same month\nThe 10-Year Breakeven Inflation Rate (T10YIE) series is published via FRED and used as a tier-1 macro signal source.\nThe 10-Year Breakeven Inflation Rate for the United States (2.351% in 2026-09, latest daily 2.37% on 2026-10-21) is published by FRED as a monthly mean of daily data."
+  },
+  {
+   "id": "0eecdf23-acd2-4d48-8295-693582e287fd",
+   "name": "ICE DXY index",
+   "labels": [
+    "MacroSignal"
+   ],
+   "summary": "MarketWatch quoted the ICE DXY index at 101.94 on an undated page, best treated as an approximate autumn-2026 level.\nA Forex.com note of 13 March 2026 reported DXY surging more than 5% off its 2026 lows and testing the 100 handle.\nThe Iran war caused the ICE DXY index to surge more than 5% off its 2026 lows and test the 100 handle, per a Forex.com note of 13 March 2026.\nMarketWatch publishes an overview page for the U.S. Dollar Index (DXY) [S38]."
+  },
+  {
+   "id": "091fcd83-6b6b-438f-a0d3-a3118eb1306c",
+   "name": "LBMA Precious Metal Prices",
+   "labels": [
+    "GoldInstrument"
+   ],
+   "summary": "LBMA publishes the LBMA Precious Metal Prices data series."
+  },
+  {
+   "id": "08973c58-49e4-4a62-9a67-641a9e42004f",
+   "name": "Deutsche Bank",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Deutsche Bank carried a $6,000 end-2026 gold price target as a publisher forecast referencing the LBMA Gold Price benchmark.\nJ.P. Morgan and Deutsche Bank both published $6,000 end-2026 gold price forecasts, competing as publisher forecasters."
+  },
+  {
+   "id": "0724ba5e-6128-4701-b0a7-8e2aa0a82539",
+   "name": "FedWatch",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "FedWatch showed 89.5% probability of the Federal Reserve holding rates at the 28 October 2026 FOMC meeting, versus Fed Rate Monitor's 83.9% hold odds.\nFed Rate Monitor (83.9% hold) and FedWatch (89.5% hold) provided competing market-implied probability estimates for the 28 October 2026 FOMC decision as of 21 October 2026.\nFedWatch is the CME Group's tool for market-implied Fed rate probabilities."
+  },
+  {
+   "id": "0345779e-6802-4b99-8054-d62e23dfd84e",
+   "name": "Bank for International Settlements",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The US central bank policy rate series (3.875% at end of September 2026, monthly end-of-period) is published by the Bank for International Settlements.\nThe US real broad effective exchange rate index (107.11 for 2026-09, 2020=100, 64 economies) is published by the Bank for International Settlements.\nThe China central bank policy rate series (3% at end of September 2026, unchanged YoY) is published by the Bank for International Settlements."
+  },
+  {
+   "id": "033bf764-73e1-4ac3-bdeb-56ed71f4d619",
+   "name": "LBMA",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Source of the resolving PM auction prints and the $5,501.70 a.m. all-time high of 29 January 2026; its Q2 2026 market report relays custodial and flow data\nLBMA's Q4 2024 market report put the 2024 gold close at $2,610.85/oz, up over 25% — the strongest year in fourteen — and set the all-time high LBMA a.m. print of $5,501.70 on 29 January 2026 (p.m. $5,405.00).\nAn FT-quoted WGC report (finding only 22% of RBI gold remained stored abroad by March 2026, down from 55% three years earlier) was relayed in LBMA's Q2 2026 market report\nLBMA publishes the LBMA Gold Price via its prices-and-data pages"
+  }
+ ],
+ "links": [
+  {
+   "source": "7a02fa2e-1956-48d5-9002-653636bbb70a",
+   "target": "a594a54a-7239-4594-b87b-aedff59fbfb9",
+   "name": "COMPETES_WITH",
+   "fact": "Polymarket's 'US recession by end of 2027' contract traded around a 65% market-implied probability, far above J.P. Morgan Research's roughly 40% recession probability estimate"
+  },
+  {
+   "source": "41b735cd-e0b4-4bb4-bca2-fbb06dcab959",
+   "target": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "name": "PARTNERS_WITH",
+   "fact": "CME Group lists gold option quotes used alongside the LBMA Gold Price benchmark in the research's evidence base."
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "033bf764-73e1-4ac3-bdeb-56ed71f4d619",
+   "name": "PARTNERS_WITH",
+   "fact": "LBMA's Q4 2024 market report put the 2024 gold close at $2,610.85/oz, up over 25% — the strongest year in fourteen — and set the all-time high LBMA a.m. print of $5,501.70 on 29 January 2026 (p.m. $5,405.00)."
+  },
+  {
+   "source": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "target": "781478e6-efc8-4110-ab82-95e5210fd055",
+   "name": "SUPPLIES",
+   "fact": "The World Gold Council reported global physically backed gold ETF holdings at a record 4,256t in September 2026 on +67t of inflows, with AUM down 7% month-on-month to US$574bn (a separate WGC post printed 4,189t, +121t, an apparent vintage difference)."
+  },
+  {
+   "source": "5e37544d-d2e0-429e-8cc0-04849163c365",
+   "target": "44b5b779-1eac-466c-841c-e0471d34601f",
+   "name": "IS_A",
+   "fact": "Reports Chinese physical demand, the largest consumer market；- 角色定位: Reports Chinese physical demand, the largest consumer market；- 立场: Not quoted with data in the evidence; no Chinese bar-and-coin figures available；- 影响力: low；- 目标/动机: Industry representation and statistics；- 资源/能力: Domestic demand data（simulation_tier=4，salience=0.30）"
+  },
+  {
+   "source": "67e2f9cf-f9fe-4e3f-870b-db60c3a746ba",
+   "target": "67e2f9cf-f9fe-4e3f-870b-db60c3a746ba",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "SPDR Gold Shares (GLD) 亦称 GLD"
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "7449fe06-06b8-415e-9608-cb9ba7a06fd5",
+   "name": "ACCUMULATES",
+   "fact": "Poland held 648 tonnes of gold after buying 98 tonnes year-to-date through August 2026, putting its 700-tonne target within reach."
+  },
+  {
+   "source": "77a889a5-2dbb-4a27-a5b9-015c5ac78d96",
+   "target": "999840c8-66b5-4554-851d-58e112135e44",
+   "name": "CITES_CAUSE_OF",
+   "fact": "Forex.com's 13 March 2026 note cited the Iran war as the driver behind DXY surging more than 5% off its 2026 lows."
+  },
+  {
+   "source": "999840c8-66b5-4554-851d-58e112135e44",
+   "target": "0eecdf23-acd2-4d48-8295-693582e287fd",
+   "name": "CAUSES",
+   "fact": "The Iran war caused the ICE DXY index to surge more than 5% off its 2026 lows and test the 100 handle, per a Forex.com note of 13 March 2026."
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "73493c35-49a9-4ed9-81f8-4e887c468b6e",
+   "name": "INFLUENCES",
+   "fact": "The 2027 elections (France presidential, Argentina/Switzerland, Poland and Italy votes, per RankiaPro's '2027, year of elections' report) are cited as a transmission channel affecting gold prices via sovereign spreads and fiscal risk premia."
+  },
+  {
+   "source": "a75e9848-a031-46b9-a214-01e45e2fd366",
+   "target": "7449fe06-06b8-415e-9608-cb9ba7a06fd5",
+   "name": "DEPENDS_ON",
+   "fact": "Monthly WGC central-bank commentary tracks the NBP gold buying programme; an NBP halt at its 700t target (648t held end-Aug, 98t YTD) would remove a key buyer from the monthly flow data."
+  },
+  {
+   "source": "ee74bd7a-2ad8-41f1-9546-9943f6eb25bd",
+   "target": "ee74bd7a-2ad8-41f1-9546-9943f6eb25bd",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "People's Bank of China 亦称 PBoC"
+  },
+  {
+   "source": "a75e9848-a031-46b9-a214-01e45e2fd366",
+   "target": "f88cd4a2-4065-4c17-b9c4-c5c0eb2e5bba",
+   "name": "REPORTS_ON",
+   "fact": "WGC central-bank commentary listed Poland among the leading buyers in August 2026's +39t of net central-bank gold purchases"
+  },
+  {
+   "source": "a75e9848-a031-46b9-a214-01e45e2fd366",
+   "target": "7449fe06-06b8-415e-9608-cb9ba7a06fd5",
+   "name": "REPORTS_ON",
+   "fact": "WGC central-bank commentary reported that an NBP halt at its 700t target (648t held end-Aug, 98t YTD through August) would remove a key central-bank gold buyer"
+  },
+  {
+   "source": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "target": "67e2f9cf-f9fe-4e3f-870b-db60c3a746ba",
+   "name": "INFLUENCES",
+   "fact": "TIPS at 2.638% imposes opportunity cost while ETF inflows persisted contrarianly [S5][S8]（sign=-，strength=0.6，valence=directional，polarity=-0.50）"
+  },
+  {
+   "source": "7449fe06-06b8-415e-9608-cb9ba7a06fd5",
+   "target": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "name": "CUSTOMER_OF",
+   "fact": "NBP purchases reported monthly by WGC [S17][S9]（sign=+，strength=0.5，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "target": "1e1c696a-d37f-48b8-aa4f-7dd498afb4a3",
+   "name": "INFLUENCES",
+   "fact": "Hawkish repricing trimmed net length to +107,089 contracts [S27][S14]（sign=-，strength=0.8，valence=directional，polarity=-0.60）"
+  },
+  {
+   "source": "67e2f9cf-f9fe-4e3f-870b-db60c3a746ba",
+   "target": "781478e6-efc8-4110-ab82-95e5210fd055",
+   "name": "ACCUMULATES",
+   "fact": "SPDR Gold Shares held 1,053.91 tonnes of gold on 15 October 2026."
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "3f958402-2ad5-47cf-ab3d-43ce5add6d1c",
+   "name": "ACCUMULATES",
+   "fact": "Turkey was a net seller of gold, with -82 tonnes year-to-date as of August 2026."
+  },
+  {
+   "source": "b19de7b8-d4fe-439c-9cc0-da09e819c1e6",
+   "target": "ee74bd7a-2ad8-41f1-9546-9943f6eb25bd",
+   "name": "PARTNERS_WITH",
+   "fact": "Both diversifying and, in India's case, repatriating gold custody [S3]（sign=+，strength=0.4，valence=allied，polarity=0.40）"
+  },
+  {
+   "source": "80c1a98e-86db-4405-a318-3315d87c6af0",
+   "target": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "name": "CAUSES",
+   "fact": "Over the year to October 2026, gold fell 5.2% while the trade-weighted dollar slipped just 0.678% and real yields rose +0.889 pp — real rates, not the dollar, carried the gold move."
+  },
+  {
+   "source": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "target": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "World Gold Council 亦称 WGC"
+  },
+  {
+   "source": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "target": "a4f20934-7253-4e31-b591-e1d095aec3af",
+   "name": "PARTNERS_WITH",
+   "fact": "The World Gold Council is covered in the goldsilver.com article on the Goldman Sachs gold target cut and JPMorgan divergence (coverage relationship via industry news)."
+  },
+  {
+   "source": "5e37544d-d2e0-429e-8cc0-04849163c365",
+   "target": "5e37544d-d2e0-429e-8cc0-04849163c365",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "China Gold Association 亦称 CGA"
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "80c1a98e-86db-4405-a318-3315d87c6af0",
+   "name": "CAUSES",
+   "fact": "The 10-year TIPS yield averaged 2.638% in September 2026, the top of its five-year range, contributing to a real-yield shock pressuring gold prices"
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "30c841f2-61c6-44d4-9961-3ff9294cd0cb",
+   "name": "ACCUMULATES",
+   "fact": "China led August 2026's 39 tonnes of net central bank gold purchases, alongside Uzbekistan and the Czech National Bank."
+  },
+  {
+   "source": "781478e6-efc8-4110-ab82-95e5210fd055",
+   "target": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "name": "PARTNERS_WITH",
+   "fact": "COMEX settlements ($4,092.50/ozt for GCZ6 on 22 October 2026, −1.39%) serve as a futures cross-check against the LBMA Gold Price auction, with small gaps reflecting fixing-versus-settlement timing."
+  },
+  {
+   "source": "7a02fa2e-1956-48d5-9002-653636bbb70a",
+   "target": "1b0dc34b-c358-4626-9e77-a583567aa1e9",
+   "name": "HOSTS",
+   "fact": "Polymarket hosts the 'US recession by end of 2027' prediction market for trading odds and predictions."
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "a531e1a9-225b-4b1f-a6ff-d1c909667cb7",
+   "name": "ACCUMULATES",
+   "fact": "The Czech National Bank is on a 42-month gold buying streak as of August 2026."
+  },
+  {
+   "source": "d69c3663-c129-4027-84c5-08c872e132b5",
+   "target": "0724ba5e-6128-4701-b0a7-8e2aa0a82539",
+   "name": "COMPETES_WITH",
+   "fact": "Fed Rate Monitor (83.9% hold) and FedWatch (89.5% hold) provided competing market-implied probability estimates for the 28 October 2026 FOMC decision as of 21 October 2026."
+  },
+  {
+   "source": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "target": "d9ed6905-5ed7-4675-8c37-9a641886939b",
+   "name": "PUBLISHED",
+   "fact": "The World Gold Council published the Central Bank Gold Reserves Survey 2026 on its Goldhub research site."
+  },
+  {
+   "source": "86ec8371-1f5f-48c1-85c2-b3f99c4b5048",
+   "target": "67e2f9cf-f9fe-4e3f-870b-db60c3a746ba",
+   "name": "CAUSES",
+   "fact": "CPI YoY of 3.717% in September 2026 versus the 2.391% low in January 2026: convergence toward the January low supports Fed easing while persistence above 3% confirms the bear real-yield squeeze for gold"
+  },
+  {
+   "source": "acca6422-d9a3-4669-9396-99571664214f",
+   "target": "55225a6e-ec4f-4d12-b04c-e0b38155ae8b",
+   "name": "SANCTIONS",
+   "fact": "Russia liquidated 56t YTD amid sanctions [S17]（sign=-，strength=0.8，valence=adversarial，polarity=-0.80）"
+  },
+  {
+   "source": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "target": "67e2f9cf-f9fe-4e3f-870b-db60c3a746ba",
+   "name": "PUBLISHES_DATA_ON",
+   "fact": "The World Gold Council publishes data on gold-backed ETFs including SPDR Gold Trust, the world's largest gold ETF, which held holdings reported as of October 15, 2026."
+  },
+  {
+   "source": "1e1c696a-d37f-48b8-aa4f-7dd498afb4a3",
+   "target": "1e1c696a-d37f-48b8-aa4f-7dd498afb4a3",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "COMEX gold managed-money traders 亦称 Managed money"
+  },
+  {
+   "source": "7449fe06-06b8-415e-9608-cb9ba7a06fd5",
+   "target": "7449fe06-06b8-415e-9608-cb9ba7a06fd5",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "National Bank of Poland 亦称 NBP"
+  },
+  {
+   "source": "999840c8-66b5-4554-851d-58e112135e44",
+   "target": "3f958402-2ad5-47cf-ab3d-43ce5add6d1c",
+   "name": "TRIGGERS",
+   "fact": "The Iran War outbreak in April 2026 triggered the Central Bank of Turkey to sell/lent roughly $20bn in gold over five weeks, making it the largest downside swing factor; Turkey later bought +3t in August 2026 after three net-sale months"
+  },
+  {
+   "source": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "target": "cae3176e-af56-44ea-bc02-c9975bb126b1",
+   "name": "INFLUENCES",
+   "fact": "The Federal Reserve will decide whether to hold at 3.75–4.00% or hike to 4.00–4.25% at the 28 October 2026 FOMC meeting, a near-term discriminator for the gold forecast."
+  },
+  {
+   "source": "a75e9848-a031-46b9-a214-01e45e2fd366",
+   "target": "30c841f2-61c6-44d4-9961-3ff9294cd0cb",
+   "name": "REPORTS_ON",
+   "fact": "WGC central-bank commentary reported August 2026 net central-bank gold purchases of +39t, led by China, Uzbekistan and Poland"
+  },
+  {
+   "source": "da9c1a12-66ff-4135-a6c1-f4af82c96a91",
+   "target": "a594a54a-7239-4594-b87b-aedff59fbfb9",
+   "name": "COMPETES_WITH",
+   "fact": "Goldman Sachs and JPMorgan (J.P. Morgan) hold diverging gold price forecasts, as reported in the article 'Goldman Sachs Gold Target Cut: What the $1,400 Gap Means' and the JPMorgan-divergence coverage."
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "4689f9d2-add5-4c2e-81b4-9ae6e7969930",
+   "name": "INFLUENCES",
+   "fact": "The Fed holding the US policy rate at 3.875% (having stopped easing) is a bearish force contesting the gold price through 2027"
+  },
+  {
+   "source": "a75e9848-a031-46b9-a214-01e45e2fd366",
+   "target": "3a8fc141-bee4-4fa9-99c1-05a88f863141",
+   "name": "REPORTS_ON",
+   "fact": "WGC central-bank commentary listed Uzbekistan among the leading buyers in August 2026's +39t of net central-bank gold purchases"
+  },
+  {
+   "source": "1effa149-0178-4b6f-8eb5-1d0c7623cb42",
+   "target": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "name": "OCCURS_NEAR",
+   "fact": "The WGC Gold Demand Trends Q3 2026 report is due end-October 2026, around the same time as the 28 October 2026 FOMC meeting; both are key catalysts in the same week."
+  },
+  {
+   "source": "da9c1a12-66ff-4135-a6c1-f4af82c96a91",
+   "target": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "name": "DEPENDS_ON",
+   "fact": "Goldman Sachs Research expects roughly 50 tonnes per month (about 600t a year) of central bank gold buying in 2026, comparing it to World Gold Council survey pages recording 1,082t in 2022 and 1,037t in 2023."
+  },
+  {
+   "source": "80c1a98e-86db-4405-a318-3315d87c6af0",
+   "target": "e1c2272f-3647-4999-9bae-bd0d5310b7f5",
+   "name": "SOURCED_FROM",
+   "fact": "The 10-year TIPS yield series (2.638% in 2026-09, latest daily 2.77% on 2026-10-20) is published by FRED as a monthly mean of daily data."
+  },
+  {
+   "source": "a531e1a9-225b-4b1f-a6ff-d1c909667cb7",
+   "target": "781478e6-efc8-4110-ab82-95e5210fd055",
+   "name": "ACCUMULATES",
+   "fact": "The Czech National Bank maintained a 42-month buying streak of gold, contributing to August 2026's 39t of net central-bank purchases alongside Uzbekistan (~50t year-to-date) and China."
+  },
+  {
+   "source": "3f958402-2ad5-47cf-ab3d-43ce5add6d1c",
+   "target": "3f958402-2ad5-47cf-ab3d-43ce5add6d1c",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Central Bank of Turkey 亦称 CBRT"
+  },
+  {
+   "source": "b19de7b8-d4fe-439c-9cc0-da09e819c1e6",
+   "target": "b19de7b8-d4fe-439c-9cc0-da09e819c1e6",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Reserve Bank of India 亦称 RBI"
+  },
+  {
+   "source": "7449fe06-06b8-415e-9608-cb9ba7a06fd5",
+   "target": "30c841f2-61c6-44d4-9961-3ff9294cd0cb",
+   "name": "COMPETES_WITH",
+   "fact": "NBP (Poland, 648t held end-Aug, +98t YTD) and China are rival leading central-bank gold buyers; an NBP halt at its 700t target would remove a key buyer"
+  },
+  {
+   "source": "0724ba5e-6128-4701-b0a7-8e2aa0a82539",
+   "target": "cae3176e-af56-44ea-bc02-c9975bb126b1",
+   "name": "DEPENDS_ON",
+   "fact": "FedWatch showed 89.5% probability of the Federal Reserve holding rates at the 28 October 2026 FOMC meeting, versus Fed Rate Monitor's 83.9% hold odds."
+  },
+  {
+   "source": "9c551e7f-f9ec-47a9-9d5f-495a729e91de",
+   "target": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "name": "INFLUENCES",
+   "fact": "The September 2026 SEP median, an FOMC projection holding 4.25% through 2028, versus roughly 77bp of cumulative tightening priced through October 2027, is a key indicator for gold price forecasting."
+  },
+  {
+   "source": "3f958402-2ad5-47cf-ab3d-43ce5add6d1c",
+   "target": "1e1c696a-d37f-48b8-aa4f-7dd498afb4a3",
+   "name": "SUPPLIES",
+   "fact": "Turkey sold/lent ~$20bn of gold post-Iran war outbreak; -82t YTD [S3][S17]（sign=-，strength=0.5，valence=transactional，polarity=-0.40）"
+  },
+  {
+   "source": "a594a54a-7239-4594-b87b-aedff59fbfb9",
+   "target": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "name": "DEPENDS_ON",
+   "fact": "J.P. Morgan carried a $6,000 end-2026 gold price target as a publisher forecast referencing the LBMA Gold Price benchmark."
+  },
+  {
+   "source": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "target": "033bf764-73e1-4ac3-bdeb-56ed71f4d619",
+   "name": "PARTNERS_WITH",
+   "fact": "LBMA market reports relay WGC and FT/WGC findings [S3]（sign=+，strength=0.4，valence=allied，polarity=0.50）"
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "682087ea-7cbd-44ba-a361-f684c9023af1",
+   "name": "DEPENDS_ON",
+   "fact": "goldprice.org lists gold spot at $4,083.55 on 31 December 2025, while the exact LBMA p.m. close for that day remains unconfirmed."
+  },
+  {
+   "source": "80c1a98e-86db-4405-a318-3315d87c6af0",
+   "target": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "name": "PUBLISHED",
+   "fact": "The Federal Reserve (via FRED) publishes the 10-Year Treasury Inflation-Indexed Securities constant-maturity series (DFII10), used as a macro signal input."
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "name": "DEPENDS_ON",
+   "fact": "The research's gold supply and demand evidence relies on World Gold Council Goldhub data benchmarked against the LBMA Gold Price."
+  },
+  {
+   "source": "a4cacb4f-e9cd-4388-8a56-a31751e3ad7f",
+   "target": "a75e9848-a031-46b9-a214-01e45e2fd366",
+   "name": "COMPLEMENTS",
+   "fact": "The WGC monthly ETF report (early November 2026) and the monthly WGC central-bank commentary together monitor demand flows: September 2026 ETF inflows of +67t to a record 4,256t, and August 2026 central-bank net buying of +39t led by China, Uzbekistan and Poland."
+  },
+  {
+   "source": "e1c2272f-3647-4999-9bae-bd0d5310b7f5",
+   "target": "22c82f89-d19a-4b7e-851f-d82fdfd93ba9",
+   "name": "SUPPLIES",
+   "fact": "FRED publishes the official Nominal Broad U.S. Dollar Index series used in the report, whose latest observation is down from a year earlier."
+  },
+  {
+   "source": "80c1a98e-86db-4405-a318-3315d87c6af0",
+   "target": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "name": "CAUSES",
+   "fact": "The 10-year TIPS yield is the cleanest discriminator between Base and Bear gold price scenarios."
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "033bf764-73e1-4ac3-bdeb-56ed71f4d619",
+   "name": "SUPPLIES",
+   "fact": "LBMA publishes the LBMA Gold Price via its prices-and-data pages."
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "91549699-0df8-4c1a-ade3-5f8017765f0c",
+   "name": "INFLUENCES",
+   "fact": "The New York Fed's Treasury-spread recession probability model is used as a leading indicator informing the gold price forecast."
+  },
+  {
+   "source": "55153b65-9cd2-4937-b4ac-3ba08f2964f0",
+   "target": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "name": "DEPENDS_ON",
+   "fact": "Kitco News's October 6, 2026 report on central banks adding 39 net tonnes of gold in August relies on World Gold Council data."
+  },
+  {
+   "source": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "target": "1350642f-4392-4e76-ae4e-102a16577f35",
+   "name": "PUBLISHED",
+   "fact": "The 10-Year Breakeven Inflation Rate (T10YIE) series is published via FRED and used as a tier-1 macro signal source."
+  },
+  {
+   "source": "267d5241-deac-49fe-b285-048c3a40fb10",
+   "target": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "name": "INFLUENCES",
+   "fact": "10-year TIPS at top of five-year range [S5]（sign=+，strength=0.5，valence=directional，polarity=0.30）"
+  },
+  {
+   "source": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "target": "22c82f89-d19a-4b7e-851f-d82fdfd93ba9",
+   "name": "PUBLISHES",
+   "fact": "The Federal Reserve's broad trade-weighted dollar index covers 26 currencies, in contrast to the ICE DXY's 6-currency basket."
+  },
+  {
+   "source": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "target": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "name": "SUPPLIES",
+   "fact": "The World Gold Council spot page provides the baseline spot print of $4,099.20/ozt on 21 October 2026, cross-checking the LBMA Gold Price auction benchmark."
+  },
+  {
+   "source": "9a8439c8-3a7a-4aa6-aacf-cc8b986034f6",
+   "target": "67e2f9cf-f9fe-4e3f-870b-db60c3a746ba",
+   "name": "CAUSES",
+   "fact": "Record global gold ETF holdings of 4,256t with GLD at 1,053.91t on 15 October 2026 support gold; multi-month outflows would undercut the base grind-higher scenario"
+  },
+  {
+   "source": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "target": "9c551e7f-f9ec-47a9-9d5f-495a729e91de",
+   "name": "PUBLISHED",
+   "fact": "The Federal Reserve published the Summary of Economic Projections dated September 16, 2026 (fomcprojtabl20260916.pdf)."
+  },
+  {
+   "source": "a594a54a-7239-4594-b87b-aedff59fbfb9",
+   "target": "4a50f50b-052e-4551-bd83-2da8223576cd",
+   "name": "COMPETES_WITH",
+   "fact": "JPM ~40% recession vs Polymarket ~65% by end-2027; different resolution windows [S47][S48]（sign=-，strength=0.4，valence=neutral，polarity=-0.30）"
+  },
+  {
+   "source": "41b735cd-e0b4-4bb4-bca2-fbb06dcab959",
+   "target": "0724ba5e-6128-4701-b0a7-8e2aa0a82539",
+   "name": "OPERATES",
+   "fact": "FedWatch is the CME Group's tool for market-implied Fed rate probabilities."
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "ee74bd7a-2ad8-41f1-9546-9943f6eb25bd",
+   "name": "ACCUMULATES",
+   "fact": "PBoC added about 10 tonnes of gold in May 2026, its nineteenth consecutive month of purchases and longest streak since 2015; reported reserves reached 2,346.43 tonnes in Q2 2026."
+  },
+  {
+   "source": "cae3176e-af56-44ea-bc02-c9975bb126b1",
+   "target": "35a6969a-9d98-4e37-88d6-19fbff4f7b97",
+   "name": "INFLUENCES",
+   "fact": "The 28 October 2026 FOMC meeting, with market-implied odds of 83.9% on a hold and 73.3% on ending December at 4.00–4.25%, is a key indicator shaping gold price outcomes."
+  },
+  {
+   "source": "1350642f-4392-4e76-ae4e-102a16577f35",
+   "target": "e1c2272f-3647-4999-9bae-bd0d5310b7f5",
+   "name": "SOURCED_FROM",
+   "fact": "The 10-Year Breakeven Inflation Rate for the United States (2.351% in 2026-09, latest daily 2.37% on 2026-10-21) is published by FRED as a monthly mean of daily data."
+  },
+  {
+   "source": "a6b49a68-fded-4924-86f0-27782138d965",
+   "target": "ccb02e10-42f8-4319-950d-6828d2c9d23c",
+   "name": "IS_A",
+   "fact": "Publishes Commitments of Traders positioning data；- 角色定位: Publishes Commitments of Traders positioning data；- 立场: Neutral regulator and data publisher；- 影响力: low；- 目标/动机: Market transparency；- 资源/能力: Weekly COT data（simulation_tier=4，salience=0.40）"
+  },
+  {
+   "source": "9643f0a4-b327-406e-876f-2f5387645aea",
+   "target": "781478e6-efc8-4110-ab82-95e5210fd055",
+   "name": "ACCUMULATES",
+   "fact": "Uzbekistan bought roughly 50t of gold year-to-date (through October 2026), with its reserves already 90% gold, leading August 2026's 39t of net central-bank purchases."
+  },
+  {
+   "source": "a594a54a-7239-4594-b87b-aedff59fbfb9",
+   "target": "c9235004-3e14-4305-907a-18c5207d8e6b",
+   "name": "PUBLISHES",
+   "fact": "JPMorgan Asset Management published the FOMC Statement: September 2026 commentary on its fixed income perspectives page [S35]."
+  },
+  {
+   "source": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "target": "033bf764-73e1-4ac3-bdeb-56ed71f4d619",
+   "name": "PARTNERS_WITH",
+   "fact": "An FT-quoted WGC report (finding only 22% of RBI gold remained stored abroad by March 2026, down from 55% three years earlier) was relayed in LBMA's Q2 2026 market report"
+  },
+  {
+   "source": "033bf764-73e1-4ac3-bdeb-56ed71f4d619",
+   "target": "091fcd83-6b6b-438f-a0d3-a3118eb1306c",
+   "name": "SUPPLIES",
+   "fact": "LBMA publishes the LBMA Precious Metal Prices data series."
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "3a8fc141-bee4-4fa9-99c1-05a88f863141",
+   "name": "ACCUMULATES",
+   "fact": "Uzbekistan bought roughly 50 tonnes of gold year-to-date 2026; its reserves are already 90% gold."
+  },
+  {
+   "source": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "target": "4689f9d2-add5-4c2e-81b4-9ae6e7969930",
+   "name": "CAUSES",
+   "fact": "The Fed has stopped easing, holding the US policy rate at 3.875% per year at end-September 2026"
+  },
+  {
+   "source": "80c1a98e-86db-4405-a318-3315d87c6af0",
+   "target": "67e2f9cf-f9fe-4e3f-870b-db60c3a746ba",
+   "name": "CAUSES",
+   "fact": "A sustained fall of at least 0.5pp in the 10-yr TIPS real yield (2.638% in 2026-09 monthly, 2.77% on 2026-10-20 daily) would confirm a gold-friendly base scenario, while new highs would confirm the bear real-yield squeeze scenario"
+  },
+  {
+   "source": "55225a6e-ec4f-4d12-b04c-e0b38155ae8b",
+   "target": "da9c1a12-66ff-4135-a6c1-f4af82c96a91",
+   "name": "ACCUMULATES",
+   "fact": "placeholder"
+  },
+  {
+   "source": "5e1d2bec-5333-40c4-8d1a-c33c8174749e",
+   "target": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "name": "INFLUENCES",
+   "fact": "A daily DTWEXBGS close above its five-year high of 128.837 (set January 2025) would confirm a genuine dollar-breakout regime, a signpost bearing on gold."
+  },
+  {
+   "source": "9c551e7f-f9ec-47a9-9d5f-495a729e91de",
+   "target": "a8d0d703-62c1-4c8b-9e73-6131d03686c7",
+   "name": "COMPETES_WITH",
+   "fact": "The September 2026 SEP median holds the policy rate midpoint at 4.25% from end-2026 through end-2028, while Central Bank Watch tabulates roughly 77bp of cumulative tightening priced across meetings through 27 October 2027; this market-versus-SEP gap is itself a leading indicator, where repricing toward cuts would mark the turn toward the Bull scenario."
+  },
+  {
+   "source": "4689f9d2-add5-4c2e-81b4-9ae6e7969930",
+   "target": "0345779e-6802-4b99-8054-d62e23dfd84e",
+   "name": "SOURCED_FROM",
+   "fact": "The US central bank policy rate series (3.875% at end of September 2026, monthly end-of-period) is published by the Bank for International Settlements."
+  },
+  {
+   "source": "1e1c696a-d37f-48b8-aa4f-7dd498afb4a3",
+   "target": "781478e6-efc8-4110-ab82-95e5210fd055",
+   "name": "SUPPLIES",
+   "fact": "Managed-money net long positions in COMEX gold stood at 107,089 contracts on 13 October 2026, down 3,898 week-on-week."
+  },
+  {
+   "source": "77a889a5-2dbb-4a27-a5b9-015c5ac78d96",
+   "target": "0eecdf23-acd2-4d48-8295-693582e287fd",
+   "name": "REPORTS_VALUE_OF",
+   "fact": "A Forex.com note of 13 March 2026 reported DXY surging more than 5% off its 2026 lows and testing the 100 handle."
+  },
+  {
+   "source": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "target": "663b5622-2355-44c3-9ec5-35b62c4f9904",
+   "name": "CAUSES",
+   "fact": "The 9 December 2026 FOMC meeting will publish the SEP, whose 2027 PCE median of 2.4% could be revised upward; an upward revision would favour the Bear real-yield squeeze scenario."
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "67e2f9cf-f9fe-4e3f-870b-db60c3a746ba",
+   "name": "SUPPLIES",
+   "fact": "Global gold ETF holdings reached a record 4,256 tonnes in September 2026, absorbing roughly US$10bn of inflows into a falling price, providing an unusually firm floor"
+  },
+  {
+   "source": "22c82f89-d19a-4b7e-851f-d82fdfd93ba9",
+   "target": "e1c2272f-3647-4999-9bae-bd0d5310b7f5",
+   "name": "SOURCED_FROM",
+   "fact": "The Nominal Broad U.S. Dollar Index (119.2152 for 2026-09, latest daily 121.4048 on 2026-10-16) is published by FRED as a monthly mean of daily data."
+  },
+  {
+   "source": "b8ccd17d-ba4a-4a5d-9e69-4a002f29e253",
+   "target": "44b5b779-1eac-466c-841c-e0471d34601f",
+   "name": "IS_A",
+   "fact": "COFER and IFS data on official reserve composition；- 角色定位: COFER and IFS data on official reserve composition；- 立场: Neutral data institution；- 影响力: low；- 目标/动机: Reserve statistics；- 资源/能力: COFER/IFS datasets（simulation_tier=4，salience=0.30）"
+  },
+  {
+   "source": "d69c3663-c129-4027-84c5-08c872e132b5",
+   "target": "cae3176e-af56-44ea-bc02-c9975bb126b1",
+   "name": "DEPENDS_ON",
+   "fact": "As of 21 October 2026, Fed Rate Monitor put 83.9% odds on the Federal Reserve holding at 3.75–4.00% and 16.1% on a hike to 4.00–4.25% at the 28 October 2026 FOMC meeting, and 73.3% on ending December at 4.00–4.25% with 13.6% at 4.25–4.50%."
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "6e8fc26f-8432-4a6f-95b7-d03ffc163ad3",
+   "name": "DEPENDS_ON",
+   "fact": "GCZ7 (Dec 2027) gold futures settled at $4,363.70/ozt on 21 October 2026, with small gaps versus LBMA spot prints reflecting fixing-versus-settlement timing rather than genuine disagreement."
+  },
+  {
+   "source": "a6b49a68-fded-4924-86f0-27782138d965",
+   "target": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "name": "OCCURS_NEAR",
+   "fact": "Weekly CFTC Commitments of Traders reports (13 October 2026: managed-money net long +107,089 contracts) serve as a positioning check alongside FOMC meetings on the catalyst calendar; falling length would support the Range-bound consolidation scenario."
+  },
+  {
+   "source": "da9c1a12-66ff-4135-a6c1-f4af82c96a91",
+   "target": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "name": "DEPENDS_ON",
+   "fact": "Cut target to $4,900 after pushing first cut to June 2027; ~$120/oz per 50bp [S11]（strength=0.7，valence=neutral，polarity=0.00）"
+  },
+  {
+   "source": "a594a54a-7239-4594-b87b-aedff59fbfb9",
+   "target": "08973c58-49e4-4a62-9a67-641a9e42004f",
+   "name": "COMPETES_WITH",
+   "fact": "J.P. Morgan and Deutsche Bank both published $6,000 end-2026 gold price forecasts, competing as publisher forecasters."
+  },
+  {
+   "source": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "target": "7449fe06-06b8-415e-9608-cb9ba7a06fd5",
+   "name": "ACCUMULATES",
+   "fact": "Per World Gold Council data, May 2026 delivered 41t of net central bank gold buying led by Poland, with Russia and Turkey the only sellers; August added 39t, which the World Gold Council calls 'on pace'."
+  },
+  {
+   "source": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "target": "86ec8371-1f5f-48c1-85c2-b3f99c4b5048",
+   "name": "PUBLISHED",
+   "fact": "The CPI for All Urban Consumers: All Items in U.S. City Average (year-over-year % change, CPIAUCSL) is published via FRED and used as a tier-1 macro signal source."
+  },
+  {
+   "source": "08973c58-49e4-4a62-9a67-641a9e42004f",
+   "target": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "name": "DEPENDS_ON",
+   "fact": "Deutsche Bank carried a $6,000 end-2026 gold price target as a publisher forecast referencing the LBMA Gold Price benchmark."
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "66c27634-dfe1-454d-a6b3-53a33f5ef84d",
+   "name": "DEPENDS_ON",
+   "fact": "Macrotrends' daily-close record for gold was $5,379 on 29 January 2026, and its composite shows gold down 4.4% year-to-date and 23.2% below its record as of 21 October 2026, implying an end-2025 level near $4,322."
+  },
+  {
+   "source": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "target": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Federal Reserve (FOMC) 亦称 Fed"
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "86ec8371-1f5f-48c1-85c2-b3f99c4b5048",
+   "name": "INFLUENCES",
+   "fact": "CPI at 3.717% year over year in September 2026, far above the 10-year breakeven of 2.351%, creates a wedge that either feeds the gold hedge bid or, if it closes through disinflation and higher real rates, removes it"
+  },
+  {
+   "source": "da9c1a12-66ff-4135-a6c1-f4af82c96a91",
+   "target": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "name": "DEPENDS_ON",
+   "fact": "Goldman Sachs Research expects central-bank gold buying of roughly 50 tonnes per month (about 600t a year) in 2026, below the >1,000t/year pace of 2022–2024, drawing on WGC survey pages that record 1,082t in 2022 and 1,037t in 2023"
+  },
+  {
+   "source": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "target": "5a99b59a-6bef-4867-80f4-13b00ae5ef3d",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Federal Reserve (FOMC) 亦称 FOMC"
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "2ae6055b-c2d5-48f8-9101-55b7eb303d80",
+   "name": "INFLUENCES",
+   "fact": "The World Gold Council reports central banks bought a record for a second quarter — 289 tonnes net in Q2 2026 after a revised 57t in Q1, leaving H1 2026 at 345t, the weakest first half since 2022 — and that they intend to continue buying over the next 12 months."
+  },
+  {
+   "source": "67e2f9cf-f9fe-4e3f-870b-db60c3a746ba",
+   "target": "033bf764-73e1-4ac3-bdeb-56ed71f4d619",
+   "name": "DEPENDS_ON",
+   "fact": "ETF AUM of US$574bn tied to benchmark prices [S8][S3]（sign=+，strength=0.5，valence=transactional，polarity=0.30）"
+  },
+  {
+   "source": "8423eb6b-290e-4edf-a945-b25784f0406b",
+   "target": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "name": "INFLUENCES",
+   "fact": "DXY losing the 100 handle would signal dollar relief for gold, cutting against a dollar-breakout regime; elasticities calibrated on DXY overstate the breadth of the dollar–gold link versus the Fed's 26-currency broad index."
+  },
+  {
+   "source": "86ec8371-1f5f-48c1-85c2-b3f99c4b5048",
+   "target": "1350642f-4392-4e76-ae4e-102a16577f35",
+   "name": "INFLUENCES",
+   "fact": "CPI was 3.717% year over year in September 2026, far above the 10-year breakeven of 2.351% for the same month"
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "55225a6e-ec4f-4d12-b04c-e0b38155ae8b",
+   "name": "ACCUMULATES",
+   "fact": "Russia remained a net gold seller with -56 tonnes year-to-date in 2026, while holding 2,271 tonnes of reserves."
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "c32bfc32-c578-45e4-93a6-046f821b8b15",
+   "name": "INFLUENCES",
+   "fact": "The Gold-to-Silver Ratio is used as a macro signal bearing on the gold price forecast."
+  },
+  {
+   "source": "ee74bd7a-2ad8-41f1-9546-9943f6eb25bd",
+   "target": "acca6422-d9a3-4669-9396-99571664214f",
+   "name": "COMPETES_WITH",
+   "fact": "De-dollarization motive behind 19-month buying streak [S3]（sign=-，strength=0.6，valence=adversarial，polarity=-0.50）"
+  },
+  {
+   "source": "a594a54a-7239-4594-b87b-aedff59fbfb9",
+   "target": "a594a54a-7239-4594-b87b-aedff59fbfb9",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "J.P. Morgan Research 亦称 JPMorgan"
+  },
+  {
+   "source": "592163c7-c2c3-4d96-9975-3aa79971b8e7",
+   "target": "307f4aab-65f4-4295-8b5e-ff399e13aea2",
+   "name": "SUPPLIES",
+   "fact": "Newmont's annual report shows a 2025 gold price range of $2,633–$4,449/oz with a $3,432/oz average."
+  }
+ ],
+ "graph_id": "mirofish_2c4be3f089df4594"
+}

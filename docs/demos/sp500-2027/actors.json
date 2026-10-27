@@ -1,0 +1,3007 @@
+{
+  "central_question": "What will the S&P 500 index closing level be on 31 December 2027, and what is the probability that the index falls 20% or more from any 2026-2027 peak before that date, given current valuation, earnings-growth consensus, Fed policy, AI-capex breadth and mega-cap concentration risks as of 23 October 2026?",
+  "as_of_date": "2026-10-23",
+  "situation_brief": {
+    "current_situation": "The S&P 500 closed near 7,624-7,757 (vendor closes: 7,662.54 on 2026-10-22; WSJ 7,623.68 on 2026-10-23), up 16.485% year over year as of 2026-09, with trailing as-reported P/E of 26.15 (above 22 since January 2024), forward P/E near 19, and CY2026 consensus EPS growth of 32.8% with CY2027 at 15.8%.",
+    "context": "The Fed holds the target-range upper limit at 4% after a unanimous 25 bp September 2026 hike; the SEP median is 4.1% through 2027 while futures imply roughly 4.56-4.7% by late 2027. Recession signals are quiet: Sahm rule 0pp, smoothed recession probability 0.62%, 10Y-3M spread +0.896%. Top-10 index weight hit a record 40.7% in 2025 versus roughly 32% of earnings; hyperscalers are on track to spend $800bn capex in 2026 (+94% over 2025).",
+    "dynamics": "Earnings carry the index: blended Q3 2026 growth of 29.0% is a third straight quarter above 25%, but excluding Micron and NVIDIA alone it drops to 20.0%. Breadth is improving at the Mag 7 boundary (33.2% vs 27.7% in Q3 2026; Q4 2026 predicted first Mag 7 underperformance since Q4 2022). Roughly $150bn of unrealized private-company gains, 12% of Q2 2026 EPS, are expected to shrink in 2027. FactSet CY2027 consensus is 15.8%; Goldman forecasts 2027 EPS of $415 and a 12-month target of 8,700.",
+    "fault_lines": [
+      "Valuation: trailing P/E above 22 since January 2024; mean-reversion base rates show a 33-40% frequency of 20%+ drawdowns within 2 years from similar starts",
+      "Concentration: top-10 weight 40.7% vs ~32% of earnings; growth dependence on Micron/NVIDIA and AI capex (almost half of 2026 EPS growth per Goldman)",
+      "Rates: divergence between futures-implied path (~4.56-4.7% by late 2027) and SEP median 4.1% through 2027",
+      "Earnings quality: fade of ~$150bn unrealized private-company gains in 2027",
+      "Tariffs: effective rate 7.1% (Aug 2026) post-IEEPA Supreme Court ruling and Section 301 replacement; refund-distorted customs-duty receipts"
+    ],
+    "catalysts": [
+      "FOMC 27-28 October 2026 (FedWatch: 83.9% hold, 16.1% hike)",
+      "FOMC 8-9 December 2026 with SEP",
+      "Q4 2026 earnings season and Mag 7 vs other-493 growth comparison (Feb 2027)",
+      "Hyperscaler 2027 capex guidance from NVIDIA, Microsoft, Alphabet, Amazon, Meta (Q4 2026-Q1 2027)",
+      "Monthly Sahm rule and NY Fed recession-model updates",
+      "FactSet CY2027 EPS revisions relative to 15.8%"
+    ]
+  },
+  "actors": [
+    {
+      "name": "Federal Open Market Committee",
+      "type": "Government",
+      "role": "Sets the federal funds target range anchoring discount rates and recession odds",
+      "stance": "Tightening: unanimous 25 bp hike September 2026; SEP median 4.1% end-2026 through 2027; 16 of 18 participants see one more 2026 hike",
+      "description": "Target-range upper limit 4% as of 2026-10-23; remaining 2026 meetings 27-28 Oct and 8-9 Dec (with SEP); 2027 dates unpublished; projections revised toward stronger growth, higher inflation and lower unemployment; Chair Warsh submitted no dot for a second consecutive SEP",
+      "stated_vs_revealed": "States data dependence; has delivered a hike and projects holding above neutral through 2027",
+      "memory": "Raised 25 bp in September 2026 after holding 3.625% February-August 2026",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "FOMC"
+      ],
+      "goals": [
+        "Contain PCE inflation (median 2.3% 2026, 2.4% 2027)",
+        "Sustain growth (median real GDP ~2.0-2.1%) and unemployment near 4.1%"
+      ],
+      "constraints": [
+        "Futures market prices ~4.56-4.7% by late 2027, above the SEP median",
+        "Quiet labor-market signals limit easing case"
+      ],
+      "assets": [
+        "Policy rate setting",
+        "Summary of Economic Projections"
+      ],
+      "vulnerabilities": [
+        "Overtightening into an AI-capex-sensitive market"
+      ],
+      "incentives": [
+        {
+          "driver": "Inflation control",
+          "gains_if": "Inflation returns to 2% without recession",
+          "loses_if": "Hikes trigger a hard landing",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Price stability",
+          "Dual mandate"
+        ],
+        "beliefs": [
+          "Growth solid, inflation slightly above target"
+        ],
+        "identity": "US monetary policymaker",
+        "frame": "Restrictive policy maintained while labor market is strong"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "Directly sets the discount-rate path and recession odds central to every scenario"
+      }
+    },
+    {
+      "name": "NVIDIA",
+      "type": "Organization",
+      "role": "Largest AI-capex proxy; guidance drives index earnings expectations",
+      "stance": "Expanding; CEO claims $600bn annual hyperscaler capex, flagged as unvalidated by leading hyperscalers",
+      "description": "Top index weight alongside Apple; Q3 2026 index EPS contribution $2.47 vs $1.30 a year earlier; excluding Micron and NVIDIA alone, blended Q3 2026 earnings growth falls from 29.0% to 20.0%",
+      "stated_vs_revealed": "Promotes $600bn hyperscaler capex narrative exceeding validated figures",
+      "memory": "Among the largest year-over-year index EPS contributors in Q3 2026",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "Sustain AI accelerator demand"
+      ],
+      "constraints": [
+        "Hyperscaler capex discipline"
+      ],
+      "assets": [
+        "Dominant AI-chip position"
+      ],
+      "vulnerabilities": [
+        "Single-theme concentration; capex disappointment feeds the 20% drawdown scenario"
+      ],
+      "incentives": [
+        {
+          "driver": "AI capex cycle",
+          "gains_if": "Hyperscalers hold or raise 2027 capex guidance",
+          "loses_if": "Capex guidance cuts",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "AI industrial revolution"
+        ],
+        "beliefs": [
+          "Sustained hyperscaler spending"
+        ],
+        "identity": "AI infrastructure supplier",
+        "frame": "Capex boom continuation"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.9,
+        "basis": "Ex-NVIDIA/Micron arithmetic makes it decisive for index earnings growth"
+      }
+    },
+    {
+      "name": "Microsoft",
+      "type": "Organization",
+      "role": "Top AI-capex spender whose cloud growth validates or deflates the capex cycle",
+      "stance": "Heavy investment",
+      "description": "One of the largest US hyperscalers on track for a share of $800bn 2026 capex (+94% over 2025)",
+      "stated_vs_revealed": "Sustains capex while signaling monetization",
+      "memory": "Multi-year capex ramp through 2026",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "Monetize AI cloud capacity"
+      ],
+      "constraints": [
+        "Returns discipline on capex"
+      ],
+      "assets": [
+        "Cloud infrastructure"
+      ],
+      "vulnerabilities": [
+        "Depreciation drag if AI demand disappoints"
+      ],
+      "incentives": [
+        {
+          "driver": "Cloud growth",
+          "gains_if": "AI workloads scale",
+          "loses_if": "Capacity underutilized",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "AI platform shift"
+        ],
+        "beliefs": [
+          "AI demand durable"
+        ],
+        "identity": "Hyperscaler",
+        "frame": "Capex as competitive moat"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.85,
+        "basis": "Capex guidance is a named falsifier for the modal scenario"
+      }
+    },
+    {
+      "name": "Alphabet (Google)",
+      "type": "Organization",
+      "role": "Hyperscaler capex and ad revenue swing index earnings breadth",
+      "stance": "Expanding capex and ad business",
+      "description": "Dual share classes imply a combined weight of about 5.63% (unverified Slickcharts snapshot), ranking third behind Nvidia and Apple",
+      "stated_vs_revealed": "—",
+      "memory": "—",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "Google"
+      ],
+      "goals": [
+        "Defend search/ads while scaling AI"
+      ],
+      "constraints": [
+        "Ad-cycle sensitivity"
+      ],
+      "assets": [
+        "Search dominance, cloud"
+      ],
+      "vulnerabilities": [
+        "Ad slowdown in recession"
+      ],
+      "incentives": [
+        {
+          "driver": "Ad and cloud revenue",
+          "gains_if": "AI monetization broadens",
+          "loses_if": "Ad weakness plus capex drag",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "AI integration"
+        ],
+        "beliefs": [],
+        "identity": "Hyperscaler and ad platform",
+        "frame": "—"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.8,
+        "basis": "Top-3 index weight and named hyperscaler to track"
+      }
+    },
+    {
+      "name": "Amazon",
+      "type": "Organization",
+      "role": "Capex intensity and retail margin sensitivity to wages and tariffs",
+      "stance": "Investing",
+      "description": "Hyperscaler capex participant; retail arm exposed to AHE wage growth (3.025% YoY, 2026-09) and tariff pass-through (effective rate 7.1%, Aug 2026)",
+      "stated_vs_revealed": "—",
+      "memory": "—",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "AWS growth, retail margin defense"
+      ],
+      "constraints": [
+        "Wage and import costs"
+      ],
+      "assets": [
+        "AWS, logistics"
+      ],
+      "vulnerabilities": [
+        "Wage and tariff cost inflation"
+      ],
+      "incentives": [
+        {
+          "driver": "Cloud growth vs retail costs",
+          "gains_if": "AWS scales",
+          "loses_if": "Wage/tariff squeeze",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [],
+        "identity": "Hyperscaler and retailer",
+        "frame": "—"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.75,
+        "basis": "Named actor bridging capex and margin channels"
+      }
+    },
+    {
+      "name": "Meta Platforms",
+      "type": "Organization",
+      "role": "AI monetisation pace affects mega-cap earnings dispersion",
+      "stance": "Investing heavily in AI",
+      "description": "Q3 2026 index EPS contribution $6.58 vs $1.05 a year earlier, among the top five year-over-year contributors",
+      "stated_vs_revealed": "—",
+      "memory": "—",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "AI-driven ad efficiency"
+      ],
+      "constraints": [
+        "Capex returns scrutiny"
+      ],
+      "assets": [
+        "Ad platform"
+      ],
+      "vulnerabilities": [
+        "Earnings dispersion within Mag 7"
+      ],
+      "incentives": [
+        {
+          "driver": "Ad monetization",
+          "gains_if": "AI lifts ad ROI",
+          "loses_if": "Capex outruns revenue",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [],
+        "identity": "Mega-cap ad platform",
+        "frame": "—"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.75,
+        "basis": "Large EPS contributor within concentrated top 10"
+      }
+    },
+    {
+      "name": "Apple",
+      "type": "Organization",
+      "role": "Tariff and China-demand exposure in a top-3 index weight",
+      "stance": "—",
+      "description": "Top index weight behind Nvidia per Slickcharts snapshot; exposed to China tariff rate of 24.3% and consumer-demand cycles",
+      "stated_vs_revealed": "—",
+      "memory": "—",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "Margin preservation"
+      ],
+      "constraints": [
+        "Tariff and China exposure"
+      ],
+      "assets": [
+        "Brand, installed base"
+      ],
+      "vulnerabilities": [
+        "Tariff escalation, China demand"
+      ],
+      "incentives": [
+        {
+          "driver": "Hardware margins",
+          "gains_if": "Tariffs stay below 10.1% pre-substitution rate",
+          "loses_if": "Tariff re-escalation",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [],
+        "identity": "Top-3 index weight",
+        "frame": "—"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.7,
+        "basis": "Top-3 weight with direct tariff transmission"
+      }
+    },
+    {
+      "name": "Micron",
+      "type": "Organization",
+      "role": "Largest year-over-year index EPS contributor in Q3 2026",
+      "stance": "Boom conditions in memory",
+      "description": "Q3 2026 index EPS contribution $33.42 vs $3.03 a year earlier; excluding Micron and NVIDIA, blended Q3 2026 growth falls from 29.0% to 20.0%",
+      "stated_vs_revealed": "—",
+      "memory": "Delivered outsized EPS contribution in 2026",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Sustain memory pricing"
+      ],
+      "constraints": [
+        "Memory cyclicality"
+      ],
+      "assets": [
+        "Memory leadership"
+      ],
+      "vulnerabilities": [
+        "Highly cyclical earnings reversal"
+      ],
+      "incentives": [
+        {
+          "driver": "Memory cycle",
+          "gains_if": "AI memory demand holds",
+          "loses_if": "Cycle turns",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [],
+        "identity": "Memory semiconductor maker",
+        "frame": "—"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.7,
+        "basis": "Single-name dependence of index earnings growth arithmetic"
+      }
+    },
+    {
+      "name": "FactSet Earnings Insight",
+      "type": "Other",
+      "role": "Publishes the index EPS consensus that anchors valuation and binary forecasts",
+      "stance": "Neutral aggregator; CY2026 consensus 32.8%, CY2027 15.8%, Q4 2026 28.6%",
+      "description": "Bottom-up consensus source; blended Q3 2026 net margin 14.9%, second-highest in 15+ years; Mag 7 vs other-493 tracking",
+      "stated_vs_revealed": "—",
+      "memory": "CY2026 headline slipped from ~33% to 32.8% in October 2026",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "intermediary",
+      "aliases": [
+        "FactSet Earnings Insight consensus"
+      ],
+      "goals": [
+        "Accurate bottom-up aggregation"
+      ],
+      "constraints": [
+        "Slow revision dynamics"
+      ],
+      "assets": [
+        "Consensus database"
+      ],
+      "vulnerabilities": [
+        "Lagging turning points"
+      ],
+      "incentives": [
+        {
+          "driver": "Data quality",
+          "gains_if": "Coverage trusted",
+          "loses_if": "Misses regime shift",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Measurement"
+        ],
+        "beliefs": [],
+        "identity": "Consensus publisher",
+        "frame": "—"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.8,
+        "basis": "Resolution source for EPS binaries and revisions signposts"
+      }
+    },
+    {
+      "name": "Goldman Sachs Research",
+      "type": "Organization",
+      "role": "Publishes 2026-2027 EPS and index targets framing sell-side consensus",
+      "stance": "Constructive: 2027 EPS $415, 2028 $460, 12-month target 8,700",
+      "description": "Estimates AI investment drives almost half of 2026 EPS growth; hyperscalers to spend $800bn capex in 2026 (+94%); flags ~$150bn unrealized private-company gains (12% of Q2 2026 EPS) fading in 2027",
+      "stated_vs_revealed": "Publishes 8,700 target while documenting the fading AI contribution hazard",
+      "memory": "—",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "amplifier",
+      "goals": [
+        "Accurate sell-side forecasting"
+      ],
+      "constraints": [
+        "Home bias in bull cases"
+      ],
+      "assets": [
+        "Research platform"
+      ],
+      "vulnerabilities": [
+        "AI-narrative dependence"
+      ],
+      "incentives": [
+        {
+          "driver": "Research franchise",
+          "gains_if": "Calls prove right",
+          "loses_if": "AI unwind contradicts target",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [
+          "Earnings carry the index"
+        ],
+        "identity": "Sell-side forecaster",
+        "frame": "AI capex to productivity handoff"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.8,
+        "basis": "Anchors the modal trajectory and B3 binary threshold"
+      }
+    },
+    {
+      "name": "New York Fed",
+      "type": "Government",
+      "role": "Publishes Treasury-spread recession-probability model",
+      "stance": "Model shows 12-month-ahead recession probability of 0.28 for 2026 and 0.15 for 2027; disclaimed as not official forecasts",
+      "description": "Updates model within the first two weeks of each month",
+      "stated_vs_revealed": "—",
+      "memory": "—",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "arbiter",
+      "aliases": [
+        "NY Fed"
+      ],
+      "goals": [
+        "Macro surveillance"
+      ],
+      "constraints": [
+        "Model cannot see non-curve shocks"
+      ],
+      "assets": [
+        "Yield-curve model"
+      ],
+      "vulnerabilities": [
+        "Low readings are a scope limitation, not reassurance"
+      ],
+      "incentives": [
+        {
+          "driver": "Analytical rigor",
+          "gains_if": "—",
+          "loses_if": "—",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Transparency"
+        ],
+        "beliefs": [
+          "Term spreads predict recessions"
+        ],
+        "identity": "Reserve Bank research shop",
+        "frame": "—"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.6,
+        "basis": "Named published recession probability for 2027"
+      }
+    },
+    {
+      "name": "Cleveland Fed",
+      "type": "Government",
+      "role": "Publishes alternative yield-curve recession-probability model",
+      "stance": "Model put 1-year-ahead recession probability at 11.4% for September 2026, down from 12.3% in August",
+      "description": "Estimate based on 3-month bill at 4.20% and +88 bp slope",
+      "stated_vs_revealed": "—",
+      "memory": "—",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "arbiter",
+      "goals": [
+        "Macro surveillance"
+      ],
+      "constraints": [
+        "Same curve-only scope limits"
+      ],
+      "assets": [
+        "Recession model"
+      ],
+      "incentives": [
+        {
+          "driver": "Research",
+          "gains_if": "—",
+          "loses_if": "—",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Measurement"
+        ],
+        "beliefs": [],
+        "identity": "Reserve Bank research shop",
+        "frame": "—"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "Second published recession probability series"
+      }
+    },
+    {
+      "name": "S&P Dow Jones Indices",
+      "type": "Organization",
+      "role": "Publisher of the official S&P 500 closing levels that settle both forecast questions",
+      "stance": "Neutral arbiter",
+      "description": "Official daily closes settle index level and drawdown legs; monthly series showed 7669.4143 for 2026-09; Top 10 factsheet tables did not render",
+      "stated_vs_revealed": "—",
+      "memory": "—",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "arbiter",
+      "aliases": [
+        "S&P DJI"
+      ],
+      "goals": [
+        "Index integrity"
+      ],
+      "assets": [
+        "Index administration"
+      ],
+      "incentives": [
+        {
+          "driver": "Publisher trust",
+          "gains_if": "—",
+          "loses_if": "—",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Standardization"
+        ],
+        "beliefs": [],
+        "identity": "Index provider",
+        "frame": "—"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.7,
+        "basis": "Settlement source for all index binaries"
+      }
+    },
+    {
+      "name": "US Congress and President",
+      "type": "Government",
+      "role": "Tariff, tax and fiscal decisions affecting margins and growth",
+      "stance": "Policy in flux: Supreme Court struck down IEEPA tariffs 20 Feb 2026; Section 122 tariffs expired 24 Jul 2026, replaced by Section 301 tariffs of 10 or 12.5% on imports from 60 economies",
+      "description": "Effective tariff rate 7.1% in August 2026 vs 2.3% in January 2025; Yale estimates ~$165bn may be refunded; customs duties swung from -$25.6bn (Jun 2026) to +$5.9bn (Sep 2026)",
+      "stated_vs_revealed": "—",
+      "memory": "IEEPA unconstitutionality ruling Feb 2026",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Revenue and trade policy"
+      ],
+      "constraints": [
+        "Court rulings on tariff authority"
+      ],
+      "assets": [
+        "Tariff, tax, fiscal powers"
+      ],
+      "vulnerabilities": [
+        "Litigation risk to trade measures"
+      ],
+      "incentives": [
+        {
+          "driver": "Trade policy",
+          "gains_if": "Tariff revenue sustained",
+          "loses_if": "Refunds and court reversals",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [],
+        "identity": "Fiscal and trade policymakers",
+        "frame": "—"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "Controls the tariff-cost channel into margins"
+      }
+    },
+    {
+      "name": "RBC Wealth Management",
+      "type": "Organization",
+      "role": "Publishes concentration-risk analysis tracking top-10 weight",
+      "stance": "Cautious: 'Great Narrowing' analysis documents record 40.7% top-10 weight vs ~32% of earnings in 2025",
+      "description": "Documents one-for-one transmission of a top-10 de-rating through index weight, amplified by passive flows",
+      "stated_vs_revealed": "—",
+      "memory": "—",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "amplifier",
+      "goals": [
+        "Client risk management"
+      ],
+      "assets": [
+        "Research platform"
+      ],
+      "incentives": [
+        {
+          "driver": "Advisory credibility",
+          "gains_if": "Risk framing proves prescient",
+          "loses_if": "Concentration keeps paying",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Diversification"
+        ],
+        "beliefs": [
+          "Concentration is a thematic bet"
+        ],
+        "identity": "Wealth manager research",
+        "frame": "—"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.55,
+        "basis": "Key source for concentration binary B12"
+      }
+    },
+    {
+      "name": "Cboe / VIX market",
+      "type": "Platform",
+      "role": "Volatility pricing signalling drawdown risk conditioning",
+      "stance": "Market-based signal; no specific VIX level retrieved",
+      "description": "Volatility pricing conditions the drawdown-risk assessment; the report notes high-yield spreads around 3.33% (78th percentile) as a related market proxy",
+      "stated_vs_revealed": "—",
+      "memory": "—",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "amplifier",
+      "goals": [
+        "Price risk"
+      ],
+      "assets": [
+        "Options market"
+      ],
+      "incentives": [
+        {
+          "driver": "—",
+          "gains_if": "—",
+          "loses_if": "—",
+          "intensity": "low"
+        }
+      ],
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "Named actor for volatility signals"
+      }
+    },
+    {
+      "name": "US Bureau of Economic Analysis",
+      "type": "Government",
+      "role": "Official GDP and corporate-profits data for recession and margin calls",
+      "stance": "Neutral statistical agency",
+      "description": "No official GDP print retrieved for the report; SEP and SIFMA panel medians (GDP ~2.0-2.2%) serve as growth proxies",
+      "stated_vs_revealed": "—",
+      "memory": "—",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "arbiter",
+      "aliases": [
+        "BEA"
+      ],
+      "goals": [
+        "Official statistics"
+      ],
+      "assets": [
+        "National accounts"
+      ],
+      "incentives": [
+        {
+          "driver": "—",
+          "gains_if": "—",
+          "loses_if": "—",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Accuracy"
+        ],
+        "beliefs": [],
+        "identity": "Statistical agency",
+        "frame": "—"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.45,
+        "basis": "Official arbiter for macro signposts"
+      }
+    },
+    {
+      "name": "Polymarket",
+      "type": "Platform",
+      "role": "Prediction market quoting event-risk probabilities",
+      "stance": "Quoted 8% chance on 'US recession by end of 2026?' contract",
+      "description": "Only event-risk market price in the evidence; no index-level market on the settlement quantity exists",
+      "stated_vs_revealed": "—",
+      "memory": "—",
+      "influence": "low",
+      "simulation_tier": 4,
+      "role_class": "intermediary",
+      "goals": [
+        "Liquidity"
+      ],
+      "assets": [
+        "Contract platform"
+      ],
+      "incentives": [
+        {
+          "driver": "Volume",
+          "gains_if": "—",
+          "loses_if": "—",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [],
+        "identity": "Prediction market",
+        "frame": "—"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 4,
+        "score": 0.4,
+        "basis": "Market-based floor for recession-by-2026 probability"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source": "Microsoft",
+      "target": "NVIDIA",
+      "type": "CUSTOMER_OF",
+      "relation_label": "Buys AI accelerators",
+      "basis": "Hyperscaler capex driving AI-chip demand [S31]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "Alphabet (Google)",
+      "target": "NVIDIA",
+      "type": "CUSTOMER_OF",
+      "relation_label": "AI capex buyer",
+      "basis": "Hyperscaler capex cohort [S31]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "Meta Platforms",
+      "target": "NVIDIA",
+      "type": "CUSTOMER_OF",
+      "relation_label": "AI capex buyer",
+      "basis": "Hyperscaler capex cohort [S31]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "Amazon",
+      "target": "NVIDIA",
+      "type": "CUSTOMER_OF",
+      "relation_label": "AI capex buyer",
+      "basis": "Hyperscaler capex cohort [S31]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "Federal Open Market Committee",
+      "target": "Goldman Sachs Research",
+      "type": "INFLUENCES",
+      "relation_label": "Rate path conditions index targets",
+      "basis": "SEP median vs futures divergence is the calendar's central tension [S12][S37]",
+      "valence": "directional",
+      "polarity": 0.3,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "US Congress and President",
+      "target": "Apple",
+      "type": "REGULATES",
+      "relation_label": "Tariff policy exposure",
+      "basis": "China tariff rate 24.3%; Section 301 tariffs [S51]",
+      "valence": "directional",
+      "polarity": -0.5,
+      "strength": 0.6,
+      "sign": "-"
+    },
+    {
+      "source": "US Congress and President",
+      "target": "Amazon",
+      "type": "REGULATES",
+      "relation_label": "Tariff and wage policy",
+      "basis": "Retail margin sensitivity to tariffs and wages [S51][S29]",
+      "valence": "directional",
+      "polarity": -0.3,
+      "strength": 0.5,
+      "sign": "-"
+    },
+    {
+      "source": "FactSet Earnings Insight",
+      "target": "Goldman Sachs Research",
+      "type": "INFLUENCES",
+      "relation_label": "Consensus anchors sell-side targets",
+      "basis": "Both track index EPS estimates [S7][S31]",
+      "valence": "directional",
+      "polarity": 0.4,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "RBC Wealth Management",
+      "target": "NVIDIA",
+      "type": "OPPOSES",
+      "relation_label": "Warns against concentration risk",
+      "basis": "Top-10 weight 40.7% vs ~32% of earnings [S9]",
+      "valence": "adversarial",
+      "polarity": -0.4,
+      "strength": 0.4,
+      "sign": "-"
+    },
+    {
+      "source": "New York Fed",
+      "target": "Federal Open Market Committee",
+      "type": "INFLUENCES",
+      "relation_label": "Recession model informs committee",
+      "basis": "Monthly recession-model updates [S14][S40]",
+      "valence": "directional",
+      "polarity": 0.3,
+      "strength": 0.4,
+      "sign": "+"
+    },
+    {
+      "source": "Micron",
+      "target": "NVIDIA",
+      "type": "PARTNERS_WITH",
+      "relation_label": "AI memory supply chain",
+      "basis": "Both dominate Q3 2026 index EPS contributions [S8]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "S&P Dow Jones Indices",
+      "target": "Polymarket",
+      "type": "OTHER",
+      "relation_label": "Official closes settle related contracts",
+      "basis": "Settlement basis conventions [S2][S42]",
+      "valence": "neutral",
+      "polarity": 0.2,
+      "strength": 0.3,
+      "sign": "+"
+    },
+    {
+      "source": "Goldman Sachs Research",
+      "target": "NVIDIA",
+      "type": "BACKS",
+      "relation_label": "Validates AI-capex thesis",
+      "basis": "AI investment drives almost half of 2026 EPS growth [S31]",
+      "valence": "directional",
+      "polarity": 0.5,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "FactSet Earnings Insight",
+      "target": "RBC Wealth Management",
+      "type": "INFLUENCES",
+      "relation_label": "Consensus data underpins concentration analysis",
+      "basis": "Both used for breadth tracking [S7][S9]",
+      "valence": "directional",
+      "polarity": 0.3,
+      "strength": 0.3,
+      "sign": "+"
+    }
+  ],
+  "hot_topics": [
+    "Fed SEP median 4.1% vs futures-implied ~4.56-4.7% by late 2027",
+    "Hyperscaler 2027 capex guidance after $800bn 2026 (+94%)",
+    "Micron/NVIDIA dependence: ex-them growth falls 29.0% to 20.0%",
+    "Fade of ~$150bn unrealized private-company gains (12% of Q2 2026 EPS)",
+    "First Mag 7 underperformance vs other-493 since Q4 2022 predicted for Q4 2026",
+    "Tariff refund and Section 301 reset after IEEPA ruling",
+    "Trailing P/E above 22 since January 2024 and 33-40% drawdown base rate",
+    "Sahm rule at 0pp versus Fed re-tightening"
+  ],
+  "key_events": [
+    {
+      "date": "2026-10-22",
+      "event": "S&P 500 closed at 7,662.54 (StreetStats valuation snapshot basis)",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-23",
+      "event": "WSJ reports S&P 500 close of 7,623.68; Investing.com shows 7,639.06",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-16",
+      "event": "FactSet Earnings Insight reports Q3 2026 blended earnings growth of 29.0% and CY2026 consensus of +32.8%",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-09",
+      "event": "FactSet projects CY2027 EPS growth of +15.8%",
+      "staleness_days": 14,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09",
+      "event": "Federal Funds Target Range - Upper Limit at 4%; FOMC delivered unanimous 25 bp hike per J.P. Morgan summary",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09",
+      "event": "Real-time Sahm Rule Recession Indicator at 0 percentage points",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "date": "2026-08",
+      "event": "Smoothed U.S. Recession Probabilities at 0.62%",
+      "staleness_days": 83,
+      "is_stale": false
+    },
+    {
+      "date": "2026-02-20",
+      "event": "Supreme Court ruled IEEPA tariffs unconstitutional",
+      "staleness_days": 245,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07-24",
+      "event": "Section 122 tariffs expired, replaced by Section 301 tariffs of 10 or 12.5% on imports from 60 economies",
+      "staleness_days": 91,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-21",
+      "event": "CME FedWatch prices 83.9% no change and 16.1% hike for the October 28, 2026 FOMC meeting",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-27",
+      "event": "FOMC meeting begins (27–28 October 2026)",
+      "staleness_days": -4,
+      "is_stale": false
+    },
+    {
+      "date": "2026-12-08",
+      "event": "FOMC meeting with Summary of Economic Projections (8–9 December 2026)",
+      "staleness_days": -46,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-23",
+      "event": "Goldman Sachs Research forecasts 2027 EPS of $415, 2028 EPS of $460, and a 12-month index target of 8,700",
+      "staleness_days": 30,
+      "is_stale": false
+    },
+    {
+      "date": "2026-08-21",
+      "event": "Oak Harvest, citing FactSet, puts CY2026 EPS at $358.66 and CY2027 EPS at $405.17",
+      "staleness_days": 63,
+      "is_stale": false
+    },
+    {
+      "date": "2025-12-31",
+      "event": "S&P 500 total return of 17.88% for 2025; 2024 total return 25.02%",
+      "staleness_days": 296,
+      "is_stale": false
+    },
+    {
+      "date": "2026-01",
+      "event": "Trailing as-reported P/E exceeded 22 and has every month since (since January 2024)",
+      "staleness_days": 295,
+      "is_stale": false
+    },
+    {
+      "date": "2000-03",
+      "event": "Dot-com bear market began; −49.1% decline over 31 months to October 2002",
+      "staleness_days": 9732,
+      "is_stale": true
+    },
+    {
+      "date": "2022-01",
+      "event": "Bear market drawdown of −25.4% from January to October 2022 from the January 2021 P/E>22 start",
+      "staleness_days": 1756,
+      "is_stale": true
+    },
+    {
+      "date": "2018-10",
+      "event": "Q4 2018 correction of approximately −19.8% (daily close basis)",
+      "staleness_days": 2944,
+      "is_stale": true
+    },
+    {
+      "date": "2026-10-08",
+      "event": "Atlanta Fed Wage Growth Tracker update: 3.9% in September 2026, down from 4.1% in August",
+      "staleness_days": 15,
+      "is_stale": false
+    }
+  ],
+  "quantitative_facts": [
+    {
+      "metric": "Index close (StreetStats valuation snapshot)",
+      "value": "7,662.54",
+      "series": "S&P 500",
+      "unit": "Index points",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "United States",
+      "definition": "Vendor closing value",
+      "source": "StreetStats",
+      "value_type": "actual",
+      "source_url": "https://streetstats.finance/valuation/market",
+      "tier": "S3",
+      "value_num": 7662.54,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "StreetStats",
+      "metric_family": "valuation",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "Official monthly series value",
+      "value": "7669.4143",
+      "series": "S&P 500 — United States (FRED)",
+      "unit": "Index",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Stored monthly observation, 4 p.m. ET closing-value series",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/SP500",
+      "tier": "S1",
+      "value_num": 7669.4143,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Index close (WSJ)",
+      "value": "7,623.68",
+      "series": "S&P 500",
+      "unit": "Index points",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "United States",
+      "definition": "WSJ reported close",
+      "source": "WSJ",
+      "value_type": "actual",
+      "source_url": "https://www.wsj.com/market-data/quotes/index/SPX/historical-prices",
+      "tier": "S2",
+      "value_num": 7623.68,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "WSJ",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Index close (Investing.com)",
+      "value": "7,639.06",
+      "series": "S&P 500",
+      "unit": "Index points",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "United States",
+      "definition": "Vendor snapshot",
+      "source": "Investing.com",
+      "value_type": "actual",
+      "source_url": "https://www.investing.com/indices/us-spx-500-historical-data",
+      "tier": "S3",
+      "value_num": 7639.06,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Investing.com",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Trailing P/E",
+      "value": "22.28",
+      "series": "S&P 500 trailing P/E",
+      "unit": "ratio",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "United States",
+      "definition": "On trailing 12-month actual EPS of $343.87",
+      "source": "StreetStats",
+      "value_type": "actual",
+      "source_url": "https://streetstats.finance/valuation/market",
+      "tier": "S3",
+      "value_num": 22.28,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "StreetStats",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "Forward P/E",
+      "value": "18.87",
+      "series": "S&P 500 forward P/E",
+      "unit": "ratio",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "United States",
+      "definition": "On estimated forward 12-month EPS of $406.12",
+      "source": "StreetStats",
+      "value_type": "actual",
+      "source_url": "https://streetstats.finance/valuation/market",
+      "tier": "S3",
+      "value_num": 18.87,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "StreetStats",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "Forward 12-month P/E",
+      "value": "19.0",
+      "series": "FactSet forward P/E",
+      "unit": "ratio",
+      "as_of_date": "2026-10-16",
+      "period_end": "2026-10-16",
+      "geography": "United States",
+      "definition": "Below 5-year average (19.8) and 10-year average (19.1)",
+      "source": "FactSet Earnings Insight",
+      "value_type": "actual",
+      "source_url": "https://insight.factset.com/sp-500-earnings-season-update-october-16-2026",
+      "tier": "S3",
+      "value_num": 19.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FactSet Earnings Insight",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "metric": "Trailing as-reported P/E",
+      "value": "26.15",
+      "series": "S&P 500 trailing as-reported P/E (Multpl)",
+      "unit": "ratio",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "United States",
+      "definition": "Shiller-derived data; above 22 continuously since January 2024",
+      "source": "Multpl",
+      "value_type": "actual",
+      "source_url": "https://www.multpl.com/s-p-500-pe-ratio/table/by-year",
+      "tier": "S3",
+      "value_num": 26.15,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Multpl",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "Trailing as-reported P/E",
+      "value": "25.943",
+      "series": "S&P 500 GAAP P/E (GuruFocus)",
+      "unit": "ratio",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "United States",
+      "definition": "On GAAP as-reported earnings",
+      "source": "GuruFocus",
+      "value_type": "actual",
+      "source_url": "https://www.gurufocus.com/economic_indicators/57/sp-500-pe-ratio",
+      "tier": "S3",
+      "value_num": 25.943,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "GuruFocus",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "Total return 2024",
+      "value": "25.02",
+      "series": "S&P 500 total return",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2024-12-31",
+      "geography": "United States",
+      "definition": "Total return incl. dividends",
+      "source": "Unspecified (report)",
+      "value_type": "actual",
+      "source_url": "https://www.slickcharts.com/sp500/returns",
+      "tier": "S3",
+      "value_num": 25.02,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Unspecified (report)",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Total return 2025",
+      "value": "17.88",
+      "series": "S&P 500 total return",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2025-12-31",
+      "geography": "United States",
+      "definition": "Total return incl. dividends",
+      "source": "Unspecified (report)",
+      "value_type": "actual",
+      "source_url": "https://www.slickcharts.com/sp500/returns",
+      "tier": "S3",
+      "value_num": 17.88,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Unspecified (report)",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Year-to-date total return 2026",
+      "value": "12.38",
+      "series": "S&P 500 total return",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "United States",
+      "definition": "Through the 23 October 2026 close",
+      "source": "Unspecified (report)",
+      "value_type": "actual",
+      "source_url": "https://www.slickcharts.com/sp500/returns",
+      "tier": "S3",
+      "value_num": 12.38,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Unspecified (report)",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Year-over-year index change",
+      "value": "16.485",
+      "series": "S&P 500 (year-over-year % change)",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "From FRED official series (7669.4143 vs 6584.0181)",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/SP500",
+      "tier": "S1",
+      "value_num": 16.485,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "CY2026 EPS growth consensus",
+      "value": "32.8",
+      "series": "FactSet Earnings Insight",
+      "unit": "percent",
+      "as_of_date": "2026-10-16",
+      "period_end": "CY2026",
+      "geography": "United States",
+      "definition": "Bottom-up consensus YoY earnings growth",
+      "source": "FactSet Earnings Insight",
+      "value_type": "forecast",
+      "source_url": "https://insight.factset.com/sp-500-earnings-season-update-october-16-2026",
+      "tier": "S3",
+      "value_num": 32.8,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "FactSet Earnings Insight",
+      "metric_family": "growth rate",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "metric": "CY2027 EPS growth consensus",
+      "value": "15.8",
+      "series": "FactSet Earnings Insight",
+      "unit": "percent",
+      "as_of_date": "2026-10-09",
+      "period_end": "CY2027",
+      "geography": "United States",
+      "definition": "Bottom-up consensus YoY earnings growth",
+      "source": "FactSet Earnings Insight",
+      "value_type": "forecast",
+      "source_url": "https://advantage.factset.com/hubfs/Website/Resources%20Section/Research%20Desk/Earnings%20Insight/EarningsInsight_100926.pdf",
+      "tier": "S3",
+      "value_num": 15.8,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "FactSet Earnings Insight",
+      "metric_family": "growth rate",
+      "staleness_days": 14,
+      "is_stale": false
+    },
+    {
+      "metric": "Q4 2026 EPS growth consensus",
+      "value": "28.6",
+      "series": "FactSet Earnings Insight",
+      "unit": "percent",
+      "as_of_date": "2026-10-16",
+      "period_end": "Q4 2026",
+      "geography": "United States",
+      "definition": "Bottom-up consensus YoY earnings growth",
+      "source": "FactSet Earnings Insight",
+      "value_type": "forecast",
+      "source_url": "https://insight.factset.com/sp-500-earnings-season-update-october-16-2026",
+      "tier": "S3",
+      "value_num": 28.6,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "FactSet Earnings Insight",
+      "metric_family": "growth rate",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "metric": "Blended Q3 2026 earnings growth",
+      "value": "29.0",
+      "series": "FactSet blended earnings growth",
+      "unit": "percent",
+      "as_of_date": "2026-10-16",
+      "period_end": "Q3 2026",
+      "geography": "United States",
+      "definition": "Blended (actuals + estimates), 9% of companies reported",
+      "source": "FactSet Earnings Insight",
+      "value_type": "estimate",
+      "source_url": "https://insight.factset.com/sp-500-earnings-season-update-october-16-2026",
+      "tier": "S3",
+      "value_num": 29.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "FactSet Earnings Insight",
+      "metric_family": "growth rate",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "metric": "Blended Q3 2026 net margin",
+      "value": "14.9",
+      "series": "FactSet blended net margin",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "Q3 2026",
+      "geography": "United States",
+      "definition": "Second-highest in more than 15 years",
+      "source": "FactSet Earnings Insight",
+      "value_type": "estimate",
+      "source_url": "https://www.factset.com/earningsinsight",
+      "tier": "S3",
+      "value_num": 14.9,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "FactSet Earnings Insight",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Blended Q2 2026 net margin",
+      "value": "15.7",
+      "series": "FactSet blended net margin",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "Q2 2026",
+      "geography": "United States",
+      "definition": "Highest in more than 15 years",
+      "source": "FactSet Earnings Insight",
+      "value_type": "actual",
+      "source_url": "https://www.factset.com/earningsinsight",
+      "tier": "S3",
+      "value_num": 15.7,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FactSet Earnings Insight",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "CY2026 net margin projection",
+      "value": "13.9",
+      "series": "FactSet blended net margin",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "CY2026",
+      "geography": "United States",
+      "definition": "Calendar-year blended net margin",
+      "source": "FactSet Earnings Insight",
+      "value_type": "forecast",
+      "source_url": "https://www.linkedin.com/posts/factset_sp-500-cy-2026-earnings-preview-analysts-activity-7407875146713034752-QfUK",
+      "tier": "S3",
+      "value_num": 13.9,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "FactSet Earnings Insight",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Magnificent 7 Q3 2026 earnings growth",
+      "value": "33.2",
+      "series": "FactSet Mag 7 estimated growth",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "Q3 2026",
+      "geography": "United States",
+      "definition": "Versus 27.7% for the other 493 companies",
+      "source": "FactSet Earnings Insight",
+      "value_type": "estimate",
+      "source_url": "https://insight.factset.com/are-magnificent-7-companies-still-top-contributors-to-sp-500-earnings-growth-for-q3",
+      "tier": "S3",
+      "value_num": 33.2,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "FactSet Earnings Insight",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Q4 2026 predicted Mag 7 vs other-493 growth",
+      "value": "23.6 vs 30.6",
+      "series": "FactSet analyst estimates",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "Q4 2026",
+      "geography": "United States",
+      "definition": "First Mag 7 underperformance since Q4 2022 if realised",
+      "source": "FactSet Earnings Insight",
+      "value_type": "forecast",
+      "source_url": "https://insight.factset.com/are-magnificent-7-companies-still-top-contributors-to-sp-500-earnings-growth-for-q3",
+      "tier": "S3",
+      "value_num": 23.6,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "FactSet Earnings Insight",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Ex-Micron/NVIDIA Q3 2026 blended growth",
+      "value": "20.0",
+      "series": "FactSet blended earnings growth",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "Q3 2026",
+      "geography": "United States",
+      "definition": "Falls from 29.0% excluding Micron and NVIDIA alone",
+      "source": "FactSet Earnings Insight",
+      "value_type": "estimate",
+      "source_url": "https://insight.factset.com/are-magnificent-7-companies-still-top-contributors-to-sp-500-earnings-growth-for-q3",
+      "tier": "S3",
+      "value_num": 20.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "FactSet Earnings Insight",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "EPS beat rate Q3 2026",
+      "value": "84",
+      "series": "FactSet EPS beat rate",
+      "unit": "percent",
+      "as_of_date": "2026-10-16",
+      "period_end": "Q3 2026",
+      "geography": "United States",
+      "definition": "Of 9% of companies reported; five-year average 78%; aggregate surprise +2.6% vs +7.5% five-year average",
+      "source": "FactSet Earnings Insight",
+      "value_type": "actual",
+      "source_url": "https://insight.factset.com/sp-500-earnings-season-update-october-16-2026",
+      "tier": "S3",
+      "value_num": 84.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FactSet Earnings Insight",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "metric": "CY2027 EPS forecast",
+      "value": "415",
+      "series": "Goldman Sachs Research EPS",
+      "unit": "US dollars per share",
+      "as_of_date": "2026-09-23",
+      "period_end": "CY2027",
+      "geography": "United States",
+      "definition": "Approximately 11% per year growth to $460 in CY2028",
+      "source": "Goldman Sachs Research",
+      "value_type": "forecast",
+      "source_url": "https://www.goldmansachs.com/insights/articles/can-ai-investment-drive-s-and-p-500-earnings-even-higher",
+      "tier": "S3",
+      "value_num": 415.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Goldman Sachs Research",
+      "metric_family": "growth rate",
+      "staleness_days": 30,
+      "is_stale": false
+    },
+    {
+      "metric": "12-month index target",
+      "value": "8,700",
+      "series": "Goldman Sachs Research index target",
+      "unit": "Index points",
+      "as_of_date": "2026-09-23",
+      "period_end": "Next 12 months",
+      "geography": "United States",
+      "definition": "From 7,764 on 21 September 2026",
+      "source": "Goldman Sachs Research",
+      "value_type": "target",
+      "source_url": "https://www.goldmansachs.com/insights/articles/can-ai-investment-drive-s-and-p-500-earnings-even-higher",
+      "tier": "S3",
+      "value_num": 8700.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Goldman Sachs Research",
+      "staleness_days": 30,
+      "is_stale": false
+    },
+    {
+      "metric": "Hyperscaler capex 2026",
+      "value": "800",
+      "series": "Goldman Sachs Research capex estimate",
+      "unit": "billion US dollars",
+      "as_of_date": "2026-09-23",
+      "period_end": "CY2026",
+      "geography": "United States",
+      "definition": "+94% over 2025; AI investment drives almost half of 2026 index EPS growth",
+      "source": "Goldman Sachs Research",
+      "value_type": "estimate",
+      "source_url": "https://www.goldmansachs.com/insights/articles/can-ai-investment-drive-s-and-p-500-earnings-even-higher",
+      "tier": "S3",
+      "value_num": 800.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Goldman Sachs Research",
+      "metric_family": "growth rate",
+      "staleness_days": 30,
+      "is_stale": false
+    },
+    {
+      "metric": "Unrealized private-company investment gains Q2 2026",
+      "value": "150",
+      "series": "Goldman Sachs Research estimate",
+      "unit": "billion US dollars",
+      "as_of_date": "2026-09-23",
+      "period_end": "Q2 2026",
+      "geography": "United States",
+      "definition": "Roughly 12% of index EPS, expected to shrink materially in 2027",
+      "source": "Goldman Sachs Research",
+      "value_type": "estimate",
+      "source_url": "https://www.goldmansachs.com/insights/articles/can-ai-investment-drive-s-and-p-500-earnings-even-higher",
+      "tier": "S3",
+      "value_num": 150.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Goldman Sachs Research",
+      "staleness_days": 30,
+      "is_stale": false
+    },
+    {
+      "metric": "CY2026 EPS (secondary citation)",
+      "value": "358.66",
+      "series": "FactSet bottom-up charts via Oak Harvest",
+      "unit": "US dollars per share",
+      "as_of_date": "2026-08-21",
+      "period_end": "CY2026",
+      "geography": "United States",
+      "definition": "Secondary August-vintage citation; CY2027 at $405.17",
+      "source": "Oak Harvest citing FactSet",
+      "value_type": "forecast",
+      "source_url": "https://oakharvestfg.com/stock-talk/earnings-up-rates-up-who-wins-the-tug-of-war-stock-talk-update-aug-21-2026/",
+      "tier": "S3",
+      "value_num": 358.66,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Oak Harvest citing FactSet",
+      "metric_family": "market share",
+      "staleness_days": 63,
+      "is_stale": false
+    },
+    {
+      "metric": "Federal Funds Target Range - Upper Limit",
+      "value": "4",
+      "series": "FRED",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Daily value on 2026-10-23; September 2026 monthly",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DFEDTARU",
+      "tier": "S1",
+      "value_num": 4.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Federal Funds Effective Rate (monthly average)",
+      "value": "3.75",
+      "series": "FRED",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Daily effective rate 3.88% on 2026-10-22",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/FEDFUNDS",
+      "tier": "S1",
+      "value_num": 3.75,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Policy rate end of period",
+      "value": "3.875",
+      "series": "BIS central bank policy rates",
+      "unit": "percent per year",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Midpoint; 4.125% in 2025-09; 3.625% February–August 2026",
+      "source": "BIS",
+      "value_type": "actual",
+      "source_url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US",
+      "tier": "S1",
+      "value_num": 3.875,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "BIS",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Smoothed U.S. Recession Probabilities",
+      "value": "0.62",
+      "series": "FRED RECPROUSM156N",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-08",
+      "geography": "United States",
+      "definition": "Five-year high 2.32% (2024-01); 0.86% in 2025-08",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/RECPROUSM156N",
+      "tier": "S1",
+      "value_num": 0.62,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Real-time Sahm Rule Recession Indicator",
+      "value": "0",
+      "series": "FRED SAHMREALTIME",
+      "unit": "percentage points",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Against 0.50pp trigger",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/SAHMREALTIME",
+      "tier": "S1",
+      "value_num": 0.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "NY Fed recession probability 12 months ahead",
+      "value": "0.15",
+      "series": "NY Fed Treasury-spread model",
+      "unit": "probability",
+      "as_of_date": "2026-10-23",
+      "period_end": "2027",
+      "geography": "United States",
+      "definition": "Model estimate, not official forecast; 0.28 for 2026",
+      "source": "New York Fed",
+      "value_type": "estimate",
+      "source_url": "https://www.newyorkfed.org/medialibrary/media/research/capital_markets/prob_rec.pdf",
+      "tier": "S3",
+      "value_num": 0.15,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "New York Fed",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Cleveland Fed recession probability within one year",
+      "value": "11.4",
+      "series": "Cleveland Fed yield-curve model",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Down from 12.3% in August and 13.6% in July",
+      "source": "Cleveland Fed",
+      "value_type": "estimate",
+      "source_url": "https://www.clevelandfed.org/indicators-and-data/yield-curve-and-predicted-gdp-growth",
+      "tier": "S3",
+      "value_num": 11.4,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Cleveland Fed",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Polymarket US recession by end of 2026",
+      "value": "8",
+      "series": "Polymarket contract",
+      "unit": "percent chance",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-12-31",
+      "geography": "United States",
+      "definition": "Prediction-market quote",
+      "source": "Polymarket",
+      "value_type": "estimate",
+      "source_url": "https://polymarket.com/event/us-recession-by-end-of-2026",
+      "tier": "S3",
+      "value_num": 8.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Polymarket",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "CME FedWatch October 2026 FOMC hike probability",
+      "value": "16.1",
+      "series": "CME FedWatch",
+      "unit": "percent",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026-10-28",
+      "geography": "United States",
+      "definition": "83.9% no change; hike odds 57.6% a month earlier",
+      "source": "CME FedWatch",
+      "value_type": "estimate",
+      "source_url": "https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html",
+      "tier": "S3",
+      "value_num": 16.1,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "CME FedWatch",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "metric": "October 2027 fed funds future",
+      "value": "95.44",
+      "series": "Fed funds futures",
+      "unit": "index",
+      "as_of_date": "2026-10-23",
+      "period_end": "2027-10",
+      "geography": "United States",
+      "definition": "Implies about 4.56%",
+      "source": "Unspecified (report)",
+      "value_type": "estimate",
+      "source_url": "https://www.cmegroup.com/markets/interest-rates/stirs/30-day-federal-fund.quotes.html",
+      "tier": "S3",
+      "value_num": 95.44,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Unspecified (report)",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Futures-implied policy rate by October 2027",
+      "value": "about 4.7",
+      "series": "StreetStats futures-implied path",
+      "unit": "percent",
+      "as_of_date": "2026-10-20",
+      "period_end": "2027-10",
+      "geography": "United States",
+      "definition": "Rises to about 4.1% by January 2027; blend of SOFR futures and term premia",
+      "source": "StreetStats",
+      "value_type": "estimate",
+      "source_url": "https://streetstats.finance/rates/fedfunds",
+      "tier": "S3",
+      "value_num": 4.7,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "StreetStats",
+      "staleness_days": 3,
+      "is_stale": false
+    },
+    {
+      "metric": "SEP median fed funds rate end-2027",
+      "value": "4.1",
+      "series": "September 2026 SEP via J.P. Morgan",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2027-12-31",
+      "geography": "United States",
+      "definition": "Unchanged from end-2026; 2027 participant range 3.125% to 4.375%; 16 of 18 see one more 2026 hike",
+      "source": "J.P. Morgan (FOMC summary)",
+      "value_type": "forecast",
+      "source_url": "https://am.jpmorgan.com/us/en/asset-management/adv/insights/portfolio-insights/fixed-income/fixed-income-perspectives/fomc-statement-september-2026/",
+      "tier": "S3",
+      "value_num": 4.1,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "J.P. Morgan (FOMC summary)",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "10Y minus 3M Treasury spread",
+      "value": "0.896",
+      "series": "FRED T10Y3M",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Monthly average; 0.78% on 2026-10-23; +0.841pp yearly change",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/T10Y3M",
+      "tier": "S1",
+      "value_num": 0.896,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "SEP median PCE inflation",
+      "value": "2.3",
+      "series": "September 2026 FOMC SEP",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026",
+      "geography": "United States",
+      "definition": "2.4% for 2027; median unemployment 4.1% both years",
+      "source": "FOMC SEP",
+      "value_type": "forecast",
+      "source_url": "https://www.federalreserve.gov/monetarypolicy/fomcprojtabl20260916.htm",
+      "tier": "S1",
+      "value_num": 2.3,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "FOMC SEP",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "SEP median real GDP",
+      "value": "2.0",
+      "series": "September 2026 FOMC SEP",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026",
+      "geography": "United States",
+      "definition": "2.1% for 2027",
+      "source": "FOMC SEP",
+      "value_type": "forecast",
+      "source_url": "https://www.federalreserve.gov/monetarypolicy/fomcprojtabl20260916.htm",
+      "tier": "S1",
+      "value_num": 2.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "FOMC SEP",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "SIFMA economist panel median GDP growth",
+      "value": "2.2",
+      "series": "SIFMA economist panel",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-Q4",
+      "geography": "United States",
+      "definition": "2.0% for Q4 2027 over Q4 2026; core CPI to 2.4% by Q4 2027; majority see one further Fed cut",
+      "source": "SIFMA",
+      "value_type": "forecast",
+      "source_url": "https://www.sifma.org/research/economics/us-economic-survey",
+      "tier": "S3",
+      "value_num": 2.2,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "SIFMA",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Average Hourly Earnings, total private",
+      "value": "37.81",
+      "series": "FRED CES0500000003",
+      "unit": "Dollars per Hour",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Versus 36.7 a year earlier",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/CES0500000003",
+      "tier": "S1",
+      "value_num": 37.81,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "AHE year-over-year change",
+      "value": "3.025",
+      "series": "FRED AHE YoY",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Down from 3.848% (2025-09); five-year high 4.214% (2025-03)",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/CES0500000003",
+      "tier": "S1",
+      "value_num": 3.025,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Atlanta Fed Wage Growth Tracker",
+      "value": "3.9",
+      "series": "Atlanta Fed Wage Growth Tracker",
+      "unit": "percent",
+      "as_of_date": "2026-10-08",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Down from 4.1% in August; job-stayers 3.4%, job-switchers 4.7%",
+      "source": "Atlanta Fed",
+      "value_type": "actual",
+      "source_url": "https://www.atlantafed.org/research-and-data/data/wage-growth-tracker",
+      "tier": "S3",
+      "value_num": 3.9,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Atlanta Fed",
+      "metric_family": "growth rate",
+      "staleness_days": 15,
+      "is_stale": false
+    },
+    {
+      "metric": "Net customs duties (current month)",
+      "value": "5910402249.78",
+      "series": "Monthly Treasury Statement: Customs Duties",
+      "unit": "US dollars",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "≈ 5.91 billion; −80.083% yearly change, refund-distorted",
+      "source": "U.S. Treasury Fiscal Data",
+      "value_type": "actual",
+      "source_url": "https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/",
+      "tier": "S1",
+      "value_num": 5910402249.78,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "U.S. Treasury Fiscal Data",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Average US effective tariff rate",
+      "value": "7.1",
+      "series": "Effective tariff rate (report)",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-08",
+      "geography": "United States",
+      "definition": "Up from 6.7% in July; 2.3% in January 2025; pre-substitution rate 10.1%; China 24.3%, steel/aluminium 39.8%, automotive 13.8%",
+      "source": "Unspecified (report)",
+      "value_type": "estimate",
+      "source_url": "https://budgetmodel.wharton.upenn.edu/p/2026-10-14-effective-tariff-rates-and-revenues-updated-october-14-2026/",
+      "tier": "S1",
+      "value_num": 7.1,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Unspecified (report)",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Yale Budget Lab tariff revenue estimate",
+      "value": "214.7",
+      "series": "Yale Budget Lab",
+      "unit": "billion US dollars",
+      "as_of_date": "2026-04",
+      "period_end": "CY2026",
+      "geography": "United States",
+      "definition": "Above 2022–2024 average; roughly $165 billion possibly refunded; January rate put at 10.6%",
+      "source": "Yale Budget Lab",
+      "value_type": "estimate",
+      "source_url": "https://budgetlab.yale.edu/research/tracking-economic-effects-tariffs",
+      "tier": "S1",
+      "value_num": 214.7,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Yale Budget Lab",
+      "metric_family": "annual revenue",
+      "staleness_days": 205,
+      "is_stale": false
+    },
+    {
+      "metric": "PWBM gross tariff receipts",
+      "value": "314.8",
+      "series": "PWBM",
+      "unit": "billion US dollars",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-08",
+      "geography": "United States",
+      "definition": "Gross through August 2026",
+      "source": "PWBM",
+      "value_type": "actual",
+      "source_url": "https://budgetmodel.wharton.upenn.edu/p/2026-10-14-effective-tariff-rates-and-revenues-updated-october-14-2026/",
+      "tier": "S1",
+      "value_num": 314.8,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "PWBM",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Import prices year over year",
+      "value": "8.1",
+      "series": "BLS import prices",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Nonfuel +6.0%, fuel +34.5%",
+      "source": "BLS",
+      "value_type": "actual",
+      "source_url": "https://www.bls.gov/news.release/ximpim.nr0.htm",
+      "tier": "S1",
+      "value_num": 8.1,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "BLS",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Top-10 index weight",
+      "value": "40.7",
+      "series": "RBC Wealth Management",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2025",
+      "geography": "United States",
+      "definition": "Record; versus roughly 32% of index earnings; 18%–23% band 1990–2015",
+      "source": "RBC Wealth Management",
+      "value_type": "actual",
+      "source_url": "https://www.rbcwealthmanagement.com/en-us/insights/the-great-narrowing-sp-500-concentration",
+      "tier": "S3",
+      "value_num": 40.7,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "RBC Wealth Management",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "High-yield corporate spread",
+      "value": "about 3.33",
+      "series": "High-yield spread (MacroRadar)",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10",
+      "geography": "United States",
+      "definition": "Range 3.27–3.33%; around the 78th percentile",
+      "source": "MacroRadar",
+      "value_type": "actual",
+      "source_url": "https://www.macroradar.io/high-yield-spread",
+      "tier": "S3",
+      "value_num": 3.33,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "MacroRadar",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Median maximum drawdown of single stocks",
+      "value": "-85.4",
+      "series": "Morgan Stanley 1985–2024 study",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "1985-2024",
+      "geography": "United States",
+      "definition": "Median across more than 6,500 single stocks",
+      "source": "Morgan Stanley",
+      "value_type": "actual",
+      "source_url": "https://www.morganstanley.com/im/publication/insights/articles/article_drawdownsandrecoveries.pdf",
+      "tier": "S3",
+      "value_num": -85.4,
+      "year": 1985,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Morgan Stanley",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "2021-start two-year price return",
+      "value": "0.2",
+      "series": "Computed from FRED SP500",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2023-01",
+      "geography": "United States",
+      "definition": "From January 2021 P/E>22 start; intra-window drawdown −25.4% (Jan–Oct 2022)",
+      "source": "FRED / report computation",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/SP500",
+      "tier": "S1",
+      "value_num": 0.2,
+      "year": 2023,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED / report computation",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "2024-start two-year price return",
+      "value": "28.7",
+      "series": "Computed from FRED SP500",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-01",
+      "geography": "United States",
+      "definition": "From January 2024 P/E>22 start (P/E 25.01)",
+      "source": "FRED / report computation",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/SP500",
+      "tier": "S1",
+      "value_num": 28.7,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED / report computation",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Dot-com bear market decline",
+      "value": "-49.1",
+      "series": "Closing-basis bear markets",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2002-10",
+      "geography": "United States",
+      "definition": "March 2000–October 2002, over 31 months; 13 closing-basis bears since 1929 with median −33.9% and 17 months to trough",
+      "source": "Unspecified (report bear-market table)",
+      "value_type": "actual",
+      "source_url": "https://winthropwealth.com/wp-content/uploads/2023/01/SP-500-Bear-Markets-CQ.pdf",
+      "tier": "S3",
+      "value_num": -49.1,
+      "year": 2002,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Unspecified (report bear-market table)",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Q3 2026 index EPS contribution - Micron",
+      "value": "33.42 vs 3.03",
+      "series": "FactSet EPS contributions",
+      "unit": "US dollars per share",
+      "as_of_date": "2026-10-23",
+      "period_end": "Q3 2026",
+      "geography": "United States",
+      "definition": "Q3 2026 vs Q3 2025; largest year-over-year contributor",
+      "source": "FactSet Earnings Insight",
+      "value_type": "estimate",
+      "source_url": "https://www.factset.com/earningsinsight",
+      "tier": "S3",
+      "value_num": 33.42,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "FactSet Earnings Insight",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    }
+  ],
+  "contested_claims": [
+    {
+      "claim": "S&P 500 closing level on the as-of date",
+      "positions": [
+        {
+          "stance": "7,662.54 close on 2026-10-22",
+          "sources": [
+            "https://streetstats.finance/valuation/market"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "7,623.68 close on 2026-10-23",
+          "sources": [
+            "https://www.wsj.com/market-data/quotes/index/SPX/historical-prices"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "7,639.06 on 2026-10-23",
+          "sources": [
+            "https://www.investing.com/indices/us-spx-500-historical-data"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "7757.17 daily reading on 2026-10-21 (unconfirmed, inconsistent)",
+          "sources": [
+            "https://fred.stlouisfed.org/series/SP500"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Snapshot timing and settlement differences across vendors; the official daily reading is inconsistent with vendor closes and no official S&P DJI print for the week is in evidence"
+    },
+    {
+      "claim": "Trailing P/E of the S&P 500",
+      "positions": [
+        {
+          "stance": "22.28 on trailing-actual EPS of $343.87",
+          "sources": [
+            "https://streetstats.finance/valuation/market"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "26.15 on as-reported basis",
+          "sources": [
+            "https://www.multpl.com/s-p-500-pe-ratio/table/by-year"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "25.943 on GAAP as-reported earnings",
+          "sources": [
+            "https://www.gurufocus.com/economic_indicators/57/sp-500-pe-ratio"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "23.80 (WorldPE)",
+          "sources": [
+            "https://worldperatio.com/index/sp-500/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "resolved",
+      "why_they_differ": "Definitional differences in earnings basis (blended trailing-actual vs GAAP as-reported vs Shiller-derived); not a data dispute"
+    },
+    {
+      "claim": "Effective tariff rate and tariff revenue",
+      "positions": [
+        {
+          "stance": "7.1% average effective rate in August 2026; January rate below January peak",
+          "sources": [
+            "https://budgetmodel.wharton.upenn.edu/p/2026-10-14-effective-tariff-rates-and-revenues-updated-october-14-2026/"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "January rate 10.6%; $214.7 billion revenue above 2022–2024 average with roughly $165 billion possibly refunded",
+          "sources": [
+            "https://budgetlab.yale.edu/research/tracking-economic-effects-tariffs"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "$314.8 billion gross receipts through August 2026",
+          "sources": [
+            "https://budgetmodel.wharton.upenn.edu/p/2026-10-14-effective-tariff-rates-and-revenues-updated-october-14-2026/"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Differences of vintage, baseline (gross vs net of refunds) and substitution adjustments"
+    },
+    {
+      "claim": "Fed policy path to end-2027",
+      "positions": [
+        {
+          "stance": "Futures-implied path rising to roughly 4.7% by October 2027 (about 4.56% implied by the October 2027 contract)",
+          "sources": [
+            "https://streetstats.finance/rates/fedfunds",
+            "https://www.cmegroup.com/markets/interest-rates/stirs/30-day-federal-fund.quotes.html"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "SEP median 4.1% at end-2026 and through 2027",
+          "sources": [
+            "https://am.jpmorgan.com/us/en/asset-management/adv/insights/portfolio-insights/fixed-income/fixed-income-perspectives/fomc-statement-september-2026/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "SIFMA dealer panel majority sees one further Fed cut",
+          "sources": [
+            "https://www.sifma.org/research/economics/us-economic-survey"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "A much lower SEP median (3.4% end-2026, 2.5% end-2027) circulated but unconfirmed",
+          "sources": [
+            "https://www.federalreserve.gov/monetarypolicy/fomcprojtabl20260916.htm"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Futures embed SOFR blending and term premia rather than pure policy expectations; SEP reflects participant projections; the unconfirmed lower median was not verified on the fetched page"
+    },
+    {
+      "claim": "Annual hyperscaler capex",
+      "positions": [
+        {
+          "stance": "$800 billion in 2026, +94% over 2025",
+          "sources": [
+            "https://www.goldmansachs.com/insights/articles/can-ai-investment-drive-s-and-p-500-earnings-even-higher"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "$600 billion per year claimed by NVIDIA CEO, unvalidated by leading hyperscalers",
+          "sources": [
+            "https://thecuberesearch.com/jensen-claims-600b-in-annual-capex-spend-wait-what/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different definitions/scope of hyperscaler capex and incentives; the $600 billion claim is flagged as unvalidated"
+    },
+    {
+      "claim": "CY2026 and CY2027 dollar EPS consensus",
+      "positions": [
+        {
+          "stance": "CY2027 EPS $415",
+          "sources": [
+            "https://www.goldmansachs.com/insights/articles/can-ai-investment-drive-s-and-p-500-earnings-even-higher"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "CY2026 $358.66 and CY2027 $405.17 citing FactSet (August vintage)",
+          "sources": [
+            "https://oakharvestfg.com/stock-talk/earnings-up-rates-up-who-wins-the-tug-of-war-stock-talk-update-aug-21-2026/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Forward 12-month EPS $406.12",
+          "sources": [
+            "https://streetstats.finance/valuation/market"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different vintages and definitions (calendar-year bottom-up vs forward 12-month aggregation); FactSet's own CY2027 dollar figure was not directly retrievable"
+    },
+    {
+      "claim": "Mega-cap earnings dominance direction",
+      "positions": [
+        {
+          "stance": "Top-10 weight 40.7% versus roughly 32% of earnings is a widening concentration risk",
+          "sources": [
+            "https://www.rbcwealthmanagement.com/en-us/insights/the-great-narrowing-sp-500-concentration"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Mega-cap earnings dominance is 'now fading'",
+          "sources": [
+            "https://www.guinnessgi.com/insights/articles/rising-sp-500-concentration-was-rational-mega-cap-earnings-dominance-now-fading"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different framings: RBC emphasizes weight-vs-earnings gap; Guinness emphasizes relative earnings growth convergence of the largest stocks"
+    },
+    {
+      "claim": "Recession probability for 2026–2027",
+      "positions": [
+        {
+          "stance": "Smoothed recession probability 0.62% (August 2026), contemporaneous state",
+          "sources": [
+            "https://fred.stlouisfed.org/series/RECPROUSM156N"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "NY Fed model 0.28 for 2026 and 0.15 for 2027, twelve months ahead",
+          "sources": [
+            "https://www.newyorkfed.org/medialibrary/media/research/capital_markets/prob_rec.pdf"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Cleveland Fed model 11.4% within one year (September 2026)",
+          "sources": [
+            "https://www.clevelandfed.org/indicators-and-data/yield-curve-and-predicted-gdp-growth"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Polymarket 8% chance of recession by end of 2026",
+          "sources": [
+            "https://polymarket.com/event/us-recession-by-end-of-2026"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "YCharts 13.88% for August 2027",
+          "sources": [
+            "https://ycharts.com/indicators/us_recession_probability"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "The indicators measure different objects: contemporaneous state probability, 12-month-ahead term-spread predictions (explicitly disclaimed as forecasts) and prediction-market event pricing"
+    },
+    {
+      "claim": "2024–2025 annual returns basis",
+      "positions": [
+        {
+          "stance": "Total returns 25.02% (2024) and 17.88% (2025)",
+          "sources": [
+            "https://www.slickcharts.com/sp500/returns"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Price-only returns 23.31% (2024) and 16.39% (2025)",
+          "sources": [
+            "https://www.macrotrends.net/2526/sp-500-historical-annual-returns"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "resolved",
+      "why_they_differ": "Total return includes dividends; price-only does not"
+    },
+    {
+      "claim": "FactSet CY2026 growth revision",
+      "positions": [
+        {
+          "stance": "About 33% on 9 October 2026",
+          "sources": [
+            "https://advantage.factset.com/hubfs/Website/Resources%20Section/Research%20Desk/Earnings%20Insight/EarningsInsight_100926.pdf"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "32.8% on 16 October 2026",
+          "sources": [
+            "https://insight.factset.com/sp-500-earnings-season-update-october-16-2026"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "resolved",
+      "why_they_differ": "Sequential weekly vintages of the same bottom-up consensus, with Health Care downward revisions the largest drag"
+    }
+  ],
+  "forecast_inputs": {
+    "scenarios": [
+      {
+        "name": "AI-driven reacceleration",
+        "probability": 0.35,
+        "narrative": "Broadening earnings growth of roughly 10-15% annually and stable multiples carry the index to new highs, with no 20% drawdown; prior: bull-market continuation after double-digit EPS growth."
+      },
+      {
+        "name": "Melt-up then correction",
+        "probability": 0.3,
+        "narrative": "Earnings deliver but valuations overshoot, then a mid-horizon 10-19% correction resets multiples while the index still ends 2027 modestly higher; prior: high-multiple regimes often see double-digit corrections without a 20% breach."
+      },
+      {
+        "name": "Bear market and drawdown",
+        "probability": 0.2,
+        "narrative": "An AI-capex disappointment or mild recession triggers a 20%+ drawdown and a negative two-year return; prior: roughly 1 in 5 two-year windows from elevated multiples ended in a bear market."
+      },
+      {
+        "name": "Hard landing recession",
+        "probability": 0.1,
+        "narrative": "Policy or credit shock causes a recession, a 25-35% drawdown and a 2027 close well below 2026 levels; prior: US recession began in roughly 1 of 6.5 years since 1948."
+      },
+      {
+        "name": "Stagnant sideways grind",
+        "probability": 0.05,
+        "narrative": "Flat earnings revisions and multiple compression leave the 2027 close within a few percent of today with shallow drawdowns; residual case for range-bound markets."
+      }
+    ],
+    "base_rates": [
+      {
+        "reference_class": "Trailing as-reported P/E > 22, non-overlapping January starts (2004, 2017, 2021, 2024); −20% or worse closing-basis drawdown within 24 months",
+        "outcome_frequency": "1/4",
+        "basis": "Multpl P/E series and closing-basis drawdown sources [S4][S55][S2]"
+      },
+      {
+        "reference_class": "Same class, dot-com era added (adds the 2000 start, −49.1% bear)",
+        "outcome_frequency": "2/5",
+        "basis": "[S55][S4]"
+      },
+      {
+        "reference_class": "Overlapping trailing-P/E > 22 starts, 2003–2021; −20% or worse closing-basis drawdown within 24 months",
+        "outcome_frequency": "2/7",
+        "basis": "[S56][S4]"
+      },
+      {
+        "reference_class": "All bear markets; closing-basis −20%+",
+        "outcome_frequency": "13 since 1929, about one per 7 years",
+        "basis": "[S55]"
+      },
+      {
+        "reference_class": "Two-year price returns from trailing-P/E > 22 calendar starts since 2003 (wider Multpl-based set, 2003–2021)",
+        "outcome_frequency": "≈+34%, +20%, +12%, +21%, +37% and −1% — median ≈+20%, no episode worse than about −1%",
+        "basis": "Multpl [S4][S15]"
+      },
+      {
+        "reference_class": "US recessions since 1948 (scenario prior)",
+        "outcome_frequency": "roughly 1 of 6.5 years since 1948",
+        "basis": "Canonical scenario frame"
+      }
+    ],
+    "drivers": [
+      {
+        "variable": "S&P 500 EPS growth path (FactSet CY2026 +32.8%, CY2027 +15.8%)",
+        "direction": "up",
+        "why_it_matters": "Earnings, not multiple expansion, carry the modal path to ≈8,700 by end-2027 [S7][S6][S31]"
+      },
+      {
+        "variable": "Valuation starting point (trailing as-reported P/E 26.15, above 22 since January 2024; forward P/E 19.0)",
+        "direction": "down",
+        "why_it_matters": "High starting multiples set the 33–40% conditional drawdown base rate and compress the multiple's room to expand [S4][S7]"
+      },
+      {
+        "variable": "Fed policy path (target-range upper limit 4%; futures imply ~4.56% by October 2027 vs SEP median 4.1%)",
+        "direction": "down",
+        "why_it_matters": "Rates held above 4.5% pressure the multiples at risk in the drawdown scenarios [S11][S38][S37][S12]"
+      },
+      {
+        "variable": "Concentration in mega-cap tech (top-10 weight 40.7% in 2025 vs ~32% of index earnings)",
+        "direction": "down",
+        "why_it_matters": "A top-10 de-rating passes one-for-one through index weight, amplified by passive flows [S9]"
+      },
+      {
+        "variable": "AI-capex dependence and breadth (ex-Micron/NVIDIA growth 20.0% vs 29.0%; hyperscaler capex $800bn in 2026, +94%)",
+        "direction": "up",
+        "why_it_matters": "Almost half of 2026 EPS growth comes from AI investment, a contribution Goldman says will fade into 2027 [S34][S31]"
+      },
+      {
+        "variable": "Labour-market recession signals (Sahm 0 pp; smoothed recession probability 0.62%)",
+        "direction": "up",
+        "why_it_matters": "Near-zero labour signals are why the frame discounts the 33–40% conditional drawdown range to 30% [S17][S13]"
+      },
+      {
+        "variable": "Margin pressure from wages and tariffs (AHE YoY 3.025%; effective tariff rate 7.1%)",
+        "direction": "down",
+        "why_it_matters": "Measured incremental cost pressure into 2027 looks modest, conditional on no escalation; margins at 14.9% are near cyclical highs [S29][S51][S8]"
+      },
+      {
+        "variable": "Quality of 2027 earnings (~$150bn unrealized private-company gains, 12% of Q2 2026 EPS, fading)",
+        "direction": "down",
+        "why_it_matters": "Goldman expects these gains to shrink materially in 2027, mechanically dragging EPS [S31]"
+      }
+    ],
+    "risks": [
+      {
+        "event": "US recession per NY Fed Treasury-spread model",
+        "probability": "0.15",
+        "per": "",
+        "source": "[PDF] Probability of US Recession Predicted by Treasury Spread [S14]",
+        "source_url": "https://www.newyorkfed.org/medialibrary/media/research/capital_markets/prob_rec.pdf",
+        "tier": "S3",
+        "effects": [],
+        "affects": [
+          "Federal Reserve (FOMC)",
+          "S&P 500 index"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "US recession per Cleveland Fed yield-curve model",
+        "probability": "11.4%",
+        "per": "September 2026",
+        "source": "Yield Curve and Predicted GDP Growth [S41]",
+        "source_url": "https://www.clevelandfed.org/indicators-and-data/yield-curve-and-predicted-gdp-growth",
+        "tier": "S3",
+        "effects": [],
+        "affects": [
+          "S&P 500 index"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "US recession per Polymarket prediction market",
+        "probability": "8% chance",
+        "per": "",
+        "source": "US recession by end of 2026? Trading Odds & Predictions | Polymarket [S42]",
+        "source_url": "https://polymarket.com/event/us-recession-by-end-of-2026",
+        "tier": "S3",
+        "effects": [],
+        "affects": [
+          "S&P 500 index"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "FOMC hikes at the 27–28 October 2026 meeting",
+        "probability": "16.1%",
+        "per": "",
+        "source": "FedWatch - CME Group [S36]",
+        "source_url": "https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html",
+        "tier": "S3",
+        "effects": [
+          {
+            "metric": "Federal Funds Target Range - Upper Limit",
+            "change": "+25 bp",
+            "direction": "up"
+          },
+          {
+            "metric": "Forward P/E",
+            "change": "",
+            "direction": "down"
+          }
+        ],
+        "affects": [
+          "Federal Reserve (FOMC)",
+          "S&P 500 index"
+        ],
+        "recurring": false
+      }
+    ],
+    "indicators": [
+      {
+        "indicator": "S&P 500 — United States (fred:SP500)",
+        "series": "fred:SP500",
+        "latest_value": 7669.414285714286,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Index",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S2"
+      },
+      {
+        "indicator": "S&P 500 (year-over-year % change) — United States (fred:SP500#yoy)",
+        "series": "fred:SP500#yoy",
+        "latest_value": 16.485316030057785,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent change from year ago",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S10"
+      },
+      {
+        "indicator": "Federal Funds Target Range - Upper Limit — United States (fred:DFEDTARU)",
+        "series": "fred:DFEDTARU",
+        "latest_value": 4.0,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S11"
+      },
+      {
+        "indicator": "Smoothed U.S. Recession Probabilities (fred:RECPROUSM156N)",
+        "series": "fred:RECPROUSM156N",
+        "latest_value": 0.62,
+        "latest_date": "2026-08-31",
+        "latest_period": "2026-08",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-08",
+        "source_ref": "S13"
+      },
+      {
+        "indicator": "Real-time Sahm Rule Recession Indicator — United States (fred:SAHMREALTIME)",
+        "series": "fred:SAHMREALTIME",
+        "latest_value": 0.0,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percentage Points",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S17"
+      },
+      {
+        "indicator": "10-Year Treasury Constant Maturity Minus 3-Month Treasury Constant Maturity — United States (fred:T10Y3M)",
+        "series": "fred:T10Y3M",
+        "latest_value": 0.8961904761904762,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S18"
+      },
+      {
+        "indicator": "Central bank policy rates - United States - Monthly - End of period (bis:WS_CBPOL/M.US)",
+        "series": "bis:WS_CBPOL/M.US",
+        "latest_value": 3.875,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Per cent per year",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S25"
+      },
+      {
+        "indicator": "Average Hourly Earnings of All Employees, Total Private — United States (fred:CES0500000003)",
+        "series": "fred:CES0500000003",
+        "latest_value": 37.81,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Dollars per Hour",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S26"
+      },
+      {
+        "indicator": "Monthly Treasury Statement: Customs Duties (current month) — United States (usgov:treasury/mts_customs_duties)",
+        "series": "usgov:treasury/mts_customs_duties",
+        "latest_value": 5910402249.78,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "U.S. dollars",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S27"
+      },
+      {
+        "indicator": "Federal Funds Effective Rate — United States (fred:FEDFUNDS)",
+        "series": "fred:FEDFUNDS",
+        "latest_value": 3.75,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S28"
+      },
+      {
+        "indicator": "Average Hourly Earnings of All Employees, Total Private (year-over-year % change) — United States (fred:CES0500000003#yoy)",
+        "series": "fred:CES0500000003#yoy",
+        "latest_value": 3.0245231607629375,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent change from year ago",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S29"
+      },
+      {
+        "indicator": "Federal Funds Effective Rate — United States (fred:DFF)",
+        "series": "fred:DFF",
+        "latest_value": 3.7466666666666666,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S30"
+      }
+    ]
+  }
+}

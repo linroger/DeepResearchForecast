@@ -1,0 +1,2662 @@
+{
+  "central_question": "What will the LBMA/COMEX spot price of gold in US dollars per troy ounce be at the end of 31 December 2027, given the late-October 2026 baseline of roughly $4,099/oz and the balance of central bank buying, Fed policy and real yields, the dollar, inflation and geopolitical risk?",
+  "as_of_date": "2026-10-22",
+  "situation_brief": {
+    "current_situation": "Gold traded at $4,099.20/oz on 21 October 2026 (WGC spot; Macrotrends composite $4,132), down 4.4% YTD and 23.2% below the 29 January 2026 all-time high of $5,501.70 (LBMA a.m.). COMEX Dec 2026 settled $4,092.50 and Dec 2027 at $4,363.70. The Fed is on a hawkish pivot: policy rate 3.875%, September 2026 hike, 10-year TIPS at 2.638% (top of five-year range), CPI 3.717% y/y.",
+    "context": "After +25% in 2024 (close $2,610.85) and roughly +65% in 2025 with the January 2026 record, gold corrected nearly 27% to a June 2026 close of $4,026.05, touching $3,994.50 on 25 June. ETF holdings hit a record 4,256t in September 2026 (+67t, contrarian inflows); central banks bought a Q2-record 289t but H1 of 345t was the weakest since 2022. Mine output hit a record H1 of 1,867t; total supply flat y/y.",
+    "dynamics": "A real-yield shock is contesting a firm demand floor. Markets price ~77bp of cumulative Fed tightening through October 2027 against an SEP median holding 4.25% through 2028; a December 2026 hike is priced at 73.3%. Bank 2027 targets cluster at $5,000-5,600, well above the futures-implied centre of ~$4,360. Turkey (-82t YTD) and Russia (-56t YTD) are official sellers; Poland nears its 700t target.",
+    "fault_lines": [
+      "Hawkish Fed path and record-high real yields versus record ETF holdings and continued central bank buying",
+      "Realised CPI at 3.717% versus anchored 10-year breakevens at 2.351% and SEP PCE falling to 2.4% in 2027",
+      "Market pricing of hikes versus SEP median and the Base scenario's assumed gradual cuts",
+      "Turkey and Russia liquidating official gold against Poland, China, Uzbekistan and Czech buying",
+      "Futures-implied centre (~$4,360) far below bank consensus (~$5,400)",
+      "Thin far-dated COMEX liquidity (1,166 Dec 2027 contracts vs 315,599 Dec 2026)"
+    ],
+    "catalysts": [
+      "28 October 2026 FOMC (83.9% hold, 16.1% hike)",
+      "WGC Gold Demand Trends Q3 2026 (end-October)",
+      "US midterms 3 November 2026 and Spain snap election 29 November 2026",
+      "9 December 2026 FOMC + SEP (73.3% one cumulative hike)",
+      "2027 FOMC meetings (27 Jan through 27 Oct 2027); ~77bp tightening priced",
+      "France presidential rounds 18 April and 2 May 2027; Poland and Italy elections late 2027",
+      "NBP reaching its 700t target; PBoC monthly reserve updates; monthly WGC ETF flows"
+    ]
+  },
+  "actors": [
+    {
+      "name": "Federal Reserve (FOMC)",
+      "type": "Government",
+      "role": "US monetary authority setting the policy rate and real-yield path, gold's core macro driver",
+      "stance": "Hawkish hold: September 2026 25bp hike to 3.75-4.00%; SEP median holds 4.25% through 2028",
+      "description": "Policy rate 3.875% end-September 2026; September 2026 SEP projects PCE 3.7% (2026) falling to 2.4% (2027), unemployment 4.1%, GDP 2.3-2.4%. Chair Warsh's Jackson Hole speech drove the hawkish turn. Markets price a December 2026 hike at 73.3%.",
+      "stated_vs_revealed": "SEP projects no cuts until 2028 while markets price ~77bp tightening through Oct 2027 - both hawkish, but the SEP path is more restrictive than 2026 realized policy",
+      "memory": "Cut 0.25pp over the year to September 2026, then pivoted to a hike at the September 2026 meeting",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "Fed",
+        "FOMC"
+      ],
+      "goals": [
+        "Return inflation to 2% without a recession",
+        "Hold policy restrictive until PCE converges to 2.4% in 2027"
+      ],
+      "constraints": [
+        "Sticky CPI at 3.717% y/y",
+        "Conference Board expects tightening to deepen a consumer pullback",
+        "Recession risk near 40% per J.P. Morgan"
+      ],
+      "assets": [
+        "Policy rate at 3.875%",
+        "Balance sheet and communication tools"
+      ],
+      "vulnerabilities": [
+        "Inflation re-acceleration forcing further hikes into a slowdown",
+        "Recession forcing an easing pivot"
+      ],
+      "incentives": [
+        {
+          "driver": "Inflation mandate",
+          "gains_if": "PCE falls toward 2.4% in 2027",
+          "loses_if": "CPI stays above 3% into H1 2027",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Price stability",
+          "Dual mandate"
+        ],
+        "beliefs": [
+          "Inflation will ease to 2.4% in 2027",
+          "Growth stays near 2.3-2.4%"
+        ],
+        "identity": "Independent US central bank under Chair Warsh",
+        "frame": "Sticky-inflation, no-landing baseline requiring restrictive rates"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "Policy rate and TIPS yields are the report's core discriminators between scenarios"
+      }
+    },
+    {
+      "name": "People's Bank of China",
+      "type": "Government",
+      "role": "Largest single central bank gold buyer; pace of reported reserve accumulation moves gold",
+      "stance": "Persistent buyer: ~10t in May 2026, nineteenth consecutive monthly purchase, longest streak since 2015",
+      "description": "Reported reserves 2,346.43t at end-Q2 2026, up from 2,313.46t in Q1. Led August 2026 buying. Reported figures likely understate accumulation. Operates with a dovish domestic stance (China policy rate 3%).",
+      "stated_vs_revealed": "Official monthly disclosures likely understate true accumulation",
+      "memory": "Nineteen-month buying streak through May 2026",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "PBoC"
+      ],
+      "goals": [
+        "Reserve diversification away from the dollar",
+        "Continued steady gold accumulation"
+      ],
+      "constraints": [
+        "Reporting transparency gaps",
+        "Domestic policy priorities"
+      ],
+      "assets": [
+        "2,346.43t of gold reserves",
+        "Large FX reserves"
+      ],
+      "vulnerabilities": [
+        "A first net-sale month would break the streak and signal a crack in EM official demand"
+      ],
+      "incentives": [
+        {
+          "driver": "De-dollarization of reserves",
+          "gains_if": "Geopolitical fragmentation continues",
+          "loses_if": "Dollar assets become indispensable again",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Reserve security",
+          "Strategic autonomy"
+        ],
+        "beliefs": [
+          "Gold reduces exposure to US financial weapons"
+        ],
+        "identity": "China's central bank",
+        "frame": "Long-run diversification regardless of price"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.85,
+        "basis": "Tracked actor; monthly reserve updates are a listed Bear signpost"
+      }
+    },
+    {
+      "name": "World Gold Council",
+      "type": "Organization",
+      "role": "Publisher of benchmark demand, central bank, ETF and supply data",
+      "stance": "Neutral data provider; reports central banks intend to continue buying; 89% of surveyed central banks expect global gold reserves to rise",
+      "description": "Source for Q2 2026 record 289t official buying, H1 345t, record ETF holdings 4,256t, record H1 mine output 1,867t, and the 2026 central bank survey",
+      "stated_vs_revealed": "Describes September ETF inflows as contrarian; survey intent data used as forward indicator",
+      "memory": "Publishes monthly ETF and central bank commentary and quarterly demand data",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "arbiter",
+      "aliases": [
+        "WGC"
+      ],
+      "goals": [
+        "Market transparency and gold demand research"
+      ],
+      "constraints": [
+        "Quarterly publication lag"
+      ],
+      "assets": [
+        "Gold Demand Trends dataset",
+        "Central bank survey"
+      ],
+      "vulnerabilities": [
+        "Vintage discrepancies between posts (4,256t vs 4,189t prints)"
+      ],
+      "incentives": [
+        {
+          "driver": "Industry promotion and data quality",
+          "gains_if": "Gold demand is well understood",
+          "loses_if": "Data credibility is questioned",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Evidence-based market analysis"
+        ],
+        "beliefs": [
+          "Official demand stays above long-term average"
+        ],
+        "identity": "Gold industry research body",
+        "frame": "Structural demand shift toward official sector"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.8,
+        "basis": "Its data releases anchor most flow evidence in the report"
+      }
+    },
+    {
+      "name": "LBMA",
+      "type": "Organization",
+      "role": "Administers the resolving LBMA Gold Price auction",
+      "stance": "Neutral benchmark administrator",
+      "description": "Source of the resolving PM auction prints and the $5,501.70 a.m. all-time high of 29 January 2026; its Q2 2026 market report relays custodial and flow data",
+      "stated_vs_revealed": "Survey of 16 analysts points to roughly $4,500 at year-end",
+      "memory": "Published Q4 2024 and Q2 2026 market reports",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "arbiter",
+      "goals": [
+        "Reliable price benchmarking"
+      ],
+      "constraints": [
+        "Auction timing differences versus spot composites"
+      ],
+      "assets": [
+        "The LBMA Gold Price auction",
+        "Analyst survey (~$4,500 year-end expectation)"
+      ],
+      "incentives": [
+        {
+          "driver": "Benchmark integrity",
+          "gains_if": "Auction remains the reference price",
+          "loses_if": "Participants lose confidence in the fixing",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Market integrity"
+        ],
+        "beliefs": [],
+        "identity": "London bullion market association",
+        "frame": "Neutral administrator"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.7,
+        "basis": "Resolving instrument administrator"
+      }
+    },
+    {
+      "name": "National Bank of Poland",
+      "type": "Government",
+      "role": "Top year-to-date official buyer in 2026; swing factor for 2027 flows",
+      "stance": "Aggressive buyer: +98t YTD through August 2026; 700t target 'within reach in the coming months'",
+      "description": "Holdings 648t end-August 2026 after 51t in Q2 and 8t in August; reaching the 700t target implies its flow tapers, removing the largest buyer's bid",
+      "stated_vs_revealed": "Publicly signals the 700t milestone is near; taper risk is explicit in the report",
+      "memory": "Bought steadily through 2024-2026",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "NBP"
+      ],
+      "goals": [
+        "Reach 700t of gold reserves",
+        "Reserve diversification"
+      ],
+      "constraints": [
+        "Stated 700t target caps further purchases once met"
+      ],
+      "assets": [
+        "648t of gold"
+      ],
+      "vulnerabilities": [
+        "Target completion removes a key marginal buyer"
+      ],
+      "incentives": [
+        {
+          "driver": "Reserve diversification target",
+          "gains_if": "Target met before geopolitical deterioration",
+          "loses_if": "Purchases crowd out other reserve goals",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Reserve security",
+          "Regional risk hedging"
+        ],
+        "beliefs": [
+          "Gold share of reserves should rise"
+        ],
+        "identity": "Polish central bank",
+        "frame": "EM reserve diversification leader"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.8,
+        "basis": "Named 2027 swing factor for official demand"
+      }
+    },
+    {
+      "name": "Reserve Bank of India",
+      "type": "Government",
+      "role": "Consistent official buyer influencing physical demand; repatriating custodial gold",
+      "stance": "Steady diversifier; only 22% of RBI gold stored abroad by March 2026, down from 55% three years earlier",
+      "description": "Custodial shift signals operational de-dollarization motive per FT/WGC report relayed by LBMA",
+      "stated_vs_revealed": "Repatriation actions reveal sovereignty motive beyond statements",
+      "memory": "Cut foreign-stored share from 55% to 22% over three years",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "RBI"
+      ],
+      "goals": [
+        "Reserve diversification and domestic custody of gold"
+      ],
+      "assets": [
+        "Gold reserves held increasingly domestically"
+      ],
+      "incentives": [
+        {
+          "driver": "De-dollarization and custody security",
+          "gains_if": "Geopolitical fragmentation persists",
+          "loses_if": "Trust in Western custody returns",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Custody sovereignty",
+          "Diversification"
+        ],
+        "beliefs": [
+          "Gold held abroad carries political risk"
+        ],
+        "identity": "India's central bank",
+        "frame": "Operational de-dollarization"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "Tracked actor with demand-side influence"
+      }
+    },
+    {
+      "name": "Central Bank of Turkey",
+      "type": "Government",
+      "role": "Large, volatile official buyer/seller of gold; largest downside swing factor in official demand",
+      "stance": "Net seller: -82t YTD through August 2026; sold or lent ~$20bn of gold in five weeks after the April 2026 Iran War outbreak; +3t in August after three net-sale months",
+      "description": "Swings between large purchases and crisis-driven liquidation; its 2026 sales dragged H1 official demand to the weakest since 2022",
+      "stated_vs_revealed": "Described as buyer historically but revealed as large seller in 2026 stress",
+      "memory": "Sold/lent ~$20bn in five weeks post-April 2026",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "CBRT"
+      ],
+      "goals": [
+        "Reserve management and FX stability under stress"
+      ],
+      "constraints": [
+        "Balance-of-payments stress during the Iran war forced gold sales/lending"
+      ],
+      "assets": [
+        "Gold reserves (level not stated in evidence)"
+      ],
+      "vulnerabilities": [
+        "Crisis episodes force rapid liquidation"
+      ],
+      "incentives": [
+        {
+          "driver": "Crisis liquidity",
+          "gains_if": "Gold can be mobilized in stress",
+          "loses_if": "Sales deplete reserves",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Lira and external stability"
+        ],
+        "beliefs": [],
+        "identity": "Turkey's central bank",
+        "frame": "Pragmatic reserve manager under stress"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.7,
+        "basis": "Named largest downside swing factor for official demand"
+      }
+    },
+    {
+      "name": "Central Bank of Russia",
+      "type": "Government",
+      "role": "Large official seller under sanctions",
+      "stance": "Net seller: -6t in August 2026, -56t YTD; holds 2,271t",
+      "description": "Liquidating official gold amid sanctions, adding marginal physical supply",
+      "stated_vs_revealed": "Long gold rhetorically, selling in practice",
+      "memory": "Sold 56t year-to-date 2026",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "goals": [
+        "Financing under sanctions"
+      ],
+      "constraints": [
+        "Sanctions regime restricts alternatives"
+      ],
+      "assets": [
+        "2,271t of gold"
+      ],
+      "vulnerabilities": [
+        "Forced liquidation depletes reserves"
+      ],
+      "incentives": [
+        {
+          "driver": "Sanctions financing",
+          "gains_if": "Gold remains liquid",
+          "loses_if": "Reserves exhausted",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Sanctions resistance"
+        ],
+        "beliefs": [],
+        "identity": "Russia's central bank",
+        "frame": "Sanctions-driven liquidation"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "Steady seller at the margin of the physical balance"
+      }
+    },
+    {
+      "name": "US Treasury",
+      "type": "Government",
+      "role": "Debt issuance and TIPS supply shaping real yields",
+      "stance": "Not directly characterized in evidence beyond its structural role",
+      "description": "Debt issuance and TIPS supply shape the 10-year TIPS yield at 2.638% (September 2026), the report's key Bear driver",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "goals": [
+        "Fund federal borrowing needs"
+      ],
+      "constraints": [
+        "Debt-crisis risk is a named Bull trigger"
+      ],
+      "assets": [
+        "Issuance calendar",
+        "TIPS supply"
+      ],
+      "vulnerabilities": [
+        "Fiscal credibility and debt-crisis dynamics"
+      ],
+      "incentives": [
+        {
+          "driver": "Fiscal financing",
+          "gains_if": "Demand for Treasuries holds",
+          "loses_if": "Debt crisis lifts gold",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [],
+        "identity": "US fiscal authority",
+        "frame": "Fiscal agent shaping real yields"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "Structural influence on real yields and debt-crisis scenario"
+      }
+    },
+    {
+      "name": "CFTC",
+      "type": "Government",
+      "role": "Publishes Commitments of Traders positioning data",
+      "stance": "Neutral regulator and data publisher",
+      "description": "COT report of 13 October 2026 showed managed-money net long of +107,089 contracts in COMEX gold, down 3,898 w/w",
+      "influence": "low",
+      "simulation_tier": 4,
+      "role_class": "arbiter",
+      "goals": [
+        "Market transparency"
+      ],
+      "assets": [
+        "Weekly COT data"
+      ],
+      "incentives": [
+        {
+          "driver": "Mandated disclosure",
+          "gains_if": "Data quality maintained",
+          "loses_if": "",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Market integrity"
+        ],
+        "beliefs": [],
+        "identity": "US derivatives regulator",
+        "frame": "Data publisher"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 4,
+        "score": 0.4,
+        "basis": "Weekly positioning monitorable"
+      }
+    },
+    {
+      "name": "SPDR Gold Shares (GLD)",
+      "type": "Organization",
+      "role": "Largest gold ETF; holdings flows proxy Western investor demand",
+      "stance": "Flat: 1,053.91t as of 15 October 2026, down 0.29t",
+      "description": "Part of a global ETF complex at a record 4,256t (September 2026) with ~US$10bn of contrarian monthly inflows; AUM fell 7% m/m to US$574bn",
+      "stated_vs_revealed": "Holdings stable while aggregate global ETFs hit records - Western vs global flow divergence",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "intermediary",
+      "aliases": [
+        "GLD"
+      ],
+      "goals": [
+        "Track the gold price for shareholders"
+      ],
+      "constraints": [
+        "Price declines reduce AUM even with tonnage inflows"
+      ],
+      "assets": [
+        "1,053.91t of gold"
+      ],
+      "vulnerabilities": [
+        "Multi-month outflows would undercut the Base scenario"
+      ],
+      "incentives": [
+        {
+          "driver": "Investor demand for gold exposure",
+          "gains_if": "Safe-haven and hedging demand rises",
+          "loses_if": "Investors rotate to yielding assets",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [],
+        "identity": "Largest physically backed gold ETF",
+        "frame": "Passive investment vehicle"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "Listed monitoring indicator"
+      }
+    },
+    {
+      "name": "IMF",
+      "type": "Organization",
+      "role": "COFER and IFS data on official reserve composition",
+      "stance": "Neutral data institution",
+      "description": "Listed actor for official reserve composition data; no specific COFER figure appears in the evidence",
+      "influence": "low",
+      "simulation_tier": 4,
+      "role_class": "arbiter",
+      "goals": [
+        "Reserve statistics"
+      ],
+      "assets": [
+        "COFER/IFS datasets"
+      ],
+      "incentives": [
+        {
+          "driver": "Statistical mandate",
+          "gains_if": "",
+          "loses_if": "",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Data standards"
+        ],
+        "beliefs": [],
+        "identity": "Multilateral financial institution",
+        "frame": "Data publisher"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 4,
+        "score": 0.3,
+        "basis": "No specific data cited in the report"
+      }
+    },
+    {
+      "name": "US President and administration",
+      "type": "Government",
+      "role": "Sets tariff, sanctions and geopolitical policy that drive risk premia",
+      "stance": "Policy source of tariff-driven inflation concerns cited in 2026 gold trading; midterms 3 November 2026 test its position",
+      "description": "Tariff policy fed inflation fears and safe-haven gold demand per Reuters; sanctions regimes contribute to Russia's gold liquidation",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "Trade and foreign-policy objectives"
+      ],
+      "constraints": [
+        "Midterm election calendar",
+        "Inflation consequences of tariffs"
+      ],
+      "assets": [
+        "Tariff and sanctions authority"
+      ],
+      "vulnerabilities": [
+        "Policy-driven inflation complicates the Fed's task"
+      ],
+      "incentives": [
+        {
+          "driver": "Trade policy leverage",
+          "gains_if": "Tariffs deliver concessions",
+          "loses_if": "Inflation backlash and market stress",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [],
+        "identity": "US executive branch",
+        "frame": "Tariff- and sanctions-led policy"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.7,
+        "basis": "Risk-premium channel named in scenario frame"
+      }
+    },
+    {
+      "name": "Goldman Sachs",
+      "type": "Organization",
+      "role": "Influential bank forecaster anchoring consensus",
+      "stance": "Cautiously bullish but cutting: end-2026 target lowered from $5,400 to $4,900 on 19 June 2026 after scrapping 2026 Fed cuts (first cut pushed to June 2027); 2027 target $5,400-5,600; expects ~50t/month (~600t/yr) central bank buying in 2026",
+      "description": "Estimates each 50bp of Fed easing adds roughly $120/oz of support; hawkish repricing since June is a several-hundred-dollar headwind",
+      "stated_vs_revealed": "Cut near-term target while keeping 2027 bullish - internally consistent easing-delay view",
+      "memory": "Raised then cut its 2026 target between January and June 2026",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "amplifier",
+      "goals": [
+        "Accurate research calls",
+        "Client flow"
+      ],
+      "constraints": [
+        "Vintages of its target changes conflict across secondary sources"
+      ],
+      "assets": [
+        "Research platform",
+        "Rate-gold sensitivity model"
+      ],
+      "vulnerabilities": [
+        "Reputation risk if the hawkish Fed path persists"
+      ],
+      "incentives": [
+        {
+          "driver": "Research influence",
+          "gains_if": "Targets are directionally right",
+          "loses_if": "Fed path invalidates easing assumptions",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [
+          "Central bank demand puts a floor under gold",
+          "Fed easing eventually resumes"
+        ],
+        "identity": "US investment bank",
+        "frame": "Structural gold bull with cyclical delay"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.8,
+        "basis": "Sensitivity estimate ($120/oz per 50bp) used throughout the report"
+      }
+    },
+    {
+      "name": "J.P. Morgan Research",
+      "type": "Organization",
+      "role": "Widely cited forecaster of 2026-2027 gold prices and recession odds",
+      "stance": "Bullish on gold ($6,000 end-2026 target carried mid-2026; $5,400 end-2027); put US and global recession probability at roughly 40% in mid-2026",
+      "description": "Kasman team's 40% recession probability is the principal trigger evidence for the Bull scenario; its targets anchor the high bank-consensus cluster",
+      "stated_vs_revealed": "High gold targets coexist with a high recession-probability call - a crisis-bull framing",
+      "memory": "Held $6,000 end-2026 target with spot near $4,202 in June 2026",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "amplifier",
+      "aliases": [
+        "JPMorgan"
+      ],
+      "goals": [
+        "Macro and commodities forecasting"
+      ],
+      "constraints": [
+        "Targets sat far above market mid-2026"
+      ],
+      "assets": [
+        "Global research franchise"
+      ],
+      "vulnerabilities": [
+        "Targets well above the futures curve risk credibility"
+      ],
+      "incentives": [
+        {
+          "driver": "Forecast influence",
+          "gains_if": "Recession/easing materializes",
+          "loses_if": "Hawkish path persists",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [
+          "Considerable downside risk to the US economy"
+        ],
+        "identity": "Bank research house",
+        "frame": "Recession-risk gold bull"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.75,
+        "basis": "Recession probability and price targets cited repeatedly"
+      }
+    },
+    {
+      "name": "COMEX gold managed-money traders",
+      "type": "Other",
+      "role": "Speculative positioning block in gold futures",
+      "stance": "Long but trimming: +107,089 contracts net long on 13 October 2026, down 3,898 w/w; positioning front-loaded in Dec 2026 (315,599 contracts vs 1,166 in Dec 2027)",
+      "description": "Falling length supports Range-bound consolidation; thin far-dated open interest means long-dated conviction is absent",
+      "stated_vs_revealed": "Net length remains large but is being trimmed into the drawdown",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Managed money"
+      ],
+      "goals": [
+        "Profit from directional and momentum trades"
+      ],
+      "constraints": [
+        "Margin and volatility"
+      ],
+      "assets": [
+        "Futures positions"
+      ],
+      "vulnerabilities": [
+        "Crowding after the 2024-2026 surge"
+      ],
+      "incentives": [
+        {
+          "driver": "Speculative returns",
+          "gains_if": "Trend resumes",
+          "loses_if": "Real-yield squeeze extends",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [],
+        "identity": "Leveraged fund community",
+        "frame": "Momentum-sensitive marginal buyer/seller"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "Weekly COT signpost"
+      }
+    },
+    {
+      "name": "China Gold Association",
+      "type": "Organization",
+      "role": "Reports Chinese physical demand, the largest consumer market",
+      "stance": "Not quoted with data in the evidence; no Chinese bar-and-coin figures available",
+      "description": "Listed actor; current retail demand level unknown from the evidence",
+      "influence": "low",
+      "simulation_tier": 4,
+      "role_class": "stakeholder",
+      "aliases": [
+        "CGA"
+      ],
+      "goals": [
+        "Industry representation and statistics"
+      ],
+      "assets": [
+        "Domestic demand data"
+      ],
+      "incentives": [
+        {
+          "driver": "Industry promotion",
+          "gains_if": "",
+          "loses_if": "",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [],
+        "identity": "Chinese industry body",
+        "frame": "Data publisher"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 4,
+        "score": 0.3,
+        "basis": "No data in evidence"
+      }
+    },
+    {
+      "name": "Polymarket traders",
+      "type": "Platform",
+      "role": "Prediction-market pricing of US recession by end-2027",
+      "stance": "Priced roughly 65% probability of a US recession by end-2027 (cumulative resolution wording)",
+      "description": "The only tradeable probability comparison in the report; exceeds Bull's 25% weight because it prices a recession event, not a gold print",
+      "influence": "low",
+      "simulation_tier": 3,
+      "role_class": "amplifier",
+      "goals": [
+        "Profit from event contracts"
+      ],
+      "constraints": [
+        "Resolution wording likely overstates 12-month hazard rate"
+      ],
+      "assets": [
+        "Liquid event markets"
+      ],
+      "vulnerabilities": [
+        "Crowd biases in long-dated contracts"
+      ],
+      "incentives": [
+        {
+          "driver": "Speculative returns",
+          "gains_if": "Correct probability assessment",
+          "loses_if": "Mispricing",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [],
+        "beliefs": [
+          "High US recession odds"
+        ],
+        "identity": "Crypto prediction market participants",
+        "frame": "Risk-event pricing"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "Cited market comparison for the Bull trigger"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source": "Federal Reserve (FOMC)",
+      "target": "COMEX gold managed-money traders",
+      "type": "INFLUENCES",
+      "relation_label": "policy path drives speculative positioning",
+      "basis": "Hawkish repricing trimmed net length to +107,089 contracts [S27][S14]",
+      "valence": "directional",
+      "polarity": -0.6,
+      "strength": 0.8,
+      "sign": "-"
+    },
+    {
+      "source": "Federal Reserve (FOMC)",
+      "target": "SPDR Gold Shares (GLD)",
+      "type": "INFLUENCES",
+      "relation_label": "real yields shape ETF demand",
+      "basis": "TIPS at 2.638% imposes opportunity cost while ETF inflows persisted contrarianly [S5][S8]",
+      "valence": "directional",
+      "polarity": -0.5,
+      "strength": 0.6,
+      "sign": "-"
+    },
+    {
+      "source": "People's Bank of China",
+      "target": "US President and administration",
+      "type": "COMPETES_WITH",
+      "relation_label": "reserve diversification versus dollar primacy",
+      "basis": "De-dollarization motive behind 19-month buying streak [S3]",
+      "valence": "adversarial",
+      "polarity": -0.5,
+      "strength": 0.6,
+      "sign": "-"
+    },
+    {
+      "source": "US President and administration",
+      "target": "Central Bank of Russia",
+      "type": "SANCTIONS",
+      "relation_label": "sanctions regime forcing gold liquidation",
+      "basis": "Russia liquidated 56t YTD amid sanctions [S17]",
+      "valence": "adversarial",
+      "polarity": -0.8,
+      "strength": 0.8,
+      "sign": "-"
+    },
+    {
+      "source": "National Bank of Poland",
+      "target": "World Gold Council",
+      "type": "CUSTOMER_OF",
+      "relation_label": "buyer tracked in WGC data",
+      "basis": "NBP purchases reported monthly by WGC [S17][S9]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "Central Bank of Turkey",
+      "target": "COMEX gold managed-money traders",
+      "type": "SUPPLIES",
+      "relation_label": "official sales add physical supply",
+      "since": "2026-04",
+      "basis": "Turkey sold/lent ~$20bn of gold post-Iran war outbreak; -82t YTD [S3][S17]",
+      "valence": "transactional",
+      "polarity": -0.4,
+      "strength": 0.5,
+      "sign": "-"
+    },
+    {
+      "source": "Reserve Bank of India",
+      "target": "People's Bank of China",
+      "type": "PARTNERS_WITH",
+      "relation_label": "parallel EM reserve diversification",
+      "basis": "Both diversifying and, in India's case, repatriating gold custody [S3]",
+      "valence": "allied",
+      "polarity": 0.4,
+      "strength": 0.4,
+      "sign": "+"
+    },
+    {
+      "source": "Goldman Sachs",
+      "target": "Federal Reserve (FOMC)",
+      "type": "DEPENDS_ON",
+      "relation_label": "gold targets hinge on Fed path",
+      "basis": "Cut target to $4,900 after pushing first cut to June 2027; ~$120/oz per 50bp [S11]",
+      "valence": "neutral",
+      "polarity": 0.0,
+      "strength": 0.7
+    },
+    {
+      "source": "J.P. Morgan Research",
+      "target": "Polymarket traders",
+      "type": "COMPETES_WITH",
+      "relation_label": "divergent recession probability estimates",
+      "basis": "JPM ~40% recession vs Polymarket ~65% by end-2027; different resolution windows [S47][S48]",
+      "valence": "neutral",
+      "polarity": -0.3,
+      "strength": 0.4,
+      "sign": "-"
+    },
+    {
+      "source": "US Treasury",
+      "target": "Federal Reserve (FOMC)",
+      "type": "INFLUENCES",
+      "relation_label": "issuance and TIPS supply shape real yields",
+      "basis": "10-year TIPS at top of five-year range [S5]",
+      "valence": "directional",
+      "polarity": 0.3,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "World Gold Council",
+      "target": "LBMA",
+      "type": "PARTNERS_WITH",
+      "relation_label": "complementary benchmark data and price administration",
+      "basis": "LBMA market reports relay WGC and FT/WGC findings [S3]",
+      "valence": "allied",
+      "polarity": 0.5,
+      "strength": 0.4,
+      "sign": "+"
+    },
+    {
+      "source": "SPDR Gold Shares (GLD)",
+      "target": "LBMA",
+      "type": "DEPENDS_ON",
+      "relation_label": "valuations referenced to LBMA price",
+      "basis": "ETF AUM of US$574bn tied to benchmark prices [S8][S3]",
+      "valence": "transactional",
+      "polarity": 0.3,
+      "strength": 0.5,
+      "sign": "+"
+    }
+  ],
+  "hot_topics": [
+    "Fed hike-or-hold at 28 October and 9 December 2026 FOMC meetings",
+    "10-year TIPS real yield at 2.638%, top of five-year range",
+    "CPI at 3.717% versus anchored breakevens at 2.351%",
+    "Central bank buying pace: Q2 record 289t versus weak H1 of 345t",
+    "Poland approaching its 700t reserve target and purchase taper risk",
+    "PBoC 19-month buying streak",
+    "Turkey and Russia as official gold sellers",
+    "Record ETF holdings of 4,256t with contrarian inflows",
+    "COMEX managed-money net length trimming",
+    "Bank 2027 targets of $5,000-5,600 versus futures-implied ~$4,360",
+    "US recession odds (JPM ~40%, Polymarket ~65% by end-2027)",
+    "Iran war aftermath and sanctions-driven official gold sales"
+  ],
+  "key_events": [
+    {
+      "date": "2026-01-29",
+      "event": "LBMA gold price all-time high of $5,501.70/ozt (a.m.); p.m. print $5,405.00; Macrotrends daily-close record $5,379",
+      "staleness_days": 266,
+      "is_stale": false
+    },
+    {
+      "date": "2026-03-13",
+      "event": "Forex.com reported DXY surging more than 5% off its 2026 lows, testing the 100 handle, citing the Iran war",
+      "staleness_days": 223,
+      "is_stale": false
+    },
+    {
+      "date": "2026-04",
+      "event": "Iran war broke out; Turkey sold or lent some $20bn of gold in the five weeks after it began",
+      "staleness_days": 204,
+      "is_stale": false
+    },
+    {
+      "date": "2026-05",
+      "event": "PBoC added about 10t of gold, its nineteenth consecutive month of purchases, longest streak since 2015",
+      "staleness_days": 174,
+      "is_stale": false
+    },
+    {
+      "date": "2026-06-19",
+      "event": "Goldman Sachs cut its end-2026 gold target from $5,400 to $4,900 after scrapping all expected 2026 Fed cuts (first cut pushed to June 2027)",
+      "staleness_days": 125,
+      "is_stale": false
+    },
+    {
+      "date": "2026-06-25",
+      "event": "LBMA a.m. gold price touched $3,994.50/ozt, below $4,000 for the first time since early November 2025",
+      "staleness_days": 119,
+      "is_stale": false
+    },
+    {
+      "date": "2026-06-30",
+      "event": "Gold closed June 2026 at $4,026.05 (p.m.), nearly 27% below the January peak; silver at $58.795 versus its $118.450 peak of 29 January 2026",
+      "staleness_days": 114,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07-30",
+      "event": "WGC Gold Demand Trends Q2 2026 edition showed official buying of 289t after Q1's 57t",
+      "staleness_days": 84,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-11",
+      "event": "Conference Board outlook 'Fed Tightening to Deepen Consumer Pullback' expected tightening to weaken consumption into end-2026",
+      "staleness_days": 41,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-16",
+      "event": "FOMC September 2026 Summary of Economic Projections: funds-rate midpoint median 4.25% at end-2026, end-2027 and end-2028; PCE inflation 3.7% (2026) falling to 2.4% (2027)",
+      "staleness_days": 36,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-30",
+      "event": "US central bank policy rate at 3.875% per year end-September 2026; 10-year TIPS yield averaged 2.638% in September 2026, top of five-year range",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-13",
+      "event": "CFTC Commitments of Traders report: managed-money net long of +107,089 contracts, down 3,898 week over week",
+      "staleness_days": 9,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-15",
+      "event": "SPDR Gold Shares holdings of 1,053.91 tonnes, down 0.29t from previous reporting date",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-16",
+      "event": "Nominal broad US dollar index daily observation at 121.4048",
+      "staleness_days": 6,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-20",
+      "event": "10-year TIPS yield daily print of 2.77%",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-21",
+      "event": "WGC spot page quoted gold at $4,099.20/ozt; Macrotrends printed $4,132; 10-year breakeven at 2.37%; COMEX Dec 2027 futures (GCZ7) settled at 4363.7 USD/ozt",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-22",
+      "event": "Front-month Dec 2026 (GCZ6) settled $4,092.50/ozt, −1.39%; Fed Rate Monitor put 83.9% on a hold and 73.3% on December ending at 4.00–4.25%",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-28",
+      "event": "Scheduled FOMC meeting with market-implied odds of 83.9% on a hold at 3.75–4.00%, 16.1% on a hike",
+      "staleness_days": -6,
+      "is_stale": false
+    },
+    {
+      "date": "2026-11-03",
+      "event": "US midterm elections scheduled",
+      "staleness_days": -12,
+      "is_stale": false
+    },
+    {
+      "date": "2026-11-29",
+      "event": "Spain snap general election scheduled",
+      "staleness_days": -38,
+      "is_stale": false
+    },
+    {
+      "date": "2026-12-09",
+      "event": "Scheduled FOMC meeting with 73.3% priced on one cumulative hike to 4.00–4.25%, 13.6% on two hikes",
+      "staleness_days": -48,
+      "is_stale": false
+    },
+    {
+      "date": "2027-04-18",
+      "event": "France presidential first round and Finland parliamentary election scheduled",
+      "staleness_days": -178,
+      "is_stale": false
+    },
+    {
+      "date": "2027-05-02",
+      "event": "France presidential second round scheduled",
+      "staleness_days": -192,
+      "is_stale": false
+    },
+    {
+      "date": "2027-10-24",
+      "event": "Argentina presidential election and Swiss federal votes scheduled",
+      "staleness_days": -367,
+      "is_stale": false
+    },
+    {
+      "date": "2027-10-27",
+      "event": "Last scheduled 2027 FOMC meeting; roughly 77bp of cumulative tightening priced across meetings through this date",
+      "staleness_days": -370,
+      "is_stale": false
+    },
+    {
+      "date": "2027-12-31",
+      "event": "Forecast resolution date: LBMA Gold Price PM auction on the last trading day of 2027",
+      "staleness_days": -435,
+      "is_stale": false
+    }
+  ],
+  "quantitative_facts": [
+    {
+      "metric": "Gold spot price",
+      "value": "4,099.20",
+      "series": "WGC spot page",
+      "unit": "USD per troy ounce",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026-10-21",
+      "geography": "Global",
+      "definition": "World Gold Council spot page quote",
+      "source": "World Gold Council",
+      "value_type": "actual",
+      "source_url": "https://www.gold.org/goldhub/data/gold-prices",
+      "tier": "S3",
+      "value_num": 4099.2,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "World Gold Council",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "Gold daily composite price",
+      "value": "4,132",
+      "series": "Macrotrends daily composite",
+      "unit": "USD per troy ounce",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026-10-21",
+      "geography": "Global",
+      "definition": "Macrotrends daily composite; 4.4% down YTD, 5.2% below year-earlier $4,359, 23.2% below record close $5,379",
+      "source": "Macrotrends",
+      "value_type": "actual",
+      "source_url": "https://www.macrotrends.net/1333/historical-gold-prices-100-year-chart",
+      "tier": "S3",
+      "value_num": 4132.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Macrotrends",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "Gold all-time high",
+      "value": "5,501.70",
+      "series": "LBMA Gold Price a.m. auction",
+      "unit": "USD per troy ounce",
+      "as_of_date": "2026-01-29",
+      "period_end": "2026-01-29",
+      "geography": "Global",
+      "definition": "LBMA a.m. record print; p.m. $5,405.00 same day",
+      "source": "LBMA",
+      "value_type": "actual",
+      "source_url": "https://www.lbma.org.uk/articles/lbma-precious-metals-market-report-q2-2026",
+      "tier": "S3",
+      "value_num": 5501.7,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "LBMA",
+      "staleness_days": 266,
+      "is_stale": false
+    },
+    {
+      "metric": "Gold June 2026 close",
+      "value": "4,026.05",
+      "series": "LBMA Gold Price p.m.",
+      "unit": "USD per troy ounce",
+      "as_of_date": "2026-06-30",
+      "period_end": "2026-06-30",
+      "geography": "Global",
+      "definition": "End-June p.m. close after ~27% five-month fall; a.m. low $3,994.50 on 25 June 2026",
+      "source": "LBMA",
+      "value_type": "actual",
+      "source_url": "https://www.lbma.org.uk/articles/lbma-precious-metals-market-report-q2-2026",
+      "tier": "S3",
+      "value_num": 4026.05,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "LBMA",
+      "staleness_days": 114,
+      "is_stale": false
+    },
+    {
+      "metric": "Gold 2024 close and annual gain",
+      "value": "2,610.85",
+      "series": "LBMA Gold Price",
+      "unit": "USD per troy ounce",
+      "as_of_date": "2024-12-31",
+      "period_end": "2024",
+      "geography": "Global",
+      "definition": "2024 close, up over 25%, strongest year in fourteen years",
+      "source": "LBMA Q4 2024 market report",
+      "value_type": "actual",
+      "source_url": "https://www.lbma.org.uk/articles/lbma-precious-metals-market-report-q4-2024",
+      "tier": "S3",
+      "value_num": 2610.85,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "LBMA Q4 2024 market report",
+      "staleness_days": 660,
+      "is_stale": true
+    },
+    {
+      "metric": "Gold 2025 range and average",
+      "value": "2,633–4,449 (range), 3,432 (average)",
+      "series": "Newmont annual report",
+      "unit": "USD per ounce",
+      "as_of_date": "2026-10-22",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "2025 low/high range and average from Newmont's SEC-filed annual report",
+      "source": "Newmont",
+      "value_type": "actual",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1164727/000110465926035231/nem-20251231xars.pdf",
+      "tier": "S1",
+      "value_num": 3541.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Newmont",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Gold 31 Dec 2025 spot",
+      "value": "4,083.55",
+      "series": "goldprice.org spot",
+      "unit": "USD per troy ounce",
+      "as_of_date": "2025-12-31",
+      "period_end": "2025-12-31",
+      "geography": "Global",
+      "definition": "Spot close listing; conflicts with Macrotrends-derived ~$4,320 end-2025",
+      "source": "goldprice.org",
+      "value_type": "actual",
+      "source_url": "https://goldprice.org/gold-price-today/2025-12-31",
+      "tier": "S3",
+      "value_num": 4083.55,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "goldprice.org",
+      "staleness_days": 295,
+      "is_stale": false
+    },
+    {
+      "metric": "Gold front-month futures settlement",
+      "value": "4,092.50",
+      "series": "COMEX GCZ6",
+      "unit": "USD per troy ounce",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "US",
+      "definition": "Dec 2026 front-month settlement, −1.39% on the day",
+      "source": "COMEX",
+      "value_type": "actual",
+      "source_url": "https://www.wsj.com/market-data/quotes/futures/GCZ27",
+      "tier": "S2",
+      "value_num": 4092.5,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "COMEX",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Gold Dec 2027 futures settlement",
+      "value": "4,363.70",
+      "series": "COMEX GCZ7",
+      "unit": "USD per troy ounce",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026-10-21",
+      "geography": "US",
+      "definition": "Dec 2027 contract settlement; open interest 1,166 contracts vs 315,599 for Dec 2026",
+      "source": "COMEX",
+      "value_type": "actual",
+      "source_url": "https://www.cmegroup.com/markets/metals/precious/gold.quotes.html",
+      "tier": "S3",
+      "value_num": 4363.7,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "COMEX",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "US central bank policy rate",
+      "value": "3.875",
+      "series": "BIS central bank policy rates, US, monthly end of period",
+      "unit": "percent per year",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "End-September 2026 level, 0.25 pp below 4.125% a year earlier; September FOMC raised target range 25bp to 3.75–4.00% per JPMAM",
+      "source": "BIS",
+      "value_type": "actual",
+      "source_url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US",
+      "tier": "S1",
+      "value_num": 3.875,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "BIS",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "10-year TIPS real yield",
+      "value": "2.638",
+      "series": "FRED DFII10",
+      "unit": "percent",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "September 2026 monthly average, +0.889 pp y/y; daily print 2.77% on 2026-10-20; top of 5-year range -1.06% to 2.638%",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DFII10",
+      "tier": "S1",
+      "value_num": 2.638,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "US CPI inflation",
+      "value": "3.717",
+      "series": "CPIAUCSL YoY",
+      "unit": "percent change from year ago",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Headline CPI; 2026 low 2.391% (Jan), peak 4.167% (May); +0.695 pp y/y",
+      "source": "FRED / BLS",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/CPIAUCSL",
+      "tier": "S1",
+      "value_num": 3.717,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED / BLS",
+      "metric_family": "growth rate",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "10-year breakeven inflation rate",
+      "value": "2.351",
+      "series": "FRED T10YIE",
+      "unit": "percent",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "September 2026 monthly average; 2.37% daily on 2026-10-21; -0.02 pp y/y",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/T10YIE",
+      "tier": "S1",
+      "value_num": 2.351,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "Global gold ETF holdings",
+      "value": "4,256",
+      "series": "WGC monthly ETF report",
+      "unit": "tonnes",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "Global",
+      "definition": "Record holdings, +67t m/m inflows (~US$10bn) into a falling price; AUM down 7% m/m to US$574bn",
+      "source": "World Gold Council",
+      "value_type": "actual",
+      "source_url": "https://www.gold.org/goldhub/data/global-gold-backed-etf-holdings-and-flows",
+      "tier": "S3",
+      "value_num": 4256.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "World Gold Council",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "Central bank net gold purchases Q2 2026",
+      "value": "289",
+      "series": "WGC Gold Demand Trends",
+      "unit": "tonnes",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-Q2",
+      "geography": "Global",
+      "definition": "Record for a second quarter, five times Q1's revised 57t; H1 2026 at 345t, weakest H1 since 2022 (241t)",
+      "source": "World Gold Council",
+      "value_type": "actual",
+      "source_url": "https://www.gold.org/goldhub/research/gold-demand-trends/gold-demand-trends-q2-2026/central-banks",
+      "tier": "S3",
+      "value_num": 289.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "World Gold Council",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "H1 2026 mine production",
+      "value": "1,867",
+      "series": "WGC Gold Demand Trends",
+      "unit": "tonnes",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-H1",
+      "geography": "Global",
+      "definition": "Record H1 output, up 3% on 1,808t in H1 2025; Q2 mine production 965.6t, +2% y/y, all-time Q2 high",
+      "source": "World Gold Council",
+      "value_type": "actual",
+      "source_url": "https://www.gold.org/goldhub/research/gold-demand-trends/gold-demand-trends-q2-2026/supply",
+      "tier": "S3",
+      "value_num": 1867.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "World Gold Council",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Goldman Sachs end-2026 gold target",
+      "value": "4,900",
+      "series": "Goldman Sachs Research",
+      "unit": "USD per troy ounce",
+      "as_of_date": "2026-06-19",
+      "period_end": "2026-12-31",
+      "geography": "Global",
+      "definition": "Cut from $5,400 on 19 June 2026; first cut pushed to June 2027; each 50bp of easing worth ~$120/oz; JPMorgan and Deutsche Bank held $6,000, Wells Fargo $6,300",
+      "source": "Goldman Sachs Research",
+      "value_type": "target",
+      "source_url": "https://goldsilver.com/industry-news/goldsilver-news/goldman-sachs-gold-target-cut-jpmorgan-divergence/",
+      "tier": "S3",
+      "value_num": 4900.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Goldman Sachs Research",
+      "staleness_days": 125,
+      "is_stale": false
+    },
+    {
+      "metric": "Bank 2027 year-end gold targets",
+      "value": "5,000–5,600",
+      "series": "Bank forecasts",
+      "unit": "USD per troy ounce",
+      "as_of_date": "2026-10-22",
+      "period_end": "2027-12-31",
+      "geography": "Global",
+      "definition": "J.P. Morgan $5,400, UBS $5,400, Goldman Sachs $5,400–5,600, Westpac $5,000 Q1 2027 peak, Morgan Stanley $4,800, BofA extreme-demand scenario $8,000",
+      "source": "Various banks",
+      "value_type": "forecast",
+      "source_url": "https://www.bullionstar.com/blogs/gold-silver-101/gold-price-forecast-2027/",
+      "tier": "S3",
+      "value_num": 5300.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Various banks",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "FOMC 28 Oct 2026 meeting probabilities",
+      "value": "83.9 hold / 16.1 hike",
+      "series": "Fed Rate Monitor",
+      "unit": "percent",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026-10-28",
+      "geography": "United States",
+      "definition": "Market-implied odds of hold at 3.75–4.00% vs hike to 4.00–4.25%; FedWatch showed 89.5% hold",
+      "source": "Fed Rate Monitor",
+      "value_type": "estimate",
+      "source_url": "https://www.investing.com/central-banks/fed-rate-monitor",
+      "tier": "S3",
+      "value_num": 83.9,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Fed Rate Monitor",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "FOMC Dec 2026 rate probabilities",
+      "value": "73.3",
+      "series": "Fed Rate Monitor",
+      "unit": "percent",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026-12-09",
+      "geography": "United States",
+      "definition": "Probability of ending December at 4.00–4.25% (one hike); 13.2% hold; 13.6% two hikes (4.25–4.50%)",
+      "source": "Fed Rate Monitor",
+      "value_type": "estimate",
+      "source_url": "https://www.investing.com/central-banks/fed-rate-monitor",
+      "tier": "S3",
+      "value_num": 73.3,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Fed Rate Monitor",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "SEP funds rate median path",
+      "value": "4.25",
+      "series": "FOMC Summary of Economic Projections",
+      "unit": "percent",
+      "as_of_date": "2026-09-16",
+      "period_end": "2027-12-31",
+      "geography": "United States",
+      "definition": "Median midpoint at end-2026, end-2027 and end-2028; 3.75% end-2029; 3.0% longer run; 18 participants",
+      "source": "Federal Reserve",
+      "value_type": "forecast",
+      "source_url": "https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf",
+      "tier": "S1",
+      "value_num": 4.25,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Federal Reserve",
+      "staleness_days": 36,
+      "is_stale": false
+    },
+    {
+      "metric": "Cumulative tightening priced through Oct 2027",
+      "value": "77",
+      "series": "Central Bank Watch",
+      "unit": "basis points",
+      "as_of_date": "2026-10-22",
+      "period_end": "2027-10-27",
+      "geography": "United States",
+      "definition": "Cumulative tightening priced across 2027 FOMC meetings (27 Jan, 17 Mar, 28 Apr, 9 Jun, 28 Jul, 15 Sep, 27 Oct)",
+      "source": "Central Bank Watch",
+      "value_type": "estimate",
+      "source_url": "https://centralbank.watch/federal-reserve/",
+      "tier": "S3",
+      "value_num": 77.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Central Bank Watch",
+      "metric_family": "cumulative deployment",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Nominal broad US dollar index",
+      "value": "119.2152",
+      "series": "FRED DTWEXBGS",
+      "unit": "index (Jan 2006=100)",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "September 2026 monthly average, -0.678% y/y vs 120.0291; daily 121.4048 on 2026-10-16; 5-year range 113.4437–128.837",
+      "source": "FRED / Federal Reserve",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DTWEXBGS",
+      "tier": "S1",
+      "value_num": 119.2152,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED / Federal Reserve",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "Real broad effective exchange rate",
+      "value": "107.11",
+      "series": "BIS WS_EER real broad (64 economies)",
+      "unit": "index (2020=100)",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "September 2026 level vs 107.49 a year earlier (-0.354%); 2026 path 107.38 (Mar) to 108.21 (Jul) to 107.11",
+      "source": "BIS",
+      "value_type": "actual",
+      "source_url": "https://data.bis.org/topics/EER/BIS,WS_EER,1.0/M.R.B.US",
+      "tier": "S1",
+      "value_num": 107.11,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "BIS",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "University of Michigan 1-year inflation expectations",
+      "value": "4.0",
+      "series": "MICH",
+      "unit": "percent",
+      "as_of_date": "2026-08-31",
+      "period_end": "2026-08",
+      "geography": "United States",
+      "definition": "After May 2026 peak of 4.8%; -0.8 pp y/y",
+      "source": "FRED / University of Michigan",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/MICH",
+      "tier": "S1",
+      "value_num": 4.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED / University of Michigan",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "China central bank policy rate",
+      "value": "3",
+      "series": "BIS central bank policy rates, China",
+      "unit": "percent per year",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "China",
+      "definition": "Unchanged from September 2025; 5-year range 3% (2025-05) to 3.85% (2021-09)",
+      "source": "BIS",
+      "value_type": "actual",
+      "source_url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.CN",
+      "tier": "S1",
+      "value_num": 3.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "BIS",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "Global copper price",
+      "value": "13542.8209",
+      "series": "FRED PCOPPUSDM",
+      "unit": "USD per metric ton",
+      "as_of_date": "2026-07-31",
+      "period_end": "2026-07",
+      "geography": "Global",
+      "definition": "July 2026 monthly average, near 5-year high of 13,552.0409 (June 2026)",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/PCOPPUSDM",
+      "tier": "S1",
+      "value_num": 13542.8209,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "FRED",
+      "staleness_days": 83,
+      "is_stale": false
+    },
+    {
+      "metric": "Central bank gold purchases full years",
+      "value": "1,082 (2022); 1,037 (2023)",
+      "series": "WGC survey pages",
+      "unit": "tonnes",
+      "as_of_date": "2026-10-22",
+      "period_end": "2023",
+      "geography": "Global",
+      "definition": "Record net purchase years 2022 and 2023; 2022–24 pace above 1,000t/yr",
+      "source": "World Gold Council",
+      "value_type": "actual",
+      "source_url": "https://www.gold.org/goldhub/research/central-banks-survey",
+      "tier": "S3",
+      "value_num": 1082.0,
+      "year": 2023,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "World Gold Council",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Goldman Sachs central bank buying forecast 2026",
+      "value": "50",
+      "series": "Goldman Sachs Research via social-media relay",
+      "unit": "tonnes per month (~600t/yr)",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026",
+      "geography": "Global",
+      "definition": "Expected monthly official buying in 2026, below 2022–24 pace above 1,000t/yr",
+      "source": "Goldman Sachs Research",
+      "value_type": "forecast",
+      "source_url": "https://www.instagram.com/p/DdOdMHJsuwF/",
+      "tier": "S3",
+      "value_num": 50.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Goldman Sachs Research",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "PBoC reported gold reserves",
+      "value": "2,346.43",
+      "series": "Reported PBoC reserve data",
+      "unit": "tonnes",
+      "as_of_date": "2026-06-30",
+      "period_end": "2026-Q2",
+      "geography": "China",
+      "definition": "End-Q2 2026, up from 2,313.46t at end-Q1; ~10t added in May, 19th consecutive month",
+      "source": "PBoC",
+      "value_type": "actual",
+      "source_url": "https://tradingeconomics.com/china/gold-reserves",
+      "tier": "S3",
+      "value_num": 2346.43,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "PBoC",
+      "staleness_days": 114,
+      "is_stale": false
+    },
+    {
+      "metric": "Poland gold reserves and YTD buying",
+      "value": "648",
+      "series": "WGC monthly central-bank commentary",
+      "unit": "tonnes (reserves); +98t YTD",
+      "as_of_date": "2026-08-31",
+      "period_end": "2026-08",
+      "geography": "Poland",
+      "definition": "Holdings after 98t YTD through August; 700t target 'within reach in the coming months'; 51t in Q2, 8t in Aug",
+      "source": "World Gold Council / NBP",
+      "value_type": "actual",
+      "source_url": "https://www.kitco.com/news/article/2026-10-06/central-banks-add-39-net-tonnes-gold-august-china-uzbekistan-and-poland",
+      "tier": "S3",
+      "value_num": 648.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Poland",
+      "analyst": "World Gold Council / NBP",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "Russia gold reserves and 2026 sales",
+      "value": "2,271",
+      "series": "WGC commentary",
+      "unit": "tonnes (reserves); -56t YTD",
+      "as_of_date": "2026-08-31",
+      "period_end": "2026-08",
+      "geography": "Russia",
+      "definition": "Holdings 2,271t; net seller 56t YTD; -6t in August, liquidation amid sanctions",
+      "source": "World Gold Council",
+      "value_type": "actual",
+      "source_url": "https://www.kitco.com/news/article/2026-10-06/central-banks-add-39-net-tonnes-gold-august-china-uzbekistan-and-poland",
+      "tier": "S3",
+      "value_num": 2271.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Russia",
+      "analyst": "World Gold Council",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "Turkey 2026 net gold sales",
+      "value": "-82",
+      "series": "WGC commentary",
+      "unit": "tonnes YTD",
+      "as_of_date": "2026-08-31",
+      "period_end": "2026-08",
+      "geography": "Turkey",
+      "definition": "Net seller 82t YTD despite +3t in August; sold/lent ~$20bn in five weeks after Iran war outbreak",
+      "source": "World Gold Council / CBRT",
+      "value_type": "actual",
+      "source_url": "https://www.kitco.com/news/article/2026-10-06/central-banks-add-39-net-tonnes-gold-august-china-uzbekistan-and-poland",
+      "tier": "S3",
+      "value_num": -82.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Turkey",
+      "analyst": "World Gold Council / CBRT",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "Uzbekistan gold reserves",
+      "value": "439",
+      "series": "WGC commentary",
+      "unit": "tonnes; ~+50t YTD",
+      "as_of_date": "2026-08-31",
+      "period_end": "2026-08",
+      "geography": "Uzbekistan",
+      "definition": "Reserves 439t at 90% of total reserves; ~50t YTD buying; saturation limits scope",
+      "source": "World Gold Council",
+      "value_type": "actual",
+      "source_url": "https://www.kitco.com/news/article/2026-10-06/central-banks-add-39-net-tonnes-gold-august-china-uzbekistan-and-poland",
+      "tier": "S3",
+      "value_num": 439.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Uzbekistan",
+      "analyst": "World Gold Council",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "Czech National Bank gold reserves",
+      "value": "86",
+      "series": "WGC commentary",
+      "unit": "tonnes; +14t YTD",
+      "as_of_date": "2026-08-31",
+      "period_end": "2026-08",
+      "geography": "Czech Republic",
+      "definition": "42-month buying streak; 7% of reserves; +2t in August",
+      "source": "World Gold Council / CNB",
+      "value_type": "actual",
+      "source_url": "https://www.kitco.com/news/article/2026-10-06/central-banks-add-39-net-tonnes-gold-august-china-uzbekistan-and-poland",
+      "tier": "S3",
+      "value_num": 86.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Czech Republic",
+      "analyst": "World Gold Council / CNB",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "August 2026 central bank net purchases",
+      "value": "39",
+      "series": "WGC commentary",
+      "unit": "tonnes",
+      "as_of_date": "2026-08-31",
+      "period_end": "2026-08",
+      "geography": "Global",
+      "definition": "Net purchases WGC calls 'on pace'; China, Uzbekistan, Poland led; Russia and Turkey only sellers in May (41t month)",
+      "source": "World Gold Council",
+      "value_type": "actual",
+      "source_url": "https://www.kitco.com/news/article/2026-10-06/central-banks-add-39-net-tonnes-gold-august-china-uzbekistan-and-poland",
+      "tier": "S3",
+      "value_num": 39.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "World Gold Council",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "GLD ETF holdings",
+      "value": "1,053.91",
+      "series": "SPDR Gold Shares",
+      "unit": "tonnes",
+      "as_of_date": "2026-10-15",
+      "period_end": "2026-10-15",
+      "geography": "Global",
+      "definition": "Holdings as of 15 October 2026, down 0.29t from previous reporting date",
+      "source": "SPDR Gold Shares",
+      "value_type": "actual",
+      "source_url": "https://www.webull.com/news/15755126785467392",
+      "tier": "S3",
+      "value_num": 1053.91,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "SPDR Gold Shares",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "metric": "Managed-money net long gold futures",
+      "value": "107,089",
+      "series": "CFTC Commitments of Traders",
+      "unit": "contracts",
+      "as_of_date": "2026-10-13",
+      "period_end": "2026-10-13",
+      "geography": "US",
+      "definition": "Net long, down 3,898 w/w; futures-only net position 111,079 contracts",
+      "source": "CFTC / COT aggregators",
+      "value_type": "actual",
+      "source_url": "https://metalcharts.org/cot/gold",
+      "tier": "S3",
+      "value_num": 107089.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "CFTC / COT aggregators",
+      "staleness_days": 9,
+      "is_stale": false
+    },
+    {
+      "metric": "COMEX open interest Dec 2026 vs Dec 2027",
+      "value": "315,599 vs 1,166",
+      "series": "COMEX",
+      "unit": "contracts",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "US",
+      "definition": "Dec 2026 OI 315,599 (WSJ reported GCZ27 OI of 1,113 in early October); far-dated liquidity thin",
+      "source": "COMEX / WSJ",
+      "value_type": "actual",
+      "source_url": "https://www.wsj.com/market-data/quotes/futures/GCZ26/contracts",
+      "tier": "S2",
+      "value_num": 315599.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "COMEX / WSJ",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Gold/silver ratio",
+      "value": "71.85–72.34",
+      "series": "Ratio charts",
+      "unit": "ratio",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-10-19/20",
+      "geography": "Global",
+      "definition": "On 19–20 October 2026; alternative computation 4,092.50/55.710 ≈ 73.5 on 22 Oct; silver $58.795 end-June vs $118.450 peak",
+      "source": "Ratio charts",
+      "value_type": "actual",
+      "source_url": "https://www.jmbullion.com/charts/gold-silver-ratio/",
+      "tier": "S3",
+      "value_num": 72.095,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Ratio charts",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "metric": "Q2 2026 recycling supply",
+      "value": "326.1",
+      "series": "WGC Gold Demand Trends",
+      "unit": "tonnes",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-Q2",
+      "geography": "Global",
+      "definition": "-6% y/y as prices weakened; Q1 2026 recycling rose 5% y/y; net producer de-hedging -22.8t; total supply 1,268.9t flat y/y",
+      "source": "World Gold Council",
+      "value_type": "actual",
+      "source_url": "https://www.gold.org/goldhub/research/gold-demand-trends/gold-demand-trends-q2-2026/supply",
+      "tier": "S3",
+      "value_num": 326.1,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "World Gold Council",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Recession probability (J.P. Morgan)",
+      "value": "40",
+      "series": "J.P. Morgan Research",
+      "unit": "percent (approx.)",
+      "as_of_date": "2026-10-22",
+      "period_end": "mid-2026 vintage",
+      "geography": "United States / global",
+      "definition": "Bruce Kasman team probability of US and global recession, cited mid-2026",
+      "source": "J.P. Morgan Research",
+      "value_type": "estimate",
+      "source_url": "https://www.jpmorgan.com/insights/global-research/economy/recession-probability",
+      "tier": "S3",
+      "value_num": 40.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States / global",
+      "analyst": "J.P. Morgan Research",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Recession probability (Polymarket)",
+      "value": "65",
+      "series": "Polymarket contract",
+      "unit": "percent (approx.)",
+      "as_of_date": "2026-10-22",
+      "period_end": "end-2027",
+      "geography": "United States",
+      "definition": "'US recession by end of 2027' contract, cumulative resolution wording",
+      "source": "Polymarket",
+      "value_type": "estimate",
+      "source_url": "https://polymarket.com/event/us-recession-by-end-of-2027-20260807185409760",
+      "tier": "S3",
+      "value_num": 65.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Polymarket",
+      "metric_family": "cumulative deployment",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "WGC central bank survey expectations",
+      "value": "89",
+      "series": "WGC 2026 survey",
+      "unit": "percent",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026",
+      "geography": "Global",
+      "definition": "89% of central bank respondents expecting global gold reserves to rise over next 12 months; record 45% expecting to add to own holdings",
+      "source": "World Gold Council",
+      "value_type": "estimate",
+      "source_url": "https://www.gold.org/goldhub/research/gold-demand-trends/gold-demand-trends-q2-2026/central-banks",
+      "tier": "S3",
+      "value_num": 89.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "World Gold Council",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "LBMA analyst survey year-end 2026",
+      "value": "4,500",
+      "series": "LBMA survey of 16 analysts",
+      "unit": "USD per troy ounce (approx.)",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-12-31",
+      "geography": "Global",
+      "definition": "LBMA survey of 16 professional analysts pointing to roughly $4,500 at year-end",
+      "source": "LBMA",
+      "value_type": "forecast",
+      "source_url": "https://www.lbma.org.uk/prices-and-data/lbma-precious-metal-prices",
+      "tier": "S3",
+      "value_num": 4500.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "LBMA",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Five-year compound gold growth",
+      "value": "18.3",
+      "series": "Macrotrends",
+      "unit": "percent per year",
+      "as_of_date": "2026-10-21",
+      "period_end": "5 years to 2026-10-21",
+      "geography": "Global",
+      "definition": "Five-year compound annual growth rate",
+      "source": "Macrotrends",
+      "value_type": "actual",
+      "source_url": "https://www.macrotrends.net/1333/historical-gold-prices-100-year-chart",
+      "tier": "S3",
+      "value_num": 18.3,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Macrotrends",
+      "metric_family": "growth rate",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "RBI gold stored abroad share",
+      "value": "22",
+      "series": "FT-quoted WGC report relayed in LBMA Q2 2026 report",
+      "unit": "percent",
+      "as_of_date": "2026-03-31",
+      "period_end": "2026-03",
+      "geography": "India",
+      "definition": "Share of RBI gold stored abroad, down from 55% three years earlier",
+      "source": "WGC / FT via LBMA",
+      "value_type": "actual",
+      "source_url": "https://www.lbma.org.uk/articles/lbma-precious-metals-market-report-q2-2026",
+      "tier": "S3",
+      "value_num": 22.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "India",
+      "analyst": "WGC / FT via LBMA",
+      "metric_family": "market share",
+      "staleness_days": 205,
+      "is_stale": false
+    },
+    {
+      "metric": "Gold Dec-26 ATM implied volatility",
+      "value": "19.32",
+      "series": "Barchart Dec'26 ATM IV",
+      "unit": "percent",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "US",
+      "definition": "Proxy for horizon vol; risk-neutral P10/P50/P90 ≈ 3,540/4,360/5,370; CME CVOL variant ≈ 11.7% gives ≈ 3,730/4,360/5,110",
+      "source": "Barchart",
+      "value_type": "estimate",
+      "source_url": "https://www.barchart.com/futures/quotes/GC*0/volatility-greeks",
+      "tier": "S3",
+      "value_num": 19.32,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Barchart",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "DXY level",
+      "value": "101.94",
+      "series": "ICE DXY via MarketWatch",
+      "unit": "index",
+      "as_of_date": "2026-10-22",
+      "period_end": "undated, approx. autumn 2026",
+      "geography": "US",
+      "definition": "Undated page quote, approximate autumn-2026 level",
+      "source": "MarketWatch",
+      "value_type": "estimate",
+      "source_url": "https://www.marketwatch.com/investing/index/dxy?eafs_enabled=false",
+      "tier": "S3",
+      "value_num": 101.94,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "MarketWatch",
+      "staleness_days": 0,
+      "is_stale": false
+    }
+  ],
+  "contested_claims": [
+    {
+      "claim": "End-2025 gold price level",
+      "positions": [
+        {
+          "stance": "$4,083.55 spot on 31 December 2025 (goldprice.org)",
+          "sources": [
+            "https://goldprice.org/gold-price-today/2025-12-31"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "~$4,320 implied end-2025 close derived from Macrotrends' $4,132 on 21 Oct 2026 and −4.4% YTD",
+          "sources": [
+            "https://www.macrotrends.net/1333/historical-gold-prices-100-year-chart"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Likely a spot close versus p.m. auction print and differing composite methodologies; the exact LBMA p.m. print for 31 December 2025 is unconfirmed"
+    },
+    {
+      "claim": "Global gold ETF holdings in September 2026",
+      "positions": [
+        {
+          "stance": "4,256t (+67t inflows), treated as authoritative",
+          "sources": [
+            "https://www.gold.org/goldhub/data/global-gold-backed-etf-holdings-and-flows"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "4,189t (+121t inflows), an apparent vintage difference",
+          "sources": [
+            "https://www.facebook.com/worldgoldcouncil/posts/the-latest-data-on-gold-backed-etfs-is-in-and-uk-listed-funds-recorded-their-str/1530798705748519/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different data vintages or revision timing in World Gold Council monthly reporting"
+    },
+    {
+      "claim": "Fed policy path through 2027",
+      "positions": [
+        {
+          "stance": "September 2026 SEP median holds funds-rate midpoint at 4.25% through end-2028, no cuts until 2028",
+          "sources": [
+            "https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "Market pricing puts ~77bp of cumulative tightening through October 2027, with a December 2026 hike priced at 73.3%",
+          "sources": [
+            "https://centralbank.watch/federal-reserve/",
+            "https://www.investing.com/central-banks/fed-rate-monitor"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "A stale cached table shows cuts, contradicting current pricing",
+          "sources": [
+            "https://rateprobability.com/fed"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "SEP is an official projection of 18 participants; market pricing reflects real-time probabilities; the stale cache reflects outdated data and is discounted"
+    },
+    {
+      "claim": "Goldman Sachs gold target timeline",
+      "positions": [
+        {
+          "stance": "Cut end-2026 target from $5,400 to $4,900 on 19 June 2026 after scrapping 2026 Fed cuts",
+          "sources": [
+            "https://goldsilver.com/industry-news/goldsilver-news/goldman-sachs-gold-target-cut-jpmorgan-divergence/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "January 2026 raise to $5,400; 2027 target $5,400–5,600",
+          "sources": [
+            "https://www.bullionstar.com/blogs/gold-silver-101/gold-price-forecast-2027/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Secondary sources disagree on the vintage and sequencing of Goldman's target changes, leaving the exact timeline unconfirmed"
+    },
+    {
+      "claim": "US recession probability by end-2027",
+      "positions": [
+        {
+          "stance": "Roughly 40% (J.P. Morgan Research, mid-2026 vintage)",
+          "sources": [
+            "https://www.jpmorgan.com/insights/global-research/economy/recession-probability"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Around 65% market-implied (Polymarket contract)",
+          "sources": [
+            "https://polymarket.com/event/us-recession-by-end-of-2027-20260807185409760"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Not directly comparable: the Polymarket contract resolves cumulatively through end-2027, overstating any 12-month hazard rate; JPM is a forecaster's point estimate"
+    },
+    {
+      "claim": "2025 calendar-year gold return magnitude",
+      "positions": [
+        {
+          "stance": "Roughly +65%, derived from $2,610.85 end-2024 to ~$4,320 implied end-2025",
+          "sources": [
+            "https://www.macrotrends.net/1333/historical-gold-prices-100-year-chart",
+            "https://www.lbma.org.uk/articles/lbma-precious-metals-market-report-q4-2024"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Gold exceeded $4,000 for the first time in 2025, gaining over 10% in Q4 alone; exact end-year close unconfirmed",
+          "sources": [
+            "https://www.lbma.org.uk/articles/lbma-precious-metals-market-report-q4-and-full-year-2025"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Derivation depends on the disputed end-2025 anchor; LBMA's own Q4/FY 2025 report gives a qualitative but not exact year-end print"
+    },
+    {
+      "claim": "Central bank buying pace in 2026",
+      "positions": [
+        {
+          "stance": "Net 345t in H1 2026, the weakest first half since 2022, after record 289t Q2 rebound from 57t Q1",
+          "sources": [
+            "https://www.gold.org/goldhub/research/gold-demand-trends/gold-demand-trends-q2-2026/central-banks"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Roughly 50t per month (~600t/yr) expected in 2026, below the >1,000t/yr pace of 2022–24",
+          "sources": [
+            "https://www.instagram.com/p/DdOdMHJsuwF/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "One is a realized WGC flow count, the other a Goldman forecast relayed via social media; also definitional (reported vs expected, quarterly volatility)"
+    }
+  ],
+  "forecast_inputs": {
+    "scenarios": [
+      {
+        "name": "Base: grind higher",
+        "probability": 0.45,
+        "narrative": "Fed cuts gradually, real yields drift lower, central banks keep buying 500-800t/year and gold ends 2027 between $4,300 and $5,200."
+      },
+      {
+        "name": "Bull: policy and crisis premium",
+        "probability": 0.25,
+        "narrative": "A recession, geopolitical escalation or debt-crisis shock drives aggressive Fed easing and safe-haven flows, pushing gold above $5,500 by end-2027."
+      },
+      {
+        "name": "Bear: real-yield squeeze",
+        "probability": 0.2,
+        "narrative": "Sticky inflation forces the Fed to hold or hike, real yields and the dollar rise, central bank buying slows and gold ends 2027 near or below $3,800."
+      },
+      {
+        "name": "Range-bound consolidation",
+        "probability": 0.1,
+        "narrative": "Positioning exhaustion and stable real rates cap gold between $3,800 and $4,500 through 2027 after the 2024-2026 surge."
+      }
+    ],
+    "base_rates": [
+      {
+        "reference_class": "Negative calendar-year gold returns, 1996–2025, counted by year",
+        "outcome_frequency": "roughly 7 of the 30 years 1996–2025",
+        "basis": "LBMA/Macrotrends year-end closes, commonly cited instances 1997, 2000, 2014, 2015, 2018, 2021, 2022 — an indicative count [S2]"
+      },
+      {
+        "reference_class": "Average calendar-year gold return, 2000–2025",
+        "outcome_frequency": "approximately 10.9%",
+        "basis": "Visual Capitalist chart summary relayed via a secondary aggregator, cumulative gain roughly +1,075% [S34]"
+      },
+      {
+        "reference_class": "12-month change after a calendar gain above 40% since 1996",
+        "outcome_frequency": "unresolved, n≈1 (2025); no fully resolved follow-through, Laplace-adjusted rate uninformative",
+        "basis": "Macrotrends/LBMA year-end closes [S2][S20]"
+      },
+      {
+        "reference_class": "Months with 10-year TIPS yield above 2.5% (hostile real-yield regime), 2006-11 to 2026-10",
+        "outcome_frequency": "~2 of 240 (engine count)",
+        "basis": "FRED DFII10 series [S5]"
+      },
+      {
+        "reference_class": "Central bank annual net gold purchases, record years",
+        "outcome_frequency": "1,082t (2022) and 1,037t (2023)",
+        "basis": "WGC survey pages [S44]"
+      }
+    ],
+    "drivers": [
+      {
+        "variable": "10-year TIPS real yield",
+        "direction": "higher real yields push gold down; falling real yields push gold up",
+        "why_it_matters": "2.638% in September 2026 is at the top of its five-year range, up 0.889 pp y/y, and is the cleanest discriminator between Base and Bear [S5]"
+      },
+      {
+        "variable": "Federal Reserve policy path (funds rate, cuts vs hikes)",
+        "direction": "easing supports gold; holding or hiking suppresses it",
+        "why_it_matters": "each 50bp of Fed easing adds roughly $120/oz of support per Goldman Sachs Research [S11]; ~77bp of cumulative tightening priced through 27 Oct 2027 [S16]"
+      },
+      {
+        "variable": "Central bank net gold purchases",
+        "direction": "more official buying supports gold",
+        "why_it_matters": "record 289t in Q2 2026 after 57t in Q1; WGC expects demand above its long-term average [S9]"
+      },
+      {
+        "variable": "US inflation (CPI) vs anchored breakevens",
+        "direction": "sticky CPI feeds the hawkish Fed response (bearish) while a CPI rollover with falling real yields supports gold",
+        "why_it_matters": "CPI 3.717% y/y in September 2026 vs 10-year breakeven of 2.351% — the wedge either feeds the hedge bid or removes it [S6][S7]"
+      },
+      {
+        "variable": "Trade-weighted US dollar (DTWEXBGS / real broad EER)",
+        "direction": "a stronger dollar pressures gold; a softer dollar supports it",
+        "why_it_matters": "nominal broad index 119.2152 (Sep 2026), -0.678% y/y — real rates, not the dollar, carried the 5.2% gold decline [S29][S30][S2]"
+      },
+      {
+        "variable": "ETF investment flows",
+        "direction": "inflows support gold; sustained outflows undercut it",
+        "why_it_matters": "record 4,256t global holdings absorbed ~US$10bn of inflows into a falling price in September 2026 [S8]"
+      },
+      {
+        "variable": "COMEX managed-money net length / far-dated positioning",
+        "direction": "falling length supports consolidation; rising length supports upside",
+        "why_it_matters": "net long +107,089 contracts (13 Oct 2026), down 3,898 w/w, with far-dated Dec 2027 open interest of only 1,166 contracts [S27][S28][S51]"
+      },
+      {
+        "variable": "Recycling supply",
+        "direction": "recycling surges into price spikes, partially self-correcting rallies",
+        "why_it_matters": "recycling fell 6% y/y to 326.1t in Q2 2026 as prices weakened [S10]"
+      }
+    ],
+    "risks": [
+      {
+        "event": "US and global recession",
+        "probability": "roughly 40%",
+        "per": "mid-2026 vintage",
+        "source": "What Is the Probability of a Recession? | J.P. Morgan Research [S47]",
+        "source_url": "https://www.jpmorgan.com/insights/global-research/economy/recession-probability",
+        "tier": "S3",
+        "effects": [
+          {
+            "metric": "Gold spot price",
+            "change": "",
+            "direction": "up"
+          }
+        ],
+        "affects": [
+          "Federal Reserve (FOMC)",
+          "global economy"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "Fed holds at 3.75–4.00% at the 28 October 2026 FOMC",
+        "probability": "83.9%",
+        "per": "28 October 2026 meeting",
+        "source": "Fed Rate Monitor Tool - Investing.com [S14]",
+        "source_url": "https://www.investing.com/central-banks/fed-rate-monitor",
+        "tier": "S3",
+        "effects": [
+          {
+            "metric": "10-year TIPS real yield",
+            "change": "",
+            "direction": "up"
+          }
+        ],
+        "affects": [
+          "Federal Reserve (FOMC)"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "Fed hikes to 4.00–4.25% by the 9 December 2026 FOMC",
+        "probability": "73.3%",
+        "per": "December 2026",
+        "source": "Fed Rate Monitor Tool - Investing.com [S14]",
+        "source_url": "https://www.investing.com/central-banks/fed-rate-monitor",
+        "tier": "S3",
+        "effects": [
+          {
+            "metric": "Gold spot price",
+            "change": "",
+            "direction": "down"
+          }
+        ],
+        "affects": [
+          "Federal Reserve (FOMC)"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "Fed hikes to 4.00–4.25% at the 28 October 2026 FOMC",
+        "probability": "16.1%",
+        "per": "28 October 2026 meeting",
+        "source": "Fed Rate Monitor Tool - Investing.com [S14]",
+        "source_url": "https://www.investing.com/central-banks/fed-rate-monitor",
+        "tier": "S3",
+        "effects": [
+          {
+            "metric": "Gold spot price",
+            "change": "",
+            "direction": "down"
+          }
+        ],
+        "affects": [
+          "Federal Reserve (FOMC)"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "Fed hikes to 4.00–4.25% at 28 October 2026 FOMC (FedWatch hold odds variant)",
+        "probability": "89.5% for a hold",
+        "per": "28 October 2026 meeting",
+        "source": "FedWatch - CME Group [S13]",
+        "source_url": "https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html",
+        "tier": "S3",
+        "effects": [],
+        "affects": [
+          "Federal Reserve (FOMC)"
+        ],
+        "recurring": false
+      }
+    ],
+    "indicators": [
+      {
+        "indicator": "Central bank policy rates - United States - Monthly - End of period (bis:WS_CBPOL/M.US)",
+        "series": "bis:WS_CBPOL/M.US",
+        "latest_value": 3.875,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Per cent per year",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S4"
+      },
+      {
+        "indicator": "Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis, Inflation-Indexed (fred:DFII10)",
+        "series": "fred:DFII10",
+        "latest_value": 2.638095238095238,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S5"
+      },
+      {
+        "indicator": "Consumer Price Index for All Urban Consumers: All Items in U.S. City Average (year-over-year % change) (fred:CPIAUCSL#yoy)",
+        "series": "fred:CPIAUCSL#yoy",
+        "latest_value": 3.7172508442689933,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent change from year ago",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S6"
+      },
+      {
+        "indicator": "10-Year Breakeven Inflation Rate — United States (fred:T10YIE)",
+        "series": "fred:T10YIE",
+        "latest_value": 2.3509523809523807,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S7"
+      },
+      {
+        "indicator": "Nominal Broad U.S. Dollar Index (fred:DTWEXBGS)",
+        "series": "fred:DTWEXBGS",
+        "latest_value": 119.2152238095238,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Index Jan 2006=100",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S29"
+      },
+      {
+        "indicator": "Effective exchange rates: United States - Real - Broad (64 economies) (bis:WS_EER/M.R.B.US)",
+        "series": "bis:WS_EER/M.R.B.US",
+        "latest_value": 107.11,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Index, 2020 = 100",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S30"
+      },
+      {
+        "indicator": "University of Michigan: Inflation Expectation (fred:MICH)",
+        "series": "fred:MICH",
+        "latest_value": 4.0,
+        "latest_date": "2026-08-31",
+        "latest_period": "2026-08",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-08",
+        "source_ref": "S31"
+      },
+      {
+        "indicator": "Central bank policy rates - China - Monthly - End of period (bis:WS_CBPOL/M.CN)",
+        "series": "bis:WS_CBPOL/M.CN",
+        "latest_value": 3.0,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Per cent per year",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S32"
+      },
+      {
+        "indicator": "Global price of Copper (fred:PCOPPUSDM)",
+        "series": "fred:PCOPPUSDM",
+        "latest_value": 13542.82086956522,
+        "latest_date": "2026-07-31",
+        "latest_period": "2026-07",
+        "status": "observed",
+        "units": "U.S. Dollars per Metric Ton",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-07",
+        "source_ref": "S33"
+      }
+    ]
+  }
+}

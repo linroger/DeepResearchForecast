@@ -1,0 +1,1935 @@
+{
+ "nodes": [
+  {
+   "id": "fff6728a-8697-4605-8cb0-9a44bf2c0cef",
+   "name": "SoIC",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "TSMC owns SoIC advanced packaging capacity, which together with CoWoS is a binding bottleneck in the AI supply chain between late October 2026 and 31 December 2027."
+  },
+  {
+   "id": "fde3dd42-2dc1-40a1-a08b-758045229ce6",
+   "name": "SemiAnalysis",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "SemiAnalysis reports the quad-die Rubin Ultra design was cancelled over substrate warpage and yield issues in TSMC CoWoS-L, replaced by a dual-die package carrying 192 GB of 8-Hi HBM4.\nSemiAnalysis reported that Nvidia's Rubin Ultra will ship with 192GB of HBM4 8-hi instead of the quad-die design."
+  },
+  {
+   "id": "fd7ea867-2ec1-4ad3-946d-eab3386f6de4",
+   "name": "High-NA system",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "ASML's High-NA EUV lithography equipment segment; one High-NA system was sold in Q3 2026, when ASML booked record net sales of €11.7 billion and €5.0 billion net income and stated its supply for 2027 and 2028 will not fully meet customer demand.\nIntel deployed the first EXE:5200B High-NA system in December 2025 and reportedly expanded its order to two units at roughly $370–380 million per tool, against near-zero High-NA volume through the horizon.\nOne High-NA system was sold in Q3 2026 (reported); forecast (60%) that High-NA revenue is recognized in ≥2 quarters of 2027.\nASML owns the High-NA E"
+  },
+  {
+   "id": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "name": "Unimicron",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Chairman said 20 October 2026 that lead times for over 80% of substrate-making equipment have lengthened (some to 30 months) and low-CTE glass fiber cloth, CCL and ABF could face a 20% supply shortfal\nUnimicron holds ~14% of the ABF substrate market, where lead times remain 20–28 weeks and relief from its KF expansion only fully lands mid-2028\nUnimicron's late substrate capacity timing (raised 2026 capex to NT$53.7 billion, over 80% for ABF, with new capacity landing after 2027) keeps the Packaging-only bottleneck scenario (25%) credible.\nUnimicron's chairman warned of 30-month equipment lead "
+  },
+  {
+   "id": "fbd412a7-2d20-4579-814e-7437d9fc83f1",
+   "name": "Bank of America",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Bank of America sizes the 2026 HBM market at $54.6 billion, up 58% year-on-year."
+  },
+  {
+   "id": "fabb5d05-c920-4827-afe8-1f8856032f36",
+   "name": "United States semiconductor and electronic component manufacturing capacity utilization (NAICS 3344)",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "Utilization was 76.51% in September 2026, up from 73.723% in September 2025 after a 71.096% trough in March 2026, still below the 92.195% peak of February 2022. Matching industrial production index (2017=100) reached 198.6335 versus 165.667 a year earlier. The baseline confirms tightening without broad scarcity.\nSEMI's WWSEMS billings of US$40.53 billion in Q2 2026 (+23% YoY, +11% QoQ) reflect record equipment demand amid rising NAICS 3344 utilization (76.51% in Sep 2026 vs 73.723% Sep 2025).\nFRED publishes official statistics for US semiconductor and electronic component manufacturing (NAICS "
+  },
+  {
+   "id": "f69c1b7d-94b8-41ae-b180-9b5606d52efb",
+   "name": "TSMC N2 process node",
+   "labels": [
+    "FoundryOperator"
+   ],
+   "summary": "TSMC's N2 process node has estimated lead times of 78–156 weeks, with reported bookings into 2028 unconfirmed (per Silicon Analysts)\nSilicon Analysts estimates TSMC's N2 lead times at 78–156 weeks, with reported bookings into 2028 unconfirmed\nTSMC reportedly targets 2nm capacity of 90,000 wafers per month at end-2026, rising to 110,000 wpm by mid-2027 (Economic Daily News via TrendForce, September 14, 2026).\nTSMC controls N2 capacity, and under AI-led broad tightness (40%) N2/CoWoS coupling keeps leading-edge allocation binding; its 2nm ramp (with three new N3 fabs) could clear gaps by late 20"
+  },
+  {
+   "id": "e57d92e0-bc56-4dc4-9520-02331372a7cd",
+   "name": "AI-led broad tightness",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "MOFCOM's pause of the October 2025 rare-earth controls lapsing 10 November 2026 is a dated trigger that could shift the 2027 chain from AI-led broad tightness (40%) toward oversupply via rare-earth export reinstatement; rare-earth exports were down 9.6% YoY at 43,711 tonnes in January–September 2026.\nThe BIS Affiliates Rule suspension ending 9 November 2026 absent a Federal Register notice is one of two converging clocks whose joint lapse is a dated trigger away from the AI-led broad tightness scenario."
+  },
+  {
+   "id": "e1bea187-3ed2-4f81-a8bd-5d1f122d1718",
+   "name": "CoWoS-L",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "The quad-die Rubin Ultra design was reportedly cancelled over substrate warpage and yield issues in TSMC CoWoS-L packaging.\nTSMC operates CoWoS-L advanced packaging; 2026 estimated industry CoWoS capacity is 120,000–140,000 wafers per month at TSMC plus 50,000–60,000 wpm from OSAT partners.\nNVIDIA is estimated to hold ~60% of 2026 CoWoS capacity (~595,000 wafers), with NVIDIA, Broadcom and AMD together above 85%.\nBroadcom, together with NVIDIA and AMD, holds above 85% of 2026 CoWoS capacity.\nAMD, together with NVIDIA and Broadcom, holds above 85% of 2026 CoWoS capacity.\nTrendForce estimates th"
+  },
+  {
+   "id": "e17b27cd-4e44-48e7-9bc5-7dd2ce930dba",
+   "name": "OSAT",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "OSAT (outsourced assembly and test) contributes an estimated 50,000–60,000 wafers per month of advanced packaging capacity alongside TSMC's 120,000–140,000 wpm in 2026, approaching ~200,000 wpm industry-wide. OSAT relief is dated mostly for 2027–28 (e.g., Amkor raised its Arizona packaging/test campus to ~US$12 billion). Advanced packaging is the leading bottleneck candidate: CoWoS-S/L lead times of 52–78 weeks fully booked, supply-demand gap ~20% at mid-2026 narrowing to ~10% by end-2026, with a Packaging-only bottleneck scenario weighted at 25% where packaging and substrates remain the singl"
+  },
+  {
+   "id": "dcf909c6-2535-4e3f-8734-6bbfc2632e37",
+   "name": "GlobalFoundries",
+   "labels": [
+    "FoundryOperator"
+   ],
+   "summary": "SMIC competes with GlobalFoundries in mature nodes, with analysts assuming 5–10% GlobalFoundries price hikes in H2 2026 amid 5–20% SMIC increases planned for 2026"
+  },
+  {
+   "id": "db34d8fd-0d97-4c4a-bcfe-e2b0de86a4dc",
+   "name": "Rubin",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "NVIDIA GPU package shipping with up to 288 GB of HBM4 per GPU in 12-Hi stacks in 2026. Its 2027 successor package is contested: a quad-die, 1 TB-class HBM4e roadmap versus a reported dual-die replacement carrying 192 GB — a roughly fivefold gap in per-package HBM bits.\nNVIDIA's Rubin GPU, shipping in H2 2026 per its July 2026 developer blog, integrates up to 288 GB of HBM4 per GPU in 12-Hi stacks at 22 TB/s peak bandwidth, with 336 billion transistors on two reticle-limited compute dies unified by NV-HBI.\nRubin ships with up to 288 GB of HBM4 per GPU in 12-Hi stacks in H2 2026.\nTSMC has guided"
+  },
+  {
+   "id": "d96ab877-8707-4426-8a14-c5a553a65885",
+   "name": "SEMI",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Semiconductor equipment industry association whose equipment billings data serves as a leading indicator for 2027 supply-chain tightness. SEMI-reported global equipment billings hit a record US$40.53 billion in Q2 2026, up 23% year-over-year.\nSEMI forecasts 11.8% silicon wafer shipment growth in 2026 with record highs through 2029, supporting GlobalWafers' projected >90% 300mm utilization from 2025 to 2027.\nA report sourced via SEMI indicates TSMC plans to double CoWoS capacity by 2028 amid AI chip demand."
+  },
+  {
+   "id": "d6030bab-c352-4447-8068-4905a6f4d1ac",
+   "name": "Shin-Etsu Chemical",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Last dated capacity move is a ~JPY 30 billion photoresist investment (Naoetsu, Joetsu, Douliu) dating from around 2020; current EUV resist capacity unknown in the evidence."
+  },
+  {
+   "id": "d4cec09e-6466-46ea-bf25-416a6d8feb26",
+   "name": "Broadcom",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "With NVIDIA and AMD, holds an estimated >85% of 2026 CoWoS capacity; custom-ASIC AI HBM demand projected by Goldman Sachs to grow 82% to one-third of total HBM demand.\nBroadcom, together with NVIDIA and AMD, holds above 85% of 2026 CoWoS capacity."
+  },
+  {
+   "id": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "name": "CoWoS-S",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "TSMC owns CoWoS-S advanced packaging capacity, reported fully booked with 52–78-week lead times, with TSMC monthly CoWoS capacity estimated at 120,000–140,000 wafers per month in 2026"
+  },
+  {
+   "id": "cef0f251-a7b0-4c02-9c5d-0845d4d1013b",
+   "name": "300mm wafers",
+   "labels": [
+    "MaterialSubstrateSupplier"
+   ],
+   "summary": "300mm wafer supply is a second-order materials constraint, ranking behind substrates among pre-end-2027 binding risks; supply stays concentrated. GlobalWafers projects >90% 300mm utilization from 2025 to 2027; SUMCO reports record 300mm shipments; SEMI forecasts 11.8% wafer-shipment growth in 2026. Relief is announced but dated, with the constraint propagating through tool supply rather than cleanroom space.\nSUMCO owns 300mm wafer capacity, a segment with 40% probability of episodic tightness into 2029 affecting price rather than allocation\nGlobalWafers owns 300mm wafer capacity, a segment wit"
+  },
+  {
+   "id": "cd3a3aa6-111c-4f8d-85f8-6b1d9fb21549",
+   "name": "Applied Materials",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "No direct shipment or lead-time figures in the evidence; exposure inferred from record SEMI billings, TSMC's tight-tool statement, and substrate-equipment lead times up to 30 months.\nApplied Materials benefits from EUV/High-NA and etch/deposition tool tightness as ASML's supply falls short through 2028"
+  },
+  {
+   "id": "cd2c8698-57bc-46e8-89ca-a7eaedf88e22",
+   "name": "Federal Register",
+   "labels": [
+    "Government"
+   ],
+   "summary": "U.S. government publication whose notices determine key policy deadlines. The BIS Affiliates Rule suspension runs only \"until November 9, 2026\" absent a Federal Register extension; as of October 2026, BIS had published no Federal Register notice matching the Treasury-announced Busan truce extension to 10 January 2027. A Federal Register extension before 9 November 2026 would be a leading indicator shifting forecast weight toward a balanced supply chain; its absence is the dated trigger for the oversupply-and-correction scenario.\nForecast (65%) that BIS publishes a Federal Register extension of"
+  },
+  {
+   "id": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "name": "NVIDIA",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Estimated to hold ~60% of 2026 CoWoS capacity (~595,000 wafers), with NVIDIA, Broadcom and AMD above 85% combined; October 2026 supply-chain agreements target 2.5x substrate capacity over three years;\nNVIDIA's AI package demand pulls hardest on HBM; Rubin ships with up to 288 GB of HBM4 per GPU in 12-Hi stacks in 2026, and 2027 roadmaps (quad-die 1 TB-class HBM4e vs dual-die 192 GB) drive the decisive HBM demand variable.\nNVIDIA buys advanced packaging (CoWoS) capacity from TSMC, whose tight CoWoS/SoIC capacity limits customers' growth.\nNVIDIA is estimated to consume roughly 60% of 2026 CoWoS "
+  },
+  {
+   "id": "c8834311-f0ff-4e29-944d-4e63a10ed0a4",
+   "name": "Silicon Analysts",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Silicon Analysts estimates TSMC's N3 utilization near 98% with 104–156-week lead times\nSilicon Analysts estimates TSMC's N2 lead times at 78–156 weeks, with reported bookings into 2028 unconfirmed\nSilicon Analysts, citing trade reports, estimates CoWoS demand roughly tripled in two years: ~370,000 wafers in 2024, ~670,000 in 2025, approaching ~1,000,000 in 2026.\nSilicon Analysts estimates TSMC's N3 at 28% of wafer revenue in 4Q25 rising to 33% in 3Q26, N3 utilization near 98% with 104–156-week lead times, and N2 lead times of 78–156 weeks — figures TSMC does not disclose."
+  },
+  {
+   "id": "c6c97683-a4df-42cd-8f63-0ac45581113f",
+   "name": "HBM4e",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "Next-generation HBM type tied to a contested 2027 NVIDIA roadmap step: a quad-die, 1 TB-class HBM4e package versus a reported dual-die replacement carrying 192 GB, a roughly fivefold gap in per-package HBM bits.\nThe commonly reported roadmap shows quad-die Rubin Ultra with 1 TB-class HBM4e in H2 2027.\nSamsung and SK Hynix's finished-memory inventory fell below 10 days of supply on September 7, 2026 amid HBM4/HBM4e allocation tightening."
+  },
+  {
+   "id": "c555f52a-80f2-47b4-a39a-681b8a3886ee",
+   "name": "GlobalWafers",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Projects >90% 300mm utilization from 2025 to 2027; holds July 2024 CHIPS preliminary terms for the first US 300mm source; reported to lift 12-inch prices in H2 2026.\nSUMCO and GlobalWafers compete in the 300mm silicon wafer segment; SUMCO shifts focus to sophistication rather than volume while GlobalWafers projects >90% 300mm utilization from 2025 to 2027 and holds July 2024 CHIPS preliminary terms for the first US 300mm source.\nSEMI forecasts 11.8% silicon wafer shipment growth in 2026 with record highs through 2029, supporting GlobalWafers' projected >90% 300mm utilization from 2025 to 2027."
+  },
+  {
+   "id": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "TSMC",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Taiwan Semiconductor Manufacturing Company. Q3 2026 revenue USD 46.7 billion, above guidance; Q4 2026 guided $52.3–54.3 billion vs $33.73 billion a year earlier; ~44% full-year USD growth expected. Q4 2026 gross margin guided down ~40bps to 66% midpoint on 2nm ramp dilution and overseas fabs. 2026–2028 capex to be \"even more significantly higher than the past three years\"; management called leading-edge demand \"extremely robust\" but \"prudent\" on 2027; flagged \"the tool supply is tight\" (corroborated by ASML's October 14, 2026 statement that 2027–28 supply \"will not fully meet the demand of our"
+  },
+  {
+   "id": "c19619fb-6207-4003-ba7a-5e7b737f7247",
+   "name": "DRAM",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "In prior DRAM commodity cycles (e.g., 2017-18), Samsung and peers cleared within roughly 18 months, but the current cycle analysis (October 2026) shows allocation regimes persisting"
+  },
+  {
+   "id": "bfdc5a82-b1c9-4c85-ae27-bd1ec66de09c",
+   "name": "CoPoS",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "TSMC's next-generation CoPoS packaging reaches pilot production only in mid-2027"
+  },
+  {
+   "id": "b012d8db-eb5b-4207-8860-508f8b00c925",
+   "name": "mainstream memory",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "Mainstream DRAM/NAND is starved by HBM wafer allocation rather than short of capacity. TrendForce forecasts 4Q26 conventional DRAM contract prices +10–15% QoQ and NAND +15–20% QoQ with the market undersupplied; 3Q26 server DRAM was forecast +13–18% QoQ, capped by LTAs. Q2 2026 DRAM revenue share: Samsung 38%, SK Hynix 25%, Micron 24%, CXMT 10%. Samsung and SK Hynix finished-memory inventory fell below 10 days of supply on September 7, 2026. Under Oversupply and correction (15%), HBM and mainstream memory flip into oversupply by late 2027; under Balanced chain (20%), record 2026–27 capex and so"
+  },
+  {
+   "id": "af74bada-2708-4b8f-93c9-5c529b9fe1cb",
+   "name": "NXE:3800F",
+   "labels": [
+    "EquipmentSupplier"
+   ],
+   "summary": "ASML lithography system whose introduction timing is a leading indicator for equipment supply through 2027. Its introduction slipping past mid-2027 is listed as a factor that would change the outlook on tool availability, alongside ASML's October 14, 2026 statement that its supply \"as currently planned for both 2027 and 2028 will not fully meet the demand of our customers\" despite a planned 30% capacity increase. Only one High-NA system was sold in Q3 2026, with near-zero High-NA volume expected through the horizon."
+  },
+  {
+   "id": "aec28c7b-cfd0-4fa2-ae26-6a62f5146506",
+   "name": "SF2 (2nm)",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "Samsung's SF2 (2nm) yield is leak-reported from ~30% in Q1 2026 toward 50–60%, with no official figure\nSamsung's SF2 (2nm) capacity has no verified external customer qualification, with leak-based reports putting external tape-out shifted to 2029.\nSamsung Electronics Foundry owns and operates the Samsung 2nm SF2 node, with yield reported to have climbed to roughly 60% and mass production begun (leak-based, unconfirmed by Samsung)."
+  },
+  {
+   "id": "aaf81862-bef0-461f-8751-7d204e9d4de5",
+   "name": "SPIL",
+   "labels": [
+    "OSATProvider"
+   ],
+   "summary": "NVIDIA's October 2026 announcements have SPIL targeting 15x optical-engine capacity by mid-2027"
+  },
+  {
+   "id": "aa42c129-3a6b-4798-ad82-61ca56c06e97",
+   "name": "SMIC",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "On US Entity List since December 2020; 28nm wafer pricing fell from ~$2,500 to ~$1,500 in 2024 with 5-20% increases planned for 2026; mature-node capacity is the chain's slack pool with 4-17-week lead\nSMIC competes with UMC in mature nodes, where SMIC's 28nm pricing fell from ~$2,500 to ~$1,500 per wafer in 2024 (with 5–20% increases planned for 2026) and analysts assume 5–10% UMC hikes in H2 2026\nSMIC competes with GlobalFoundries in mature nodes, with analysts assuming 5–10% GlobalFoundries price hikes in H2 2026 amid 5–20% SMIC increases planned for 2026"
+  },
+  {
+   "id": "a80a318b-f6d5-4003-9dbc-f66cbd520fd1",
+   "name": "Lam Research",
+   "labels": [
+    "EquipmentSupplier"
+   ],
+   "summary": "Etch and deposition equipment supplier. No direct shipment or lead-time figures appear in the evidence; its exposure to the 2026–2027 tool shortage is inferred from record SEMI equipment billings (US$40.53 billion in Q2 2026, +23% YoY), TSMC's October 2026 statement that \"the tool supply is tight\" with 2026–2028 capex \"even more significantly higher than the past three years,\" and substrate-equipment lead times of up to 30 months.\nLam benefits from EUV/High-NA and etch/deposition tool tightness as ASML's supply falls short through 2028"
+  },
+  {
+   "id": "a2b8296b-388d-4f75-bc80-3c5a51fa4a96",
+   "name": "Exynos 2600",
+   "labels": [],
+   "summary": "The Exynos 2600, for the Samsung Galaxy S26, is the first mass-production product on Samsung Foundry's SF2 (2nm) process."
+  },
+  {
+   "id": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "ABF substrate",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "High-end FC-BGA/ABF capacity is concentrated: Ibiden ~35%, Shinko ~18%, Unimicron ~14%, AT&S ~10%, Nan Ya ~5% (2026 analysis). Substrate ASPs rose from ~$65 (2024) to ~$82 (2025), +26%; 14-layer ABF lead times persist at 20–28 weeks; large AI substrates reported at 48–56 weeks. Ajinomoto raised ABF film prices 30%. Unimicron (October 2026) warned of up to 30-month equipment lead times and a 20% material gap in 2027, with customers rushing to lock in ABF substrate LTAs. Relief is announced but dated: IBIDEN's Ono ramp begins Q1 2028 (NVIDIA multibillion-dollar reservation, 2.5x capacity target "
+  },
+  {
+   "id": "98251365-d130-40a2-9fa3-4343a87bdf7c",
+   "name": "Ajinomoto film",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "ABF substrate film material segment; Ajinomoto film prices rose 30% amid AI-driven substrate demand, with ABF substrate ASPs up from ~$65 (2024) to ~$82 (2025), +26%, and 20–28-week lead times persisting (other reports cite 48–56-week lead times on large AI substrates)."
+  },
+  {
+   "id": "9602938e-6656-4e34-ba80-7ae0930e112e",
+   "name": "Announcement No. 70",
+   "labels": [
+    "Government"
+   ],
+   "summary": "China's suspension of its October 2025 rare-earth and magnet export controls, issued 2025-11-07 and running until 2026-11-10; no extension was published as of 16 October 2026. Even during the pause, China's rare-earth exports fell 9.6% YoY to 43,711 tonnes in January–September 2026, though September 2026 rose 6.7%. A lapse (jointly with the US Affiliates Rule suspension) is the dated trigger for an 'Oversupply and correction' scenario; a mutual extension would shift weight toward a 'Balanced chain' outcome.\nMOFCOM Announcement No. 70's pause expires on 10 November 2026, and its lapse together "
+  },
+  {
+   "id": "8a3aba63-f98c-4b3a-9ce8-2f9b16513ac8",
+   "name": "Conventional DRAM contract price",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "The binding constraint in mainstream memory is allocation of DRAM wafers to HBM, with HBM wafer allocation driving conventional DRAM contract price rises (4Q26 forecast +10–15% QoQ, persisting into 1H27), cleared by price and LTA caps rather than new capacity.\nA confirmed Rubin Ultra HBM cut is a falsifier that would flip the mainstream memory price dynamic driven by HBM wafer allocation.\nSamsung owns conventional DRAM capacity (bottleneck #5, 55% probability demand exceeds capacity through at least 1H27; 4Q26 contract prices forecast +10-15% QoQ)\nSK Hynix owns conventional DRAM capacity in a "
+  },
+  {
+   "id": "82cfed31-1742-4d04-8734-886c0ce2446a",
+   "name": "UMC",
+   "labels": [
+    "FoundryOperator"
+   ],
+   "summary": "SMIC competes with UMC in mature nodes, where SMIC's 28nm pricing fell from ~$2,500 to ~$1,500 per wafer in 2024 (with 5–20% increases planned for 2026) and analysts assume 5–10% UMC hikes in H2 2026"
+  },
+  {
+   "id": "82a9bc7e-caa6-417f-a1e3-0ae875a7849c",
+   "name": "Shinko",
+   "labels": [
+    "MaterialSubstrateSupplier"
+   ],
+   "summary": "ABF substrate supplier holding ~18% share of the ABF substrate market, second to Ibiden (~35%); other major players are Unimicron (~14%), AT&S (~10%), Nan Ya (~5%).\nShinko holds ~18% of the concentrated ABF substrate capacity, per a 2026 analysis\nShinko owns constrained ABF substrate capacity with 20-28-week lead times and ASPs rising from ~$65 (2024) to ~$82 (2025)"
+  },
+  {
+   "id": "815e29ff-403f-47f0-94d2-670a8b144957",
+   "name": "Nan Ya",
+   "labels": [
+    "MaterialSubstrateSupplier"
+   ],
+   "summary": "ABF/BT substrate supplier holding ~5% share of the ABF substrate market; market leaders are Ibiden (~35%), Shinko (~18%), Unimicron (~14%), AT&S (~10%).\nNan Ya PCB holds ~5% of high-end FC-BGA/ABF capacity share (2026 analysis)"
+  },
+  {
+   "id": "7c685f5a-ad1b-4fc8-8183-6fa41b1efc60",
+   "name": "EXE:5200B",
+   "labels": [],
+   "summary": "Intel deployed the first EXE:5200B High-NA system in December 2025 and reportedly expanded its order to two units at roughly $370–380 million per tool."
+  },
+  {
+   "id": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "name": "Samsung Electronics",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Samsung Q2 2026 HBM revenue share 33% (SK Hynix 50%, Micron 18%) and DRAM share 38% (SK Hynix 25%, Micron 24%, CXMT 10%) per Counterpoint. Runs ~150,000 DRAM wafers per month through HBM lines, including ~75,000 wpm HBM4, as of September 2026; with SK Hynix processes an estimated 150,000–200,000 HBM wpm, three to four times Micron. Samsung+SK Hynix finished-memory inventory fell below 10 days of supply on September 7, 2026. TrendForce projects 4Q26 conventional DRAM contract prices +10–15% QoQ and 2027 blended HBM ASP +121% YoY. Foundry: SF2 (2nm) yield leak-reported from ~30% in Q1 2026 climb"
+  },
+  {
+   "id": "769893ac-00bc-49de-b724-2e2abe48a560",
+   "name": "TrendForce",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "TrendForce reports the CoWoS supply-demand gap narrowing from ~20% to ~10% by end-2026\nTrendForce estimates the CoWoS supply–demand gap; view shifts toward Balanced chain if TrendForce reports the gap below 5% by mid-2027."
+  },
+  {
+   "id": "7553c748-76c6-4f6a-8e08-8f2be3fb5f3f",
+   "name": "CoWoS/SoIC",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "TSMC controls the CoWoS/SoIC advanced packaging capacity that accelerator demand may outrun in 2027.\nChina's Announcement No. 70 pause of the October 2025 rare-earth controls ends 10 November 2026 with no extension published as of 16 October 2026, a lapse that could constrain supply chain segments.\nBIS's Affiliates Rule suspension runs only until November 9, 2026 absent a Federal Register extension, an export-control clock affecting the supply chain.\nTSMC is the owner of the constrained CoWoS/SoIC packaging capacity (ranked bottleneck #1, 85% probability demand exceeds capacity before end-2027"
+  },
+  {
+   "id": "6e853d88-101b-447c-a82f-b4f64578fe6b",
+   "name": "US Department of the Treasury",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Treasury announced a truce extension to 10 January 2027 on 23 September 2026, while MOFCOM's Announcement No. 70 pause of rare-earth controls lapses 10 November 2026 with no extension notice as of 16 October 2026"
+  },
+  {
+   "id": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "name": "SK Hynix",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Q2 2026 HBM revenue share 50% (Counterpoint); UBS estimates ~70% of Rubin-generation HBM4 supply; with Samsung processes an estimated 150,000-200,000 HBM wpm; finished-memory inventory below 10 days (\nSamsung competes with SK Hynix in HBM (Q2 2026 HBM revenue share: SK Hynix 50%, Samsung 33%) and DRAM (Samsung 38%, SK Hynix 25%), per Counterpoint\nSK Hynix and Micron compete in HBM (Q2 2026 revenue shares 50% and 18% respectively) and DRAM, per Counterpoint\nSK Hynix and Samsung together process an estimated 150,000–200,000 HBM wafers per month, three to four times Micron's volume.\nSamsung and S"
+  },
+  {
+   "id": "6249c2a7-a009-4931-8608-1d8f89f4d9fd",
+   "name": "Unimicron KF expansion",
+   "labels": [
+    "MaterialSubstrateSupplier"
+   ],
+   "summary": "Unimicron's KF expansion is a component of NVIDIA's October 2026 supply-chain agreements targeting 2.5x capacity over three years. The expansion adds capacity from Q2 2027 and reaches full run-rate only mid-2028. Unimicron holds roughly 14% of the ABF substrate market, where 14-layer ABF lead times remain 20–28 weeks and ASPs rose from ~$65 (2024) to ~$82 (2025).\nUnimicron's KF plant in Taiwan adds substrate capacity from Q2 2027, reaching full capacity only by mid-2028 (partial slack to end-2027)\nUnimicron's KF expansion adds capacity from Q2 2027 and completes mid-2028."
+  },
+  {
+   "id": "62263e24-b968-47ea-9d3a-d2eee625aa5f",
+   "name": "IBIDEN",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Holds ~35% of high-end FC-BGA/ABF capacity; Gama Cell 6 (~JPY 220bn first phase of ~JPY 500bn FY2026-28 plan) mass production from FY2027; Ono 3x capacity ramp begins Q1 2028 under NVIDIA multibillion\nIbiden dominates ABF substrate capacity with ~35% share, ahead of Shinko (~18%), Unimicron (~14%), AT&S (~10%) and Nan Ya (~5%)\nIBIDEN's Ono ramp begins Q1 2028, so substrate relief lands mostly after 2027.\nIBIDEN announced a capital investment plan (February 2026) for high-performance IC package substrates capacity"
+  },
+  {
+   "id": "5eb16f17-fb26-4235-a605-45ab1109a010",
+   "name": "BIS Affiliates Rule",
+   "labels": [
+    "Government"
+   ],
+   "summary": "US export control instrument whose suspension runs only \"until November 9, 2026\" absent a Federal Register extension. Its lapse, together with China's rare-earth pause ending 10 November 2026, is the dated trigger for the \"Oversupply and correction\" scenario (15% probability) in the 2027 semiconductor chain outlook.\nThe BIS Affiliates Rule suspension lapses by default on 9 November 2026 unless a Federal Register extension is published; a rollover to 10 January 2027 is expected but unpublished."
+  },
+  {
+   "id": "5df8b4a6-a92a-4b3b-8533-ecaf0925f9fa",
+   "name": "US Department of Commerce/BIS",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Affiliates Rule suspension runs 'until November 9, 2026' per Federal Register; Treasury announced a Busan truce extension to 10 January 2027 on 23 September 2026 but BIS has published no matching noti\nBIS's Affiliates Rule suspension runs only until November 9, 2026 absent a Federal Register extension, an export-control clock affecting the supply chain.\nBIS's Affiliates Rule suspension runs only until November 9, 2026 absent a Federal Register extension, an export-control clock affecting the supply chain.\nMOFCOM's October 2025 rare-earth controls (pause lapsing 10 November 2026, no extension p"
+  },
+  {
+   "id": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "name": "ASML",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Record Q3 2026 net sales EUR 11.7 billion, net income EUR 5.0 billion; plans ~30% increase in low-NA EUV/DUV immersion capacity for 2027 yet states supply for 2027 and 2028 'will not fully meet the de\nLeading-edge logic constraint propagates through tool supply rather than cleanroom space; ASML 2027 shipments materially above its planned 30% capacity increase would change the view.\nThe leading-edge capacity constraint propagates through tool supply (ASML) rather than cleanroom space, coupling N2 and CoWoS allocation.\nASML's supply shortfall (its planned 30% capacity increase deemed insufficien"
+  },
+  {
+   "id": "5bae11a5-a0d2-47b5-99ba-40e4b30e19c3",
+   "name": "Rubin Ultra package design",
+   "labels": [
+    "ChipDesigner"
+   ],
+   "summary": "Nvidia package design whose resolution is a key leading indicator for 2027 semiconductor supply-chain tightness. Current mapping [S6][S7] contrasts with a reported dual-die replacement carrying 192 GB [S8][S9] — a roughly fivefold gap in per-package HBM bits. Its resolution settles the fivefold HBM gap and the depth of the 2027 squeeze.\nA confirmed Rubin Ultra HBM cut is a falsifier that would flip the mainstream memory price dynamic driven by HBM wafer allocation.\nRubin Ultra's package configuration — whether it keeps 12-Hi stacks or switches to a reported 8-Hi design — is a key signpost dete"
+  },
+  {
+   "id": "59353e8a-5c64-4905-9efa-ab8e593ce75a",
+   "name": "Amkor",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Raised its Arizona packaging and test campus plan to roughly US$12 billion as of September 2026; NVIDIA announcements add Amkor capacity growth above 300% by end-2028.\nAmkor raised its Arizona packaging/test campus investment to ~US$12 billion\nASE+Amkor combined CoWoS-equivalent capacity is estimated at about 110,000 wafers per month by end-2028.\nAmkor benefits from spillover demand; its capacity grows +300% by end-2028."
+  },
+  {
+   "id": "54874ba2-8b32-448a-9844-077ab2d7c762",
+   "name": "Ajinomoto",
+   "labels": [
+    "MaterialSubstrateSupplier"
+   ],
+   "summary": "Ajinomoto, the dominant ABF film supplier, raised ABF film prices 30%\nAjinomoto raised ABF film prices 30% amid re-tightened ABF substrate supply with 2026 lead times of 48-56 weeks, up to 4.7 times equilibrium, after the 2023 glut\nAjinomoto benefits from ABF substrate tightness (materials gap into 2028) as the ABF film supplier"
+  },
+  {
+   "id": "4c571ce5-2003-44eb-8a0e-52b7bf0b6541",
+   "name": "KYEC US facilities",
+   "labels": [
+    "OSATProvider"
+   ],
+   "summary": "NVIDIA's October 2026 announcements back KYEC US facilities with a $1.1 billion reservation advance"
+  },
+  {
+   "id": "47428721-c6a5-435a-857f-c57e791568fa",
+   "name": "Commercial Times",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Commercial Times (via TrendForce, October 20, 2026) reports switching Rubin Ultra from 12-Hi to 8-Hi stacks is under active consideration, cutting HBM capacity per GPU by about 33% and letting the same DRAM die supply support about 50% more GPUs."
+  },
+  {
+   "id": "3fa0cdf9-1b4d-4b76-b88f-894f1988069a",
+   "name": "Packaging-only bottleneck",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "Unimicron's late substrate capacity timing (raised 2026 capex to NT$53.7 billion, over 80% for ABF, with new capacity landing after 2027) keeps the Packaging-only bottleneck scenario (25%) credible."
+  },
+  {
+   "id": "3f8604fb-55fe-45d7-8e03-fbfa497ea803",
+   "name": "IBIDEN Gama Cell 6",
+   "labels": [
+    "MaterialSubstrateSupplier"
+   ],
+   "summary": "IBIDEN Gama Cell 6, a ~¥220bn first phase of a ~¥500bn FY2026-28 plan, begins mass production from FY2027, with slack to end-2027 qualification-dependent"
+  },
+  {
+   "id": "3ddec2d5-18fc-4b1d-836d-c0d5fae428cc",
+   "name": "TSMC N3 process node",
+   "labels": [
+    "FoundryOperator"
+   ],
+   "summary": "TSMC's N3 process node rose to 33% of wafer revenue in 3Q26 (from 28% in 4Q25), with Silicon Analysts estimating N3 utilization near 98% and 104–156-week lead times\nSilicon Analysts estimates TSMC's N3 utilization near 98% with 104–156-week lead times\nTSMC is reportedly raising 3nm capacity by more than 16% (Economic Daily News via TrendForce, September 14, 2026).\nTSMC owns three new N3 fabs whose capacity, along with the 2nm ramp, could clear leading-edge gaps by late 2027 under a balanced chain scenario."
+  },
+  {
+   "id": "3daa1adc-9081-442d-9cd8-510d1e8ee081",
+   "name": "IBIDEN Ono",
+   "labels": [
+    "MaterialSubstrateSupplier"
+   ],
+   "summary": "CoWoS constraint relief through 2027 is limited because most announced substrate relief, such as the IBIDEN Ono ramp from Q1 2028, lands after the horizon.\nNVIDIA made a multibillion-dollar reservation at IBIDEN's Ono plant for 3x substrate capacity, with the ramp beginning Q1 2028\nIBIDEN's Ono plant holds a 3x capacity expansion reserved by NVIDIA, ramping from Q1 2028, providing no slack before end-2027\nIBIDEN's Ono ramp begins Q1 2028, so substrate relief lands mostly after 2027."
+  },
+  {
+   "id": "368a6519-1ac5-4eda-b0b9-fae33fea90ac",
+   "name": "Arizona packaging/test campus",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "Amkor raised its Arizona packaging/test campus investment to ~US$12 billion\nAmkor raised its Arizona packaging and test campus plan to roughly US$12 billion as of September 2026, but test and OSAT relief lands late"
+  },
+  {
+   "id": "2f15ca36-e8d5-47d7-a77d-9ad71b807696",
+   "name": "SUMCO",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "States focus on 'sophistication or refinement' rather than volume; last large greenfield commitment was a $2 billion expansion announced in 2021; record-high 300mm shipments projected for Q2 FY2026.\nSUMCO and GlobalWafers compete in the 300mm silicon wafer segment; SUMCO shifts focus to sophistication rather than volume while GlobalWafers projects >90% 300mm utilization from 2025 to 2027 and holds July 2024 CHIPS preliminary terms for the first US 300mm source.\nSUMCO owns 300mm wafer capacity, a segment with 40% probability of episodic tightness into 2029 affecting price rather than allocation"
+  },
+  {
+   "id": "281b1c1a-9135-40d6-b6c9-c92366b1fc64",
+   "name": "Intel",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Deployed the first EXE:5200B in December 2025 and reportedly expanded its order to two units at roughly $370-380 million per tool; named as a beneficiary if CoWoS stays constrained.\nIntel deployed the first EXE:5200B High-NA system in December 2025 and reportedly expanded its order to two units at roughly $370–380 million per tool, against near-zero High-NA volume through the horizon.\nIntel benefits from spillover demand as constrained CoWoS capacity pushes orders outward in 2027.\nIntel and OSAT providers are reported to capture spillover orders amid TSMC CoWoS capacity constraints, as TSMC's "
+  },
+  {
+   "id": "26da455f-1c28-40e7-8f2a-263dcfb96792",
+   "name": "HBM",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "NVIDIA's AI package demand pulls hardest on HBM; Rubin ships with up to 288 GB of HBM4 per GPU in 12-Hi stacks in 2026, and 2027 roadmaps (quad-die 1 TB-class HBM4e vs dual-die 192 GB) drive the decisive HBM demand variable.\nThe binding constraint in mainstream memory is allocation of DRAM wafers to HBM, with HBM wafer allocation driving conventional DRAM contract price rises (4Q26 forecast +10–15% QoQ, persisting into 1H27), cleared by price and LTA caps rather than new capacity.\nTrendForce reported a forecast of a 121% YoY rise in 2027 HBM blended ASP; the Balanced chain scenario requires th"
+  },
+  {
+   "id": "25b50ceb-475c-4f41-b60a-bbf918c6f891",
+   "name": "mlq.ai",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "mlq.ai reports the quad-die Rubin Ultra design was cancelled and replaced by a dual-die package carrying 192 GB of 8-Hi HBM4."
+  },
+  {
+   "id": "24a6ba4f-e036-4f00-a615-fd99f69388d1",
+   "name": "ASE Technology",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "ASE+Amkor CoWoS-equivalent capacity of ~110,000 wpm is an end-2028 estimate; OSAT partners add an estimated 50,000-60,000 wpm of 2026 CoWoS capacity.\nASE+Amkor combined CoWoS-equivalent capacity is estimated at about 110,000 wafers per month by end-2028.\nASE benefits from spillover demand as 2027 CoWoS gaps clear through price, backlog and spillover."
+  },
+  {
+   "id": "232322dc-53ca-45fd-8124-9502b1c7aa50",
+   "name": "CXMT",
+   "labels": [
+    "MemoryManufacturer"
+   ],
+   "summary": "Samsung competes with CXMT in DRAM, where Counterpoint put Q2 2026 shares at Samsung 38% and CXMT 10%\nCXMT doubled its DRAM revenue share to 10% by Q2 2026, growing amid allocation-driven mainstream DRAM tightness\nCXMT (10% DRAM share) benefits from conventional DRAM tightness with +10-15% QoQ 4Q26 contract price forecasts"
+  },
+  {
+   "id": "1c4ca017-b152-4861-ba64-9e70ef5c5707",
+   "name": "CoWoS-equivalent capacity",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "ASE+Amkor combined CoWoS-equivalent capacity is estimated at about 110,000 wafers per month by end-2028.\nASE+Amkor combined CoWoS-equivalent capacity is estimated at about 110,000 wafers per month by end-2028."
+  },
+  {
+   "id": "12c9c070-2afa-4a4c-8c0b-c207a230c71d",
+   "name": "Goldman Sachs",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Goldman Sachs projects custom-ASIC AI HBM demand growing 82% to one-third of total HBM demand."
+  },
+  {
+   "id": "11ba86b1-b230-43d2-bf03-193df6d8207f",
+   "name": "AMD",
+   "labels": [
+    "ChipDesigner"
+   ],
+   "summary": "AMD, together with NVIDIA and Broadcom, is estimated to hold above 85% of 2026 CoWoS capacity."
+  },
+  {
+   "id": "0cb29311-f2fa-40d9-83f6-c2d10004e2ff",
+   "name": "N2",
+   "labels": [
+    "SupplyChainSegment"
+   ],
+   "summary": "ASML equipment supply shortfalls cap the ramp so that funded logic and packaging capacity slip together and scarcity carries into N2."
+  },
+  {
+   "id": "0c6684fb-35ad-4dc7-ba8f-3c270f157397",
+   "name": "China MOFCOM",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Announcement No. 70 suspended the October 2025 rare-earth controls until 10 November 2026 with no extension as of 16 October 2026; Ga/Ge licensing (Aug 2023), Dec 2024 prohibition in principle on Ga/G\nChina's Announcement No. 70 pause of the October 2025 rare-earth controls ends 10 November 2026 with no extension published as of 16 October 2026, a lapse that could constrain supply chain segments.\nMOFCOM's October 2025 rare-earth controls (pause lapsing 10 November 2026, no extension published as of 16 October 2026) stand against the US BIS Affiliates Rule (suspension ending 9 November 2026), w"
+  },
+  {
+   "id": "0bc873fb-f5f0-4156-bc77-0d21507b3b55",
+   "name": "AT&S",
+   "labels": [
+    "MaterialSubstrateSupplier"
+   ],
+   "summary": "ABF substrate supplier holding ~10% share of the ABF substrate market; market leaders are Ibiden (~35%), Shinko (~18%), Unimicron (~14%).\nAT&S holds ~10% of the concentrated ABF substrate capacity, per a 2026 analysis\nAT&S owns constrained ABF substrate capacity, one of the dominant suppliers in a segment with a warned 20% 2027 materials gap"
+  },
+  {
+   "id": "0932b1a4-6ee8-406c-add3-84f7e3218cac",
+   "name": "Tokyo Electron",
+   "labels": [
+    "EquipmentSupplier"
+   ],
+   "summary": "Etch and deposition equipment supplier with high influence and non-single-source status. No direct shipment or lead-time figures appear in the evidence; exposure to the tightening tool market is inferred from record SEMI billings (US$40.53 billion in Q2 2026, +23% YoY, second consecutive record; full-year 2025 $135 billion), TSMC's October 15, 2026 statement that tool supply is tight, and TSMC's tool-gated 2nm ramp targeting 90,000 wpm at end-2026 rising to 110,000 by mid-2027.\nTEL benefits from EUV/High-NA and etch/deposition tool tightness as ASML's supply falls short through 2028"
+  },
+  {
+   "id": "00f34897-f1bf-4bc7-9253-888c66571791",
+   "name": "MOFCOM Notice 2024 No. 46",
+   "labels": [
+    "Government"
+   ],
+   "summary": "China's Ministry of Commerce directive dated 2024-12-03 prohibiting exports of gallium, germanium and antimony to the United States in principle; still in force as of October 2026.\nChina's Ministry of Commerce Notice 2024 No. 46 imposed rare-earth export controls (per CSET Georgetown), part of the trade-control backdrop affecting semiconductor supply chains including constrained segments like CoWoS."
+  }
+ ],
+ "links": [
+  {
+   "source": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "target": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "name": "PARTNERS_WITH",
+   "fact": "2.5x capacity over three years agreements [S45][S54]（sign=+，strength=0.7，valence=allied，polarity=0.70）"
+  },
+  {
+   "source": "aaf81862-bef0-461f-8751-7d204e9d4de5",
+   "target": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "name": "PARTNERS_WITH",
+   "fact": "SPIL targets 15x optical-engine capacity by mid-2027 under NVIDIA's reservation program"
+  },
+  {
+   "source": "7553c748-76c6-4f6a-8e08-8f2be3fb5f3f",
+   "target": "5bae11a5-a0d2-47b5-99ba-40e4b30e19c3",
+   "name": "CONSTRAINS",
+   "fact": "TSMC CoWoS-L packaging yield and substrate warpage issues constrained NVIDIA, causing the reported scrapping of the quad-die Rubin Ultra GPU design."
+  },
+  {
+   "source": "0c6684fb-35ad-4dc7-ba8f-3c270f157397",
+   "target": "9602938e-6656-4e34-ba80-7ae0930e112e",
+   "name": "REGULATES",
+   "fact": "MOFCOM Announcement No. 70's pause expires on 10 November 2026, and its lapse together with the BIS Affiliates Rule suspension is the dated trigger for the Oversupply and correction scenario."
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "name": "CONSTRAINS",
+   "fact": "ASML's supply shortfall (its planned 30% capacity increase deemed insufficient for 2027–2028) constrains downstream segments such as CoWoS advanced packaging, where capability bottlenecks persisted 10+ quarters despite capacity doubling, weighting AI-led broad tightness (40%) over Balanced chain (20%)."
+  },
+  {
+   "source": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "SUPPLIES",
+   "fact": "ASML sole EUV supplier gating all leading-edge ramps [S2]（sign=+，strength=0.9，valence=transactional，polarity=0.60）"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC owns advanced CoWoS packaging capacity that is so tight it limits customers' growth, per CEO statement on 16 July 2026; estimated CoWoS demand approaches about 1,000,000 wafers in 2026."
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "name": "CONSTRAINS",
+   "fact": "The leading-edge capacity constraint propagates through tool supply (ASML) rather than cleanroom space, coupling N2 and CoWoS allocation."
+  },
+  {
+   "source": "368a6519-1ac5-4eda-b0b9-fae33fea90ac",
+   "target": "b012d8db-eb5b-4207-8860-508f8b00c925",
+   "name": "OWNS_CAPACITY",
+   "fact": "Amkor raised its Arizona packaging and test campus plan to roughly US$12 billion as of September 2026, but test and OSAT relief lands late"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "OWNS_CAPACITY",
+   "fact": "CoWoS is TSMC's advanced packaging capacity, with estimated demand rising from about 370,000 wafers in 2024 to about 670,000 in 2025 and approaching about 1,000,000 in 2026; TSMC discloses no CoWoS capacity figure."
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "232322dc-53ca-45fd-8124-9502b1c7aa50",
+   "name": "COMPETES_WITH",
+   "fact": "Samsung competes with CXMT in DRAM, where Counterpoint put Q2 2026 shares at Samsung 38% and CXMT 10%"
+  },
+  {
+   "source": "0c6684fb-35ad-4dc7-ba8f-3c270f157397",
+   "target": "5df8b4a6-a92a-4b3b-8533-ecaf0925f9fa",
+   "name": "OPPOSES",
+   "fact": "Announcement No. 70 pause; Ga/Ge licensing; Dec 2024 prohibition [S15][S59][S71]（sign=-，strength=0.8，valence=adversarial，polarity=-0.60）"
+  },
+  {
+   "source": "281b1c1a-9135-40d6-b6c9-c92366b1fc64",
+   "target": "7553c748-76c6-4f6a-8e08-8f2be3fb5f3f",
+   "name": "BENEFITS_FROM",
+   "fact": "Intel benefits from CoWoS/SoIC packaging tightness via spillover overflow demand as 2027 gaps clear through spillover to ASE/Amkor/Intel"
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "name": "COMPETES_WITH",
+   "fact": "Micron competes with SK Hynix in HBM memory, reaching ~100,000 HBM wpm by Dec 2026 per TrendForce."
+  },
+  {
+   "source": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "target": "281b1c1a-9135-40d6-b6c9-c92366b1fc64",
+   "name": "SUPPLIES",
+   "fact": "First EXE:5200B deployed December 2025 [S64][S65]（sign=+，strength=0.6，valence=transactional，polarity=0.60）"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "769893ac-00bc-49de-b724-2e2abe48a560",
+   "name": "ESTIMATES",
+   "fact": "TrendForce reports the CoWoS supply-demand gap narrowing from ~20% to ~10% by end-2026"
+  },
+  {
+   "source": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "target": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "name": "COMPETES_WITH",
+   "fact": "HBM shares 50% vs 33% Q2 2026 [S24]（sign=-，strength=0.8，valence=adversarial，polarity=-0.40）"
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "7553c748-76c6-4f6a-8e08-8f2be3fb5f3f",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC controls the CoWoS/SoIC advanced packaging capacity that accelerator demand may outrun in 2027."
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "8a3aba63-f98c-4b3a-9ce8-2f9b16513ac8",
+   "name": "OWNS_CAPACITY",
+   "fact": "Micron owns conventional DRAM capacity in a segment with 55% probability of demand exceeding capacity through at least 1H27"
+  },
+  {
+   "source": "c6c97683-a4df-42cd-8f63-0ac45581113f",
+   "target": "db34d8fd-0d97-4c4a-bcfe-e2b0de86a4dc",
+   "name": "SUPPLIES",
+   "fact": "Per NVIDIA's July 2026 developer blog, the Rubin GPU architecture integrates up to 288 GB of HBM4 in 12-Hi stacks, shipping in H2 2026."
+  },
+  {
+   "source": "769893ac-00bc-49de-b724-2e2abe48a560",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "REPORTS_ON",
+   "fact": "TrendForce reported that TSMC's CoWoS supply-demand gap is seen narrowing from 20% to 10% by end-2026 as capacity expands."
+  },
+  {
+   "source": "d4cec09e-6466-46ea-bf25-416a6d8feb26",
+   "target": "e1bea187-3ed2-4f81-a8bd-5d1f122d1718",
+   "name": "OWNS_CAPACITY",
+   "fact": "Broadcom, together with NVIDIA and AMD, holds above 85% of 2026 CoWoS capacity."
+  },
+  {
+   "source": "62263e24-b968-47ea-9d3a-d2eee625aa5f",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "OWNS_CAPACITY",
+   "fact": "IBIDEN owns constrained ABF substrate capacity (bottleneck #3, 70% probability into 2028); its Ono ramp relief begins Q1 2028"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "name": "CUSTOMER_OF",
+   "fact": "NVIDIA buys advanced packaging (CoWoS) capacity from TSMC, whose tight CoWoS/SoIC capacity limits customers' growth."
+  },
+  {
+   "source": "5bae11a5-a0d2-47b5-99ba-40e4b30e19c3",
+   "target": "e1bea187-3ed2-4f81-a8bd-5d1f122d1718",
+   "name": "DEPENDS_ON",
+   "fact": "The quad-die Rubin Ultra design was reportedly cancelled over substrate warpage and yield issues in TSMC CoWoS-L packaging."
+  },
+  {
+   "source": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "target": "aaf81862-bef0-461f-8751-7d204e9d4de5",
+   "name": "PARTNERS_WITH",
+   "fact": "NVIDIA's October 2026 announcements have SPIL targeting 15x optical-engine capacity by mid-2027"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "59353e8a-5c64-4905-9efa-ab8e593ce75a",
+   "name": "BENEFITS_FROM",
+   "fact": "Amkor benefits from spillover demand; its capacity grows +300% by end-2028."
+  },
+  {
+   "source": "0c6684fb-35ad-4dc7-ba8f-3c270f157397",
+   "target": "5df8b4a6-a92a-4b3b-8533-ecaf0925f9fa",
+   "name": "OPPOSES",
+   "fact": "MOFCOM's October 2025 rare-earth controls (pause lapsing 10 November 2026, no extension published as of 16 October 2026) stand against the US BIS Affiliates Rule (suspension ending 9 November 2026), with a truce extension to 10 January 2027 announced but not matched by a BIS notice."
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "OWNS_CAPACITY",
+   "fact": "Forecast (55%) that TSMC CoWoS-equivalent capacity reaches ≥200,000 wafers per month in 2027, per TrendForce/Economic Daily News estimates."
+  },
+  {
+   "source": "0c6684fb-35ad-4dc7-ba8f-3c270f157397",
+   "target": "0c6684fb-35ad-4dc7-ba8f-3c270f157397",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "China MOFCOM 亦称 MOFCOM"
+  },
+  {
+   "source": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "target": "4c571ce5-2003-44eb-8a0e-52b7bf0b6541",
+   "name": "PARTNERS_WITH",
+   "fact": "NVIDIA's October 2026 announcements back KYEC US facilities with a $1.1 billion reservation advance"
+  },
+  {
+   "source": "5bae11a5-a0d2-47b5-99ba-40e4b30e19c3",
+   "target": "8a3aba63-f98c-4b3a-9ce8-2f9b16513ac8",
+   "name": "CONSTRAINS",
+   "fact": "A confirmed Rubin Ultra HBM cut is a falsifier that would flip the mainstream memory price dynamic driven by HBM wafer allocation."
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "281b1c1a-9135-40d6-b6c9-c92366b1fc64",
+   "name": "BENEFITS_FROM",
+   "fact": "Intel and OSAT providers are reported to capture spillover orders amid TSMC CoWoS capacity constraints, as TSMC's CoWoS capacity doubles to 260,000 wafers by 2028"
+  },
+  {
+   "source": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "target": "281b1c1a-9135-40d6-b6c9-c92366b1fc64",
+   "name": "SUPPLIES",
+   "fact": "ASML supplies High-NA EUV tools to Intel, which took the lead in High-NA EUV adoption and reportedly boosted its High-NA EUV orders"
+  },
+  {
+   "source": "af74bada-2708-4b8f-93c9-5c529b9fe1cb",
+   "target": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "name": "OWNS_CAPACITY",
+   "fact": "ASML's NXE:3800F Low-NA EUV tool, running at 260 wafers per hour, enters small-quantity introduction in early 2027; around 65 Low-NA (NXE) tools ship in 2026."
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "CONSTRAINS",
+   "fact": "Unimicron holds ~14% of the ABF substrate market, where lead times remain 20–28 weeks and relief from its KF expansion only fully lands mid-2028"
+  },
+  {
+   "source": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "target": "fd7ea867-2ec1-4ad3-946d-eab3386f6de4",
+   "name": "OWNS_CAPACITY",
+   "fact": "One High-NA system was sold in Q3 2026 (reported); forecast (60%) that High-NA revenue is recognized in ≥2 quarters of 2027."
+  },
+  {
+   "source": "47428721-c6a5-435a-857f-c57e791568fa",
+   "target": "5bae11a5-a0d2-47b5-99ba-40e4b30e19c3",
+   "name": "REPORTS_OPTION",
+   "fact": "Commercial Times (via TrendForce, October 20, 2026) reports switching Rubin Ultra from 12-Hi to 8-Hi stacks is under active consideration, cutting HBM capacity per GPU by about 33% and letting the same DRAM die supply support about 50% more GPUs."
+  },
+  {
+   "source": "62263e24-b968-47ea-9d3a-d2eee625aa5f",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "OWNS_CAPACITY",
+   "fact": "IBIDEN owns ABF substrate capacity, with Gama Cell6 mass production starting from FY2027."
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "TSMC 亦称 Taiwan Semiconductor Manufacturing Company"
+  },
+  {
+   "source": "2f15ca36-e8d5-47d7-a77d-9ad71b807696",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "SUPPLIES",
+   "fact": "Record 300mm shipments; SEMI 11.8% shipment growth [S33][S10]（sign=+，strength=0.6，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "OWNS_CAPACITY",
+   "fact": "Unimicron owns ABF substrate capacity, with its KF expansion adding capacity from Q2 2027."
+  },
+  {
+   "source": "5df8b4a6-a92a-4b3b-8533-ecaf0925f9fa",
+   "target": "5df8b4a6-a92a-4b3b-8533-ecaf0925f9fa",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "US Department of Commerce/BIS 亦称 BIS"
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "62263e24-b968-47ea-9d3a-d2eee625aa5f",
+   "name": "COMPETES_WITH",
+   "fact": "Unimicron and IBIDEN compete as ABF substrate suppliers, both adding capacity (Unimicron KF from Q2 2027; IBIDEN Gama Cell6 from FY2027)."
+  },
+  {
+   "source": "82a9bc7e-caa6-417f-a1e3-0ae875a7849c",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "OWNS_CAPACITY",
+   "fact": "Shinko owns constrained ABF substrate capacity with 20-28-week lead times and ASPs rising from ~$65 (2024) to ~$82 (2025)"
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "bfdc5a82-b1c9-4c85-ae27-bd1ec66de09c",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC's next-generation CoPoS packaging reaches pilot production only in mid-2027"
+  },
+  {
+   "source": "d6030bab-c352-4447-8068-4905a6f4d1ac",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "SUPPLIES",
+   "fact": "Dominant photoresist incl. EUV supplier [S39]（sign=+，strength=0.6，valence=transactional，polarity=0.40）"
+  },
+  {
+   "source": "54874ba2-8b32-448a-9844-077ab2d7c762",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "BENEFITS_FROM",
+   "fact": "Ajinomoto benefits from ABF substrate tightness (materials gap into 2028) as the ABF film supplier"
+  },
+  {
+   "source": "2f15ca36-e8d5-47d7-a77d-9ad71b807696",
+   "target": "c555f52a-80f2-47b4-a39a-681b8a3886ee",
+   "name": "COMPETES_WITH",
+   "fact": "SUMCO and GlobalWafers compete in the 300mm silicon wafer segment; SUMCO shifts focus to sophistication rather than volume while GlobalWafers projects >90% 300mm utilization from 2025 to 2027 and holds July 2024 CHIPS preliminary terms for the first US 300mm source."
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "3daa1adc-9081-442d-9cd8-510d1e8ee081",
+   "name": "DEPENDS_ON",
+   "fact": "CoWoS constraint relief through 2027 is limited because most announced substrate relief, such as the IBIDEN Ono ramp from Q1 2028, lands after the horizon."
+  },
+  {
+   "source": "c6c97683-a4df-42cd-8f63-0ac45581113f",
+   "target": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "name": "OWNS_CAPACITY",
+   "fact": "Samsung runs ~150,000 DRAM wafers per month through HBM lines, including ~75,000 wpm of HBM4 capacity"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "name": "PARTNERS_WITH",
+   "fact": "NVIDIA announced (October 2026) supply-chain capacity expansion agreements with partners — targeting 2.5x capacity over three years — to accelerate AI infrastructure buildout, easing CoWoS packaging constraints"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "281b1c1a-9135-40d6-b6c9-c92366b1fc64",
+   "name": "BENEFITS_FROM",
+   "fact": "BigGo Finance reports Intel and OSAT providers capture spillover orders as CoWoS capacity tightens toward 1,000,000 wafers by 2028"
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "f69c1b7d-94b8-41ae-b180-9b5606d52efb",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC reportedly targets 2nm capacity of 90,000 wafers per month at end-2026, rising to 110,000 wpm by mid-2027 (Economic Daily News via TrendForce, September 14, 2026)."
+  },
+  {
+   "source": "c8834311-f0ff-4e29-944d-4e63a10ed0a4",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "ESTIMATES",
+   "fact": "Silicon Analysts estimates TSMC's N3 at 28% of wafer revenue in 4Q25 rising to 33% in 3Q26, N3 utilization near 98% with 104–156-week lead times, and N2 lead times of 78–156 weeks — figures TSMC does not disclose."
+  },
+  {
+   "source": "c6c97683-a4df-42cd-8f63-0ac45581113f",
+   "target": "12c9c070-2afa-4a4c-8c0b-c207a230c71d",
+   "name": "PROJECTS_DEMAND_GROWTH",
+   "fact": "Goldman Sachs projects custom-ASIC AI HBM demand growing 82% to one-third of total HBM demand."
+  },
+  {
+   "source": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "target": "59353e8a-5c64-4905-9efa-ab8e593ce75a",
+   "name": "PARTNERS_WITH",
+   "fact": "NVIDIA's October 2026 supply-chain announcements include Amkor capacity growth above 300% by end-2028; Amkor raised its Arizona packaging and test campus plan to roughly US$12 billion as of September 2026"
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "name": "COMPETES_WITH",
+   "fact": "Micron fastest-growing share, 18% [S24]（sign=-，strength=0.6，valence=adversarial，polarity=-0.30）"
+  },
+  {
+   "source": "62263e24-b968-47ea-9d3a-d2eee625aa5f",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "OWNS_CAPACITY",
+   "fact": "Ibiden dominates ABF substrate capacity with ~35% share, ahead of Shinko (~18%), Unimicron (~14%), AT&S (~10%) and Nan Ya (~5%)"
+  },
+  {
+   "source": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "CUSTOMER_OF",
+   "fact": "NVIDIA estimated at ~60% of 2026 CoWoS wafers; packaging 'limiting my customers' growth' [S1]（sign=+，strength=0.9，valence=transactional，polarity=0.60）"
+  },
+  {
+   "source": "59353e8a-5c64-4905-9efa-ab8e593ce75a",
+   "target": "7553c748-76c6-4f6a-8e08-8f2be3fb5f3f",
+   "name": "BENEFITS_FROM",
+   "fact": "Amkor benefits from CoWoS/SoIC packaging tightness via spillover demand, planning +300% capacity by end-2028"
+  },
+  {
+   "source": "d96ab877-8707-4426-8a14-c5a553a65885",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "REPORTS_ABOUT",
+   "fact": "A report sourced via SEMI indicates TSMC plans to double CoWoS capacity by 2028 amid AI chip demand."
+  },
+  {
+   "source": "c8834311-f0ff-4e29-944d-4e63a10ed0a4",
+   "target": "3ddec2d5-18fc-4b1d-836d-c0d5fae428cc",
+   "name": "ESTIMATES",
+   "fact": "Silicon Analysts estimates TSMC's N3 utilization near 98% with 104–156-week lead times"
+  },
+  {
+   "source": "0bc873fb-f5f0-4156-bc77-0d21507b3b55",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "OWNS_CAPACITY",
+   "fact": "AT&S owns constrained ABF substrate capacity, one of the dominant suppliers in a segment with a warned 20% 2027 materials gap"
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "name": "COMPETES_WITH",
+   "fact": "Samsung competes with SK Hynix in HBM (Q2 2026 HBM revenue share: SK Hynix 50%, Samsung 33%) and DRAM (Samsung 38%, SK Hynix 25%), per Counterpoint"
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "OWNS_CAPACITY",
+   "fact": "Unimicron raised 2026 capex to NT$53.7 billion, over 80% of it for ABF substrates"
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "db34d8fd-0d97-4c4a-bcfe-e2b0de86a4dc",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC has guided a CoWoS capacity CAGR above 80% for 2022–2027, and its CEO said on July 16, 2026 that packaging is 'so tight that now it's limiting my customers' growth'."
+  },
+  {
+   "source": "aa42c129-3a6b-4798-ad82-61ca56c06e97",
+   "target": "dcf909c6-2535-4e3f-8734-6bbfc2632e37",
+   "name": "COMPETES_WITH",
+   "fact": "SMIC competes with GlobalFoundries in mature nodes, with analysts assuming 5–10% GlobalFoundries price hikes in H2 2026 amid 5–20% SMIC increases planned for 2026"
+  },
+  {
+   "source": "11ba86b1-b230-43d2-bf03-193df6d8207f",
+   "target": "e1bea187-3ed2-4f81-a8bd-5d1f122d1718",
+   "name": "OWNS_CAPACITY",
+   "fact": "AMD, together with NVIDIA and Broadcom, holds above 85% of 2026 CoWoS capacity."
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "c6c97683-a4df-42cd-8f63-0ac45581113f",
+   "name": "OWNS_CAPACITY",
+   "fact": "Micron reaches about 100,000 HBM wafers per month by December 2026, about one-third to one-quarter of SK Hynix and Samsung's combined HBM volume."
+  },
+  {
+   "source": "cd3a3aa6-111c-4f8d-85f8-6b1d9fb21549",
+   "target": "cd3a3aa6-111c-4f8d-85f8-6b1d9fb21549",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Applied Materials 亦称 AMAT"
+  },
+  {
+   "source": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "target": "59353e8a-5c64-4905-9efa-ab8e593ce75a",
+   "name": "PARTNERS_WITH",
+   "fact": "October 2026 NVIDIA announcements [S45][S38]（sign=+，strength=0.6，valence=allied，polarity=0.70）"
+  },
+  {
+   "source": "24a6ba4f-e036-4f00-a615-fd99f69388d1",
+   "target": "1c4ca017-b152-4861-ba64-9e70ef5c5707",
+   "name": "OWNS_CAPACITY",
+   "fact": "ASE+Amkor combined CoWoS-equivalent capacity is estimated at about 110,000 wafers per month by end-2028."
+  },
+  {
+   "source": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "target": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "name": "SUPPLIES",
+   "fact": "Per a 2026 report (S69), SK Hynix among memory makers whose supply is sold through; SK Hynix also linked as an HBM supplier for NVIDIA Rubin GPUs expected to stick with 12-Hi HBM4."
+  },
+  {
+   "source": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "target": "7553c748-76c6-4f6a-8e08-8f2be3fb5f3f",
+   "name": "CONSTRAINS",
+   "fact": "NVIDIA consumes roughly 60% of 2026 CoWoS wafers (~595,000 wafers), dominating constrained CoWoS/SoIC packaging capacity"
+  },
+  {
+   "source": "d96ab877-8707-4426-8a14-c5a553a65885",
+   "target": "c555f52a-80f2-47b4-a39a-681b8a3886ee",
+   "name": "FORECASTS_FOR",
+   "fact": "SEMI forecasts 11.8% silicon wafer shipment growth in 2026 with record highs through 2029, supporting GlobalWafers' projected >90% 300mm utilization from 2025 to 2027."
+  },
+  {
+   "source": "769893ac-00bc-49de-b724-2e2abe48a560",
+   "target": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "name": "BENEFITS_FROM",
+   "fact": "TrendForce reports the CoWoS supply-demand gap at about 20% in mid-2026, with the binary resolving on whether the gap is at or below 10% on 31 Dec 2027."
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "OWNS_CAPACITY",
+   "fact": "Unimicron reports customers rushing to lock in ABF substrate LTAs amid tight substrate supply"
+  },
+  {
+   "source": "aaf81862-bef0-461f-8751-7d204e9d4de5",
+   "target": "e17b27cd-4e44-48e7-9bc5-7dd2ce930dba",
+   "name": "OWNS_CAPACITY",
+   "fact": "SPIL is targeting 15x optical-engine capacity by mid-2027, an OSAT advanced capacity expansion."
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "00f34897-f1bf-4bc7-9253-888c66571791",
+   "name": "REGULATES",
+   "fact": "China's Ministry of Commerce Notice 2024 No. 46 imposed rare-earth export controls (per CSET Georgetown), part of the trade-control backdrop affecting semiconductor supply chains including constrained segments like CoWoS."
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "26da455f-1c28-40e7-8f2a-263dcfb96792",
+   "name": "BENEFITS_FROM",
+   "fact": "Samsung's finished-memory (HBM) inventory fell below 10 days of supply in September 2026 (KB Securities estimate), versus inventory norms of 10-15+ weeks in prior cycles"
+  },
+  {
+   "source": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "target": "b012d8db-eb5b-4207-8860-508f8b00c925",
+   "name": "BENEFITS_FROM",
+   "fact": "Samsung+SK Hynix finished-memory inventory fell below 10 days of supply on September 7, 2026 amid allocation-driven mainstream DRAM tightness"
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "name": "SUPPLIES",
+   "fact": "Per a 2026 report (search snippet S69), Samsung, SK Hynix, and Micron have collectively sold through their memory supply, implying supply relationships to memory buyers; Samsung also expected to supply HBM for NVIDIA Rubin GPUs sticking with 12-Hi HBM4."
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC owns CoWoS advanced packaging capacity, which is a structural bottleneck segment with HBM and substrates"
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "COMPETES_WITH",
+   "fact": "Samsung Foundry's SF2 yield (reported ~30% in Q1 2026, later claims ~50–60% in late 2026, all leak-based and unconfirmed) and lack of verified external 2nm customer qualification leave TSMC effectively the only qualified leading-edge foundry source through the 2027 horizon."
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "name": "SUPPLIES",
+   "fact": "Per a 2026 report (S69), Micron among memory makers whose supply is sold through; Micron linked as HBM supplier context for NVIDIA Rubin GPUs expected to stick with 12-Hi HBM4."
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC controls TSMC CoWoS capacity, roughly 90% of the world's most advanced chips, with CoWoS capacity constraints cited as causing a GPU shortage (2023–2024 reporting)."
+  },
+  {
+   "source": "aa42c129-3a6b-4798-ad82-61ca56c06e97",
+   "target": "82cfed31-1742-4d04-8734-886c0ce2446a",
+   "name": "COMPETES_WITH",
+   "fact": "SMIC competes with UMC in mature nodes, where SMIC's 28nm pricing fell from ~$2,500 to ~$1,500 per wafer in 2024 (with 5–20% increases planned for 2026) and analysts assume 5–10% UMC hikes in H2 2026"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC owns CoWoS advanced packaging capacity and is doubling CoWoS capacity through 2026 to break the AI supply bottleneck"
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "name": "COMPETES_WITH",
+   "fact": "Samsung competes with Micron in HBM (Samsung 33% vs Micron 18% Q2 2026 revenue share) and DRAM (Samsung 38%, Micron 24%), per Counterpoint"
+  },
+  {
+   "source": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "target": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "name": "SUPPLIES",
+   "fact": "UBS estimate [S43]（sign=+，strength=0.85，valence=transactional，polarity=0.70）"
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "name": "SUPPLIES",
+   "fact": "18% HBM revenue share Q2 2026 [S24]（sign=+，strength=0.5，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "a80a318b-f6d5-4003-9dbc-f66cbd520fd1",
+   "target": "fd7ea867-2ec1-4ad3-946d-eab3386f6de4",
+   "name": "BENEFITS_FROM",
+   "fact": "Lam benefits from EUV/High-NA and etch/deposition tool tightness as ASML's supply falls short through 2028"
+  },
+  {
+   "source": "c8834311-f0ff-4e29-944d-4e63a10ed0a4",
+   "target": "f69c1b7d-94b8-41ae-b180-9b5606d52efb",
+   "name": "ESTIMATES",
+   "fact": "Silicon Analysts estimates TSMC's N2 lead times at 78–156 weeks, with reported bookings into 2028 unconfirmed"
+  },
+  {
+   "source": "59353e8a-5c64-4905-9efa-ab8e593ce75a",
+   "target": "368a6519-1ac5-4eda-b0b9-fae33fea90ac",
+   "name": "OWNS_CAPACITY",
+   "fact": "Amkor raised its Arizona packaging/test campus investment to ~US$12 billion"
+  },
+  {
+   "source": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "target": "3daa1adc-9081-442d-9cd8-510d1e8ee081",
+   "name": "PARTNERS_WITH",
+   "fact": "NVIDIA made a multibillion-dollar reservation at IBIDEN's Ono plant for 3x substrate capacity, with the ramp beginning Q1 2028"
+  },
+  {
+   "source": "281b1c1a-9135-40d6-b6c9-c92366b1fc64",
+   "target": "7c685f5a-ad1b-4fc8-8183-6fa41b1efc60",
+   "name": "OWNS_CAPACITY",
+   "fact": "Intel deployed the first EXE:5200B High-NA system in December 2025 and reportedly expanded its order to two units at roughly $370–380 million per tool."
+  },
+  {
+   "source": "11ba86b1-b230-43d2-bf03-193df6d8207f",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "CUSTOMER_OF",
+   "fact": "AMD is among the top CoWoS customers, with NVIDIA, Broadcom and AMD together holding above 85% of 2026 CoWoS capacity"
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "aec28c7b-cfd0-4fa2-ae26-6a62f5146506",
+   "name": "OWNS_CAPACITY",
+   "fact": "Samsung Electronics Foundry owns and operates the Samsung 2nm SF2 node, with yield reported to have climbed to roughly 60% and mass production begun (leak-based, unconfirmed by Samsung)."
+  },
+  {
+   "source": "815e29ff-403f-47f0-94d2-670a8b144957",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "OWNS_CAPACITY",
+   "fact": "Nan Ya PCB holds ~5% of high-end FC-BGA/ABF capacity share (2026 analysis)"
+  },
+  {
+   "source": "a2b8296b-388d-4f75-bc80-3c5a51fa4a96",
+   "target": "aec28c7b-cfd0-4fa2-ae26-6a62f5146506",
+   "name": "FABRICATED_ON",
+   "fact": "The Exynos 2600, for the Samsung Galaxy S26, is the first mass-production product on Samsung Foundry's SF2 (2nm) process."
+  },
+  {
+   "source": "11ba86b1-b230-43d2-bf03-193df6d8207f",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "CUSTOMER_OF",
+   "fact": "AMD, together with NVIDIA and Broadcom, is estimated to hold above 85% of 2026 CoWoS capacity."
+  },
+  {
+   "source": "0c6684fb-35ad-4dc7-ba8f-3c270f157397",
+   "target": "7553c748-76c6-4f6a-8e08-8f2be3fb5f3f",
+   "name": "CONSTRAINS",
+   "fact": "China's Announcement No. 70 pause of the October 2025 rare-earth controls ends 10 November 2026 with no extension published as of 16 October 2026, a lapse that could constrain supply chain segments."
+  },
+  {
+   "source": "0c6684fb-35ad-4dc7-ba8f-3c270f157397",
+   "target": "e57d92e0-bc56-4dc4-9520-02331372a7cd",
+   "name": "CONSTRAINS",
+   "fact": "MOFCOM's pause of the October 2025 rare-earth controls lapsing 10 November 2026 is a dated trigger that could shift the 2027 chain from AI-led broad tightness (40%) toward oversupply via rare-earth export reinstatement; rare-earth exports were down 9.6% YoY at 43,711 tonnes in January–September 2026."
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC owns CoWoS-S advanced packaging capacity, reported fully booked with 52–78-week lead times, with TSMC monthly CoWoS capacity estimated at 120,000–140,000 wafers per month in 2026"
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "fff6728a-8697-4605-8cb0-9a44bf2c0cef",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC owns SoIC advanced packaging capacity, which together with CoWoS is a binding bottleneck in the AI supply chain between late October 2026 and 31 December 2027."
+  },
+  {
+   "source": "d96ab877-8707-4426-8a14-c5a553a65885",
+   "target": "fabb5d05-c920-4827-afe8-1f8856032f36",
+   "name": "BENEFITS_FROM",
+   "fact": "SEMI's WWSEMS billings of US$40.53 billion in Q2 2026 (+23% YoY, +11% QoQ) reflect record equipment demand amid rising NAICS 3344 utilization (76.51% in Sep 2026 vs 73.723% Sep 2025)."
+  },
+  {
+   "source": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "target": "5bae11a5-a0d2-47b5-99ba-40e4b30e19c3",
+   "name": "SCRAPPED_DESIGN",
+   "fact": "Nvidia scrapped the quad-die Rubin Ultra GPU design, citing packaging yield issues, per mlq.ai reporting."
+  },
+  {
+   "source": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "target": "fd7ea867-2ec1-4ad3-946d-eab3386f6de4",
+   "name": "CONSTRAINS",
+   "fact": "Per ASML's Q3 2026 earnings, the semiconductor equipment shortage could extend beyond 2028, with demand extending to 2030, meaning ASML High-NA EUV and tool supply constrains chipmaking ramp"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "name": "CONSTRAINS",
+   "fact": "An ASML statement on 14 October 2026 that its supply for 2027 and 2028 will not fully meet customer demand underpins the equipment-capped ramp constraining packaging expansion; watch whether ASML reiterates a 2027 supply shortfall at Q4 2026 results."
+  },
+  {
+   "source": "5df8b4a6-a92a-4b3b-8533-ecaf0925f9fa",
+   "target": "e57d92e0-bc56-4dc4-9520-02331372a7cd",
+   "name": "CONSTRAINS",
+   "fact": "The BIS Affiliates Rule suspension ending 9 November 2026 absent a Federal Register notice is one of two converging clocks whose joint lapse is a dated trigger away from the AI-led broad tightness scenario."
+  },
+  {
+   "source": "5df8b4a6-a92a-4b3b-8533-ecaf0925f9fa",
+   "target": "7553c748-76c6-4f6a-8e08-8f2be3fb5f3f",
+   "name": "REGULATES",
+   "fact": "BIS's Affiliates Rule suspension runs only until November 9, 2026 absent a Federal Register extension, an export-control clock affecting the supply chain."
+  },
+  {
+   "source": "5df8b4a6-a92a-4b3b-8533-ecaf0925f9fa",
+   "target": "cd2c8698-57bc-46e8-89ca-a7eaedf88e22",
+   "name": "REGULATES",
+   "fact": "Forecast (65%) that BIS publishes a Federal Register extension of the Affiliates Rule suspension before it lapses 10 Nov 2026."
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "0bc873fb-f5f0-4156-bc77-0d21507b3b55",
+   "name": "COMPETES_WITH",
+   "fact": "Unimicron (~14%) and AT&S (~10%) compete in the concentrated ABF substrate market alongside Ibiden (~35%) and Shinko (~18%)."
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "CONSTRAINS",
+   "fact": "TSMC could fill only about 80% of CoWoS demand in 2023 while planning a capacity lift from 8,000 toward 11,000 wafers per month, and the CoWoS constraint outlived successive capacity doublings"
+  },
+  {
+   "source": "c555f52a-80f2-47b4-a39a-681b8a3886ee",
+   "target": "cef0f251-a7b0-4c02-9c5d-0845d4d1013b",
+   "name": "BENEFITS_FROM",
+   "fact": "GlobalWafers plans to raise prices of 12-inch silicon wafers amid tight 300mm wafer supply"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "281b1c1a-9135-40d6-b6c9-c92366b1fc64",
+   "name": "BENEFITS_FROM",
+   "fact": "Intel benefits from spillover demand as constrained CoWoS capacity pushes orders outward in 2027."
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "name": "COMPETES_WITH",
+   "fact": "Samsung and SK Hynix together process an estimated 150,000–200,000 HBM wafers per month, three to four times Micron's volume; Samsung runs ~150,000 DRAM wpm through HBM lines (~75,000 wpm HBM4) as of September 2026."
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "3fa0cdf9-1b4d-4b76-b88f-894f1988069a",
+   "name": "CONSTRAINS",
+   "fact": "Unimicron's late substrate capacity timing (raised 2026 capex to NT$53.7 billion, over 80% for ABF, with new capacity landing after 2027) keeps the Packaging-only bottleneck scenario (25%) credible."
+  },
+  {
+   "source": "c555f52a-80f2-47b4-a39a-681b8a3886ee",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "SUPPLIES",
+   "fact": "GlobalWafers >90% utilization 2025-2027 [S32]（sign=+，strength=0.5，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "c6c97683-a4df-42cd-8f63-0ac45581113f",
+   "target": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "name": "OWNS_CAPACITY",
+   "fact": "SK Hynix and Samsung together process an estimated 150,000–200,000 HBM wafers per month, three to four times Micron's volume."
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "name": "COMPETES_WITH",
+   "fact": "Samsung and SK Hynix compete in HBM/memory; their combined finished-memory inventory fell below 10 days in September 2026"
+  },
+  {
+   "source": "5df8b4a6-a92a-4b3b-8533-ecaf0925f9fa",
+   "target": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "name": "REGULATES",
+   "fact": "US SME exports to China fell $6.8bn (2021) to $4.2bn (2024) [S60]（sign=-，strength=0.6，valence=adversarial，polarity=-0.50）"
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "c19619fb-6207-4003-ba7a-5e7b737f7247",
+   "name": "COMPETES_WITH",
+   "fact": "In prior DRAM commodity cycles (e.g., 2017-18), Samsung and peers cleared within roughly 18 months, but the current cycle analysis (October 2026) shows allocation regimes persisting"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC reportedly targets 22% 2nm and 16%+ 3nm capacity boosts by mid-2027, and its CoWoS packaging capacity is expected to double to 260,000 wafers per month by 2028 (TrendForce, September 14, 2026; BigGo Finance)"
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "name": "COMPETES_WITH",
+   "fact": "Micron, TrendForce-reported at ~100,000 HBM wpm by Dec 2026, competes with Samsung in HBM memory."
+  },
+  {
+   "source": "232322dc-53ca-45fd-8124-9502b1c7aa50",
+   "target": "8a3aba63-f98c-4b3a-9ce8-2f9b16513ac8",
+   "name": "BENEFITS_FROM",
+   "fact": "CXMT (10% DRAM share) benefits from conventional DRAM tightness with +10-15% QoQ 4Q26 contract price forecasts"
+  },
+  {
+   "source": "4c571ce5-2003-44eb-8a0e-52b7bf0b6541",
+   "target": "e17b27cd-4e44-48e7-9bc5-7dd2ce930dba",
+   "name": "OWNS_CAPACITY",
+   "fact": "KYEC US facilities, part of OSAT advanced capacity additions dated 2027-28, are backed by a $1.1 billion reservation advance."
+  },
+  {
+   "source": "54874ba2-8b32-448a-9844-077ab2d7c762",
+   "target": "98251365-d130-40a2-9fa3-4343a87bdf7c",
+   "name": "OWNS_CAPACITY",
+   "fact": "Ajinomoto, the dominant ABF film supplier, raised ABF film prices 30%"
+  },
+  {
+   "source": "59353e8a-5c64-4905-9efa-ab8e593ce75a",
+   "target": "1c4ca017-b152-4861-ba64-9e70ef5c5707",
+   "name": "OWNS_CAPACITY",
+   "fact": "ASE+Amkor combined CoWoS-equivalent capacity is estimated at about 110,000 wafers per month by end-2028."
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "name": "COMPETES_WITH",
+   "fact": "SK Hynix and Micron compete in HBM (Q2 2026 revenue shares 50% and 18% respectively) and DRAM, per Counterpoint"
+  },
+  {
+   "source": "2f15ca36-e8d5-47d7-a77d-9ad71b807696",
+   "target": "cef0f251-a7b0-4c02-9c5d-0845d4d1013b",
+   "name": "OWNS_CAPACITY",
+   "fact": "SUMCO owns 300mm wafer capacity, a segment with 40% probability of episodic tightness into 2029 affecting price rather than allocation"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "name": "CONSTRAINS",
+   "fact": "TSMC CoWoS capacity constraints were identified as a cause of GPU shortages affecting NVIDIA's output."
+  },
+  {
+   "source": "3daa1adc-9081-442d-9cd8-510d1e8ee081",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "OWNS_CAPACITY",
+   "fact": "IBIDEN's Ono plant holds a 3x capacity expansion reserved by NVIDIA, ramping from Q1 2028, providing no slack before end-2027"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "24a6ba4f-e036-4f00-a615-fd99f69388d1",
+   "name": "BENEFITS_FROM",
+   "fact": "ASE benefits from spillover demand as 2027 CoWoS gaps clear through price, backlog and spillover."
+  },
+  {
+   "source": "c6c97683-a4df-42cd-8f63-0ac45581113f",
+   "target": "fbd412a7-2d20-4579-814e-7437d9fc83f1",
+   "name": "PROJECTS_MARKET_SIZE",
+   "fact": "Bank of America sizes the 2026 HBM market at $54.6 billion, up 58% year-on-year."
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "name": "DEPENDS_ON",
+   "fact": "Unimicron's chairman warned of 30-month equipment lead times and a possible 20% materials shortfall in 2027"
+  },
+  {
+   "source": "0bc873fb-f5f0-4156-bc77-0d21507b3b55",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "OWNS_CAPACITY",
+   "fact": "AT&S holds ~10% of the concentrated ABF substrate capacity, per a 2026 analysis"
+  },
+  {
+   "source": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "SUPPLIES",
+   "fact": "ASML's Q3 2026 statement that supply for 2027–28 'will not fully meet the demand of our customers' implicates TSMC as a customer facing tool shortfalls."
+  },
+  {
+   "source": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "target": "8a3aba63-f98c-4b3a-9ce8-2f9b16513ac8",
+   "name": "OWNS_CAPACITY",
+   "fact": "SK Hynix owns conventional DRAM capacity in a segment with 55% probability of demand exceeding capacity through at least 1H27"
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "name": "DEPENDS_ON",
+   "fact": "TSMC: 'the tool supply is tight'; ASML: 2027-28 supply short of demand [S17][S2]（sign=+，strength=0.9，valence=directional，polarity=0.50）"
+  },
+  {
+   "source": "5df8b4a6-a92a-4b3b-8533-ecaf0925f9fa",
+   "target": "aa42c129-3a6b-4798-ad82-61ca56c06e97",
+   "name": "REGULATES",
+   "fact": "SMIC added to Entity List [S70]（sign=-，strength=0.8，valence=adversarial，polarity=-0.70）"
+  },
+  {
+   "source": "cd3a3aa6-111c-4f8d-85f8-6b1d9fb21549",
+   "target": "fd7ea867-2ec1-4ad3-946d-eab3386f6de4",
+   "name": "BENEFITS_FROM",
+   "fact": "Applied Materials benefits from EUV/High-NA and etch/deposition tool tightness as ASML's supply falls short through 2028"
+  },
+  {
+   "source": "c6c97683-a4df-42cd-8f63-0ac45581113f",
+   "target": "db34d8fd-0d97-4c4a-bcfe-e2b0de86a4dc",
+   "name": "DEPENDS_ON",
+   "fact": "Rubin ships with up to 288 GB of HBM4 per GPU in 12-Hi stacks in H2 2026."
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "name": "COMPETES_WITH",
+   "fact": "Samsung and SK Hynix are competing in the 2026 HBM4 market share race (Silicon Analysts analysis), alongside Micron"
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Samsung Electronics 亦称 Samsung Foundry"
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "name": "COMPETES_WITH",
+   "fact": "Samsung and Micron compete in the 2026 HBM4 market share race against SK Hynix"
+  },
+  {
+   "source": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "target": "f69c1b7d-94b8-41ae-b180-9b5606d52efb",
+   "name": "CONSTRAINS",
+   "fact": "Leading-edge logic constraint propagates through tool supply rather than cleanroom space; ASML 2027 shipments materially above its planned 30% capacity increase would change the view."
+  },
+  {
+   "source": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "target": "26da455f-1c28-40e7-8f2a-263dcfb96792",
+   "name": "CONSTRAINS",
+   "fact": "NVIDIA's AI package demand pulls hardest on HBM; Rubin ships with up to 288 GB of HBM4 per GPU in 12-Hi stacks in 2026, and 2027 roadmaps (quad-die 1 TB-class HBM4e vs dual-die 192 GB) drive the decisive HBM demand variable."
+  },
+  {
+   "source": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "target": "db34d8fd-0d97-4c4a-bcfe-e2b0de86a4dc",
+   "name": "OWNS_CAPACITY",
+   "fact": "NVIDIA's Rubin GPU, shipping in H2 2026 per its July 2026 developer blog, integrates up to 288 GB of HBM4 per GPU in 12-Hi stacks at 22 TB/s peak bandwidth, with 336 billion transistors on two reticle-limited compute dies unified by NV-HBI."
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "24a6ba4f-e036-4f00-a615-fd99f69388d1",
+   "name": "PARTNERS_WITH",
+   "fact": "Institutional estimates via TrendForce [S20]（sign=+，strength=0.7，valence=transactional，polarity=0.60）"
+  },
+  {
+   "source": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "target": "26da455f-1c28-40e7-8f2a-263dcfb96792",
+   "name": "BENEFITS_FROM",
+   "fact": "SK Hynix's finished-memory (HBM) inventory fell below 10 days of supply in September 2026 (KB Securities estimate), versus inventory norms of 10-15+ weeks in prior cycles"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC owns CoWoS-S/L advanced packaging capacity with 52–78-week lead times, fully booked, ramping from ~75–80k toward 120–130k wafers per month by end-2026"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC owns CoWoS advanced packaging capacity, projected at ~130,000 wafers per month by late-2026, up from ~35,000 wpm in late-2024, yet capacity doublings did not clear the demand gap"
+  },
+  {
+   "source": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "target": "62263e24-b968-47ea-9d3a-d2eee625aa5f",
+   "name": "PARTNERS_WITH",
+   "fact": "NVIDIA reservation; ramp begins Q1 2028 [S45]（sign=+，strength=0.8，valence=allied，polarity=0.80）"
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "aec28c7b-cfd0-4fa2-ae26-6a62f5146506",
+   "name": "OWNS_CAPACITY",
+   "fact": "Samsung's SF2 (2nm) yield is leak-reported from ~30% in Q1 2026 toward 50–60%, with no official figure"
+  },
+  {
+   "source": "c555f52a-80f2-47b4-a39a-681b8a3886ee",
+   "target": "cef0f251-a7b0-4c02-9c5d-0845d4d1013b",
+   "name": "OWNS_CAPACITY",
+   "fact": "GlobalWafers owns 300mm wafer capacity, a segment with 40% probability of episodic tightness into 2029 affecting price rather than allocation"
+  },
+  {
+   "source": "769893ac-00bc-49de-b724-2e2abe48a560",
+   "target": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "name": "CONSTRAINS",
+   "fact": "TrendForce reports the CoWoS supply-demand gap narrowing from ~20% to ~10% by end-2026"
+  },
+  {
+   "source": "26da455f-1c28-40e7-8f2a-263dcfb96792",
+   "target": "8a3aba63-f98c-4b3a-9ce8-2f9b16513ac8",
+   "name": "CONSTRAINS",
+   "fact": "The binding constraint in mainstream memory is allocation of DRAM wafers to HBM, with HBM wafer allocation driving conventional DRAM contract price rises (4Q26 forecast +10–15% QoQ, persisting into 1H27), cleared by price and LTA caps rather than new capacity."
+  },
+  {
+   "source": "2f15ca36-e8d5-47d7-a77d-9ad71b807696",
+   "target": "cef0f251-a7b0-4c02-9c5d-0845d4d1013b",
+   "name": "OWNS_CAPACITY",
+   "fact": "SUMCO plans $2bn of new 300mm wafer capacity investment"
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "e1bea187-3ed2-4f81-a8bd-5d1f122d1718",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC operates CoWoS-L advanced packaging; 2026 estimated industry CoWoS capacity is 120,000–140,000 wafers per month at TSMC plus 50,000–60,000 wpm from OSAT partners."
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "f69c1b7d-94b8-41ae-b180-9b5606d52efb",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC controls N2 capacity, and under AI-led broad tightness (40%) N2/CoWoS coupling keeps leading-edge allocation binding; its 2nm ramp (with three new N3 fabs) could clear gaps by late 2027."
+  },
+  {
+   "source": "0932b1a4-6ee8-406c-add3-84f7e3218cac",
+   "target": "fd7ea867-2ec1-4ad3-946d-eab3386f6de4",
+   "name": "BENEFITS_FROM",
+   "fact": "TEL benefits from EUV/High-NA and etch/deposition tool tightness as ASML's supply falls short through 2028"
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "7553c748-76c6-4f6a-8e08-8f2be3fb5f3f",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC is the owner of the constrained CoWoS/SoIC packaging capacity (ranked bottleneck #1, 85% probability demand exceeds capacity before end-2027, binding since mid-2023 with 52-78-week lead times)"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "5bae11a5-a0d2-47b5-99ba-40e4b30e19c3",
+   "name": "CONSTRAINS",
+   "fact": "Rubin Ultra's package configuration — whether it keeps 12-Hi stacks or switches to a reported 8-Hi design — is a key signpost determining CoWoS demand and scenario paths."
+  },
+  {
+   "source": "fde3dd42-2dc1-40a1-a08b-758045229ce6",
+   "target": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "name": "REPORTS_ABOUT",
+   "fact": "SemiAnalysis reported that Nvidia's Rubin Ultra will ship with 192GB of HBM4 8-hi instead of the quad-die design."
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "name": "CONSTRAINS",
+   "fact": "NVIDIA is estimated to consume roughly 60% of 2026 CoWoS capacity (~595,000 wafers), the dominant driver of the packaging constraint TSMC says is limiting customers' growth."
+  },
+  {
+   "source": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "target": "0cb29311-f2fa-40d9-83f6-c2d10004e2ff",
+   "name": "CONSTRAINS",
+   "fact": "ASML equipment supply shortfalls cap the ramp so that funded logic and packaging capacity slip together and scarcity carries into N2."
+  },
+  {
+   "source": "d4cec09e-6466-46ea-bf25-416a6d8feb26",
+   "target": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "name": "COMPETES_WITH",
+   "fact": "Both among top CoWoS capacity holders; ASIC HBM demand growing 82% [S1][S43]（sign=-，strength=0.7，valence=adversarial，polarity=-0.50）"
+  },
+  {
+   "source": "6249c2a7-a009-4931-8608-1d8f89f4d9fd",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "OWNS_CAPACITY",
+   "fact": "Unimicron's KF plant in Taiwan adds substrate capacity from Q2 2027, reaching full capacity only by mid-2028 (partial slack to end-2027)"
+  },
+  {
+   "source": "769893ac-00bc-49de-b724-2e2abe48a560",
+   "target": "e1bea187-3ed2-4f81-a8bd-5d1f122d1718",
+   "name": "ESTIMATES_SUPPLY_DEMAND_GAP",
+   "fact": "TrendForce estimates the CoWoS supply–demand gap at about 20% at mid-2026 narrowing to about 10% by end-2026."
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "6249c2a7-a009-4931-8608-1d8f89f4d9fd",
+   "name": "OWNS_CAPACITY",
+   "fact": "Unimicron's KF expansion adds capacity from Q2 2027 and completes mid-2028."
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "769893ac-00bc-49de-b724-2e2abe48a560",
+   "name": "CONSTRAINS",
+   "fact": "TrendForce estimates the CoWoS supply–demand gap; view shifts toward Balanced chain if TrendForce reports the gap below 5% by mid-2027."
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "3ddec2d5-18fc-4b1d-836d-c0d5fae428cc",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC is reportedly raising 3nm capacity by more than 16% (Economic Daily News via TrendForce, September 14, 2026)."
+  },
+  {
+   "source": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "target": "fd7ea867-2ec1-4ad3-946d-eab3386f6de4",
+   "name": "OWNS_CAPACITY",
+   "fact": "ASML owns the High-NA EUV tool capacity and shipped its first High-NA EUV tool, with Intel taking the lead as TSMC and Samsung lag; Intel reportedly boosted ASML High-NA EUV orders"
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "f69c1b7d-94b8-41ae-b180-9b5606d52efb",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC's N2 process node has estimated lead times of 78–156 weeks, with reported bookings into 2028 unconfirmed (per Silicon Analysts)"
+  },
+  {
+   "source": "fde3dd42-2dc1-40a1-a08b-758045229ce6",
+   "target": "5bae11a5-a0d2-47b5-99ba-40e4b30e19c3",
+   "name": "REPORTED_CANCELLATION",
+   "fact": "SemiAnalysis reports the quad-die Rubin Ultra design was cancelled over substrate warpage and yield issues in TSMC CoWoS-L, replaced by a dual-die package carrying 192 GB of 8-Hi HBM4."
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "3ddec2d5-18fc-4b1d-836d-c0d5fae428cc",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC owns three new N3 fabs whose capacity, along with the 2nm ramp, could clear leading-edge gaps by late 2027 under a balanced chain scenario."
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "aec28c7b-cfd0-4fa2-ae26-6a62f5146506",
+   "name": "OWNS_CAPACITY",
+   "fact": "Samsung's SF2 (2nm) capacity has no verified external customer qualification, with leak-based reports putting external tape-out shifted to 2029."
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "name": "COMPETES_WITH",
+   "fact": "With no verified external 2nm customer qualification for Samsung's SF2 (tape-out leak-reported shifted to 2029), TSMC is effectively the only qualified leading-edge foundry source through 2027."
+  },
+  {
+   "source": "6e853d88-101b-447c-a82f-b4f64578fe6b",
+   "target": "0c6684fb-35ad-4dc7-ba8f-3c270f157397",
+   "name": "OPPOSES",
+   "fact": "Treasury announced a truce extension to 10 January 2027 on 23 September 2026, while MOFCOM's Announcement No. 70 pause of rare-earth controls lapses 10 November 2026 with no extension notice as of 16 October 2026"
+  },
+  {
+   "source": "7553c748-76c6-4f6a-8e08-8f2be3fb5f3f",
+   "target": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "name": "CONSTRAINS",
+   "fact": "NVIDIA's reported Rubin Ultra redesign (dual-die 192 GB 8-Hi HBM4 replacement) was driven by CoWoS-L packaging yield constraints, limiting NVIDIA's packaging options."
+  },
+  {
+   "source": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "target": "db34d8fd-0d97-4c4a-bcfe-e2b0de86a4dc",
+   "name": "SUPPLIES",
+   "fact": "UBS estimates SK Hynix holds about 70% of Rubin-generation HBM4 supply; Rubin ships from H2 2026 with up to 288 GB of 12-Hi HBM4 per GPU."
+  },
+  {
+   "source": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "target": "e1bea187-3ed2-4f81-a8bd-5d1f122d1718",
+   "name": "OWNS_CAPACITY",
+   "fact": "NVIDIA is estimated to hold ~60% of 2026 CoWoS capacity (~595,000 wafers), with NVIDIA, Broadcom and AMD together above 85%."
+  },
+  {
+   "source": "5bae11a5-a0d2-47b5-99ba-40e4b30e19c3",
+   "target": "c6c97683-a4df-42cd-8f63-0ac45581113f",
+   "name": "DEPENDS_ON",
+   "fact": "The commonly reported roadmap shows quad-die Rubin Ultra with 1 TB-class HBM4e in H2 2027."
+  },
+  {
+   "source": "c555f52a-80f2-47b4-a39a-681b8a3886ee",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "SUPPLIES",
+   "fact": "GlobalWafers supplies 12-inch silicon wafers and plans to raise prices of 12-inch silicon wafers in the 2nd quarter"
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "c6c97683-a4df-42cd-8f63-0ac45581113f",
+   "name": "OWNS_CAPACITY",
+   "fact": "Samsung and SK Hynix's finished-memory inventory fell below 10 days of supply on September 7, 2026 amid HBM4/HBM4e allocation tightening."
+  },
+  {
+   "source": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "target": "fd7ea867-2ec1-4ad3-946d-eab3386f6de4",
+   "name": "CONSTRAINS",
+   "fact": "ASML constrains EUV/High-NA and etch/deposition tool supply, stating its 2027-28 supply 'will not fully meet the demand of our customers' — a capability gate on all leading-edge ramps (bottleneck #4, 60% probability through 2028)"
+  },
+  {
+   "source": "232322dc-53ca-45fd-8124-9502b1c7aa50",
+   "target": "b012d8db-eb5b-4207-8860-508f8b00c925",
+   "name": "BENEFITS_FROM",
+   "fact": "CXMT doubled its DRAM revenue share to 10% by Q2 2026, growing amid allocation-driven mainstream DRAM tightness"
+  },
+  {
+   "source": "25b50ceb-475c-4f41-b60a-bbf918c6f891",
+   "target": "5bae11a5-a0d2-47b5-99ba-40e4b30e19c3",
+   "name": "REPORTED_CANCELLATION",
+   "fact": "mlq.ai reports the quad-die Rubin Ultra design was cancelled and replaced by a dual-die package carrying 192 GB of 8-Hi HBM4."
+  },
+  {
+   "source": "98251365-d130-40a2-9fa3-4343a87bdf7c",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "CONSTRAINS",
+   "fact": "ABF film is a concentrated chokepoint: a new ABF film supplier qualification takes a minimum of 18–24 months, and ABF demand is projected to grow 25–35% CAGR through 2027 against committed expansions completing in 2028"
+  },
+  {
+   "source": "3f8604fb-55fe-45d7-8e03-fbfa497ea803",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "OWNS_CAPACITY",
+   "fact": "IBIDEN Gama Cell 6, a ~¥220bn first phase of a ~¥500bn FY2026-28 plan, begins mass production from FY2027, with slack to end-2027 qualification-dependent"
+  },
+  {
+   "source": "cd3a3aa6-111c-4f8d-85f8-6b1d9fb21549",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "SUPPLIES",
+   "fact": "Inferred from TSMC 'tool supply is tight' and record SEMI billings [S17][S10]（sign=+，strength=0.7，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "26da455f-1c28-40e7-8f2a-263dcfb96792",
+   "name": "OWNS_CAPACITY",
+   "fact": "Micron is an owner of HBM (HBM3E/HBM4) capacity, a segment with 85% probability of demand exceeding capacity before end-2027"
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "name": "SUPPLIES",
+   "fact": "Q2 2026 HBM share 33% [S24]（sign=+，strength=0.6，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "aa42c129-3a6b-4798-ad82-61ca56c06e97",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "COMPETES_WITH",
+   "fact": "SMIC 28nm pricing and planned 2026 increases vs loose 4-17-week market [S35][S36][S1]（sign=-，strength=0.4，valence=adversarial，polarity=-0.30）"
+  },
+  {
+   "source": "d216fe2e-e9ce-46c4-b13f-532523335992",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC is reported to double its CoWoS capacity by 2028 as AI chip shortage spills over to rivals (wccftech report)."
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "COMPETES_WITH",
+   "fact": "SF2 yield leak-reported toward 50-60%, no external qualification verified [S21][S22]（sign=-，strength=0.6，valence=adversarial，polarity=-0.40）"
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "3ddec2d5-18fc-4b1d-836d-c0d5fae428cc",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC's N3 process node rose to 33% of wafer revenue in 3Q26 (from 28% in 4Q25), with Silicon Analysts estimating N3 utilization near 98% and 104–156-week lead times"
+  },
+  {
+   "source": "5df8b4a6-a92a-4b3b-8533-ecaf0925f9fa",
+   "target": "cd2c8698-57bc-46e8-89ca-a7eaedf88e22",
+   "name": "PUBLISHES_RULE_IN",
+   "fact": "BIS published its one-year suspension of the Affiliates Rule expansion in the Federal Register on 2025-11-12."
+  },
+  {
+   "source": "6408d7bc-affa-47ae-b872-cc8cf977bf92",
+   "target": "26da455f-1c28-40e7-8f2a-263dcfb96792",
+   "name": "OWNS_CAPACITY",
+   "fact": "SK Hynix is an owner of HBM (HBM3E/HBM4) capacity (ranked bottleneck #2, 85% probability demand exceeds capacity through late 2027; 2027 blended ASP forecast +121% YoY)"
+  },
+  {
+   "source": "5bd1aadb-ee21-488e-8aac-699536d1483b",
+   "target": "f69c1b7d-94b8-41ae-b180-9b5606d52efb",
+   "name": "CONSTRAINS",
+   "fact": "ASML stated on 14 October 2026 that its planned supply for 2027-2028 will not fully meet customers' demand, constraining ramp of leading-edge nodes like N2 logic"
+  },
+  {
+   "source": "62263e24-b968-47ea-9d3a-d2eee625aa5f",
+   "target": "82a9bc7e-caa6-417f-a1e3-0ae875a7849c",
+   "name": "COMPETES_WITH",
+   "fact": "ABF substrate market concentration stays high per a 2026 analysis: Ibiden ~35%, Shinko ~18%, Unimicron ~14%, AT&S ~10%, with 14-layer ABF lead times still 20–28 weeks."
+  },
+  {
+   "source": "d4cec09e-6466-46ea-bf25-416a6d8feb26",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "CUSTOMER_OF",
+   "fact": "NVIDIA, Broadcom and AMD above 85% of 2026 CoWoS capacity combined [S1]（sign=+，strength=0.7，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "b012d8db-eb5b-4207-8860-508f8b00c925",
+   "name": "BENEFITS_FROM",
+   "fact": "Samsung and SK Hynix finished-memory inventory fell below 10 days of supply on September 7, 2026, benefiting from mainstream DRAM price increases (TrendForce projects 4Q26 conventional DRAM contract prices up 10–15% QoQ, ~20% per Commercial Times)"
+  },
+  {
+   "source": "3fa0cdf9-1b4d-4b76-b88f-894f1988069a",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "CONSTRAINS",
+   "fact": "Dated substrate relief (most new volume landing in 2028) keeps the Packaging-only bottleneck scenario (25%) credible and feeds the AI-led broad tightness scenario (40%)"
+  },
+  {
+   "source": "5df8b4a6-a92a-4b3b-8533-ecaf0925f9fa",
+   "target": "5eb16f17-fb26-4235-a605-45ab1109a010",
+   "name": "REGULATES",
+   "fact": "The BIS Affiliates Rule suspension lapses by default on 9 November 2026 unless a Federal Register extension is published; a rollover to 10 January 2027 is expected but unpublished."
+  },
+  {
+   "source": "62263e24-b968-47ea-9d3a-d2eee625aa5f",
+   "target": "3daa1adc-9081-442d-9cd8-510d1e8ee081",
+   "name": "OWNS_CAPACITY",
+   "fact": "IBIDEN's Ono ramp begins Q1 2028, so substrate relief lands mostly after 2027."
+  },
+  {
+   "source": "c8834311-f0ff-4e29-944d-4e63a10ed0a4",
+   "target": "e1bea187-3ed2-4f81-a8bd-5d1f122d1718",
+   "name": "ESTIMATES_DEMAND",
+   "fact": "Silicon Analysts, citing trade reports, estimates CoWoS demand roughly tripled in two years: ~370,000 wafers in 2024, ~670,000 in 2025, approaching ~1,000,000 in 2026."
+  },
+  {
+   "source": "769893ac-00bc-49de-b724-2e2abe48a560",
+   "target": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "name": "REPORTS_ON",
+   "fact": "TrendForce reported on September 14, 2026 that TSMC targets 22% 2nm and 16%+ 3nm capacity boosts by mid-2027 with CoWoS capacity doubling by 2028"
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "8a3aba63-f98c-4b3a-9ce8-2f9b16513ac8",
+   "name": "OWNS_CAPACITY",
+   "fact": "Samsung owns conventional DRAM capacity (bottleneck #5, 55% probability demand exceeds capacity through at least 1H27; 4Q26 contract prices forecast +10-15% QoQ)"
+  },
+  {
+   "source": "281b1c1a-9135-40d6-b6c9-c92366b1fc64",
+   "target": "fd7ea867-2ec1-4ad3-946d-eab3386f6de4",
+   "name": "PURCHASED_FROM",
+   "fact": "Intel deployed the first EXE:5200B High-NA system in December 2025 and reportedly expanded its order to two units at roughly $370–380 million per tool, against near-zero High-NA volume through the horizon."
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "c8bc7887-c09b-42e0-ad8e-9bf67c44b2ac",
+   "name": "PARTNERS_WITH",
+   "fact": "NVIDIA/Unimicron disclosures indicate the KF expansion adds capacity by 30 Jun 2027 (forecast probability 70%)."
+  },
+  {
+   "source": "769893ac-00bc-49de-b724-2e2abe48a560",
+   "target": "26da455f-1c28-40e7-8f2a-263dcfb96792",
+   "name": "BENEFITS_FROM",
+   "fact": "TrendForce reported a forecast of a 121% YoY rise in 2027 HBM blended ASP; the Balanced chain scenario requires this forecast to be revised down."
+  },
+  {
+   "source": "54874ba2-8b32-448a-9844-077ab2d7c762",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "CONSTRAINS",
+   "fact": "Ajinomoto raised ABF film prices 30% amid re-tightened ABF substrate supply with 2026 lead times of 48-56 weeks, up to 4.7 times equilibrium, after the 2023 glut"
+  },
+  {
+   "source": "fd19e92a-4d9d-4223-917b-1eeaa8eb1a75",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "CONSTRAINS",
+   "fact": "Unimicron's chairman said on 20 October 2026 that lead times for over 80% of substrate-making equipment have lengthened (some to 30 months) and low-CTE glass fiber cloth, CCL and ABF could face a 20% supply shortfall in 2027"
+  },
+  {
+   "source": "62263e24-b968-47ea-9d3a-d2eee625aa5f",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "OWNS_CAPACITY",
+   "fact": "IBIDEN announced a capital investment plan (February 2026) for high-performance IC package substrates capacity"
+  },
+  {
+   "source": "c6c97683-a4df-42cd-8f63-0ac45581113f",
+   "target": "5bae11a5-a0d2-47b5-99ba-40e4b30e19c3",
+   "name": "DEPENDS_ON",
+   "fact": "Forecast (55%) that Rubin Ultra ships H2 2027 with 8-Hi HBM4 (~192 GB) after the reported quad-die cancellation."
+  },
+  {
+   "source": "82a9bc7e-caa6-417f-a1e3-0ae875a7849c",
+   "target": "9e73f2ae-f1d4-4889-901e-483af3d2b089",
+   "name": "OWNS_CAPACITY",
+   "fact": "Shinko holds ~18% of the concentrated ABF substrate capacity, per a 2026 analysis"
+  },
+  {
+   "source": "24a6ba4f-e036-4f00-a615-fd99f69388d1",
+   "target": "7553c748-76c6-4f6a-8e08-8f2be3fb5f3f",
+   "name": "BENEFITS_FROM",
+   "fact": "ASE benefits from CoWoS/SoIC packaging tightness via spillover demand as relief and overflow shift to OSATs"
+  },
+  {
+   "source": "7b59eb3f-d2bd-4609-b4c8-b4d50d23dd89",
+   "target": "26da455f-1c28-40e7-8f2a-263dcfb96792",
+   "name": "OWNS_CAPACITY",
+   "fact": "Samsung is an owner of HBM (HBM3E/HBM4) capacity, a segment with 85% probability of demand exceeding capacity before end-2027"
+  },
+  {
+   "source": "c29fb785-bf51-4dc0-9b13-1f4cce283b12",
+   "target": "e1bea187-3ed2-4f81-a8bd-5d1f122d1718",
+   "name": "OWNS_CAPACITY",
+   "fact": "TSMC owns CoWoS-L advanced packaging capacity, described as fully booked with 52–78-week lead times, which TSMC has not confirmed"
+  }
+ ],
+ "graph_id": "mirofish_620d7d94ea334b26"
+}

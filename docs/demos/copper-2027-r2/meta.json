@@ -1,0 +1,72 @@
+{
+ "pipeline_id": "pipe_4ca4c33e759b",
+ "report_id": "report_8f0bea34ec96",
+ "simulation_id": "sim_a582f7a52a8d",
+ "graph_id": "mirofish_e77b02ef5fd94de3",
+ "status": "completed",
+ "prompt": "Forecast the price of copper (USD per tonne, LME cash settlement) as of December 31, 2027, with a probability-weighted central forecast (P10/P50/P90 levels) - not just scenario ranges. Establish the baseline first (as of late October 2026): the LME cash price and its 2024-2026 trajectory including the record highs, LME and COMEX inventories in tonnes and months-of-consumption cover, the physical market deficit/surplus estimates from ICSG, and the current TC/RC spot benchmark for concentrate.\n\nResearch and weigh the principal drivers, quantitatively where possible:\n- Mine supply: disruption rates versus historical base rates (Chile, Peru), ore-grade decline, the odds and timing of the Cobre Panama restart, first-production and ramp curves for Kamoa-Kakula Phase 3 and 4, El Tejon, Quebrada Blanca 2, Mirador, and other named projects - expressed in named kt/yr increments.\n- Smelting: Chinese refinery capacity additions versus the concentrate shortage, the 2026-2027 TC/RC benchmark settlements and spot treatment charges (including possible negative spot TCs), refined-output growth implied by available concentrate, and blister/anode constraints.\n- Demand: grid investment, EV per-unit copper intensity and global EV build rates, datacenter construction, and the China property drag - net demand growth in kt/yr; also substitution (aluminum) and secondary/scrap supply elasticity at various price levels.\n- Stocks and positioning: exchange inventories, Chinese State Reserve Bureau stockpiling behavior, and the COMEX-LME arbitrage and US Section 232 tariff decision timeline on refined copper.\n- Price formation: the market's deficit-to-price transmission in prior cycles (2021, 2006), cost-curve support levels, and consensus bank forecasts for end-2026/2027 as a reference class.\n\nDeliverables: 3-5 mutually exclusive scenarios with probabilities and a most-likely quarterly trajectory through 2027; a probability-weighted central end-2027 forecast with P10/P50/P90; and at least 12 binary forecasts with concrete price thresholds (e.g. specific USD/t round numbers crossed on the LME cash settlement), TC/RC levels, inventory thresholds, or dated events, each with a probability and resolution criteria anchored to verifiable sources (LME, ICSG, SMM, Antaike, company reports).",
+ "created_at": "2026-10-24T17:52:11.722669+00:00",
+ "mode": "full",
+ "rounds": 14,
+ "personas": 8,
+ "has_actors": true,
+ "research_log": {
+  "line_count": 354,
+  "source_count": 1,
+  "complete": true,
+  "event_fidelity": "summarized_progress_events"
+ },
+ "dossier_assets": [
+  "research-charts/data_fred_pcoppusdm_62370e387e48b4df.png",
+  "research-charts/data_fred_sp500_27cd291ad955bc97.png",
+  "research-charts/data_fred_vixcls_fa653096ca52897c.png",
+  "research-charts/timeline.png",
+  "research-charts/timeline.html"
+ ],
+ "report_assets": [
+  "charts/binary_forecast_dotplot.png",
+  "charts/official_indicators.png",
+  "charts/official_series_qmnrkensreosbodf.png",
+  "charts/metric_trajectories.png",
+  "charts/scenario_probabilities.png",
+  "charts/timeline_lanes.png"
+ ],
+ "dossier_languages": {
+  "en": "dossier.md"
+ },
+ "report_languages": {
+  "en": "report.md",
+  "zh": "report.zh.md"
+ },
+ "artifact_sha256": {
+  "research_log.txt": "5482b168e869183e0d6feba98b11ac8ab9b4841f6c2ccf30d7c08884ef100a0e",
+  "dossier.md": "56dd74a1536a165850ff89923675f68cfb1b3ffd3f2f37209539f388ed0c3d95",
+  "actors.json": "d0c6f69c84718e213237b75d399af68e037b5e27345b51357c9c043753d997d0",
+  "sources.json": "26efc40f0fe3963fef14da698c84043e42904b0e40661c09daa56ba5a97e3427",
+  "ontology.json": "22b9b7225b955da5e644e6287cfe89025495bb2c9fa86880cf2f7b04e0bacf23",
+  "graph.json": "591e94d814461238f12c56f87cf31caa09d9cb2dd96497bff126b035c260067b",
+  "forum.json": "c362994b45fe1d3a9256129cd0ec166e9c38a8f60e4a6392d8b245d84fe3dcf0",
+  "report.md": "99328af551e4bc863acae58bd9becaa2d3c10be6a538994723e58084c4769421",
+  "report.zh.md": "fcb68f988f2d44038742ba5526779124e3c54f5bc8e69e554497b267a5daf4a4",
+  "research-charts/data_fred_pcoppusdm_62370e387e48b4df.png": "776258144811fd7e444d5085a6a04a8d49d7f738181b1724126469651ccf7528",
+  "research-charts/data_fred_sp500_27cd291ad955bc97.png": "619e196119538994d228565d6ff1cc78ce3facb29d4e30ae13994bf017ecda56",
+  "research-charts/data_fred_vixcls_fa653096ca52897c.png": "a2ac3e8110b321f0f51ad5cfce34ade78d594288fe6589f4d3d7cfd67ac970d8",
+  "research-charts/timeline.png": "0545bce8f9be2252469799d9f8c9f20ff2a1df709b4012599bb34cdef06d6d1d",
+  "research-charts/timeline.html": "f42ac9df93952edf436162d3a05c4108d0153405ca2b15b460d65ba2af6b5e90",
+  "charts/binary_forecast_dotplot.png": "abdc86a43e2701425df4f37b282158f5942053f93cce3968dc273fb7cf22af8c",
+  "charts/official_indicators.png": "55cb683c2aa1288bd045592af6c03d3b02d14d32bd9c8a3a2f9724533a497409",
+  "charts/official_series_qmnrkensreosbodf.png": "70caea0ad9f0f9969e2afde2676e5bf5b9a7c63c55497294cc1b03e2aba53d33",
+  "charts/metric_trajectories.png": "0feedcf509882d6b549f4ab46ec199b0fe8b25e61453eb522ed958682f6bb73a",
+  "charts/scenario_probabilities.png": "9648b4017df9ebd4000c4ab32687ccdcf62c44bbcd00df66857655a021cce297",
+  "charts/timeline_lanes.png": "fb257ccf33c89f4c0504195ddfcb08d7a2634e0560c4b748369ffcd274822eae"
+ },
+ "publication": {
+  "hard_passed": true,
+  "publish_passed": true,
+  "scenario_contract_valid": true,
+  "citation_coverage": 0.697,
+  "semantic_citations_passed": true,
+  "markdown_sha256": "80cc65b0c26514388e9761d9addb0c4420aa9dfd42c64ad0bb74803664a0d4c6",
+  "forecast_sha256": "618f004b35783e370080d178d9153ed214024afb96aa2241edb35a0f45e9f37e"
+ }
+}

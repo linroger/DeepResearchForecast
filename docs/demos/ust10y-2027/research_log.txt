@@ -1,0 +1,260 @@
+2026-10-23T21:44:01.165521+00:00 [stage] runtime skill bundle: outcome=verified source_manifest_hash=e579d583714c93017a829a9effea5d2a866b1a9be0a5df7d87afa4473e2e2034 deployed_manifest_hash=e579d583714c93017a829a9effea5d2a866b1a9be0a5df7d87afa4473e2e2034 deployed_path=/Users/rogerlin/Downloads/DeepResearchForecast/deer-flow/skills/public
+2026-10-23T21:44:01.165791+00:00 [stage] runtime skill lazy-resource hashes: skill=actor-ontology-research {"references/actor-intelligence-contract.md":"668e01eb87d1c491eca03483e3ff80b0257749d954cada4945fcfc247a8e23aa","references/scoring-rubric.md":"570d71951cb2d3e2122028bdb351a22bd9fe96464e2bfcb157fe552586c82f78"}
+2026-10-23T21:44:01.165829+00:00 [stage] runtime skill lazy-resource hashes: skill=competitive-landscape-forecasting {"references/leadership-metrics.md":"73b4a54678c5b9c7d22b9056d1f34df98c0dfb1a2411370c19b9dd3c0c9904ba","references/persistence-and-share-dynamics.md":"d06d416ad14d8ad47cc804979465ccbacfabc2bf708548882003cc059f951f87","references/tech-race-indicators.md":"c6074ec73b3be65eef186ea655484e5aba6a0c15c3b72a57664855a0ff4514c1"}
+2026-10-23T21:44:01.165901+00:00 [stage] runtime skill lazy-resource hashes: skill=data-sources {"references/catalog-bis.md":"7c5d32739635a95125d853772ff56c4081ae575ad06440dd6154b0c38235236b","references/catalog-bls.md":"385155e89481d84088f960089c82d6909410da66c52ce5277d7b9e83ddad4228","references/catalog-fred.md":"57bc58b69616beb5bf3e03e3aa6ca139f638cc83ce9b956feebde12a39e29206","references/catalog-imf.md":"d3a1a42b44cf79c22e0a45f97032757a3a0df39a280064d9ee86a9ceecba2bc9","references/catalog-usgov.md":"c15282354d3970dd47239d8248ac8d69137ae543556ef8e55362fb172b2beda5","references/catalog-wb.md":"871b0cb84bc59eaef876dedb901db9619b5d9813e35bff5f0aedcd4701d86560","references/series-catalog.md":"569c0ec45ab3f645766c08fc5675591e241122d52c6e962e62b400b224da65cd"}
+2026-10-23T21:44:01.165941+00:00 [stage] runtime skill lazy-resource hashes: skill=data-visuals {"references/chart-patterns.md":"667f9207fb4afaef8d7ab20aa45aca4fbdfefd0b9262e557b3e3c0ddced6859d","scripts/render_data.py":"06ca497078857e15b4f07d1ee8edfc769a2330b2f37f0f6925cf239008b562b2"}
+2026-10-23T21:44:01.165967+00:00 [stage] runtime skill lazy-resource hashes: skill=deep-research {"references/final-dossier-contract.md":"6f2be6ed603ac5a2db7c1a52b581c06d0bfc36cab0de0d3770c870aa6dc0b92e","references/news-market-context.md":"61f294d467bb255b54e076cd8dc074aee8b13bca030f79114650f643dcbd1dc4","references/source-tradecraft.md":"e66e5db7d688355dec6bc925ae1812f78e6d390ae3ade40ebdecab127ef48042"}
+2026-10-23T21:44:01.165987+00:00 [stage] runtime skill lazy-resource hashes: skill=election-forecasting {"references/fundamentals-and-polls.md":"278fa9c3523dab981d3fc1bbaa04851621d5b1ea9cc780c308be5e4c03e4b8cc","references/non-us-elections.md":"df7f0d44e753fbae11044a834d8d2073b85eaeb529b8d24d1175c658b52c0938","references/us-election-mechanics.md":"0f3a42fa70c634f8c13cd1c5231c9fd19c402b11fcd398c49398407c645354c9"}
+2026-10-23T21:44:01.166004+00:00 [stage] runtime skill lazy-resource hashes: skill=financial-markets-forecasting {"references/empirical-and-volatility-base-rates.md":"5fcf896beac88fb321a3fd3e4376e08fc1a5c363047e63547b128a6d15098863","references/implied-distributions.md":"146cbd95b28a4f2430fcd5115cc68cca1c23bb801de9381d0bd98c03dd1408bd","references/listings-and-ipos.md":"94311213ac900a88a5367cd1bf48249b5795e7a812351158351cf0c0b554fdc3"}
+2026-10-23T21:44:01.166019+00:00 [stage] runtime skill lazy-resource hashes: skill=forecast-visuals {"references/chart-patterns.md":"a48316244d5293830ae42a5cfe40285a2a38d13f1da52c8949bee9a007130a60","scripts/render.py":"25d81fc98786644a5c3d72a2bab9980c09f063e4c162a124bb481ee94cccdeba"}
+2026-10-23T21:44:01.166034+00:00 [stage] runtime skill lazy-resource hashes: skill=geopolitical-forecasting {"references/conflict-base-rates.md":"8103207f91012df6800884e78716c40778d498d76d453e635db9b2ab13968d10","references/escalation-and-negotiation.md":"89a56f1988b79dde0e3dbf7073cbdb9b13aab6c79b74f071508ee64e043d307a","references/evidence-under-information-war.md":"5e70295008c764a165e9544bce30dd53f6794ecfaeae7a11c7a2c122026bba81"}
+2026-10-23T21:44:01.166058+00:00 [stage] runtime skill lazy-resource hashes: skill=industry-forecasting {"references/forecasting-methods.md":"d046d2692d510b3f8cf9917a00038ffefe9f9fed059653746ac6b82bdc6b7eff","references/outlook-reconciliation.md":"cd50927fbdb74d1a459d652bbe99504ab7e93afc3bf6ac6643f437e12b9384dd","references/reference-classes-and-lead-times.md":"626f2c50f2eabd7145386a3c3a3b04abc29e52253674e814a6ea9666b1f9d5e3"}
+2026-10-23T21:44:01.166077+00:00 [stage] runtime skill lazy-resource hashes: skill=industry-research {"references/cycles-and-capacity.md":"afdab895c62eb5e13928400809b0ab7a1d8cf8d07049cafe0a6fce6c416a8d43","references/industry-sources.md":"f12dbd5c47617abb290e9aae4ca39ffaf51839021e41df57e8a8273a095d3116","references/sectors-economy.md":"d8554ac27fd06934c6ad99f136ef917dfdcbbc26d827b6cd6ee16fae82f3ed5a","references/sectors-technology.md":"a85911b8b2dd9af422ebcdef16d892f8aa88b07fa55ab01c0eaba3969bdc7380","references/value-chain-and-sizing.md":"037eb1cc3b26701856b42802b2f1d4c52117c957b55342cc4520df34728850f9"}
+2026-10-23T21:44:01.166092+00:00 [stage] runtime skill lazy-resource hashes: skill=macro-research {"references/central-bank-reaction-functions.md":"233563c25b7f65b86497aa988063ca0266cf3f1d40e3d91228460b00d556fd23","references/macro-base-rates.md":"5ca2bcfb6585e3ed1eee40b00d0d67282a1c8b68bf9733bf1befb3512ee5460d","references/nowcasting-and-releases.md":"53ce7929a5c36ae1c934602dd39ec92b1cba77d2c1ca16b85d069b3f21584ba0"}
+2026-10-23T21:44:01.166105+00:00 [stage] runtime skill lazy-resource hashes: skill=policy-and-trade-forecasting {"references/signals-and-credibility.md":"c15e3827b90d6ccbbc90e80a4f32a51b3edb0ebc69e14ccbbbd9c3a529c590bd","references/trade-instruments.md":"242e1290dc4146dff6e1a8cc1b5b262d4542d23c7262e7ca5d29c2495b774293","references/us-process-and-base-rates.md":"f75007c73a6bcf100542995a46ec102aebfc52517d1d4ef1a94d9ca6a5d87936"}
+2026-10-23T21:44:01.166115+00:00 [stage] runtime skill lazy-resource hashes: skill=prediction-markets {}
+2026-10-23T21:44:01.166127+00:00 [stage] runtime skill lazy-resource hashes: skill=reference-class-forecasting {"references/base-rate-recipes.md":"f101b214ef371659423bb1c3d4cf67ca7ab943c48a7bd4949e4934c1d01bf16e","references/prediction-market-anchoring.md":"cb416e7c77a30695fbd4bfdfcb61d4a90679e80b3faba021226947c1b6a0ae38","references/probability-toolkit.md":"73c70e0323c495b56b3937019c0a3fab422ef44e93f4e346c92dd86560e19bff"}
+2026-10-23T21:44:01.166146+00:00 [stage] research engine: v3 (linear_research)
+2026-10-23T21:44:02.556906+00:00 [warn] RESEARCH_LINEAR_MODE=salvage is a legacy knob: v3 resumes its own identity-bound phases and never adopts a research_report.md it did not produce
+2026-10-23T21:44:07.611537+00:00 [stage] research:v3:plan start
+2026-10-23T21:44:13.541253+00:00 [usage] tokens in=1695 out=307 total=2002 phase=plan:plan:scope cached=0 cache_write=0 reasoning=0
+2026-10-23T21:44:13.541541+00:00 [tool] web_search 10-year Treasury constant maturity yield October 2026
+2026-10-23T21:44:13.541830+00:00 [tool] web_search FOMC rate path 2027 dot plot September 2026
+2026-10-23T21:44:13.542122+00:00 [tool] web_search Fed balance sheet runoff QT end date 2026
+2026-10-23T21:44:13.542700+00:00 [tool] web_search ACM term premium 10-year Treasury 2026
+2026-10-23T21:44:13.555975+00:00 [result] web_search → 5 results
+2026-10-23T21:44:13.556070+00:00 [tool] web_search Treasury refunding quarterly issuance 2027 deficit CBO
+2026-10-23T21:44:15.077138+00:00 [result] web_search → 5 results
+2026-10-23T21:44:15.077228+00:00 [tool] web_search Japan China holdings US Treasuries 2026 TIC data
+2026-10-23T21:44:15.124987+00:00 [result] web_search → 5 results
+2026-10-23T21:44:15.197612+00:00 [result] web_search → 5 results
+2026-10-23T21:44:15.411477+00:00 [result] web_search → 5 results
+2026-10-23T21:45:17.968278+00:00 [result] web_search → 4 results
+2026-10-23T21:45:44.905723+00:00 [usage] tokens in=8072 out=2053 total=10125 phase=plan:plan:plan cached=1472 cache_write=0 reasoning=46
+2026-10-23T21:45:44.918760+00:00 [ok] v3: method skills macro-research, financial-markets-forecasting, reference-class-forecasting (router)
+2026-10-23T21:45:44.920689+00:00 [ok] research:v3:plan done (6 KIQs, 10 sections)
+2026-10-23T21:45:44.941722+00:00 [stage] research:v3:data start (9 series)
+2026-10-23T21:45:47.298039+00:00 [ok] research:v3:data done (stored=9, failed=0)
+2026-10-23T21:45:47.298467+00:00 [stage] research:v3:gather start (6 KIQs, workers=4)
+2026-10-23T21:45:47.298585+00:00 [tool] web_search DGS10 10-year Treasury yield October 2026 latest value
+2026-10-23T21:45:47.298709+00:00 [tool] web_search 10-year minus 2-year Treasury spread October 2026
+2026-10-23T21:45:47.298835+00:00 [tool] web_search FOMC Summary of Economic Projections September 2026 dot plot 2027
+2026-10-23T21:45:47.298934+00:00 [tool] web_search CME FedWatch fed funds futures path 2027
+2026-10-23T21:45:48.819697+00:00 [result] web_search → 5 results
+2026-10-23T21:45:48.819747+00:00 [tool] web_search ACM term premium 10-year October 2026 New York Fed
+2026-10-23T21:46:20.625334+00:00 [result] web_search → 5 results
+2026-10-23T21:46:20.625387+00:00 [tool] web_search 10-year breakeven inflation rate 5y5y forward October 2026
+2026-10-23T21:46:20.705762+00:00 [result] web_search → 5 results
+2026-10-23T21:46:20.705828+00:00 [tool] web_search Treasury quarterly refunding statement October 2026 coupon auction sizes
+2026-10-23T21:46:21.519810+00:00 [result] web_search → 4 results
+2026-10-23T21:46:21.519885+00:00 [tool] web_search CBO baseline deficit projection 2027
+2026-10-23T21:46:48.767576+00:00 [result] web_search → 4 results
+2026-10-23T21:46:48.767644+00:00 [tool] web_search 10-year Treasury yield historical annual changes distribution
+2026-10-23T21:46:48.878710+00:00 [result] web_search → 5 results
+2026-10-23T21:46:48.878781+00:00 [tool] web_search frequency of 1 percentage point 10-year yield moves within 14 months
+2026-10-23T21:46:48.984080+00:00 [result] web_search → 5 results
+2026-10-23T21:46:48.984148+00:00 [tool] web_search NY Fed recession probability yield curve model October 2026
+2026-10-23T21:47:20.799273+00:00 [result] web_search → 5 results
+2026-10-23T21:47:20.799320+00:00 [tool] web_search Sahm rule indicator 2026
+2026-10-23T21:47:21.160142+00:00 [result] web_search → 4 results
+2026-10-23T21:47:22.280569+00:00 [result] web_search → 5 results
+2026-10-23T21:47:49.016494+00:00 [result] web_search → 5 results
+2026-10-23T21:48:24.977340+00:00 [result] web_search → 4 results
+2026-10-23T21:48:26.176118+00:00 [usage] tokens in=3610 out=3 total=3613 phase=gather:gather:prime cached=2304 cache_write=0 reasoning=0
+2026-10-23T21:48:28.566960+00:00 [usage] tokens in=6690 out=91 total=6781 phase=gather:K4:s1 cached=3584 cache_write=0 reasoning=0
+2026-10-23T21:48:28.567335+00:00 [tool] web_fetch https://www.cbo.gov/publication/62105
+2026-10-23T21:48:28.567606+00:00 [tool] web_fetch https://home.treasury.gov/news/press-releases/sb0590
+2026-10-23T21:48:29.571727+00:00 [usage] tokens in=7970 out=149 total=8119 phase=gather:K3:s1 cached=3584 cache_write=0 reasoning=94
+2026-10-23T21:48:29.846065+00:00 [result] web_fetch → 2577/5999 chars [S54]
+2026-10-23T21:48:30.651886+00:00 [usage] tokens in=7330 out=252 total=7582 phase=gather:K1:s1 cached=3584 cache_write=0 reasoning=141
+2026-10-23T21:48:30.757394+00:00 [result] web_fetch → 2587/12079 chars [S63]
+2026-10-23T21:48:35.004709+00:00 [usage] tokens in=6745 out=113 total=6858 phase=gather:K2:s1 cached=3584 cache_write=0 reasoning=0
+2026-10-23T21:48:35.005051+00:00 [tool] web_fetch https://www.federalreserve.gov/monetarypolicy/fomcprojtabl20260916.htm
+2026-10-23T21:48:35.005163+00:00 [tool] web_fetch https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm
+2026-10-23T21:48:35.032369+00:00 [result] web_fetch → 2589/12080 chars [S53]
+2026-10-23T21:48:35.036047+00:00 [result] web_fetch → 2448/2448 chars [S85]
+2026-10-23T21:48:35.123736+00:00 [usage] tokens in=8154 out=89 total=8243 phase=gather:K4:s2 cached=6656 cache_write=0 reasoning=0
+2026-10-23T21:48:35.124026+00:00 [tool] web_fetch https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding/most-recent-quarterly-refunding-documents
+2026-10-23T21:48:35.124225+00:00 [tool] web_search Treasury marketable borrowing estimates November 2026 fiscal Q1 2027 billion
+2026-10-23T21:48:36.073747+00:00 [result] web_fetch → 2544/3090 chars [S12]
+2026-10-23T21:48:36.287420+00:00 [usage] tokens in=16074 out=281 total=16355 phase=gather:K1:s2 cached=7296 cache_write=0 reasoning=211
+2026-10-23T21:48:36.287628+00:00 [tool] web_fetch https://macrotrends.net/2016/10-year-treasury-bond-rate-yield-chart
+2026-10-23T21:48:36.545722+00:00 [result] web_search → 5 results
+2026-10-23T21:48:38.503527+00:00 [usage] tokens in=9543 out=76 total=9619 phase=gather:K4:s3 cached=8128 cache_write=0 reasoning=0
+2026-10-23T21:48:38.503831+00:00 [tool] web_fetch https://home.treasury.gov/news/press-releases/sb0584
+2026-10-23T21:48:38.503899+00:00 [tool] web_search CBO deficit fiscal year 2027 projection percent of GDP budget outlook 2026
+2026-10-23T21:48:38.932994+00:00 [usage] tokens in=16477 out=121 total=16598 phase=gather:K3:s2 cached=7936 cache_write=0 reasoning=93
+2026-10-23T21:48:38.994099+00:00 [result] web_fetch → 2424/12038 chars [S20]
+2026-10-23T21:48:39.457297+00:00 [result] web_fetch → 2576/3755 chars [S86]
+2026-10-23T21:48:39.491661+00:00 [result] data fred:ACMTP10 → DATA_UNAVAILABLE[unknown_series]
+2026-10-23T21:48:40.315277+00:00 [result] web_search → 5 results
+2026-10-23T21:48:41.096141+00:00 [usage] tokens in=16560 out=46 total=16606 phase=gather:K3:s3 cached=16448 cache_write=0 reasoning=0
+2026-10-23T21:48:41.096366+00:00 [tool] web_fetch https://www.newyorkfed.org/research/data_indicators/term-premia-tabs
+2026-10-23T21:48:41.461293+00:00 [usage] tokens in=17468 out=63 total=17531 phase=gather:K1:s3 cached=16064 cache_write=0 reasoning=0
+2026-10-23T21:48:41.461554+00:00 [tool] web_fetch https://macrotrends.net/2016/10-year-treasury-bond-rate-yield-chart
+2026-10-23T21:48:41.473936+00:00 [result] web_fetch → 2531/12038 chars [S20] (stored copy)
+2026-10-23T21:48:42.350532+00:00 [usage] tokens in=10752 out=56 total=10808 phase=gather:K4:s4 cached=9536 cache_write=0 reasoning=0
+2026-10-23T21:48:42.351251+00:00 [tool] web_fetch https://www.cbo.gov/publication/62105
+2026-10-23T21:48:42.369398+00:00 [result] web_fetch → 2592/12079 chars [S63] (stored copy)
+2026-10-23T21:48:43.109104+00:00 [usage] tokens in=8215 out=208 total=8423 phase=gather:K2:s2 cached=6720 cache_write=0 reasoning=118
+2026-10-23T21:48:43.109599+00:00 [tool] web_fetch https://www.federalreserve.gov/monetarypolicy/fomcprojtabl20260916.htm
+2026-10-23T21:48:43.109707+00:00 [tool] web_search CME FedWatch fed funds futures December 2027 rate cut hike probability October 2026
+2026-10-23T21:48:43.125411+00:00 [result] web_fetch → 2595/12080 chars [S53] (stored copy)
+2026-10-23T21:48:43.753283+00:00 [usage] tokens in=11569 out=32 total=11601 phase=gather:K4:s5 cached=10688 cache_write=0 reasoning=0
+2026-10-23T21:48:43.753342+00:00 [tool] web_search Treasury bill share of marketable debt 2026 bills as percent outstanding near 25% TBAC
+2026-10-23T21:48:45.432833+00:00 [result] web_search → 5 results
+2026-10-23T21:48:45.444235+00:00 [result] web_search → 5 results
+2026-10-23T21:48:49.455418+00:00 [usage] tokens in=10125 out=175 total=10300 phase=gather:K2:s3 cached=8192 cache_write=0 reasoning=89
+2026-10-23T21:48:49.455552+00:00 [tool] web_search Federal Reserve balance sheet runoff QT ended 2026 treasury redemption cap announcement
+2026-10-23T21:48:51.883394+00:00 [result] web_fetch → FETCH_FAILED(jina_primary_failed_timeouterror)
+2026-10-23T21:49:04.943593+00:00 [usage] tokens in=18567 out=1569 total=20136 phase=gather:K1:s4 cached=17408 cache_write=0 reasoning=177
+2026-10-23T21:49:05.032886+00:00 [ok] research:v3:gather K1 facts=14 verified=10 sources=5
+2026-10-23T21:49:10.130500+00:00 [usage] tokens in=12056 out=1780 total=13836 phase=gather:K4:s6 cached=11520 cache_write=0 reasoning=192
+2026-10-23T21:49:10.161252+00:00 [ok] research:v3:gather K4 facts=16 verified=6 sources=8
+2026-10-23T21:49:10.247518+00:00 [usage] tokens in=7443 out=145 total=7588 phase=gather:K5:s1 cached=3584 cache_write=0 reasoning=123
+2026-10-23T21:49:14.408854+00:00 [usage] tokens in=16645 out=1303 total=17948 phase=gather:K3:final cached=16512 cache_write=0 reasoning=0
+2026-10-23T21:49:14.494253+00:00 [ok] research:v3:gather K3 facts=14 verified=9 sources=5
+2026-10-23T21:49:14.705961+00:00 [usage] tokens in=7593 out=302 total=7895 phase=gather:K6:s1 cached=3584 cache_write=0 reasoning=126
+2026-10-23T21:49:14.706723+00:00 [tool] web_fetch https://www.clevelandfed.org/indicators-and-data/yield-curve-and-predicted-gdp-growth
+2026-10-23T21:49:14.707140+00:00 [tool] web_fetch https://www.newyorkfed.org/research/capital_markets/ycfaq
+2026-10-23T21:49:14.738015+00:00 [result] web_fetch → 2572/4500 chars [S73]
+2026-10-23T21:49:25.513177+00:00 [result] web_fetch → FETCH_FAILED(jina_primary_failed_timeouterror)
+2026-10-23T21:49:27.193988+00:00 [usage] tokens in=9114 out=72 total=9186 phase=gather:K6:s2 cached=7552 cache_write=0 reasoning=0
+2026-10-23T21:49:27.194318+00:00 [tool] web_fetch https://www.richmondfed.org/research/national_economy/sos_recession_indicator
+2026-10-23T21:49:27.194400+00:00 [tool] web_search CME FedWatch December 2027 fed funds futures market-implied rate
+2026-10-23T21:49:27.261289+00:00 [result] web_search → 5 results
+2026-10-23T21:49:28.814446+00:00 [result] web_search → 5 results
+2026-10-23T21:49:29.821421+00:00 [usage] tokens in=10739 out=125 total=10864 phase=gather:K2:s4 cached=10112 cache_write=0 reasoning=0
+2026-10-23T21:49:29.821840+00:00 [tool] web_fetch https://www.federalreserve.gov/monetarypolicy/fomcprojtabl20260916.htm
+2026-10-23T21:49:29.821975+00:00 [tool] web_fetch https://www.federalreserve.gov/monetarypolicy/May-2026-Federal-Reserve-Balance-Sheet-Developments.htm
+2026-10-23T21:49:29.831964+00:00 [result] web_fetch → 2593/12080 chars [S53] (stored copy)
+2026-10-23T21:49:31.722666+00:00 [result] web_fetch → 2594/12022 chars [S100]
+2026-10-23T21:49:37.183213+00:00 [usage] tokens in=12418 out=171 total=12589 phase=gather:K2:s5 cached=10688 cache_write=0 reasoning=141
+2026-10-23T21:49:37.183267+00:00 [tool] web_search September 2026 SEP federal funds rate median dot 2026 2027 longer run projection
+2026-10-23T21:49:38.025419+00:00 [result] web_fetch → FETCH_FAILED(jina_primary_failed_timeouterror)
+2026-10-23T21:49:38.985799+00:00 [result] web_search → 4 results
+2026-10-23T21:49:43.284404+00:00 [usage] tokens in=9661 out=87 total=9748 phase=gather:K6:s3 cached=9088 cache_write=0 reasoning=0
+2026-10-23T21:49:43.284712+00:00 [tool] web_fetch https://www.cmegroup.com/markets/interest-rates/stirs/30-day-federal-fund.quotes.html
+2026-10-23T21:49:43.284768+00:00 [tool] web_search New York Fed recession probability model October 2026 twelve months ahead percent
+2026-10-23T21:49:44.456596+00:00 [result] web_fetch → 2572/12051 chars [S42]
+2026-10-23T21:49:45.779688+00:00 [result] web_search → 5 results
+2026-10-23T21:49:56.356308+00:00 [usage] tokens in=11601 out=3699 total=15300 phase=gather:K5:s2 cached=7424 cache_write=0 reasoning=2219
+2026-10-23T21:49:56.362691+00:00 [ok] research:v3:gather K5 facts=9 verified=2 sources=1
+2026-10-23T21:49:59.440286+00:00 [usage] tokens in=11499 out=184 total=11683 phase=gather:K6:s4 cached=9600 cache_write=0 reasoning=90
+2026-10-23T21:49:59.440640+00:00 [tool] web_fetch https://www.cmegroup.com/markets/interest-rates/stirs/30-day-federal-fund.quotes.html
+2026-10-23T21:49:59.440819+00:00 [tool] web_search Cleveland Fed yield curve probability of recession one year ahead October 2026 percent
+2026-10-23T21:49:59.454587+00:00 [result] web_fetch → 2576/12051 chars [S42] (stored copy)
+2026-10-23T21:50:01.060482+00:00 [result] web_search → 5 results
+2026-10-23T21:50:02.638095+00:00 [usage] tokens in=13243 out=56 total=13299 phase=gather:K6:s5 cached=11456 cache_write=0 reasoning=0
+2026-10-23T21:50:02.638297+00:00 [tool] web_fetch https://www.newyorkfed.org/medialibrary/media/research/capital_markets/prob_rec.pdf
+2026-10-23T21:50:02.638390+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-10-23T21:50:10.278911+00:00 [usage] tokens in=12991 out=1856 total=14847 phase=gather:K2:s6 cached=12416 cache_write=0 reasoning=288
+2026-10-23T21:50:10.348808+00:00 [ok] research:v3:gather K2 facts=18 verified=7 sources=10
+2026-10-23T21:50:26.452783+00:00 [usage] tokens in=13323 out=1616 total=14939 phase=gather:K6:s6 cached=13184 cache_write=0 reasoning=0
+2026-10-23T21:50:26.491469+00:00 [ok] research:v3:gather K6 facts=14 verified=4 sources=9
+2026-10-23T21:50:26.495142+00:00 [stage] research:v3:gap round 1
+2026-10-23T21:50:38.086705+00:00 [usage] tokens in=4981 out=713 total=5694 phase=gap:gap:r1 cached=1280 cache_write=0 reasoning=0
+2026-10-23T21:50:38.160713+00:00 [stage] v3: gap round 1: official data for follow-ups (stored=1, failed=0)
+2026-10-23T21:50:38.160756+00:00 [stage] research:v3:gather start (3 KIQs, workers=4)
+2026-10-23T21:50:38.160886+00:00 [tool] web_search New York Fed Adrian Crump Moench term premium current value
+2026-10-23T21:50:38.160961+00:00 [tool] web_search FRED DFII10 10-year TIPS real yield October 2026
+2026-10-23T21:50:38.161098+00:00 [tool] web_search FRED DGS10 daily historical moves 1996-2026 large percentage point changes
+2026-10-23T21:50:38.161192+00:00 [tool] web_search FOMC September 2026 Summary of Economic Projections dot plot median end-2027
+2026-10-23T21:50:39.765871+00:00 [result] web_search → 5 results
+2026-10-23T21:50:39.765927+00:00 [tool] web_search New York Fed recession probability model October 2026 12-month ahead
+2026-10-23T21:50:39.830163+00:00 [result] web_search → 5 results
+2026-10-23T21:50:39.885222+00:00 [result] web_search → 5 results
+2026-10-23T21:50:40.294637+00:00 [result] web_search → 4 results
+2026-10-23T21:50:41.403754+00:00 [result] web_search → 5 results
+2026-10-23T21:50:42.574465+00:00 [usage] tokens in=3610 out=3 total=3613 phase=gap:gather:prime cached=3584 cache_write=0 reasoning=0
+2026-10-23T21:50:46.551071+00:00 [usage] tokens in=6568 out=200 total=6768 phase=gap:G1F3:s1 cached=3584 cache_write=0 reasoning=50
+2026-10-23T21:50:46.551446+00:00 [tool] web_fetch https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf
+2026-10-23T21:50:46.551609+00:00 [tool] web_fetch https://www.newyorkfed.org/research/capital_markets/ycfaq
+2026-10-23T21:50:46.551983+00:00 [tool] web_search Richmond Fed Survey of Shipments SOS latest value 2026
+2026-10-23T21:50:46.563815+00:00 [result] web_fetch → 2555/4500 chars [S73] (stored copy)
+2026-10-23T21:50:46.578204+00:00 [result] web_fetch → 2588/12055 chars [S1]
+2026-10-23T21:50:46.788701+00:00 [usage] tokens in=7086 out=189 total=7275 phase=gap:G1F1:s1 cached=3584 cache_write=0 reasoning=102
+2026-10-23T21:50:46.789178+00:00 [tool] web_search ACM term premium 10-year October 2026 New York Fed
+2026-10-23T21:50:46.789218+00:00 [result] web_search → cached
+2026-10-23T21:50:46.789290+00:00 [tool] web_search CME FedWatch December 2027 fed funds futures implied rate October 2026
+2026-10-23T21:50:48.086379+00:00 [result] web_search → 5 results
+2026-10-23T21:50:48.262555+00:00 [result] web_search → 5 results
+2026-10-23T21:50:48.290198+00:00 [usage] tokens in=7350 out=215 total=7565 phase=gap:G1F2:s1 cached=3584 cache_write=0 reasoning=184
+2026-10-23T21:50:51.889662+00:00 [usage] tokens in=9234 out=188 total=9422 phase=gap:G1F3:s2 cached=6528 cache_write=0 reasoning=115
+2026-10-23T21:50:51.889979+00:00 [tool] web_fetch https://www.newyorkfed.org/medialibrary/media/research/capital_markets/Prob_Rec.pdf
+2026-10-23T21:50:51.890049+00:00 [tool] web_search CBO budget projections FY2027 deficit dollars percent of GDP 2026
+2026-10-23T21:50:54.488134+00:00 [result] web_fetch → 2257/2257 chars [S122]
+2026-10-23T21:50:55.350681+00:00 [usage] tokens in=8906 out=216 total=9122 phase=gap:G1F1:s2 cached=7040 cache_write=0 reasoning=99
+2026-10-23T21:50:55.351094+00:00 [tool] web_fetch https://www.cmegroup.com/markets/interest-rates/stirs/30-day-federal-fund.quotes.html
+2026-10-23T21:50:55.351348+00:00 [tool] web_fetch https://en.macromicro.me/charts/45452/us-10-treasury-term-premium
+2026-10-23T21:50:55.373656+00:00 [result] web_fetch → 2584/12051 chars [S42] (stored copy)
+2026-10-23T21:51:00.738228+00:00 [result] web_fetch → 2558/3585 chars [S24]
+2026-10-23T21:51:04.891509+00:00 [usage] tokens in=10820 out=231 total=11051 phase=gap:G1F1:s3 cached=8896 cache_write=0 reasoning=140
+2026-10-23T21:51:04.891826+00:00 [tool] web_fetch https://www.cmegroup.com/markets/interest-rates/stirs/30-day-federal-fund.quotes.html
+2026-10-23T21:51:04.901262+00:00 [result] web_fetch → 2572/12051 chars [S42] (stored copy)
+2026-10-23T21:51:29.586213+00:00 [usage] tokens in=11523 out=2722 total=14245 phase=gap:G1F2:s2 cached=7296 cache_write=0 reasoning=1164
+2026-10-23T21:51:29.590220+00:00 [ok] research:v3:gather G1F2 facts=10 verified=2 sources=2
+2026-10-23T21:51:32.342027+00:00 [usage] tokens in=16312 out=1872 total=18184 phase=gap:G1F1:s4 cached=10816 cache_write=0 reasoning=365
+2026-10-23T21:51:32.356223+00:00 [ok] research:v3:gather G1F1 facts=14 verified=3 sources=7
+2026-10-23T21:51:39.855950+00:00 [result] web_search → 5 results
+2026-10-23T21:51:44.011334+00:00 [usage] tokens in=11167 out=91 total=11258 phase=gap:G1F3:s3 cached=9216 cache_write=0 reasoning=0
+2026-10-23T21:51:44.011787+00:00 [tool] web_fetch https://www.cbo.gov/publication/62105
+2026-10-23T21:51:44.011908+00:00 [tool] web_fetch https://www.federalreserve.gov/monetarypolicy/fomcprojtabl20260916.htm
+2026-10-23T21:51:44.023116+00:00 [result] web_fetch → 2585/12080 chars [S53] (stored copy)
+2026-10-23T21:51:44.032228+00:00 [result] web_fetch → 2588/12079 chars [S63] (stored copy)
+2026-10-23T21:51:48.124877+00:00 [usage] tokens in=12612 out=202 total=12814 phase=gap:G1F3:s4 cached=11136 cache_write=0 reasoning=98
+2026-10-23T21:51:48.125239+00:00 [tool] web_fetch https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf
+2026-10-23T21:51:48.125388+00:00 [tool] web_fetch https://www.cbo.gov/publication/62105
+2026-10-23T21:51:48.136271+00:00 [result] web_fetch → 2589/12079 chars [S63] (stored copy)
+2026-10-23T21:51:48.146738+00:00 [result] web_fetch → 2590/12055 chars [S1] (stored copy)
+2026-10-23T21:51:51.284300+00:00 [usage] tokens in=14642 out=120 total=14762 phase=gap:G1F3:s5 cached=12608 cache_write=0 reasoning=89
+2026-10-23T21:51:51.284355+00:00 [tool] web_search CBO baseline "2027" budget deficit "percent of GDP" trillion Table 1-1
+2026-10-23T21:51:52.835683+00:00 [result] web_search → 5 results
+2026-10-23T21:51:55.584731+00:00 [usage] tokens in=15172 out=67 total=15239 phase=gap:G1F3:s6 cached=14592 cache_write=0 reasoning=0
+2026-10-23T21:51:55.585025+00:00 [tool] web_fetch https://www.taxnotes.com/lr/resolve/tax-notes-today-federal/cbo-budget-outlook-projects-large-deficits/27ydj
+2026-10-23T21:52:02.138300+00:00 [result] web_fetch → 2595/12058 chars [S126]
+2026-10-23T21:52:27.255526+00:00 [usage] tokens in=15897 out=1837 total=17734 phase=gap:G1F3:s7 cached=15168 cache_write=0 reasoning=463
+2026-10-23T21:52:27.303098+00:00 [ok] research:v3:gather G1F3 facts=12 verified=8 sources=8
+2026-10-23T21:52:27.359300+00:00 [stage] research:v3:synthesize start (8 groups)
+2026-10-23T21:53:08.701867+00:00 [usage] tokens in=20210 out=3 total=20213 phase=synthesize:synth:prime cached=0 cache_write=0 reasoning=0
+2026-10-23T21:55:39.546846+00:00 [usage] tokens in=21441 out=13649 total=35090 phase=synthesize:synth:g3 cached=20160 cache_write=0 reasoning=12321
+2026-10-23T21:55:39.547521+00:00 [ok] research:v3:synthesize G3 written=1 fallback=0
+2026-10-23T21:56:50.711258+00:00 [usage] tokens in=21446 out=4804 total=26250 phase=synthesize:synth:g4 cached=20224 cache_write=0 reasoning=3873
+2026-10-23T21:56:50.711754+00:00 [ok] research:v3:synthesize G4 written=1 fallback=0
+2026-10-23T21:57:26.600995+00:00 [usage] tokens in=21688 out=20663 total=42351 phase=synthesize:synth:g1 cached=20160 cache_write=0 reasoning=17396
+2026-10-23T21:57:26.601718+00:00 [ok] research:v3:synthesize G1 written=2 fallback=0
+2026-10-23T21:57:52.103283+00:00 [usage] tokens in=21643 out=23388 total=45031 phase=synthesize:synth:g2 cached=20160 cache_write=0 reasoning=20865
+2026-10-23T21:57:52.104063+00:00 [ok] research:v3:synthesize G2 written=2 fallback=0
+2026-10-23T21:58:38.640557+00:00 [usage] tokens in=21381 out=8426 total=29807 phase=synthesize:synth:g5 cached=20224 cache_write=0 reasoning=7341
+2026-10-23T21:58:38.641019+00:00 [ok] research:v3:synthesize G5 written=1 fallback=0
+2026-10-23T22:00:18.995911+00:00 [usage] tokens in=21478 out=10639 total=32117 phase=synthesize:synth:g6 cached=20224 cache_write=0 reasoning=9242
+2026-10-23T22:00:18.996676+00:00 [ok] research:v3:synthesize G6 written=1 fallback=0
+2026-10-23T22:01:46.899290+00:00 [usage] tokens in=22077 out=15166 total=37243 phase=synthesize:synth:g7 cached=20224 cache_write=0 reasoning=13602
+2026-10-23T22:01:46.899910+00:00 [ok] research:v3:synthesize G7 written=1 fallback=0
+2026-10-23T22:03:37.088647+00:00 [usage] tokens in=21565 out=10967 total=32532 phase=synthesize:synth:g8 cached=20224 cache_write=0 reasoning=9621
+2026-10-23T22:03:37.089224+00:00 [ok] research:v3:synthesize G8 written=1 fallback=0
+2026-10-23T22:04:51.523219+00:00 [usage] tokens in=5774 out=6756 total=12530 phase=synthesize:synth:exec cached=2560 cache_write=0 reasoning=5841
+2026-10-23T22:04:51.526203+00:00 [ok] research:v3:synthesize done
+2026-10-23T22:04:51.533335+00:00 [stage] research:v3:qa start
+2026-10-23T22:04:53.871112+00:00 [ok] research:v3:qa passed=False failures=1 repaired=0
+2026-10-23T22:04:53.878498+00:00 [stage] research:v3:finalize start
+2026-10-23T22:04:53.917918+00:00 [ok] wrote research_report.md (60137 chars)
+2026-10-23T22:04:53.917954+00:00 [ok] wrote sources.json (39 sources)
+2026-10-23T22:04:55.250971+00:00 [usage] tokens in=18722 out=3 total=18725 phase=finalize:extract:prime cached=2560 cache_write=0 reasoning=0
+2026-10-23T22:05:08.347937+00:00 [usage] tokens in=19358 out=1274 total=20632 phase=finalize:extract:frame cached=18688 cache_write=0 reasoning=85
+2026-10-23T22:06:09.966459+00:00 [usage] tokens in=19016 out=9056 total=28072 phase=finalize:extract:facts cached=18688 cache_write=0 reasoning=4
+2026-10-23T22:06:19.097990+00:00 [usage] tokens in=19326 out=7674 total=27000 phase=finalize:extract:actors cached=18688 cache_write=0 reasoning=6
+2026-10-23T22:06:19.142217+00:00 [ok] wrote actors.json (12 actors)
+2026-10-23T22:06:19.142662+00:00 [ok] wrote timeline.json (35 events)
+2026-10-23T22:06:19.143389+00:00 [ok] wrote quantitative.json (54 rows)
+2026-10-23T22:06:19.143747+00:00 [ok] wrote contested.json (8 claims)
+2026-10-23T22:06:19.143921+00:00 [ok] research_quality=0.787 (grounding=0.667)
+2026-10-23T22:06:22.073180+00:00 [usage] tokens in=690 out=160 total=850 phase=prediction-market-query-derivation cached=0 cache_write=0 reasoning=0
+2026-10-23T22:06:22.073358+00:00 [ok] prediction markets: LLM derived 16 market-title queries
+2026-10-23T22:06:37.085505+00:00 [warn] prediction markets: no relevant active markets (queries=['10-year Treasury yield above 4.5% December', '10-year Treasury yield end-2027 level', 'Fed rate decision December 2026', 'Fed rate decision January 2027', 'Fed rate cut in 2027', 'Fed funds rate December 2027', 'Fed QT ends 2027', 'Powell successor Fed chair 2027', 'November 2026 Treasury refunding coupon increase', 'Treasury bills share above 25% 2027', 'Core PCE 2027 below 2.5%', 'Michigan 1-year inflation expectations 2027', 'Term premium above 1.5% 2027', 'Recession in 2027', 'US recession probability 2027', 'CBO FY2027 deficit above $1.9 trillion'])
+2026-10-23T22:06:37.086318+00:00 [warn] wrote prediction_markets.json (no_relevant_markets marker; no report section appended)
+2026-10-23T22:06:37.086684+00:00 [stage] research charts: rendering via /Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python render.py (out=/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_b4a359aae81b/handoff)
+2026-10-23T22:06:42.537485+00:00 [ok] research charts: embedded 10 chart(s) into research_report.md (Visual Annex)
+2026-10-23T22:06:42.537533+00:00 [ok] wrote charts.json (10 charts) + charts/ files
+2026-10-23T22:06:42.549006+00:00 [ok] wrote quantitative.json (62 rows, 13 from official data)
+2026-10-23T22:06:42.551081+00:00 [done] research complete (v3: 9 KIQs, 39 sources, 60603 chars)

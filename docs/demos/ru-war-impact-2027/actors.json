@@ -1,0 +1,3321 @@
+{
+  "central_question": "By 31 December 2027, what are the probability-weighted global economic, macro-financial and geopolitical consequences of the Russia-Ukraine war, conditional on an explicitly defined war end-state (active high-intensity war, reduced-intensity attrition, frozen conflict, formal armistice, or comprehensive peace settlement), priced across Brent, TTF, gold, euro-area inflation and rates, and European defense spending?",
+  "as_of_date": "2026-10-23",
+  "situation_brief": {
+    "current_situation": "As of late October 2026, Russia holds about 19% of Ukraine (~45,196 sq miles incl. Crimea and pre-2022 Donbas) after a slow year of gains (+753 sq miles over 12 months), but momentum has reversed: Russia's four-week net gain fell to 3 sq miles, with Ukraine retaking 20 sq miles on Oct 13-19, and ISW assesses Russia's Donetsk offensive has been 'operationally defeated'. No ceasefire text exists. Talks collapsed in Geneva in February 2026; after the ninth Witkoff-Putin meeting, Russia agreed in principle to resume trilateral talks after November 10. Markets carry a double shock: Brent ~$115/b and TTF ~€92/MWh, driven largely by a Middle East energy disruption plus the war; gold averages $4,334/oz; euro-area HICP 3.8% with core 2.5%; ECB deposit rate 2.50% after two 2026 hikes; Fed upper limit 4% after a September hike.",
+    "context": "The war is in its fifth year of full-scale fighting, well beyond the 2.1-year interstate average, with Iran-Iraq (8 years to ceasefire) the closest duration analog. Russia's fiscal strain is real (2026 deficit estimate 3.2% of GDP vs 1.6% target; 2027 borrowing up 43%; security 44% of 2027 spending) but not yet binding. Ukraine's binding constraint is manpower: 200,000 AWOL, 2 million evading draft notices, average soldier over 40. Europe leads military aid but depends on US weapons; Ukraine faces a ~€70 billion 2027 funding gap against €45 billion planned from the EU. US politics (diesel peaked at $6.53/gallon before the November 3 midterms) is driving unilateral, pre-deal US sanctions relief (diesel license to April 2027, Graham Act waiver, possible shadow-fleet relief) that diverges from the EU's ratcheting 20th sanctions package.",
+    "dynamics": "The central obstacle is sequencing: Putin insists talks cover the security parameters of a final peace deal, 'not a short ceasefire', while Zelensky says Ukraine is ready to freeze the front line now and wants a ceasefire first plus security guarantees (NATO membership, US Article-5-style guarantees, or a European Coalition of the Willing). Trump is pressing Kyiv to deal and has linked the track to Russia helping on Iran. Ukraine's counteroffensive (Operation Vivaldi) has stabilised the front; drone output is scaling on both sides; Russian mobilization signals (convict contracts, regional staff cuts) have not become a decree. The probability mass sits on de-escalation without signature (frozen conflict 32% + reduced-intensity attrition 35%), with signed termination at 18% and active high-intensity war at 15%.",
+    "fault_lines": [
+      "Ceasefire-first vs final-deal-first sequencing between Kyiv and Moscow",
+      "US unilateral pre-deal sanctions relief vs EU ratcheting 20th package and prospective maritime-services ban",
+      "Ukraine's manpower crisis (200,000 AWOL, 2 million evading notices) vs Russia's thinning but functional fiscal-military buffer",
+      "Security-guarantee architecture: Putin's red line on Western peacekeeping troops vs Ukraine's demand for guarantees",
+      "Ukraine's ~€70 billion 2027 funding gap vs €45 billion planned EU support and US dependence of European aid",
+      "Election-cycle fuel politics in the US (diesel peaked at $6.53/gallon) vs coalition sanctions discipline"
+    ],
+    "catalysts": [
+      "US midterms November 3, 2026",
+      "Trilateral Russia-Ukraine-US talks expected on/after November 10, 2026, possibly Abu Dhabi",
+      "EU summit on 2027 Ukraine financing, November 26-27, 2026",
+      "Expiry of US diesel-sanctions license, April 2027",
+      "FOMC October 27-28 and December 2026 meetings; ECB meetings from February 3-4, 2027",
+      "NATO June 2027 defence-expenditure release",
+      "Russian mobilization decree or new nuclear exercise",
+      "OSINT confirmation of three months of near-zero front-line movement"
+    ]
+  },
+  "actors": [
+    {
+      "name": "Volodymyr Zelensky",
+      "type": "Person",
+      "role": "President of Ukraine; controls negotiating posture",
+      "stance": "Ready to freeze the conflict along the current front line; rejects surrendering Donbas; demands a ceasefire as the minimum and security guarantees",
+      "description": "Ukrainian president who on October 21, 2026 said 'Right now we have to freeze, and I think this is a real way to end this war', proposed ceasefires on food security, maritime activity and energy infrastructure, and named three unagreed guarantee options: NATO membership, direct US guarantees modeled on Article 5, or a European Coalition of the Willing backed by Washington.",
+      "stated_vs_revealed": "States readiness to freeze and openness to partial truces; revealed behavior includes a three-day pause on energy strikes (then resumption) and conditioning compliance with US demands on reciprocity or more Patriots.",
+      "memory": "Three trilateral rounds in early 2026 ended in impasse; US relations deteriorated sharply after the October 2026 diesel deal; the October 20 Oslo meeting agreed to resolve intelligence-sharing and Starshield disruptions.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "Freeze the current front line",
+        "Obtain security guarantees (NATO, US Article-5-style, or Coalition of the Willing)",
+        "Avoid surrendering Donbas",
+        "Sustain Western financing and weapons for 2027"
+      ],
+      "constraints": [
+        "Manpower crisis: 200,000 soldiers AWOL, 2 million men evading draft notices",
+        "Average soldier over 40; conscription age kept at 25",
+        "~€70 billion 2027 funding gap vs €45 billion planned EU support",
+        "US pressure to make a deal and to stop striking Russian refineries"
+      ],
+      "assets": [
+        "Deep-strike drones (2026 contracts 5.5x 2025 level)",
+        "~1,080 sq km retaken since January 1, 2026 per ISW",
+        "EUR 90 billion EU Ukraine Support Loan for 2026-27",
+        "EU and UK political backing as largest military donors"
+      ],
+      "vulnerabilities": [
+        "Dependence on US intelligence sharing and Starshield access, which have been disrupted",
+        "Aid still US-anchored (over 90% of NATO PURL aid from US stockpiles)",
+        "Deteriorated US relations after the diesel deal"
+      ],
+      "incentives": [
+        {
+          "driver": "Territorial and security survival",
+          "gains_if": "A freeze stabilizes the front and Western financing closes the 2027 gap",
+          "loses_if": "Forced into a deal without guarantees or ceding Donbas",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Territorial integrity",
+          "Euro-Atlantic integration"
+        ],
+        "beliefs": [
+          "A freeze along the current line is 'a real way to end this war'",
+          "Guarantees must precede durable settlement"
+        ],
+        "identity": "Wartime Ukrainian president and Western partner",
+        "frame": "Ceasefire-first, guarantees-after"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "Principal decision-maker on the Ukrainian side; central to the freeze-vs-deal sequencing gap"
+      }
+    },
+    {
+      "name": "Vladimir Putin",
+      "type": "Person",
+      "role": "President of Russia; sets war aims and any decision to halt or escalate",
+      "stance": "Ready for three-way talks on the security parameters of a final peace deal, not a 'short' ceasefire; rejects Western peacekeeping troops in Ukraine",
+      "description": "Russian president who told Witkoff the Oslo proposals contained 'little that was useful', ordered a fourth 2026 increase in authorized military strength (to 2,441,630, including 1,550,500 military personnel), warned Europe of war if peacekeeping troops deploy to Ukraine, and offered to help Trump with Iran.",
+      "stated_vs_revealed": "States he 'needs peace, not a ceasefire' and wants final-deal parameters; revealed behavior includes agreeing in principle to resume trilateral talks after November 10 and selling diesel to the US.",
+      "memory": "June 2026 ceasefire-for-talks proposal reportedly rejected; nine in-person Witkoff meetings; February 2026 Geneva round ended in impasse.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "Final-deal security parameters, not an interim ceasefire",
+        "Retain the roughly 19% of Ukraine currently held",
+        "Link the track to wider US-Russia bargaining, including Iran",
+        "Sustain the war economy through 2027"
+      ],
+      "constraints": [
+        "2026 deficit estimate 3.2% of GDP vs 1.6% target; wartime deficit targets never met (2025: 2.6% outturn)",
+        "2027 state debt rises to 21.7% of GDP, above the 20% threshold authorities deem safe; borrowing at 14-15%",
+        "Donetsk offensive 'operationally defeated'; net losing territory since September 1, 2026",
+        "Fossil-fuel export revenues down 12% m/m in July 2026"
+      ],
+      "assets": [
+        "1.55 million authorized military personnel; ~120,000 autumn conscripts",
+        "~7 million artillery/mortar/tank/rocket rounds produced in 2025 (Estonian intelligence estimate)",
+        "Energy export revenue (EUR 683 million/day, July 2026)",
+        "May 2026 nuclear signaling precedent and escalation menu"
+      ],
+      "vulnerabilities": [
+        "Fiscal-rule cutoff cut to $50/bbl against official 2027 oil forecasts of $46-53",
+        "National Wealth Fund drawdown (~11% of liquid assets in 2026 borrowing)",
+        "Battlefield setbacks correlating with nuclear signaling"
+      ],
+      "incentives": [
+        {
+          "driver": "Wait out Western cohesion",
+          "gains_if": "US relief continues unilaterally and Ukraine's funding gap stays open",
+          "loses_if": "Brent settles below the $50 fiscal-rule cutoff or financing becomes binding",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Sphere-of-influence security",
+          "No Western presence in Ukraine"
+        ],
+        "beliefs": [
+          "Russia can outlast Western pressure",
+          "A freeze now would lock in gains but forgo final-deal leverage"
+        ],
+        "identity": "Wartime Russian leader bargaining from a holding position",
+        "frame": "Final-deal-first"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "Sets Russian war aims and any decision to halt or escalate; central to the sequencing gap"
+      }
+    },
+    {
+      "name": "US administration",
+      "type": "Government",
+      "role": "Primary mediator and largest single military-aid and sanctions lever",
+      "stance": "Pressing Kyiv to make a deal; granting unilateral pre-deal sanctions relief to cut domestic fuel prices; engaging Russia including on Iran",
+      "description": "The Trump administration signed an October 16, 2026 executive order waiving the Graham Sanctioning Russia and Iran Act of 2026, announced a Russian diesel purchase deal on October 9 with a Treasury license suspending sanctions on Russian diesel deliveries until April 2027, and is reportedly weighing lifting sanctions on some shadow-fleet vessels. Envoy Witkoff held a ninth in-person meeting with Putin on October 21, securing the release of US citizen Stephen Hubbard.",
+      "stated_vs_revealed": "States a desire to stop the fighting and broker a settlement; revealed behavior is unilateral, pre-deal sanctions relief on an electoral clock and pressure on Kyiv, including telling Ukraine to stop attacking Russian refineries.",
+      "memory": "Three early-2026 trilateral rounds ended in impasse; the October 20 Oslo meeting with Zelensky and Europeans agreed to resolve intelligence-sharing and Starshield disruptions.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "arbiter",
+      "goals": [
+        "Stop the fighting and cut pump prices",
+        "A brokered settlement",
+        "Russian help on Iran",
+        "Relief from $6.53/gallon diesel prices before the November 3 midterms"
+      ],
+      "constraints": [
+        "Congress passed the act the President waived; override votes possible",
+        "Diesel rose from $3.48/gallon (Jan 5) to $6.53 peak (Sept 21, 2026)",
+        "US policy rate 3.875% and IMF-projected CPI of 3.648% for 2026",
+        "New assistance runs below FY2022-24 levels"
+      ],
+      "assets": [
+        "Sanctions waivers and licenses",
+        "Intelligence and Starshield access control",
+        "Mediation channel (Witkoff-Putin)",
+        "Residual military assistance and >90% of PURL-initiative stockpile aid"
+      ],
+      "vulnerabilities": [
+        "Midterm fuel politics",
+        "Coalition split with the EU over relief sequencing",
+        "Ukraine's dependence creates leverage but also blame risk"
+      ],
+      "incentives": [
+        {
+          "driver": "Domestic fuel prices before November 3, 2026 midterms",
+          "gains_if": "Diesel prices fall via Russian supply relief and a deal",
+          "loses_if": "Escalation keeps diesel elevated and inflation above the IMF's 2.835% 2027 projection",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Deal-making",
+          "Domestic cost-of-living primacy"
+        ],
+        "beliefs": [
+          "Relief now can buy Russian cooperation",
+          "Fuel prices decide the midterms"
+        ],
+        "identity": "Mediator with transactional incentives",
+        "frame": "Settlement-for-relief linkage"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "Largest sanctions and aid lever plus mediator role; drives relief sequencing"
+      }
+    },
+    {
+      "name": "European Union",
+      "type": "Organization",
+      "role": "Sanctions regime owner, rearmament financier and security-guarantee provider",
+      "stance": "Ratcheting sanctions (reported 20th package) while financing Ukraine through 2027; relief only in sequence with a deal",
+      "description": "The EU adopted a 20th sanctions package (120 individuals, basis for a future maritime-services ban on Russian crude, 20 more banks excluded), runs the EUR 90 billion Ukraine Support Loan for 2026-27, plans another €45 billion for 2027 against a ~€70 billion gap, and disburses SAFE loans of up to €150 billion; leaders meet November 26-27, 2026 on new financing.",
+      "stated_vs_revealed": "States relief only in sequence with a deal; revealed behavior is ratcheting sanctions (20th package) while continuing loan-based financing rather than grants.",
+      "memory": "Reported 20th package adopted despite US waivers; SAFE first payments from mid-2026; H1 2026 financial and humanitarian aid ran 41% below 2025 monthly averages.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "EU"
+      ],
+      "goals": [
+        "Keep financing Ukraine through 2027",
+        "Rearmament at 5% of GDP by 2035 (Hague pledge)",
+        "Maintain sanctions integrity and sequenced relief"
+      ],
+      "constraints": [
+        "~€70 billion 2027 Ukraine funding gap vs €45 billion planned",
+        "Aid still US-anchored (at least EUR 3 billion from US firms in H1 2026; >90% of PURL aid from US stockpiles)",
+        "EU gas at 25.494 USD/MMBtu (Sept 2026), +131.7% y/y; HICP 3.8%"
+      ],
+      "assets": [
+        "Sanctions regime",
+        "EUR 90 billion Support Loan; SAFE up to €150 billion",
+        "Escape clause for 18 member states",
+        "Largest buyer status of Russian LNG and pipeline gas (leverage)"
+      ],
+      "vulnerabilities": [
+        "Energy-price pass-through into inflation and ECB policy"
+      ],
+      "incentives": [
+        {
+          "driver": "Sanctions integrity and security of Europe",
+          "gains_if": "A deal sequences relief and stabilizes energy prices",
+          "loses_if": "US unilateral relief erodes the regime without Ukrainian concessions",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Territorial integrity",
+          "European security autonomy",
+          "Rules-based sanctions sequencing"
+        ],
+        "beliefs": [
+          "Unilateral US relief rewards Russia's waiting strategy",
+          "Rearmament must proceed under every war state"
+        ],
+        "identity": "Sanctions owner and rearmament financier",
+        "frame": "Sequenced relief, Readiness 2030"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.9,
+        "basis": "Owns the sanctions regime and the main Ukraine financing instruments"
+      }
+    },
+    {
+      "name": "NATO",
+      "type": "Organization",
+      "role": "Frames defense-spending pledges and Ukraine's membership pathway",
+      "stance": "5% of GDP by 2035 pledge (at least 3.5% core); Ukraine membership open-ended; over USD 4.8 billion PURL assistance committed by March 2026 (reported)",
+      "description": "At The Hague, allies pledged 5% of GDP by 2035 (at least 3.5% core plus up to 1.5% broader) with annual incremental-path plans. European Allies and Canada spent more than USD 571 billion (2021 prices), 2.3% of GDP, in 2025; around USD 634 billion, 2.53% of GDP, reported for 2026.",
+      "stated_vs_revealed": "States the 2035 pledge with annual plans; revealed behavior shows spending rising regardless of war state, near-term downside limited to the margin.",
+      "memory": "2025 verified total USD 571 billion (2021 prices); 2026 reported ~USD 634 billion with core spending up about 11%.",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Deliver the 2035 5% pledge",
+        "Sustain support to Ukraine via PURL",
+        "Manage the enlargement question"
+      ],
+      "constraints": [
+        "Aid still US-anchored (>90% of PURL aid from US stockpiles)",
+        "No dated membership pathway for Ukraine"
+      ],
+      "assets": [
+        "The Hague pledge framework",
+        "PURL initiative",
+        "Aggregate defense-spending trajectory (~USD 700 billion for 2027, analyst-derived)"
+      ],
+      "vulnerabilities": [
+        "Transatlantic divergence on Russia policy",
+        "Dependence on US weapons and stockpiles"
+      ],
+      "incentives": [
+        {
+          "driver": "Collective defense credibility",
+          "gains_if": "Members deliver incremental-path plans on schedule",
+          "loses_if": "US disengagement strands European capability",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Collective defense",
+          "Deterrence"
+        ],
+        "beliefs": [
+          "Rearmament continues under every end-state"
+        ],
+        "identity": "Alliance framework for European security",
+        "frame": "Readiness through spending"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.8,
+        "basis": "Anchors the defense-spending trajectory binding under all war states"
+      }
+    },
+    {
+      "name": "European Central Bank",
+      "type": "Organization",
+      "role": "Sets the deposit rate path pricing the energy-inflation pass-through",
+      "stance": "Hiked to 2.50% in September 2026; 'not pre-committing to a particular rate path'; cites Middle East conflict inflation pressure",
+      "description": "Raised all three key rates by 25bp on 10 September 2026 (deposit 2.50%, MRO 2.65%, marginal lending 2.90%), its second hike of 2026 after June's move to 2.25%. Staff project headline HICP of 3.0% (2026), 2.5% (2027), 2.1% (2028), core 2.5%/2.6%/2.3%, and GDP growth of 0.9%/1.4%/1.5%.",
+      "stated_vs_revealed": "States no pre-commitment; revealed behavior is two 2026 hikes into the energy shock.",
+      "memory": "Cut to 2.00% trough held March-May 2026; June and September hikes followed the Middle East shock.",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "ECB"
+      ],
+      "goals": [
+        "Return inflation to 2%",
+        "Avoid choking a recovery projected at 1.4% growth in 2027"
+      ],
+      "constraints": [
+        "Energy-driven headline-core gap (3.8% vs 2.5%, Sept 2026)",
+        "Growth capped near 1.2-1.4% in 2027"
+      ],
+      "assets": [
+        "Policy rate at 2.50%, within the neutral range per market commentary",
+        "Projection credibility"
+      ],
+      "vulnerabilities": [
+        "Second-round effects if core exceeds the 2.6% 2027 staff projection"
+      ],
+      "incentives": [
+        {
+          "driver": "Price stability",
+          "gains_if": "Energy premia unwind, allowing easing toward 2.00-2.25%",
+          "loses_if": "Escalation sustains refinery-strike and grain premia, forcing hikes to 2.75-3.00%",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Price stability",
+          "Data dependence"
+        ],
+        "beliefs": [
+          "Energy-driven headline will fade; core contained"
+        ],
+        "identity": "Euro-area inflation guardian",
+        "frame": "Meeting-by-meeting"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.85,
+        "basis": "Its deposit-rate path is a core deliverable, conditional on the war state's inflation pass-through"
+      }
+    },
+    {
+      "name": "Federal Reserve",
+      "type": "Organization",
+      "role": "US policy path and dollar safe-haven dynamics",
+      "stance": "Raised the target range to 3.75-4% on September 16, 2026 by 12-0 vote; 'Inflation remains elevated'; investors expect an October hold",
+      "description": "The FOMC's September minutes record Desk-survey respondents placing 'a considerable probability' on at least 25bp of additional firming by end-2026, with considerable uncertainty beyond, and note elevated foreign headline inflation on energy and food from geopolitical disruptions.",
+      "stated_vs_revealed": "States concern over elevated inflation; revealed behavior is a unanimous September hike with further firming signaled but untimed.",
+      "memory": "Held at 3.875% end-September 2026 (BIS series); Desk survey saw firming probability before the September meeting.",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Fed",
+        "FOMC"
+      ],
+      "goals": [
+        "Return inflation to 2% from 3.7% headline CPI",
+        "Support a timelier return to the goal per the September statement"
+      ],
+      "constraints": [
+        "US CPI 3.7% y/y (Sept 2026); core 2.566%",
+        "IMF projects 3.648% CPI for 2026, 2.835% for 2027"
+      ],
+      "assets": [
+        "Policy credibility; 12-0 September hike consensus"
+      ],
+      "vulnerabilities": [
+        "Diesel and energy pass-through",
+        "Electoral-cycle political pressure"
+      ],
+      "incentives": [
+        {
+          "driver": "Inflation persistence",
+          "gains_if": "Energy fade delivers the IMF's 2.835% 2027 path",
+          "loses_if": "Escalation keeps CPI at 3.5-4.0% into 2027",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Price stability",
+          "Dual mandate"
+        ],
+        "beliefs": [
+          "Geopolitical energy shocks transmit but should fade"
+        ],
+        "identity": "US monetary authority",
+        "frame": "Firming into the shock"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.8,
+        "basis": "Prices the US inflation pass-through and dollar safe-haven channel of the war state"
+      }
+    },
+    {
+      "name": "OPEC+",
+      "type": "Organization",
+      "role": "Spare-capacity response conditions the oil price under any war state",
+      "stance": "Raising output: 2.1 mb/d m/m gains in September 2026 led by Saudi Arabia; IEA projects OPEC liquids recovering from 23.9 to 29.2 mb/d into 2027",
+      "description": "Global supply rose 2.5 mb/d m/m to 102.3 mb/d in September 2026 on OPEC+ gains; the IEA projects 2027 supply up 7.7 mb/d. The IEA warns a prolonged Hormuz disruption 'could render unavailable the vast majority of the world's spare production capacity - most of which is held by Saudi Arabia'.",
+      "stated_vs_revealed": "Revealed behavior is sustained output increases through late 2026.",
+      "memory": "September 2026 gains of 2.1 mb/d led by Saudi Arabia.",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Manage supply and revenue",
+        "Rebuild market share"
+      ],
+      "constraints": [
+        "Spare capacity concentrated in Saudi Arabia and vulnerable to a Hormuz disruption",
+        "Effective spare capacity contested (secondary summary put it at 0.22 mb/d; IEA's verifiable figure is over 4 mb/d in Q4 2025)"
+      ],
+      "assets": [
+        "Saudi-held spare capacity; 3-5 mb/d East-West pipeline bypass"
+      ],
+      "vulnerabilities": [
+        "Hormuz chokepoint exposure"
+      ],
+      "incentives": [
+        {
+          "driver": "Oil-market management",
+          "gains_if": "De-escalation lets the 2027 supply build cap prices",
+          "loses_if": "Hormuz disruption removes spare capacity and spikes prices",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Market stability",
+          "Revenue defense"
+        ],
+        "beliefs": [
+          "Supply can normalize by 2027"
+        ],
+        "identity": "Producer coalition",
+        "frame": "Output management"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.75,
+        "basis": "Conditions the Brent path under every war state"
+      }
+    },
+    {
+      "name": "Chinese government",
+      "type": "Government",
+      "role": "Material supporter of Russia's war economy and sanctions-evasion channel",
+      "stance": "Undeclared support below the secondary-sanctions threshold; about 75% of Common High Priority goods exports to Russia; Garpiya-A1 drone co-production",
+      "description": "China accounts for about 75% of Common High Priority goods exports to Russia and 43% of top-five importer revenues (EUR 7.7 billion, July 2026), per CREA; the US Treasury sanctioned Chinese entities for Garpiya co-production in 2024, the first action on complete weapons systems; the US-China Commission assesses a goal of keeping Russia a dependent partner and eroding US sanctions primacy.",
+      "stated_vs_revealed": "No declared support; revealed behavior sustains Russia's war economy materially.",
+      "memory": "2024 Garpiya sanctions were the first US action on complete weapons systems with Chinese involvement.",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Keep Russia anchored as a dependent partner",
+        "Erode US sanctions primacy",
+        "Avoid triggering secondary sanctions"
+      ],
+      "constraints": [
+        "Secondary-sanction exposure since the 2024 Garpiya action"
+      ],
+      "assets": [
+        "Dominant share of dual-use exports",
+        "Drone engines and training (Garpiya-A1)",
+        "Purchasing power over Russian energy"
+      ],
+      "vulnerabilities": [
+        "Further US enforcement on Chinese entities"
+      ],
+      "incentives": [
+        {
+          "driver": "Strategic partnership without direct confrontation",
+          "gains_if": "US unilateral relief normalizes trade with Russia",
+          "loses_if": "Secondary sanctions hit Chinese firms",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Multipolarity",
+          "Non-interference framing"
+        ],
+        "beliefs": [
+          "US sanctions primacy can be eroded",
+          "Russia as dependent partner serves Chinese interests"
+        ],
+        "identity": "Enabler below the escalation threshold",
+        "frame": "Strategic opportunism"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.75,
+        "basis": "Sustains Russian war-economy capacity and shapes the US-China-Russia triangle"
+      }
+    },
+    {
+      "name": "German government",
+      "type": "Government",
+      "role": "Its fiscal and defense pivot anchors European rearmament scale",
+      "stance": "Draft 2027 budget with €109 billion core defense (from €82.2 billion in 2026); ministerial ask near €140 billion including off-budget sources",
+      "description": "Per Reuters, the cabinet-approved July 2026 draft budget carries €555.4 billion of spending and €203.6 billion of borrowing; per Defense News, Pistorius asks parliament for nearly €140 billion (about $160 billion) for 2027 - €109.7 billion from the core ministry budget (+32.7%) plus roughly €30 billion - against a 10-year Bund yield of 3.47% (Sept 2026 average).",
+      "stated_vs_revealed": "Stated ask of nearly €140 billion; revealed behavior is cabinet-approved draft with core defense rising 32.7%, pending parliamentary vote.",
+      "memory": "2026 core defense was €82.2 billion; the 2027 ask of €109.7 billion is of the same order as Russia's ~$202.6 billion defense line.",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Deliver the defense pivot",
+        "Fund it within debt rules and market tolerance"
+      ],
+      "constraints": [
+        "Bund yields at 3.47%; €203.6 billion borrowing in the draft budget",
+        "Bundestag must pass the 2027 ask; a trim would cap the aggregate path"
+      ],
+      "assets": [
+        "Largest European defense budget",
+        "Fiscal capacity and SAFE access"
+      ],
+      "vulnerabilities": [
+        "Market absorption of defense issuance; political bargaining over the ask"
+      ],
+      "incentives": [
+        {
+          "driver": "European security and industrial policy",
+          "gains_if": "Rearmament delivers economic and security returns",
+          "loses_if": "Yields rise further or the Bundestag trims the ask",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "European defense capability",
+          "Fiscal discipline tension"
+        ],
+        "beliefs": [
+          "Germany must anchor European defense"
+        ],
+        "identity": "European rearmament anchor",
+        "frame": "Zeitenwende continuation"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.8,
+        "basis": "Anchors the ~USD 700 billion European NATO 2027 aggregate"
+      }
+    },
+    {
+      "name": "Ukrainian military command",
+      "type": "Organization",
+      "role": "Determines battlefield tempo and mobilization feasibility",
+      "stance": "Conducting counteroffensive operations (Operation Vivaldi) that defeated Russia's Donetsk offensive",
+      "description": "Under constraints of 880,000-900,000 personnel, 200,000 AWOL and an over-40 average soldier age, Ukrainian forces reached the Zherebets River (Brig. Gen. Andrii Biletskyi, Oct 19), retaking ~1,080 sq km since January 1, 2026 per ISW; drone contracts in 2026 run at 5.5x the 2025 level.",
+      "stated_vs_revealed": "Stated targets (6-7 million FPV drones) are plans, not delivered output; revealed battlefield performance exceeds Russian tempo since September 2026.",
+      "memory": "May 2026 reforms raised specialist pay and expanded foreign-volunteer recruitment; only 10% of recruits joined via decentralized mechanisms by February 2026.",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Hold the front and exploit the counteroffensive",
+        "Scale drone production toward the 6-7 million FPV target for 2026"
+      ],
+      "constraints": [
+        "Manpower: 880,000-900,000 vs Russia's 1.55 million authorized",
+        "Starlink/Starshield speed restrictions degrade interception and logistics",
+        "Cannot make 155mm shells domestically"
+      ],
+      "assets": [
+        "Deep-strike drones",
+        "Front-line momentum (Russia net -73 sq km since Sept 1)",
+        "Rheinmetall Unterlüß plant targeting ~1.5 million 155mm rounds/year from end-2026"
+      ],
+      "vulnerabilities": [
+        "Desertion and draft evasion",
+        "Dependence on US early-warning intelligence and Starshield"
+      ],
+      "incentives": [
+        {
+          "driver": "Battlefield survival and leverage",
+          "gains_if": "Sustained net gains improve freeze terms",
+          "loses_if": "Manpower rupture or aid disruption collapses tempo",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Defense of territory"
+        ],
+        "beliefs": [
+          "Drone scaling can offset manpower gaps"
+        ],
+        "identity": "Wartime defense force",
+        "frame": "Attrition management"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 2,
+        "score": 0.85,
+        "basis": "Battlefield tempo feeds directly into the war-state driver"
+      }
+    },
+    {
+      "name": "Russian Ministry of Defense",
+      "type": "Organization",
+      "role": "Drives attrition strategy, mobilization and drone/missile production",
+      "stance": "Sustaining attritional strategy; fourth 2026 authorized-strength increase to 2,441,630; ~120,000 autumn conscripts",
+      "description": "Per Col. Gen. Yevgeny Burdinsky, the autumn 2026 draft plans about 120,000 conscripts; a July 2026 Duma law allows people with criminal convictions to sign military contracts during mobilization; Estonian intelligence estimates ~7 million rounds produced in 2025, up ~17-fold from four years earlier.",
+      "stated_vs_revealed": "Strength increases are decreed; a general mobilization decree has not been issued - signals (staff cuts, convict contracts) only.",
+      "memory": "Reported federal directive to cut male regional-administration staff 10-15% by October 2026, read as mobilization preparation.",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Reconstitute offensive capacity",
+        "Sustain shell and drone output",
+        "Replenish manpower coercively"
+      ],
+      "constraints": [
+        "Donetsk offensive 'operationally defeated'; net territorial losses since Sept 1, 2026",
+        "Refinery damage from Ukrainian drones slumped gasoil output and exports",
+        "Record claimed personnel losses (46,230 in September, Ukrainian General Staff claim)"
+      ],
+      "assets": [
+        "~7 million rounds/year production (estimate)",
+        "Coercive recruitment channels (convicts, staff cuts, conscripts)",
+        "Long-range strike capability"
+      ],
+      "vulnerabilities": [
+        "Attrition economics; dependence on Chinese dual-use inputs"
+      ],
+      "incentives": [
+        {
+          "driver": "Battlefield leverage for final-deal talks",
+          "gains_if": "Mobilization matures into a new offensive",
+          "loses_if": "Fiscal strain caps operations before 2028",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Military solution primacy"
+        ],
+        "beliefs": [
+          "Time and mass favor Russia"
+        ],
+        "identity": "Attrition instrument of the Kremlin",
+        "frame": "Reconstitution"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 2,
+        "score": 0.85,
+        "basis": "Its tempo decisions define the intensity continuum"
+      }
+    },
+    {
+      "name": "Ukrainian Ministry of Finance",
+      "type": "Organization",
+      "role": "Manages sovereign restructuring and reconstruction financing terms",
+      "stance": "Managing debt near 101% of GDP (USD 213.3 billion at end-2025, KSE Institute) against a ~€70 billion 2027 funding gap",
+      "description": "Ukraine's debt stood near 101% of GDP at end-2025; the IMF's anchor is below 68% of GDP; the EUR 90 billion EU Support Loan and planned €45 billion for 2027 frame the financing path, with leaders meeting November 26-27, 2026 on new instruments, possibly another loan.",
+      "stated_vs_revealed": "Financing needs documented via Reuters and Kiel; no restructuring terms exist in the evidence.",
+      "memory": "H1 2026 financial and humanitarian aid ran 41% below 2025 monthly averages per Kiel.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "goals": [
+        "Close the 2027 funding gap",
+        "Track debt toward the IMF's below-68% anchor",
+        "Manage a plausible second restructuring round on 2027-28 maturities"
+      ],
+      "constraints": [
+        "Funding gap of ~€70 billion vs €45 billion planned",
+        "Debt near 101% of GDP",
+        "No hryvnia market series captured; currency stays managed"
+      ],
+      "assets": [
+        "EU loan instruments; IMF programme anchors",
+        "Potential reconstruction inflows under de-escalation states"
+      ],
+      "vulnerabilities": [
+        "Dependence on external decisions (EU summit, US politics)"
+      ],
+      "incentives": [
+        {
+          "driver": "Solvency and war financing",
+          "gains_if": "EU closes the gap or de-escalation attracts reconstruction capital",
+          "loses_if": "Financing shortfall forces austerity or monetary financing",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Solvency",
+          "Donor credibility"
+        ],
+        "beliefs": [
+          "External financing can bridge to a settlement"
+        ],
+        "identity": "War-economy treasurer",
+        "frame": "Bridging finance"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.6,
+        "basis": "Key to Ukrainian-asset repricing under each end-state"
+      }
+    },
+    {
+      "name": "Russian government finance bloc",
+      "type": "Government",
+      "role": "Owns the fiscal sustainability question under sanctions and oil-cap enforcement",
+      "stance": "Managing a 2026 deficit estimate of 3.2% of GDP (vs 1.6% target) with 2027 borrowing up 43% to 7.7 trillion roubles",
+      "description": "Per Reuters and Carnegie: the oil-and-gas revenue estimate was cut to 7.6 trillion from 8.9 trillion roubles; borrowing of 5 trillion plus 459 billion roubles draws about 11% of the liquid National Wealth Fund; 2027 state debt rises to 21.7% of GDP, above the 20% safe threshold; the fiscal-rule cutoff was cut to $50/bbl against official 2027 oil forecasts of $46-53; the ministry borrows at 14-15%.",
+      "stated_vs_revealed": "Official 2.2%-of-GDP 2027 deficit target follows targets never met in wartime - revealed outturns run far worse.",
+      "memory": "Carnegie notes repeated deficit overshoots and the fiscal-rule cutoff cut.",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Fund the war through 2027 without rupture",
+        "Keep borrowing costs below crisis levels"
+      ],
+      "constraints": [
+        "Wartime deficit targets never met (2025: 2.6% outturn vs 0.5% target)",
+        "Borrowing at 14-15% vs US rates of 3.875%",
+        "Oil revenues hostage to Brent and cap enforcement"
+      ],
+      "assets": [
+        "National Wealth Fund (thinning)",
+        "Domestic debt market; energy export revenue"
+      ],
+      "vulnerabilities": [
+        "Brent below the $50 fiscal-rule cutoff; OFZ yields above 16%; liquid NWF below one-tenth of GDP"
+      ],
+      "incentives": [
+        {
+          "driver": "War financing",
+          "gains_if": "High oil prices and unilateral Western relief sustain revenue",
+          "loses_if": "Oil collapses or the EU maritime ban is enforced",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Fiscal control",
+          "War primacy"
+        ],
+        "beliefs": [
+          "The buffer lasts through 2027"
+        ],
+        "identity": "Kremlin's treasury under sanctions",
+        "frame": "Muddle-through financing"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 2,
+        "score": 0.8,
+        "basis": "Fiscal sustainability bounds Russia's capacity to sustain tempo into 2028"
+      }
+    },
+    {
+      "name": "UK government",
+      "type": "Government",
+      "role": "Major bilateral military aid provider and sanctions co-architect",
+      "stance": "Aligned with the EU's ratcheting track and continued Ukraine financing",
+      "description": "Grouped in the report with the EU and European allies: goals run from keeping financing Ukraine through 2027 to rearmament at 5% of GDP by 2035; the UK produced a January 2026 casualty estimate of 1,225,000 Ukrainian killed and wounded.",
+      "stated_vs_revealed": "Stated alignment with EU sequencing; revealed behavior is continued aid within a US-anchored coalition.",
+      "memory": "UK casualty estimate of 1,225,000 (January 2026) illustrates intelligence engagement.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "goals": [
+        "Sustain military aid to Ukraine",
+        "Maintain sanctions pressure with the EU"
+      ],
+      "constraints": [
+        "Coalition divergence with US relief policy"
+      ],
+      "assets": [
+        "Bilateral military aid",
+        "Sanctions co-architecture",
+        "Intelligence capabilities"
+      ],
+      "vulnerabilities": [
+        "Aid dependence on US-made weapons and components"
+      ],
+      "incentives": [
+        {
+          "driver": "European security and alliance cohesion",
+          "gains_if": "A deal preserves Ukrainian sovereignty",
+          "loses_if": "US-Russia bilateralism marginalizes European guarantor role",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Euro-Atlantic security",
+          "Sanctions discipline"
+        ],
+        "beliefs": [
+          "Ukraine must not lose"
+        ],
+        "identity": "European co-guarantor",
+        "frame": "Coalition steadfastness"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.55,
+        "basis": "Co-architect of the sanctions and aid regime, secondary to the EU and US"
+      }
+    },
+    {
+      "name": "Shadow-fleet operators and insurers",
+      "type": "Other",
+      "role": "Gate Russian oil export volumes and price-cap enforcement effectiveness",
+      "stance": "Continuing to move Russian barrels; US reportedly weighing lifting sanctions on some vessels to cut freight rates",
+      "description": "Russian crude keeps flowing with volumes flat: CREA counted crude at EUR 392 million/day and total fossil fuels at EUR 683 million/day in July 2026; Reuters reports the US administration is considering lifting sanctions on some shadow-fleet vessels, while the EU's 20th package lays the basis for a maritime-services ban on Russian crude.",
+      "stated_vs_revealed": "No statements; revealed behavior is continued operation sustaining EUR 392 million/day of crude revenue.",
+      "memory": "Volumes flat in July 2026 despite the price cap regime.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "intermediary",
+      "goals": [
+        "Keep moving Russian oil profitably",
+        "Avoid sanctions exposure"
+      ],
+      "constraints": [
+        "EU maritime-services ban (prospective)",
+        "US enforcement discretion"
+      ],
+      "assets": [
+        "Tanker fleet and insurance arrangements outside Western control"
+      ],
+      "vulnerabilities": [
+        "Vessel-level sanctions; port-access bans"
+      ],
+      "incentives": [
+        {
+          "driver": "Freight margins",
+          "gains_if": "US relief legalizes the trade and cuts costs",
+          "loses_if": "The EU ban is adopted and enforced",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Profit",
+          "Sanctions arbitrage"
+        ],
+        "beliefs": [
+          "Enforcement is selective and negotiable"
+        ],
+        "identity": "Grey-market logistics channel",
+        "frame": "Sanctions arbitrage"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 3,
+        "score": 0.6,
+        "basis": "Gatekeepers of Russian supply return and Brent repricing under each state"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source": "Volodymyr Zelensky",
+      "target": "Russian Ministry of Defense",
+      "type": "OPPOSES",
+      "relation_label": "Active hostilities",
+      "since": "2022-02-24",
+      "basis": "Front-line fighting; Ukraine's counteroffensive defeated Russia's Donetsk offensive [S2]",
+      "valence": "adversarial",
+      "polarity": -0.9,
+      "strength": 0.95,
+      "sign": "-"
+    },
+    {
+      "source": "Vladimir Putin",
+      "target": "Volodymyr Zelensky",
+      "type": "OPPOSES",
+      "relation_label": "War counterparties in mediation",
+      "since": "2022-02-24",
+      "basis": "Putin rejects a 'short' ceasefire while Zelensky demands freeze-first [S4][S22]",
+      "valence": "adversarial",
+      "polarity": -0.8,
+      "strength": 0.9,
+      "sign": "-"
+    },
+    {
+      "source": "US administration",
+      "target": "Vladimir Putin",
+      "type": "INFLUENCES",
+      "relation_label": "Mediation and relief-for-cooperation bargaining",
+      "since": "2025",
+      "basis": "Ninth Witkoff-Putin meeting; diesel deal and sanctions waivers; Iran linkage [S49][S15][S51]",
+      "valence": "transactional",
+      "polarity": 0.2,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "US administration",
+      "target": "Volodymyr Zelensky",
+      "type": "INFLUENCES",
+      "relation_label": "Pressure to make a deal and stop refinery strikes",
+      "since": "2026",
+      "basis": "Trump pressing Kyiv to deal; relations deteriorated sharply after the diesel deal [S3][S51]",
+      "valence": "transactional",
+      "polarity": -0.2,
+      "strength": 0.7,
+      "sign": "-"
+    },
+    {
+      "source": "European Union",
+      "target": "Vladimir Putin",
+      "type": "SANCTIONS",
+      "relation_label": "20th package ratchet and prospective maritime ban",
+      "since": "2022",
+      "basis": "Reported 20th package: 120 individuals, maritime-services ban basis, 20 more banks excluded [S14][S53]",
+      "valence": "adversarial",
+      "polarity": -0.7,
+      "strength": 0.8,
+      "sign": "-"
+    },
+    {
+      "source": "European Union",
+      "target": "Ukrainian Ministry of Finance",
+      "type": "FUNDS",
+      "relation_label": "EUR 90 billion Support Loan and planned €45 billion for 2027",
+      "since": "2026",
+      "basis": "EU Ukraine Support Loan 2026-27; November 26-27 summit on the ~€70 billion gap [S12][S11]",
+      "valence": "allied",
+      "polarity": 0.7,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "European Union",
+      "target": "NATO",
+      "type": "PARTNERS_WITH",
+      "relation_label": "Readiness 2030 and 5% pledge implementation",
+      "since": "2025",
+      "basis": "SAFE loans up to €150 billion alongside the Hague pledge [S115][S16]",
+      "valence": "allied",
+      "polarity": 0.6,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "Chinese government",
+      "target": "Russian government finance bloc",
+      "type": "SUPPLIES",
+      "relation_label": "Dual-use goods and revenue sustaining the war economy",
+      "since": "2022",
+      "basis": "~75% of Common High Priority exports; 43% of top-five importer revenues (EUR 7.7 billion, July 2026) [S67][S62]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "Chinese government",
+      "target": "Russian Ministry of Defense",
+      "type": "SUPPORTS",
+      "relation_label": "Garpiya-A1 drone co-production and training",
+      "since": "2024",
+      "basis": "US Treasury sanctioned Chinese entities for Garpiya co-production in 2024 [S67][S68]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "US administration",
+      "target": "European Union",
+      "type": "COMPETES_WITH",
+      "relation_label": "Divergent sanctions-relief sequencing",
+      "since": "2026-10",
+      "basis": "US waivers and diesel purchases against the EU's ratcheting 20th package [S15][S14]",
+      "valence": "adversarial",
+      "polarity": -0.4,
+      "strength": 0.7,
+      "sign": "-"
+    },
+    {
+      "source": "German government",
+      "target": "NATO",
+      "type": "BACKS",
+      "relation_label": "Defense pivot anchoring the 5% pledge",
+      "since": "2026",
+      "basis": "€109 billion core defense ask for 2027, +32.7% over 2026 [S17][S66]",
+      "valence": "allied",
+      "polarity": 0.7,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "Ukrainian military command",
+      "target": "US administration",
+      "type": "DEPENDS_ON",
+      "relation_label": "Intelligence sharing and Starshield access",
+      "since": "2022",
+      "basis": "Starlink/Starshield restrictions degrade interception; US early-warning sharing restored after Oslo [S27][S51]",
+      "valence": "transactional",
+      "polarity": 0.3,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "Shadow-fleet operators and insurers",
+      "target": "Russian government finance bloc",
+      "type": "CUSTOMER_OF",
+      "relation_label": "Moving Russian crude worth EUR 392 million/day",
+      "since": "2022",
+      "basis": "CREA July 2026 export data; US weighing vessel-level relief [S62][S57]",
+      "valence": "transactional",
+      "polarity": 0.4,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "European Central Bank",
+      "target": "European Union",
+      "type": "REGULATES",
+      "relation_label": "Monetary policy for the euro area",
+      "since": "1999",
+      "basis": "Deposit rate 2.50% after September 2026 hike; staff projections frame EU macro policy [S5][S9]",
+      "valence": "neutral",
+      "polarity": 0.2,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "UK government",
+      "target": "European Union",
+      "type": "ALLY_OF",
+      "relation_label": "Sanctions co-architects and aid coalition",
+      "since": "2022",
+      "basis": "Grouped with EU goals: financing Ukraine through 2027 and rearmament at 5% of GDP by 2035",
+      "valence": "allied",
+      "polarity": 0.6,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "NATO",
+      "target": "Ukrainian military command",
+      "type": "SUPPORTS",
+      "relation_label": "PURL initiative aid, over 90% from US stockpiles",
+      "since": "2025",
+      "basis": "Over USD 4.8 billion in PURL assistance committed by March 2026 (reported) [S132][S12]",
+      "valence": "allied",
+      "polarity": 0.6,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "Russian government finance bloc",
+      "target": "Vladimir Putin",
+      "type": "DEPENDS_ON",
+      "relation_label": "Fiscal authority subordinate to Kremlin war aims",
+      "since": "2022",
+      "basis": "Security at 44% of the 2027 budget; deficit targets subordinated to war aims [S61][S60]",
+      "valence": "directional",
+      "polarity": 0.4,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "Ukrainian Ministry of Finance",
+      "target": "Ukrainian military command",
+      "type": "FUNDS",
+      "relation_label": "War financing under the EU loan framework",
+      "since": "2022",
+      "basis": "EUR 4.3 billion military allocations May-June 2026 within the EUR 90 billion loan [S12]",
+      "valence": "allied",
+      "polarity": 0.6,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "Federal Reserve",
+      "target": "US administration",
+      "type": "COMPETES_WITH",
+      "relation_label": "Independence under electoral-cycle pressure",
+      "since": "2026",
+      "basis": "Fed hiking into an election cycle with fuel-price politics; 'Inflation remains elevated' [S106][S15]",
+      "valence": "neutral",
+      "polarity": -0.1,
+      "strength": 0.4,
+      "sign": "-"
+    }
+  ],
+  "hot_topics": [
+    "Ceasefire-first vs final-deal-first sequencing gap",
+    "US unilateral pre-deal sanctions relief (diesel license, Graham Act waiver, shadow-fleet relief)",
+    "EU 20th package and prospective maritime-services ban on Russian crude",
+    "Ukraine's ~€70 billion 2027 funding gap and the November 26-27 EU summit",
+    "Security guarantees: NATO membership vs Article-5-style US guarantees vs Coalition of the Willing",
+    "Russian mobilization signals vs no decree",
+    "Russian fiscal sustainability: 3.2%-of-GDP deficit, 2027 borrowing up 43%, $50/bbl fiscal-rule cutoff",
+    "Ukrainian manpower crisis: 200,000 AWOL, 2 million evading notices",
+    "Winter 2026-27 gas storage at its lowest seasonal level since 2018 (74.0% full)",
+    "Middle East energy shock overlapping the war premium in Brent and TTF",
+    "European rearmament: Hague 5% pledge, SAFE €150 billion, German €109 billion 2027 core defense",
+    "Nuclear signaling correlated with Russian battlefield setbacks"
+  ],
+  "key_events": [
+    {
+      "date": "2026-01",
+      "event": "First trilateral Russia-Ukraine-US round held in Abu Dhabi; no text produced.",
+      "staleness_days": 295,
+      "is_stale": false
+    },
+    {
+      "date": "2026-02",
+      "event": "Trilateral rounds in Abu Dhabi and Geneva ended in impasse with no text.",
+      "staleness_days": 264,
+      "is_stale": false
+    },
+    {
+      "date": "2026-02",
+      "event": "Former high-ranking Western official estimated Ukrainian casualties at 250,000-300,000 killed and wounded.",
+      "staleness_days": 264,
+      "is_stale": false
+    },
+    {
+      "date": "2026-01",
+      "event": "CSIS study estimated roughly 600,000 Ukrainians killed, wounded or missing.",
+      "staleness_days": 295,
+      "is_stale": false
+    },
+    {
+      "date": "2026-01",
+      "event": "UK estimate put Ukrainian casualties at 1,225,000 killed and wounded.",
+      "staleness_days": 295,
+      "is_stale": false
+    },
+    {
+      "date": "2026-01",
+      "event": "Ukrainian Defense Minister Fedorov estimated 200,000 soldiers absent without leave and 2 million men avoided draft notices.",
+      "staleness_days": 295,
+      "is_stale": false
+    },
+    {
+      "date": "2026-05",
+      "event": "Ukrainian reforms raised specialist pay and expanded foreign-volunteer recruitment.",
+      "staleness_days": 175,
+      "is_stale": false
+    },
+    {
+      "date": "2026-05",
+      "event": "Reported Russian nuclear signal package, including an exercise, correlated with battlefield setbacks.",
+      "staleness_days": 175,
+      "is_stale": false
+    },
+    {
+      "date": "2026-05-27",
+      "event": "Council adoption of SAFE instrument of up to €150 billion in EU-budget-backed loans.",
+      "staleness_days": 149,
+      "is_stale": false
+    },
+    {
+      "date": "2026-06",
+      "event": "ECB raised deposit facility rate to 2.25% (second 2026 hike after June; held 2.00% March-May).",
+      "staleness_days": 144,
+      "is_stale": false
+    },
+    {
+      "date": "2026-06",
+      "event": "NATO June 2026 release put 2026 defence spending of European Allies and Canada at around USD 634 billion, 2.53% of GDP.",
+      "staleness_days": 144,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07-10",
+      "event": "Reports that Russia halted Kerch Strait commercial transits; unconfirmed.",
+      "staleness_days": 105,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07",
+      "event": "Duma law allowed people with criminal convictions to sign military contracts during mobilization.",
+      "staleness_days": 114,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07",
+      "event": "Rheinmetall delivered first Unterlüß 155mm rounds, targeting about 1.5 million a year by end-2026.",
+      "staleness_days": 114,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-10",
+      "event": "ECB raised all three key rates by 25bp; deposit facility to 2.50%, effective 16 September.",
+      "staleness_days": 43,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-16",
+      "event": "FOMC raised target range to 3-3/4 to 4 percent by a 12-0 vote.",
+      "staleness_days": 37,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-14",
+      "event": "Putin warned Europe of war if peacekeeping troops are deployed to Ukraine, per Washington Post report.",
+      "staleness_days": 39,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-21",
+      "event": "Weekly US diesel price peaked at $6.53/gallon.",
+      "staleness_days": 32,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-09",
+      "event": "Trump announced a Russian diesel purchase deal; Treasury license suspends US sanctions on Russian diesel deliveries until April 2027.",
+      "staleness_days": 14,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-13",
+      "event": "EU gas storage 74.0% full (836.9 TWh), lowest for the season since 2018.",
+      "staleness_days": 10,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-14",
+      "event": "Reuters reported the US administration is weighing lifting sanctions on some shadow-fleet vessels.",
+      "staleness_days": 9,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-16",
+      "event": "Trump signed an executive order waiving the Lindsey O. Graham Sanctioning Russia and Iran Act of 2026.",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-20",
+      "event": "Oslo meeting: US envoy Witkoff, Zelensky, Finland, Norway and European/NATO representatives; proposals tabled, no text.",
+      "staleness_days": 3,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-21",
+      "event": "Ninth in-person Witkoff-Putin meeting in St Petersburg, three hours; US citizen Stephen Hubbard released.",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-21",
+      "event": "Zelensky said on Fox News Ukraine is ready to freeze the conflict along the current front line.",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-21",
+      "event": "Russia agreed in principle to resume trilateral talks after November 10, possibly Abu Dhabi.",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-22",
+      "event": "Zelensky named three unagreed postwar security-guarantee options: NATO membership, direct US guarantees, European Coalition of the Willing.",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-23",
+      "event": "Putin stated Russia is ready for three-way talks on security parameters of a final peace deal, not a 'short' ceasefire.",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-16",
+      "event": "Eurostat release: euro-area headline HICP 3.8% y/y for September 2026.",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "date": "2026-11-03",
+      "event": "US midterm elections scheduled.",
+      "staleness_days": -11,
+      "is_stale": false
+    },
+    {
+      "date": "2026-11-26",
+      "event": "EU leaders to meet (26-27 November) on 2027 Ukraine financing; €45 billion planned against ~€70 billion gap.",
+      "staleness_days": -34,
+      "is_stale": false
+    },
+    {
+      "date": "2027-04",
+      "event": "Expiry of the US Treasury license suspending sanctions on Russian diesel deliveries.",
+      "staleness_days": -160,
+      "is_stale": false
+    },
+    {
+      "date": "2024-05",
+      "event": "US banned enriched-uranium imports from Russia (then ~$1 billion a year), with a legislated ban running to 2028.",
+      "staleness_days": 905,
+      "is_stale": true
+    },
+    {
+      "date": "2026-09-27",
+      "event": "MarketWatch quoted ICE Brent Dec-2027 futures at $81.98/bbl.",
+      "staleness_days": 26,
+      "is_stale": false
+    }
+  ],
+  "quantitative_facts": [
+    {
+      "metric": "Russian-held territory of Ukraine",
+      "value": "45196",
+      "series": "DeepState via Russia Matters OSINT control assessment",
+      "unit": "square miles (~19% of Ukraine)",
+      "as_of_date": "2026-10-19",
+      "period_end": "2026-10-19",
+      "geography": "Ukraine",
+      "definition": "Territory incl. Crimea and pre-2022 Donbas under assessed Russian control",
+      "source": "DeepState via Russia Matters",
+      "value_type": "estimate",
+      "source_url": "https://www.russiamatters.org/news/russia-ukraine-war-report-card/russia-ukraine-war-report-card-oct-21-2026",
+      "tier": "S3",
+      "value_num": 45196.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Ukraine",
+      "analyst": "DeepState via Russia Matters",
+      "staleness_days": 4,
+      "is_stale": false
+    },
+    {
+      "metric": "Russian net territorial gain, trailing 12 months",
+      "value": "753",
+      "series": "DeepState via Russia Matters",
+      "unit": "square miles (~0.3% of Ukraine; avg 74/month)",
+      "as_of_date": "2026-10-19",
+      "period_end": "2026-10-19",
+      "geography": "Ukraine",
+      "definition": "Change in assessed control over trailing 12 months",
+      "source": "DeepState via Russia Matters",
+      "value_type": "estimate",
+      "source_url": "https://www.russiamatters.org/news/russia-ukraine-war-report-card/russia-ukraine-war-report-card-oct-21-2026",
+      "tier": "S3",
+      "value_num": 753.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Ukraine",
+      "analyst": "DeepState via Russia Matters",
+      "staleness_days": 4,
+      "is_stale": false
+    },
+    {
+      "metric": "Russian net gain, trailing 4 weeks",
+      "value": "3",
+      "series": "DeepState via Russia Matters",
+      "unit": "square miles",
+      "as_of_date": "2026-10-19",
+      "period_end": "2026-10-19",
+      "geography": "Ukraine",
+      "definition": "Four weeks to Oct 19, 2026; prior four weeks +37",
+      "source": "DeepState via Russia Matters",
+      "value_type": "estimate",
+      "source_url": "https://www.russiamatters.org/news/russia-ukraine-war-report-card/russia-ukraine-war-report-card-oct-21-2026",
+      "tier": "S3",
+      "value_num": 3.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Ukraine",
+      "analyst": "DeepState via Russia Matters",
+      "staleness_days": 4,
+      "is_stale": false
+    },
+    {
+      "metric": "Ukrainian territorial gains since Jan 1, 2026",
+      "value": "1080",
+      "series": "ISW control assessment",
+      "unit": "square kilometers",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026-10-21",
+      "geography": "Ukraine",
+      "definition": "ISW-assessed Ukrainian liberations since January 1, 2026",
+      "source": "ISW",
+      "value_type": "estimate",
+      "source_url": "https://www.understandingwar.org/backgrounder/russian-offensive-campaign-assessment-october-21-2026",
+      "tier": "S3",
+      "value_num": 1080.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Ukraine",
+      "analyst": "ISW",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "metric": "Russian personnel losses, September 2026",
+      "value": "46230",
+      "series": "Ukrainian General Staff claims",
+      "unit": "personnel killed or wounded",
+      "as_of_date": "2026-10-01",
+      "period_end": "2026-09-30",
+      "geography": "Russia/Ukraine front",
+      "definition": "Belligerent claim, not independently verified",
+      "source": "Ukrainian General Staff via Kyiv Post",
+      "value_type": "estimate",
+      "source_url": "https://www.kyivpost.com/post/85841",
+      "tier": "S3",
+      "value_num": 46230.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Russia/Ukraine front",
+      "analyst": "Ukrainian General Staff via Kyiv Post",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "Russian personnel losses, Jan-Sep 2026",
+      "value": "326900",
+      "series": "Ukrainian General Staff claims",
+      "unit": "personnel",
+      "as_of_date": "2026-10-01",
+      "period_end": "2026-09-30",
+      "geography": "Russia/Ukraine front",
+      "definition": "Belligerent claim; monthly losses up 45.8% from January to September",
+      "source": "Ukrainian General Staff",
+      "value_type": "estimate",
+      "source_url": "https://www.kyivpost.com/post/85841",
+      "tier": "S3",
+      "value_num": 326900.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Russia/Ukraine front",
+      "analyst": "Ukrainian General Staff",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "Russian autumn 2026 conscript draft",
+      "value": "120000",
+      "series": "Russian General Staff mobilization directorate",
+      "unit": "conscripts",
+      "as_of_date": "2026-10-01",
+      "period_end": "2026-12-31",
+      "geography": "Russia",
+      "definition": "Planned autumn draft, per Col. Gen. Yevgeny Burdinsky",
+      "source": "Russian General Staff via Kyiv Post",
+      "value_type": "target",
+      "source_url": "https://www.kyivpost.com/post/85841",
+      "tier": "S3",
+      "value_num": 120000.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Russia",
+      "analyst": "Russian General Staff via Kyiv Post",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "Russian authorized military strength",
+      "value": "2441630",
+      "series": "Russian presidential decree",
+      "unit": "personnel (incl. 1,550,500 military personnel)",
+      "as_of_date": "2026-10-01",
+      "period_end": "2026-10-01",
+      "geography": "Russia",
+      "definition": "Fourth 2026 increase, plus 15,500",
+      "source": "Kyiv Post reporting",
+      "value_type": "actual",
+      "source_url": "https://www.kyivpost.com/post/85841",
+      "tier": "S3",
+      "value_num": 2441630.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Russia",
+      "analyst": "Kyiv Post reporting",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "Russian artillery/mortar/tank/rocket round production, 2025",
+      "value": "7000000",
+      "series": "Estonian intelligence estimate",
+      "unit": "rounds",
+      "as_of_date": "2026-01-01",
+      "period_end": "2025-12-31",
+      "geography": "Russia",
+      "definition": "Up ~17-fold from ~400,000 four years earlier; secondary account of classified data",
+      "source": "Estonian intelligence via secondary account",
+      "value_type": "estimate",
+      "source_url": "https://euromaidanpress.com/2026/02/11/russian-shell-production-reaches-7-million-annually-17-times-pre-invasion-levels-estonian-intelligence/",
+      "tier": "S3",
+      "value_num": 7000000.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Russia",
+      "analyst": "Estonian intelligence via secondary account",
+      "staleness_days": 295,
+      "is_stale": false
+    },
+    {
+      "metric": "Ukrainian armed forces personnel",
+      "value": "880000-900000",
+      "series": "Estimate",
+      "unit": "personnel",
+      "as_of_date": "2026-10-01",
+      "period_end": "2026-10-01",
+      "geography": "Ukraine",
+      "definition": "Against Russia's 1.55 million authorized military, on a ~1,200 km front",
+      "source": "Estimate cited in report",
+      "value_type": "estimate",
+      "source_url": "https://cepa.org/article/ukraines-military-recruitment-lessons-for-nato/",
+      "tier": "S3",
+      "value_num": 890000.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Ukraine",
+      "analyst": "Estimate cited in report",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "Ukrainian soldiers absent without leave",
+      "value": "200000",
+      "series": "Defense Minister Fedorov statement",
+      "unit": "soldiers",
+      "as_of_date": "2026-01-31",
+      "period_end": "2026-01-31",
+      "geography": "Ukraine",
+      "definition": "Plus 2 million men avoided draft notices; average soldier over 40",
+      "source": "Mykhailo Fedorov",
+      "value_type": "estimate",
+      "source_url": "https://www.congress.gov/crs_external_products/IF/HTML/IF12150.html",
+      "tier": "S1",
+      "value_num": 200000.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Ukraine",
+      "analyst": "Mykhailo Fedorov",
+      "staleness_days": 265,
+      "is_stale": false
+    },
+    {
+      "metric": "Ukrainian drone contracts growth 2026 YTD",
+      "value": "5.5",
+      "series": "Ukrainian Defense Ministry",
+      "unit": "times 2025 level (deliveries up ~3.7x)",
+      "as_of_date": "2026-10-11",
+      "period_end": "2026-10-11",
+      "geography": "Ukraine",
+      "definition": "Contracted drones vs 2025; deliveries up almost 3.7 times",
+      "source": "Ukrainian Defense Ministry",
+      "value_type": "actual",
+      "source_url": "https://kyivindependent.com/ukraines-drone-production-jumps-370-in-2026-says-defense-ministry/",
+      "tier": "S3",
+      "value_num": 5.5,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Ukraine",
+      "analyst": "Ukrainian Defense Ministry",
+      "metric_family": "growth rate",
+      "staleness_days": 12,
+      "is_stale": false
+    },
+    {
+      "metric": "Brent spot price",
+      "value": "115.22",
+      "series": "EIA Europe Brent spot",
+      "unit": "US dollars per barrel",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-10-20",
+      "geography": "World",
+      "definition": "Daily spot",
+      "source": "EIA/FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DCOILBRENTEU",
+      "tier": "S1",
+      "value_num": 115.22,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "EIA/FRED",
+      "staleness_days": 3,
+      "is_stale": false
+    },
+    {
+      "metric": "Brent monthly average",
+      "value": "114.1591",
+      "series": "EIA Crude Oil Prices: Brent - Europe",
+      "unit": "Dollars per Barrel",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09-30",
+      "geography": "World",
+      "definition": "+46.1736 (+67.917%) y/y",
+      "source": "EIA/FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DCOILBRENTEU",
+      "tier": "S1",
+      "value_num": 114.1591,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "EIA/FRED",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Brent monthly average (IMF series)",
+      "value": "102.0181",
+      "series": "IMF Primary Commodity Prices, Brent",
+      "unit": "US dollars per barrel",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09-30",
+      "geography": "World",
+      "definition": "+50.894% y/y",
+      "source": "IMF",
+      "value_type": "actual",
+      "source_url": "https://data.imf.org/en/datasets/IMF.RES:PCPS",
+      "tier": "S1",
+      "value_num": 102.0181,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "IMF",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Brent Dec-2026 futures settle",
+      "value": "109.55",
+      "series": "ICE Brent futures via WSJ",
+      "unit": "US dollars per barrel",
+      "as_of_date": "2026-10-19",
+      "period_end": "2026-10-19",
+      "geography": "World",
+      "definition": "Settle after the US sanctions waiver",
+      "source": "WSJ",
+      "value_type": "actual",
+      "source_url": "https://www.wsj.com/business/energy-oil/oil-prices-fall-as-traders-weigh-russia-sanctions-waiver-middle-east-risks-05053c4f",
+      "tier": "S2",
+      "value_num": 109.55,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "WSJ",
+      "staleness_days": 4,
+      "is_stale": false
+    },
+    {
+      "metric": "ICE Brent Dec-2027 futures quote",
+      "value": "81.98",
+      "series": "MarketWatch ICE Brent quote",
+      "unit": "US dollars per barrel",
+      "as_of_date": "2026-09-27",
+      "period_end": "2026-09-27",
+      "geography": "World",
+      "definition": "Market-implied end-2027 anchor",
+      "source": "MarketWatch",
+      "value_type": "actual",
+      "source_url": "https://www.marketwatch.com/investing/future/brnz27?countrycode=uk",
+      "tier": "S3",
+      "value_num": 81.98,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "MarketWatch",
+      "staleness_days": 26,
+      "is_stale": false
+    },
+    {
+      "metric": "TTF spot price",
+      "value": "92.07",
+      "series": "Trading Economics TTF",
+      "unit": "EUR/MWh",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "Netherlands/EU",
+      "definition": "+187.58% y/y",
+      "source": "Trading Economics",
+      "value_type": "actual",
+      "source_url": "https://tradingeconomics.com/commodity/eu-natural-gas",
+      "tier": "S3",
+      "value_num": 92.07,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Netherlands/EU",
+      "analyst": "Trading Economics",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "TTF Dec-2026 futures prior settlement",
+      "value": "87.429",
+      "series": "CME TTF prior settlements",
+      "unit": "EUR/MWh",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "Netherlands",
+      "definition": "Jan-27 87.293, Feb-27 86.907",
+      "source": "CME",
+      "value_type": "actual",
+      "source_url": "https://www.cmegroup.com/markets/energy/natural-gas/dutch-ttf-natural-gas-calendar-month.html",
+      "tier": "S3",
+      "value_num": 87.429,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Netherlands",
+      "analyst": "CME",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "EU natural gas price",
+      "value": "25.494",
+      "series": "FRED Global price of Natural gas, EU",
+      "unit": "US Dollars per MMBtu",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09-30",
+      "geography": "Euro area",
+      "definition": "+131.7% y/y vs 11.003 a year earlier",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/PNGASEUUSDM",
+      "tier": "S1",
+      "value_num": 25.494,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Euro area",
+      "analyst": "FRED",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "EU gas storage fill",
+      "value": "74.0",
+      "series": "Engie tracker",
+      "unit": "percent full (836.9 TWh)",
+      "as_of_date": "2026-10-13",
+      "period_end": "2026-10-13",
+      "geography": "EU",
+      "definition": "Lowest for the season since 2018; AGSI+ 74.58%, another tracker 78.69% on Oct 20",
+      "source": "Engie",
+      "value_type": "actual",
+      "source_url": "https://energyscan.engie.com/europe-gas-storage-levels-weekly-fullness-rate-tracker-and-analysis/",
+      "tier": "S3",
+      "value_num": 74.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "Engie",
+      "staleness_days": 10,
+      "is_stale": false
+    },
+    {
+      "metric": "Gold monthly average",
+      "value": "4334.7467",
+      "series": "IMF Primary Commodity Prices, gold",
+      "unit": "US dollars per troy ounce",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09-30",
+      "geography": "World",
+      "definition": "+18.225% y/y; Feb 2026 peak 5014.645",
+      "source": "IMF",
+      "value_type": "actual",
+      "source_url": "https://data.imf.org/en/datasets/IMF.RES:PCPS",
+      "tier": "S1",
+      "value_num": 4334.7467,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "IMF",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "ECB deposit facility rate",
+      "value": "2.5",
+      "series": "FRED ECB Deposit Facility Rate",
+      "unit": "percent",
+      "as_of_date": "2026-09-16",
+      "period_end": "2026-10-22",
+      "geography": "Euro area",
+      "definition": "After 25bp hike effective 16 Sep 2026; +0.5pp y/y",
+      "source": "FRED/ECB",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/ECBDFR",
+      "tier": "S1",
+      "value_num": 2.5,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Euro area",
+      "analyst": "FRED/ECB",
+      "staleness_days": 37,
+      "is_stale": false
+    },
+    {
+      "metric": "Federal funds target range upper limit",
+      "value": "4",
+      "series": "FRED DFEDTARU",
+      "unit": "percent",
+      "as_of_date": "2026-09-16",
+      "period_end": "2026-10-22",
+      "geography": "United States",
+      "definition": "Raised 16 Sep 2026 by 12-0 vote",
+      "source": "FRED/FOMC",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DFEDTARU",
+      "tier": "S1",
+      "value_num": 4.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED/FOMC",
+      "staleness_days": 37,
+      "is_stale": false
+    },
+    {
+      "metric": "US central bank policy rate",
+      "value": "3.875",
+      "series": "BIS policy rates, US, end of period",
+      "unit": "percent per year",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09-30",
+      "geography": "United States",
+      "definition": "-0.25pp y/y",
+      "source": "BIS",
+      "value_type": "actual",
+      "source_url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US",
+      "tier": "S1",
+      "value_num": 3.875,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "BIS",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Euro-area headline HICP inflation",
+      "value": "3.8",
+      "series": "Eurostat HICP",
+      "unit": "percent, y/y",
+      "as_of_date": "2026-10-16",
+      "period_end": "2026-09-30",
+      "geography": "Euro area",
+      "definition": "Up from 3.2% in August and 2.2% a year earlier",
+      "source": "Eurostat",
+      "value_type": "actual",
+      "source_url": "https://ec.europa.eu/eurostat/web/products-euro-indicators/w/2-16102026-ap",
+      "tier": "S1",
+      "value_num": 3.8,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Euro area",
+      "analyst": "Eurostat",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "metric": "Euro-area core HICP inflation",
+      "value": "2.5",
+      "series": "HICP ex energy, food, alcohol, tobacco, 20 countries",
+      "unit": "percent, y/y",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09-30",
+      "geography": "Euro area",
+      "definition": "Five-year range 2.181% (Jan 2026) to 2.547% (May 2026)",
+      "source": "FRED/Eurostat",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/TOTNRGFOODEA20MI15XM",
+      "tier": "S1",
+      "value_num": 2.5,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Euro area",
+      "analyst": "FRED/Eurostat",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "US CPI inflation",
+      "value": "3.7",
+      "series": "BLS CPI-U",
+      "unit": "percent, y/y",
+      "as_of_date": "2026-10-01",
+      "period_end": "2026-09-30",
+      "geography": "United States",
+      "definition": "Aug: 3.4%",
+      "source": "BLS",
+      "value_type": "actual",
+      "source_url": "https://www.bls.gov/cpi/",
+      "tier": "S1",
+      "value_num": 3.7,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "BLS",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "US core CPI inflation",
+      "value": "2.566",
+      "series": "BLS CPI ex food and energy",
+      "unit": "percent, y/y",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09-30",
+      "geography": "United States",
+      "source": "BLS via FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/CPILFESL",
+      "tier": "S1",
+      "value_num": 2.566,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "BLS via FRED",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Euro-area real GDP growth, Q2 2026",
+      "value": "0.6",
+      "series": "Eurostat second estimate",
+      "unit": "percent, q/q",
+      "as_of_date": "2026-09-01",
+      "period_end": "2026-06-30",
+      "geography": "Euro area",
+      "definition": "Revised up from 0.4% flash; ~1.2% y/y per GMK Center",
+      "source": "Eurostat",
+      "value_type": "actual",
+      "source_url": "https://ec.europa.eu/eurostat/web/products-euro-indicators/w/2-07092026-ap",
+      "tier": "S1",
+      "value_num": 0.6,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Euro area",
+      "analyst": "Eurostat",
+      "metric_family": "growth rate",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "ECB staff 2027 projections",
+      "value": "2.5",
+      "series": "ECB staff projections (Sept 2026)",
+      "unit": "percent headline HICP average (2027)",
+      "as_of_date": "2026-09-10",
+      "period_end": "2027-12-31",
+      "geography": "Euro area",
+      "definition": "Headline 3.0% (2026), 2.5% (2027), 2.1% (2028); core 2.5%, 2.6%, 2.3%; GDP 0.9%, 1.4%, 1.5%",
+      "source": "ECB",
+      "value_type": "forecast",
+      "source_url": "https://www.ecb.europa.eu/press/pr/date/2026/html/ecb.mp260910~314e508016.en.html",
+      "tier": "S1",
+      "value_num": 2.5,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Euro area",
+      "analyst": "ECB",
+      "staleness_days": 43,
+      "is_stale": false
+    },
+    {
+      "metric": "IMF US CPI projection 2027",
+      "value": "2.835",
+      "series": "IMF WEO via World Bank Data360",
+      "unit": "percent",
+      "as_of_date": "2026-09-30",
+      "period_end": "2027-12-31",
+      "geography": "United States",
+      "definition": "2026 projected at 3.648%; 2025 actual 2.73%",
+      "source": "IMF",
+      "value_type": "forecast",
+      "source_url": "https://data360.worldbank.org/en/indicator/IMF_WEO_PCPIPCH",
+      "tier": "S1",
+      "value_num": 2.835,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "IMF",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "IMF euro-area GDP growth projection 2027",
+      "value": "1.208",
+      "series": "IMF WEO",
+      "unit": "percent",
+      "as_of_date": "2026-09-30",
+      "period_end": "2027-12-31",
+      "geography": "Euro area",
+      "definition": "2025 estimate 1.237%; 2026 projected 1.119%",
+      "source": "IMF",
+      "value_type": "forecast",
+      "source_url": "https://data.imf.org/en/datasets/IMF.RES:WEO",
+      "tier": "S1",
+      "value_num": 1.208,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Euro area",
+      "analyst": "IMF",
+      "metric_family": "growth rate",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "EIA STEO Brent 4Q27 projection",
+      "value": "74",
+      "series": "EIA October 2026 STEO",
+      "unit": "US dollars per barrel",
+      "as_of_date": "2026-10-01",
+      "period_end": "2027-12-31",
+      "geography": "World",
+      "definition": "From $105/b 4Q26 to $87/b by 2Q27; 2027 supply build 109.6 vs 104.6 mb/d consumption",
+      "source": "EIA",
+      "value_type": "forecast",
+      "source_url": "https://www.eia.gov/outlooks/steo/report/global_oil.php",
+      "tier": "S1",
+      "value_num": 74.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "EIA",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "IEA North Sea Dated September average",
+      "value": "116.89",
+      "series": "IEA October 2026 Oil Market Report",
+      "unit": "US dollars per barrel",
+      "as_of_date": "2026-10-01",
+      "period_end": "2026-09-30",
+      "geography": "World",
+      "definition": "+$26.17 m/m; trading around $134/bbl at report time; 2027 supply projected up 7.7 mb/d",
+      "source": "IEA",
+      "value_type": "actual",
+      "source_url": "https://www.iea.org/reports/oil-market-report-october-2026",
+      "tier": "S1",
+      "value_num": 116.89,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "IEA",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "Russian 2026 deficit",
+      "value": "3.2",
+      "series": "Russian budget documents via Reuters",
+      "unit": "percent of GDP",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-12-31",
+      "geography": "Russia",
+      "definition": "Raised from 1.6% target; oil-and-gas revenue estimate cut to 7.6 trillion from 8.9 trillion roubles; borrowing 5 trillion roubles plus 459 billion (~11% of liquid NWF)",
+      "source": "Reuters",
+      "value_type": "estimate",
+      "source_url": "https://www.reuters.com/world/russia-raises-2027-military-spending-by-27-budget-documents-show-2026-09-28/",
+      "tier": "S2",
+      "value_num": 3.2,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Russia",
+      "analyst": "Reuters",
+      "metric_family": "annual revenue",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Russian 2027 national-security allocation",
+      "value": "21.4",
+      "series": "Russian budget via Carnegie",
+      "unit": "trillion roubles (44% of spending)",
+      "as_of_date": "2026-09-30",
+      "period_end": "2027-12-31",
+      "geography": "Russia",
+      "definition": "2027 state debt rises to 21.7% of GDP; borrowing up 43% to 7.7 trillion roubles",
+      "source": "Carnegie",
+      "value_type": "target",
+      "source_url": "https://carnegieendowment.org/russia-eurasia/politika/2026/09/russia-budget-war-overview",
+      "tier": "S2",
+      "value_num": 21.4,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Russia",
+      "analyst": "Carnegie",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Russian fossil-fuel export revenues, July 2026",
+      "value": "683",
+      "series": "CREA",
+      "unit": "EUR million per day",
+      "as_of_date": "2026-08-01",
+      "period_end": "2026-07-31",
+      "geography": "Russia",
+      "definition": "Down 12% m/m; crude EUR 392 million per day; volumes flat",
+      "source": "CREA",
+      "value_type": "estimate",
+      "source_url": "https://energyandcleanair.org/july-2026-monthly-analysis-of-russian-fossil-fuel-exports-and-sanctions/",
+      "tier": "S3",
+      "value_num": 683.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Russia",
+      "analyst": "CREA",
+      "staleness_days": 83,
+      "is_stale": false
+    },
+    {
+      "metric": "EU Ukraine Support Loan",
+      "value": "90",
+      "series": "EU instrument",
+      "unit": "EUR billion",
+      "as_of_date": "2026-06-30",
+      "period_end": "2027-12-31",
+      "geography": "EU/Ukraine",
+      "definition": "For 2026-27 budgetary and defense needs; ~EUR 11 billion allocated May-June 2026 (EUR 4.3bn military, EUR 6.7bn financial/humanitarian)",
+      "source": "Kiel Institute/EU",
+      "value_type": "actual",
+      "source_url": "https://www.kielinstitut.de/media/news/ukraine-support-tracker-europe-leads-on-aid-us-weapons-remain-key/",
+      "tier": "S3",
+      "value_num": 90.0,
+      "year": 2027,
+      "value_kind": "actual",
+      "region": "EU/Ukraine",
+      "analyst": "Kiel Institute/EU",
+      "staleness_days": 115,
+      "is_stale": false
+    },
+    {
+      "metric": "Ukraine 2027 funding gap",
+      "value": "70",
+      "series": "Reuters report",
+      "unit": "EUR billion (against another planned €45 billion from the EU)",
+      "as_of_date": "2026-10-14",
+      "period_end": "2027-12-31",
+      "geography": "Ukraine",
+      "definition": "Leaders to discuss new financing November 26-27, 2026",
+      "source": "Reuters",
+      "value_type": "estimate",
+      "source_url": "https://www.reuters.com/business/eu-leaders-discuss-2027-money-ukraine-next-eu-budget-november-26-27-2026-10-21/",
+      "tier": "S2",
+      "value_num": 70.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Ukraine",
+      "analyst": "Reuters",
+      "staleness_days": 9,
+      "is_stale": false
+    },
+    {
+      "metric": "SAFE instrument envelope",
+      "value": "150",
+      "series": "EU Council",
+      "unit": "EUR billion in EU-budget-backed loans",
+      "as_of_date": "2026-10-23",
+      "period_end": "2027-12-31",
+      "geography": "EU",
+      "definition": "First payments mid-2026; Estonia €351.6 million, Greece €118.2 million; escape clause for 18 member states",
+      "source": "EU Council/Commission",
+      "value_type": "actual",
+      "source_url": "https://www.consilium.europa.eu/en/policies/european-defence-readiness/",
+      "tier": "S1",
+      "value_num": 150.0,
+      "year": 2027,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "EU Council/Commission",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "European Allies and Canada defence spending 2026",
+      "value": "634",
+      "series": "NATO June 2026 defence-investment release",
+      "unit": "USD billion, current prices (2.53% of GDP)",
+      "as_of_date": "2026-06-30",
+      "period_end": "2026-12-31",
+      "geography": "European NATO Allies and Canada",
+      "definition": "Reported, not verified; core spending up about 11%; US at USD 850 billion",
+      "source": "NATO",
+      "value_type": "estimate",
+      "source_url": "https://icds.ee/en/defence-spending-who-is-doing-what-july-2026/",
+      "tier": "S3",
+      "value_num": 634.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "European NATO Allies and Canada",
+      "analyst": "NATO",
+      "staleness_days": 115,
+      "is_stale": false
+    },
+    {
+      "metric": "European Allies and Canada defence spending 2025",
+      "value": "571",
+      "series": "NATO",
+      "unit": "USD billion, 2021 prices (2.3% of GDP)",
+      "as_of_date": "2026-06-30",
+      "period_end": "2025-12-31",
+      "geography": "European NATO Allies and Canada",
+      "definition": "Up from 1.4% of GDP in 2014; nearly 20% real rise over 2024",
+      "source": "NATO",
+      "value_type": "actual",
+      "source_url": "https://www.nato.int/en/what-we-do/introduction-to-nato/defence-expenditures-and-natos-5-commitment",
+      "tier": "S3",
+      "value_num": 571.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "European NATO Allies and Canada",
+      "analyst": "NATO",
+      "staleness_days": 115,
+      "is_stale": false
+    },
+    {
+      "metric": "German core defense budget 2027",
+      "value": "109",
+      "series": "Reuters; Defense News",
+      "unit": "EUR billion (from €82.2 billion in 2026)",
+      "as_of_date": "2026-07-06",
+      "period_end": "2027-12-31",
+      "geography": "Germany",
+      "definition": "Ministry ask €109.7 billion (+32.7%) plus ~€30 billion, near €140 billion total; draft budget €555.4 billion with €203.6 billion borrowing",
+      "source": "Reuters; Defense News",
+      "value_type": "target",
+      "source_url": "https://www.reuters.com/markets/europe/german-cabinet-approves-2027-draft-budget-hikes-defence-investment-spending-2026-07-06/",
+      "tier": "S2",
+      "value_num": 109.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Germany",
+      "analyst": "Reuters; Defense News",
+      "staleness_days": 109,
+      "is_stale": false
+    },
+    {
+      "metric": "Russian 2027 draft defense line",
+      "value": "17.1",
+      "series": "Reuters",
+      "unit": "trillion roubles (about $202.6 billion)",
+      "as_of_date": "2026-09-30",
+      "period_end": "2027-12-31",
+      "geography": "Russia",
+      "definition": "Inside 21.4-trillion-rouble national-security allocation",
+      "source": "Reuters",
+      "value_type": "target",
+      "source_url": "https://www.reuters.com/world/russia-raises-2027-military-spending-by-27-budget-documents-show-2026-09-28/",
+      "tier": "S2",
+      "value_num": 17.1,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Russia",
+      "analyst": "Reuters",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Weekly US diesel price",
+      "value": "6.53",
+      "series": "US weekly diesel prices",
+      "unit": "US dollars per gallon (peak)",
+      "as_of_date": "2026-09-21",
+      "period_end": "2026-09-21",
+      "geography": "United States",
+      "definition": "Up from $3.48/gallon on January 5, 2026, after US strikes on Iran",
+      "source": "Report citing weekly series",
+      "value_type": "actual",
+      "source_url": "https://www.cfr.org/articles/trumps-russian-diesel-deal-explained",
+      "tier": "S3",
+      "value_num": 6.53,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Report citing weekly series",
+      "staleness_days": 32,
+      "is_stale": false
+    },
+    {
+      "metric": "German 10-year Bund yield",
+      "value": "3.47",
+      "series": "FRED German 10-year yield",
+      "unit": "percent",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09-30",
+      "geography": "Germany",
+      "definition": "Late-October daily quote ~3.35% per Trading Economics",
+      "source": "FRED; Trading Economics",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/IRLTLT01DEM156N",
+      "tier": "S1",
+      "value_num": 3.47,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Germany",
+      "analyst": "FRED; Trading Economics",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "EUR/PLN ECB reference rate",
+      "value": "4.3695",
+      "series": "ECB reference rates",
+      "unit": "PLN per EUR",
+      "as_of_date": "2026-10-22",
+      "period_end": "2026-10-22",
+      "geography": "Poland",
+      "definition": "EUR/HUF 366.43, EUR/RON 5.3450 same day",
+      "source": "ECB",
+      "value_type": "actual",
+      "source_url": "https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html",
+      "tier": "S1",
+      "value_num": 4.3695,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Poland",
+      "analyst": "ECB",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "Poland 10-year yield",
+      "value": "6.415",
+      "series": "Market-data aggregator",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "Poland",
+      "definition": "Hungary 5.658% same day; Romania 7.26% on 13 Oct",
+      "source": "Aggregator",
+      "value_type": "actual",
+      "source_url": "https://www.worldgovernmentbonds.com/spread/hungary-10-years-vs-poland-10-years/",
+      "tier": "S3",
+      "value_num": 6.415,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Poland",
+      "analyst": "Aggregator",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Euro-area real effective exchange rate",
+      "value": "103.27",
+      "series": "BIS broad REER, 64 economies, 2020=100",
+      "unit": "index",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09-30",
+      "geography": "Euro area",
+      "definition": "-1.262% y/y",
+      "source": "BIS via FRED",
+      "value_type": "actual",
+      "source_url": "https://data.bis.org/topics/EER/BIS,WS_EER,1.0/M.R.B.XM",
+      "tier": "S1",
+      "value_num": 103.27,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Euro area",
+      "analyst": "BIS via FRED",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Ukraine state debt",
+      "value": "213.3",
+      "series": "KSE Institute",
+      "unit": "USD billion (~101% of GDP)",
+      "as_of_date": "2026-01-01",
+      "period_end": "2025-12-31",
+      "geography": "Ukraine",
+      "definition": "IMF programme anchor below 68% of GDP; second restructuring plausible",
+      "source": "KSE Institute",
+      "value_type": "estimate",
+      "source_url": "https://kse.ua/about-the-school/news/ukraines-state-debt-rose-to-101-of-gdp-kse-institute/",
+      "tier": "S3",
+      "value_num": 213.3,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Ukraine",
+      "analyst": "KSE Institute",
+      "staleness_days": 295,
+      "is_stale": false
+    },
+    {
+      "metric": "CBOT wheat price",
+      "value": "641.21",
+      "series": "Trading Economics CBOT wheat",
+      "unit": "USd/Bu",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026-10-21",
+      "geography": "World",
+      "definition": "+27.29% y/y; Macrotrends printed $7.10/bu on Oct 22 (+19.5% y/y)",
+      "source": "Trading Economics",
+      "value_type": "actual",
+      "source_url": "https://tradingeconomics.com/commodity/wheat",
+      "tier": "S3",
+      "value_num": 641.21,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Trading Economics",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "metric": "Uranium price",
+      "value": "72.4744",
+      "series": "IMF Primary Commodity Prices",
+      "unit": "US dollars per pound",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09-30",
+      "geography": "World",
+      "definition": "+15.267% y/y",
+      "source": "IMF",
+      "value_type": "actual",
+      "source_url": "https://data.imf.org/en/datasets/IMF.RES:PCPS",
+      "tier": "S1",
+      "value_num": 72.4744,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "IMF",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Nickel price",
+      "value": "16323.8219",
+      "series": "IMF Primary Commodity Prices",
+      "unit": "US dollars per metric ton",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09-30",
+      "geography": "World",
+      "definition": "+8.082% y/y; Russia ~10% of world production (2022 baseline)",
+      "source": "IMF",
+      "value_type": "actual",
+      "source_url": "https://data.imf.org/en/datasets/IMF.RES:PCPS",
+      "tier": "S1",
+      "value_num": 16323.8219,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "IMF",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Palladium spot price",
+      "value": "1039-1045",
+      "series": "Kitco/Trading Economics",
+      "unit": "US dollars per ounce",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "World",
+      "definition": "Russia at 41% of 2020 world mine production",
+      "source": "Kitco; Trading Economics",
+      "value_type": "actual",
+      "source_url": "https://www.kitco.com/charts/palladium",
+      "tier": "S3",
+      "value_num": 1042.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Kitco; Trading Economics",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "US anhydrous ammonia price",
+      "value": "915.50",
+      "series": "US ammonia price",
+      "unit": "US dollars per ton",
+      "as_of_date": "2026-08-07",
+      "period_end": "2026-08-07",
+      "geography": "United States",
+      "definition": "16% above a year earlier",
+      "source": "Report citing US price data",
+      "value_type": "actual",
+      "source_url": "https://farmdocdaily.illinois.edu/2026/08/fertilizer-and-fuel-prices-higher-heading-into-fall-2026.html",
+      "tier": "S3",
+      "value_num": 915.5,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Report citing US price data",
+      "staleness_days": 77,
+      "is_stale": false
+    },
+    {
+      "metric": "Chinese share of Common High Priority goods exports to Russia",
+      "value": "75",
+      "series": "Reported analysis",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "China/Russia",
+      "definition": "China 43% of Russia's top-five importer revenues (EUR 7.7 billion, July 2026)",
+      "source": "Reported in report evidence",
+      "value_type": "estimate",
+      "source_url": "https://www.csis.org/analysis/russias-turn-china-under-sanctions",
+      "tier": "S2",
+      "value_num": 75.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "China/Russia",
+      "analyst": "Reported in report evidence",
+      "metric_family": "market share",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Russian grain exports Jul-Sep 2026",
+      "value": "5.6",
+      "series": "Grain forecast cited in report",
+      "unit": "million tons (vs 11.3 million a year earlier)",
+      "as_of_date": "2026-10-01",
+      "period_end": "2026-09-30",
+      "geography": "Russia",
+      "definition": "Black Sea strikes disrupted 17% of the world's traded grain",
+      "source": "Report citing grain data",
+      "value_type": "forecast",
+      "source_url": "https://www.cfr.org/articles/hunger-on-the-horizon-the-new-black-sea-grain-crisis",
+      "tier": "S3",
+      "value_num": 5.6,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Russia",
+      "analyst": "Report citing grain data",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "European NATO 2027 aggregate defence spending, derived",
+      "value": "665-730",
+      "series": "Analyst derivation from NATO 2026 base",
+      "unit": "USD billion (current prices)",
+      "as_of_date": "2026-10-23",
+      "period_end": "2027-12-31",
+      "geography": "European NATO Allies and Canada",
+      "definition": "634 x 1.05 to 634 x 1.15; central ~700 (634 x 1.10-1.11)",
+      "source": "Analyst-derived",
+      "value_type": "forecast",
+      "source_url": "https://icds.ee/en/defence-spending-who-is-doing-what-july-2026/",
+      "tier": "S3",
+      "value_num": 697.5,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "European NATO Allies and Canada",
+      "analyst": "Analyst-derived",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Probability-weighted end-2027 Brent forecast",
+      "value": "89",
+      "series": "Report's probability-weighted forecast",
+      "unit": "US dollars per barrel",
+      "as_of_date": "2026-10-23",
+      "period_end": "2027-12-31",
+      "geography": "World",
+      "definition": "State ranges: 100-135 / 85-105 / 70-88 / 65-80 / 60-75",
+      "source": "This report",
+      "value_type": "forecast",
+      "source_url": "https://fred.stlouisfed.org/series/DCOILBRENTEU",
+      "tier": "S1",
+      "value_num": 89.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "This report",
+      "staleness_days": 0,
+      "is_stale": false
+    }
+  ],
+  "contested_claims": [
+    {
+      "claim": "Russian net territorial gain over the trailing 12 months to October 2026",
+      "positions": [
+        {
+          "stance": "+753 square miles (avg 74/month), DeepState via Russia Matters",
+          "sources": [
+            "https://www.russiamatters.org/news/russia-ukraine-war-report-card/russia-ukraine-war-report-card-oct-21-2026"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Russia net +~73 sq km since Jan 1, 2026 with Ukraine liberating ~1,080 sq km (ISW series)",
+          "sources": [
+            "https://www.understandingwar.org/backgrounder/russian-offensive-campaign-assessment-october-21-2026"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different map series, control thresholds and windows; the two series diverge by an order of magnitude on annual windows; both reported, not averaged."
+    },
+    {
+      "claim": "Ukrainian casualties killed and wounded",
+      "positions": [
+        {
+          "stance": "250,000-300,000 (former high-ranking Western official, Feb 2026)",
+          "sources": [
+            "https://www.russiamatters.org/news/russia-ukraine-war-report-card/russia-ukraine-war-report-card-oct-21-2026"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Roughly 600,000 killed, wounded or missing (CSIS study, Jan 2026)",
+          "sources": [
+            "https://www.theguardian.com/world/2026/jan/28/russia-ukraine-military-casualties-war-study"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "1,225,000 killed and wounded (UK estimate, Jan 2026)",
+          "sources": [
+            "https://www.facebook.com/groups/260143242947443/posts/1227514386210319/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Estimates span an order of magnitude by method; none is official or independently verified."
+    },
+    {
+      "claim": "Russian personnel losses (Ukrainian General Staff figures)",
+      "positions": [
+        {
+          "stance": "46,230 in September 2026; 326,900 in Jan-Sep 2026",
+          "sources": [
+            "https://www.kyivpost.com/post/85841"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Belligerent claim, not independently verified; read as upper-bound estimate."
+    },
+    {
+      "claim": "Effective OPEC+ spare capacity",
+      "positions": [
+        {
+          "stance": "Over 4 mb/d in Q4 2025, the most recent verifiable IEA figure",
+          "sources": [
+            "https://www.iea.org/about/oil-security-and-emergency-response/strait-of-hormuz"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "0.22 mb/d effective spare capacity per a secondary summary of the IEA's September 2026 report",
+          "sources": [
+            "https://globaloilshock.com/en/glossary/spare-capacity/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "The 0.22 mb/d figure is a secondary summary unverified against the IEA's own page; definitions of effective vs headline spare capacity differ."
+    },
+    {
+      "claim": "EU gas storage fill level, October 2026",
+      "positions": [
+        {
+          "stance": "74.0% full (836.9 TWh) on Oct 13 (Engie)",
+          "sources": [
+            "https://energyscan.engie.com/europe-gas-storage-levels-weekly-fullness-rate-tracker-and-analysis/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "74.58% (AGSI+) on Oct 20",
+          "sources": [
+            "https://global-energy-flow.com/storage/trajectory/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "78.69% per another tracker on Oct 20",
+          "sources": [
+            "https://en.macromicro.me/charts/57402/eu-european-countries-natural-gas-storage-percent-full"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Trackers disagree within a few points on measurement date and method; all show the lowest seasonal level since 2018."
+    },
+    {
+      "claim": "Brent monthly average, September 2026",
+      "positions": [
+        {
+          "stance": "114.1591 Dollars per Barrel (EIA)",
+          "sources": [
+            "https://fred.stlouisfed.org/series/DCOILBRENTEU"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "102.0181 US dollars per barrel (IMF)",
+          "sources": [
+            "https://data.imf.org/en/datasets/IMF.RES:PCPS"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different assessments/series of the same month; both as published, not averaged."
+    },
+    {
+      "claim": "EU 20th sanctions package contents and adoption",
+      "positions": [
+        {
+          "stance": "120 individuals sanctioned, basis for a future maritime-services ban on Russian crude, 20 more banks excluded (law-firm summary); Council adoption date could not be confirmed",
+          "sources": [
+            "https://www.consilium.europa.eu/en/policies/sanctions-against-russia/timeline-packages-sanctions-since-february-2022/",
+            "https://www.linkedin.com/pulse/eus-20th-russia-sanctions-package-initial-thoughts-jan-dunin-wasowicz-5vyve"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Reported via law-firm summary and Council timeline; adoption date unconfirmed."
+    },
+    {
+      "claim": "US waiver of the Graham Sanctioning Russia and Iran Act of 2026",
+      "positions": [
+        {
+          "stance": "Trump signed an executive order on October 16, 2026 waiving the act (reported)",
+          "sources": [
+            "https://www.nbcnews.com/politics/trump-administration/trump-suspends-new-russia-sanctions-deal-purchase-diesel-citing-nation-rcna603991",
+            "https://www.nytimes.com/2026/10/16/us/politics/trump-order-russia-sanctions.html",
+            "https://democrats-foreignaffairs.house.gov/2026/10/meeks-statement-on-trump-waiving-russia-sanctions"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Reported via wire coverage; not verified against the executive order text."
+    },
+    {
+      "claim": "Durability effect of peacekeeping/monitoring on ceasefires",
+      "positions": [
+        {
+          "stance": "Peacekeepers cut renewed-war risk by between 55 and 85 percent (Fortna 2004 summary)",
+          "sources": [
+            "https://peacepolicy.nd.edu/2012/05/01/keeping-the-peace-lessons-from-data-for-peacebuilding/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "No significant UN-intervention effect (Diehl, Reifschneider and Hensel)",
+          "sources": [
+            "https://polisci.columbia.edu/sites/polisci.columbia.edu/files/content/pdfs/Publications/Fortna/Journal%20Articles/interstate%20pk%20WP%202004%20offprint.pdf"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Contradictory findings across the peacekeeping literature; a widely cited ~90% risk-reduction figure could not be confirmed in the fetched text."
+    },
+    {
+      "claim": "ICE Brent Dec-2027 contract level, October 2026",
+      "positions": [
+        {
+          "stance": "$81.98/b on 27 September 2026 (MarketWatch)",
+          "sources": [
+            "https://www.marketwatch.com/investing/future/brnz27?countrycode=uk"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "86.980 USD/bbl reported on Oct 23, unconfirmed on the exchange page",
+          "sources": [
+            "https://www.ice.com/products/219/brent-crude-futures/data?marketId=6018448"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different quote dates and vendors; the Oct 23 print could not be confirmed on the exchange page."
+    },
+    {
+      "claim": "TTF Q4-2027 futures strip",
+      "positions": [
+        {
+          "stance": "Reported Q4-27 strip near €66/MWh (66.410 EUR/MWh, October 22)",
+          "sources": [
+            "https://www.ice.com/products/27996665/Dutch-TTF-Natural-Gas-Futures/data"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "No December 2027 TTF quote exists on the exchange line; back of curve unconfirmed",
+          "sources": [
+            "https://www.cmegroup.com/markets/energy/natural-gas/dutch-ttf-natural-gas-calendar-month.html"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Exchange page shows no Dec-27 print; the quarterly strip figure is unconfirmed on the exchange page itself."
+    },
+    {
+      "claim": "Wheat price level, late October 2026",
+      "positions": [
+        {
+          "stance": "641.21 USd/Bu on October 21, +27.29% y/y (Trading Economics)",
+          "sources": [
+            "https://tradingeconomics.com/commodity/wheat"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "$7.10/bu on 22 October 2026, up 19.5% y/y (Macrotrends)",
+          "sources": [
+            "https://www.macrotrends.net/2534/wheat-prices-historical-chart-data"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different series, units and reference days between vendors."
+    },
+    {
+      "claim": "Hungarian forint ECB reference rate",
+      "positions": [
+        {
+          "stance": "EUR/HUF 366.43 (ECB reference rate, 22 Oct 2026)",
+          "sources": [
+            "https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "EUR 1 = 363.13 HUF (Hungarian central bank fixing)",
+          "sources": [
+            "https://www.mnb.hu/en/arfolyamok"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different central-bank fixings with different timing and methodology."
+    },
+    {
+      "claim": "Ceasefire durability base rate (ETH/PRIO dataset)",
+      "positions": [
+        {
+          "stance": "Only 63 of 2,202 ceasefires recorded as lasting at least a year without violation (truncated qualifier - lower bound)",
+          "sources": [
+            "https://journals.sagepub.com/doi/10.1177/00220027221129183",
+            "https://css.ethz.ch/en/research/datasets/civil-conflict-ceasefire.html"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Monitoring and strong agreements significantly lengthen peace (Fortna)",
+          "sources": [
+            "http://www.columbia.edu/~vpf4/scraps%20IO%20offprint.pdf"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "The 63/2,202 figure's qualifying clause was truncated in the source, making it only a lower bound on fragility; civil-conflict data may overstate interstate failure rates."
+    },
+    {
+      "claim": "Ukraine 2026 drone production target vs delivered output",
+      "positions": [
+        {
+          "stance": "6-7 million FPV drones targeted for 2026",
+          "sources": [
+            "https://www.facebook.com/themilitarychannelusa/posts/read-ukraines-ministry-of-defense-has-increased-its-uncrewed-aerial-system-contr/122242958084902462/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Target is a plan, not delivered output; contracts 5.5x and deliveries ~3.7x 2025 levels YTD",
+          "sources": [
+            "https://kyivindependent.com/ukraines-drone-production-jumps-370-in-2026-says-defense-ministry/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Stated target vs contracted/delivered figures differ in definition and timing; neither is verified output."
+    }
+  ],
+  "forecast_inputs": {
+    "scenarios": [
+      {
+        "name": "Active high-intensity war",
+        "probability": 0.15,
+        "narrative": "Escalation dynamics, broken diplomacy and sustained Russian war-economy output keep full-scale fighting at or above late-2026 intensity through end-2027; prior: multi-year attritional interstate wars rarely terminate within 6 years of onset."
+      },
+      {
+        "name": "Reduced-intensity attrition",
+        "probability": 0.35,
+        "narrative": "Both sides' manpower and munitions constraints plus election-cycle pressure in the West lower the tempo, but no durable deal holds and fighting continues into end-2027."
+      },
+      {
+        "name": "Frozen conflict",
+        "probability": 0.32,
+        "narrative": "Zelensky's stated openness to freezing the frontline and partial-truce precedents produce a de facto ceasefire without a signed agreement; prior: frozen lines are the modal end-state of long interstate conflicts."
+      },
+      {
+        "name": "Formal armistice",
+        "probability": 0.15,
+        "narrative": "Sustained US mediation and mutual exhaustion produce a signed ceasefire or armistice with a monitoring line in force before end-2027."
+      },
+      {
+        "name": "Comprehensive peace settlement",
+        "probability": 0.03,
+        "narrative": "Only a political rupture in Moscow or a decisive battlefield outcome yields a signed comprehensive settlement in 2027; no framework text currently exists, so the base rate stays low."
+      }
+    ],
+    "base_rates": [
+      {
+        "reference_class": "Interstate wars, 1946–2003 (COW/PRIO), mean duration",
+        "outcome_frequency": "38 wars; average duration 2.1 years",
+        "basis": "academic count of COW/PRIO data [S72]"
+      },
+      {
+        "reference_class": "Civil wars including internationalized, since 1946, mean duration",
+        "outcome_frequency": "191; average duration 3.5 years",
+        "basis": "same academic count of COW/PRIO data [S72]"
+      },
+      {
+        "reference_class": "Civil-conflict ceasefires, 1989–2020, lasting at least one year without violation",
+        "outcome_frequency": "only 63 of 2,202 (truncated qualifier — lower bound); half of civil conflicts produce at least one ceasefire",
+        "basis": "ETH/PRIO ceasefire dataset documentation [S73][S75]"
+      },
+      {
+        "reference_class": "Interstate wars since 1946, propensity to end in negotiated peace",
+        "outcome_frequency": "far more likely than civil wars; no share printed",
+        "basis": "research cited in an escalation-dynamics study [S72]"
+      },
+      {
+        "reference_class": "Interstate cease-fires, 1946–1997, agreement strength and durability",
+        "outcome_frequency": "strong, monitored agreements significantly lengthen peace; no absolute shares",
+        "basis": "Fortna, interstate cease-fires 1946–1997 [S76]"
+      },
+      {
+        "reference_class": "Iran–Iraq war, duration to end",
+        "outcome_frequency": "8 years to ceasefire",
+        "basis": "historical analog [S79]"
+      }
+    ],
+    "drivers": [
+      {
+        "variable": "Front-line territorial momentum (OSINT net change)",
+        "direction": "Ukrainian net gains or near-zero movement push toward freeze states",
+        "why_it_matters": "Russia's four-week net gain fell from 37 to 3 square miles with a net Ukrainian recapture of 20 on Oct 13–19, and ISW assesses Russia's Donetsk offensive 'operationally defeated' [S1][S2]"
+      },
+      {
+        "variable": "US unilateral sanctions relief (diesel license, shadow-fleet waivers)",
+        "direction": "Relief without a deal rewards Russia's waiting strategy and splits the coalition",
+        "why_it_matters": "A Treasury license suspends sanctions on Russian diesel deliveries until April 2027, driven by diesel rising from $3.48/gallon to a $6.53/gallon peak before the November 3 midterms [S15][S56]"
+      },
+      {
+        "variable": "Ukraine's manpower constraint (AWOL, draft evasion, soldier age)",
+        "direction": "Manpower rupture accelerates a freeze",
+        "why_it_matters": "200,000 soldiers absent without leave and 2 million men avoiding draft notices, average soldier over 40 [S34]"
+      },
+      {
+        "variable": "Russian fiscal strain (deficit, debt, National Wealth Fund)",
+        "direction": "Tightening finances lower tempo but are not yet binding",
+        "why_it_matters": "2026 deficit estimate 3.2% of GDP vs 1.6% target, 2027 borrowing up 43% to 7.7 trillion roubles, state debt 21.7% of GDP [S60][S61]"
+      },
+      {
+        "variable": "EU financing for Ukraine's 2027 budget",
+        "direction": "Failure to close the gap raises weight on fighting states",
+        "why_it_matters": "A ~€70 billion 2027 funding gap against another planned €45 billion, leaders meeting 26–27 Nov 2026 [S11]"
+      },
+      {
+        "variable": "The trilateral negotiation track and the sequencing gap",
+        "direction": "Convening with text shifts weight toward armistice; collapse toward attrition",
+        "why_it_matters": "Putin insists on final-deal security parameters, not a 'short' ceasefire, while Zelensky says 'Right now we have to freeze' [S4][S22][S3]"
+      },
+      {
+        "variable": "EU gas storage and winter weather",
+        "direction": "Below-band storage raises winter TTF and inflation pass-through",
+        "why_it_matters": "Storage 74.0% full (836.9 TWh) on Oct 13, 2026, lowest for the season since 2018 [S90]"
+      },
+      {
+        "variable": "European rearmament commitments (NATO 2035 pledge, SAFE, German budgets)",
+        "direction": "Committed spending rises under every war state",
+        "why_it_matters": "5% of GDP by 2035 pledge, up to €150 billion SAFE loans, Germany's core €109 billion ask for 2027 [S16][S115][S17][S66]"
+      }
+    ],
+    "risks": [
+      {
+        "event": "TTF front-month settlement at or above €100.00/MWh on at least one day in winter 2026-27",
+        "probability": "55%",
+        "per": "1 Nov 2026–31 Mar 2027",
+        "source": "Dutch TTF Natural Gas Calendar Month Futures Quotes - CME Group [S84]",
+        "source_url": "https://www.cmegroup.com/markets/energy/natural-gas/dutch-ttf-natural-gas-calendar-month.html",
+        "tier": "S3",
+        "effects": [],
+        "affects": [
+          "European Central Bank",
+          "Euro-area households"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "Euro-area annual HICP flash estimate above 2.5% for Dec 2027",
+        "probability": "55%",
+        "per": "",
+        "source": "Annual inflation up to 3.8% in the euro area - Euro indicators - Eurostat [S25]",
+        "source_url": "https://ec.europa.eu/eurostat/web/products-euro-indicators/w/2-16102026-ap",
+        "tier": "S1",
+        "effects": [],
+        "affects": [
+          "European Central Bank",
+          "Euro-area households"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "Fed funds target-range upper limit at or above 4.25% on 31 Dec 2027",
+        "probability": "40%",
+        "per": "on 31 Dec 2027",
+        "source": "Federal Funds Target Range - Upper Limit — United States [S41]",
+        "source_url": "https://fred.stlouisfed.org/series/DFEDTARU",
+        "tier": "S1",
+        "effects": [],
+        "affects": [
+          "Federal Reserve",
+          "US households"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "Gold monthly average above $4,500/oz for Dec 2027",
+        "probability": "40%",
+        "per": "",
+        "source": "Gold, US dollars per troy ounce of gold, Unit prices — World [S7]",
+        "source_url": "https://data.imf.org/en/datasets/IMF.RES:PCPS",
+        "tier": "S1",
+        "effects": [
+          {
+            "metric": "Gold monthly average",
+            "change": "above $4,500/oz",
+            "direction": "up"
+          }
+        ],
+        "affects": [
+          "investors",
+          "central banks"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "EIA Europe Brent spot closes above $90.00/b on 31 Dec 2027",
+        "probability": "30%",
+        "per": "on 31 Dec 2027",
+        "source": "Crude Oil Prices: Brent - Europe — World [S40]",
+        "source_url": "https://fred.stlouisfed.org/series/DCOILBRENTEU",
+        "tier": "S1",
+        "effects": [],
+        "affects": [
+          "OPEC+",
+          "consumers"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "Euro-area real GDP growth for 2027 below 1.0%",
+        "probability": "30%",
+        "per": "2027",
+        "source": "Gross domestic product (GDP), Constant prices, Percent change: Euro Area (EA) [S43]",
+        "source_url": "https://data.imf.org/en/datasets/IMF.RES:WEO",
+        "tier": "S1",
+        "effects": [],
+        "affects": [
+          "Euro-area economies",
+          "European Central Bank"
+        ],
+        "recurring": false
+      }
+    ],
+    "indicators": [
+      {
+        "indicator": "ECB Deposit Facility Rate for Euro Area (fred:ECBDFR)",
+        "series": "fred:ECBDFR",
+        "latest_value": 2.5,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S5"
+      },
+      {
+        "indicator": "Harmonized Index of Consumer Prices: Overall Index Excluding Energy, Food, Alcohol, and Tobacco for Euro Area (20 Countries) (year-over-year % change) (fred:TOTNRGFOODEA20MI15XM#yoy)",
+        "series": "fred:TOTNRGFOODEA20MI15XM#yoy",
+        "latest_value": 2.500248040480213,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent change from year ago",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S6"
+      },
+      {
+        "indicator": "Gold, US dollars per troy ounce of gold, Unit prices — World (imf:PCPS/G001.PGOLD.USD.M)",
+        "series": "imf:PCPS/G001.PGOLD.USD.M",
+        "latest_value": 4334.746666666667,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "U.S. dollars per troy ounce",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S7"
+      },
+      {
+        "indicator": "Global price of Natural gas, EU — Euro area (fred:PNGASEUUSDM)",
+        "series": "fred:PNGASEUUSDM",
+        "latest_value": 25.494,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "U.S. Dollars per Million Metric British Thermal Unit",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S8"
+      },
+      {
+        "indicator": "Brent Crude, US dollars per barrel, Unit prices — World (imf:PCPS/G001.POILBRE.USD.M)",
+        "series": "imf:PCPS/G001.POILBRE.USD.M",
+        "latest_value": 102.0180952380952,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "U.S. dollars per barrel",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S23"
+      },
+      {
+        "indicator": "All Items, Consumer price index (CPI), Period average, percent change: United States (wb:IMF_WEO_PCPIPCH/USA)",
+        "series": "wb:IMF_WEO_PCPIPCH/USA",
+        "latest_value": 2.729506,
+        "latest_date": "2025-12-31",
+        "latest_period": "2025",
+        "status": "estimate",
+        "units": "Percent change",
+        "frequency": "A",
+        "date_or_trigger": "next annual release after 2025",
+        "source_ref": "S24"
+      },
+      {
+        "indicator": "Central bank policy rates - United States - Monthly - End of period (bis:WS_CBPOL/M.US)",
+        "series": "bis:WS_CBPOL/M.US",
+        "latest_value": 3.875,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Per cent per year",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S39"
+      },
+      {
+        "indicator": "Crude Oil Prices: Brent - Europe — World (fred:DCOILBRENTEU)",
+        "series": "fred:DCOILBRENTEU",
+        "latest_value": 114.1590909090909,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Dollars per Barrel",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S40"
+      },
+      {
+        "indicator": "Federal Funds Target Range - Upper Limit — United States (fred:DFEDTARU)",
+        "series": "fred:DFEDTARU",
+        "latest_value": 4.0,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S41"
+      },
+      {
+        "indicator": "Effective exchange rates: Euro area - Real - Broad (64 economies) (bis:WS_EER/M.R.B.XM)",
+        "series": "bis:WS_EER/M.R.B.XM",
+        "latest_value": 103.27,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Index, 2020 = 100",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S42"
+      },
+      {
+        "indicator": "Gross domestic product (GDP), Constant prices, Percent change: Euro Area (EA) (imf:WEO/G163.NGDP_RPCH.A)",
+        "series": "imf:WEO/G163.NGDP_RPCH.A",
+        "latest_value": 1.236817,
+        "latest_date": "2025-12-31",
+        "latest_period": "2025",
+        "status": "estimate",
+        "units": "Percent change",
+        "frequency": "A",
+        "date_or_trigger": "next annual release after 2025",
+        "source_ref": "S43"
+      },
+      {
+        "indicator": "Consumer Price Index for All Urban Consumers: All Items Less Food and Energy in U.S. City Average (year-over-year % change) (fred:CPILFESL#yoy)",
+        "series": "fred:CPILFESL#yoy",
+        "latest_value": 2.565840844021827,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent change from year ago",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S44"
+      },
+      {
+        "indicator": "Uranium, US dollars per pound, Unit prices — World (imf:PCPS/G001.PURAN.USD.M)",
+        "series": "imf:PCPS/G001.PURAN.USD.M",
+        "latest_value": 72.47442565545455,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "U.S. dollars per pound",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S45"
+      },
+      {
+        "indicator": "Interest Rates: Long-Term Government Bond Yields: 10-Year: Main (Including Benchmark) for Germany (fred:IRLTLT01DEM156N)",
+        "series": "fred:IRLTLT01DEM156N",
+        "latest_value": 3.46952380952381,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S46"
+      },
+      {
+        "indicator": "Nickel, US dollars per metric tonne, Unit prices — World (imf:PCPS/G001.PNICK.USD.M)",
+        "series": "imf:PCPS/G001.PNICK.USD.M",
+        "latest_value": 16323.8219047619,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "U.S. dollars per metric ton",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S47"
+      }
+    ]
+  }
+}

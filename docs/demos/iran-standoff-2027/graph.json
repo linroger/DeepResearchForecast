@@ -1,0 +1,2577 @@
+{
+ "nodes": [
+  {
+   "id": "fe28583c-8a79-4918-aaad-288220d849ab",
+   "name": "Qatari LNG",
+   "labels": [
+    "CommodityMarket"
+   ],
+   "summary": "The Renewed large-scale strikes scenario's principal priced channel is re-disruption of Qatari LNG supply."
+  },
+  {
+   "id": "fba1daee-d312-4458-8120-7d363a3247f2",
+   "name": "June 2019 Gulf of Oman incident",
+   "labels": [],
+   "summary": "Explosions on two oil tankers near Iran in the June 2019 Gulf of Oman incident sent oil prices about 2% higher."
+  },
+  {
+   "id": "fac7e755-7d06-4b28-8d47-e482bf149312",
+   "name": "2026 Iranian supreme leader election",
+   "labels": [],
+   "summary": "The Assembly of Experts moved to form an interim leadership council in connection with the 2026 Iranian supreme leader election process.\nThe 2026 Iranian supreme leader election was triggered by the death of Ali Khamenei (killed February 28, 2026, per prior context)."
+  },
+  {
+   "id": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "name": "Renewed large-scale strikes scenario",
+   "labels": [
+    "ConflictScenario"
+   ],
+   "summary": "Renewed large-scale strikes means a US or Israeli campaign of direct strikes on Iranian nuclear, military or regime targets beyond the limited exchanges traded, met with Iranian retaliation; assigned 25% probability in the end-2027 forecast frame, shifted up from a single-digit base rate by the verified 2025–2026 strike precedent and collapsed IAEA access, but discounted by Trump's record of cancelling return-to-major-combat plans. It is the fat right tail for Brent: Hormuz disruption and a war premium on the 1990, 2019 Abqaiq and 2025–2026 precedents; shut-ins return toward the 10.9 million b"
+  },
+  {
+   "id": "f4deaf01-5b61-4b67-9482-51b451b8508c",
+   "name": "Assembly of Experts",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Iranian body whose succession signals are a leading indicator for the Regime crisis scenario (5%): an open rupture in the Assembly lifts the tail risk of succession upheaval.\nRegime crisis settlement relies on Assembly of Experts and official Iranian statements corroborated by Congressional Research Service (CRS) reporting, with the window running through December 31, 2027.\nMojtaba Khamenei's continuation as Supreme Leader (5% probability he ceases before end-2027) would be decided via an Assembly of Experts announcement.\nThe Assembly of Experts moved to form an interim leadership council in c"
+  },
+  {
+   "id": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "name": "Israel",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Israel maintains an adversarial stance toward Iran, with potential direct strikes on Iranian nuclear, military or regime targets considered part of a renewed large-scale campaign scenario\nIsrael struck Iran's nuclear facilities on June 13, 2025, beginning a 12-day US-Israeli campaign that destroyed or badly damaged all three then-operating enrichment plants.\nIsrael joined the US in the war against Iran opening February 28, 2026, striking IRGC, Basij and security targets\nHezbollah aims to keep its arms north of the Litani and is rebuilding its arsenal and deterrent capability in anticipation of"
+  },
+  {
+   "id": "e6b559b9-3edc-4cd3-b82e-edf6fc205943",
+   "name": "Benjamin Netanyahu",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Has directed the military and intelligence agencies toward removing the Iranian threat, stating 'there's only one way to remove this threat once and for all - overthrow the regime in Iran'; denies Tru\nNetanyahu said 'there's only one way to remove this threat once and for all — overthrow the regime in Iran'\nNetanyahu's minimum goal is nuclear suppression, and in his October 2026 campaign speech he named Iran's new supreme leader developing 'the bombs of death' as the threat, saying the only way to remove it is to overthrow the regime in Iran.\nNetanyahu's stated aim to 'overthrow the regime in "
+  },
+  {
+   "id": "e681a6e8-db14-444e-868f-9637a5585171",
+   "name": "World Bank",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The World Bank projects a 7.7% contraction for Iran's fiscal year 2026-27, a projection Iranian authorities reject.\nThe World Bank projects a 7.7% contraction for Iran's fiscal year 2026-27 (a projection Iran rejects), a constraint on Iran's side in the standoff.\nThe World Bank projects a 7.7% contraction for Iran's fiscal year 2026-27, a projection Iranian authorities reject.\nIranian authorities reject the World Bank's projection of a 7.7% contraction for fiscal year 2026-27.\nIn the Regime crisis scenario (5%), the World Bank projects a 7.7% contraction for Iran in fiscal 2026-27, with first-"
+  },
+  {
+   "id": "df3c04ea-6f1c-484d-b438-f7337a928a44",
+   "name": "Operation Epic Fury",
+   "labels": [
+    "ConflictScenario"
+   ],
+   "summary": "Strikes beginning February 28, 2026 under the US operation designated 'Operation Epic Fury' killed Supreme Leader Ali Khamenei and dozens of senior leaders\nOperation Epic Fury strikes hit IRGC, Basij and regime-security targets"
+  },
+  {
+   "id": "dea42676-ba6b-40db-b013-f613d96b4d57",
+   "name": "Isfahan",
+   "labels": [
+    "NuclearProgram"
+   ],
+   "summary": "Iranian nuclear site where centrifuge reinstallation is monitored as a leading indicator; reinstallation points to the Renewed large-scale strikes scenario. IAEA access has collapsed.\nThe Isfahan tunnel enrichment plant, declared by Iran one day before the June 13, 2025 attack, was largely unscathed by US bombing during the 12-day campaign.\nISIS's post-ceasefire imagery puts 265–287 kg of 60%-enriched uranium in the Isfahan tunnels, over half the 60% stock.\nOn the eve of the June 13, 2025 strike the IAEA estimated Iran held 440.9 kg of uranium enriched to up to 60% — enough, if enriched furthe"
+  },
+  {
+   "id": "db0e3832-1159-495a-a43b-53124723b1f4",
+   "name": "Iran's economy",
+   "labels": [],
+   "summary": "The World Bank projects Iran's economy to contract 7.7% in fiscal year 2026-27.\nVortexa tracks Iranian crude loadings, with a restart above 210 kbd marking the de-escalation and disinflation track."
+  },
+  {
+   "id": "d8ce778d-12ef-44ac-96cb-fd24d1ff12e5",
+   "name": "Government of Iraq",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Iraq arranged passage for its own tankers through the Strait of Hormuz region in August 2026 despite blockade conditions.\nChinese teapots substituted at least 12 million barrels of Iraqi crude for October–November delivery"
+  },
+  {
+   "id": "d4173b83-0fe6-4c5f-ba42-9f732579b491",
+   "name": "Government of China",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Purchases approximately 90 percent of Iran's oil exports, mostly via teapot refineries; Iranian arrivals fell to 590,000 bpd in September 2026, the lowest since January 2023; teapots substituted at le\nChina opposed any targeting of the new supreme leader Mojtaba Khamenei\nChina buys approximately 90 percent of Iran's oil exports\nChina and Iran are linked by the 2021 25-year Cooperation Program, which is economic- and energy-focused\nChinese teapots substituted at least 12 million barrels of Iraqi crude for October–November delivery\nChina played an enabling role in Iran's war effort during and af"
+  },
+  {
+   "id": "d181aac2-b917-44bb-af93-8692ad91c81f",
+   "name": "Khamenei",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Mojtaba Khamenei was announced as successor to Khamenei (who was killed February 28, 2026) on March 8–9, 2026.\nStrikes beginning February 28, 2026 under the US operation designated 'Operation Epic Fury' killed Supreme Leader Ali Khamenei and dozens of senior leaders\nCFR assessed the post-Khamenei leader (Mojtaba Khamenei, announced March 8–9, 2026) as lacking administrative experience and strong theological credentials, a factor in the Regime crisis path.\nThe 2026 Iranian supreme leader election was triggered by the death of Ali Khamenei (killed February 28, 2026, per prior context).\nThe Found"
+  },
+  {
+   "id": "d0f4d5cd-8a62-427b-b63b-f8a9ad92a462",
+   "name": "Iran's 60%-enriched uranium stockpile",
+   "labels": [
+    "NuclearProgram"
+   ],
+   "summary": "Grossi said in March 2026 that 'a bit more than 200 kg' of up-to-60% uranium remains in the Isfahan tunnel complex, with some still at Natanz.\nOn the eve of the June 13, 2025 strike the IAEA estimated Iran held 440.9 kg of uranium enriched to up to 60% — enough, if enriched further, for ten nuclear weapons by an IAEA yardstick; surviving holdings include a bit more than 200 kg remaining in the Isfahan tunnel complex per Grossi, March 2026.\nThe Isfahan tunnel uranium stock is one of the triggers for the renewed large-scale strikes scenario, alongside breakout progress invisible to inspectors."
+  },
+  {
+   "id": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "name": "Brent crude oil market",
+   "labels": [
+    "CommodityMarket"
+   ],
+   "summary": "The Renewed large-scale strikes scenario is the fat right tail for Brent, implying Hormuz disruption and a war premium on the 1990, 2019 Abqaiq and 2025–2026 precedents.\nOn October 15, 2026, the IEA agreed to release over 20 million barrels of diesel alongside remaining volumes of a record March 2026 emergency-reserve release, actively capping the war premium in the oil market.\nOn October 12, 2026, President Trump temporarily lifted sanctions on Russian diesel while Washington weighed letting \"legal oil\" move on previously sanctioned shadow-fleet vessels, policy acting to cap the oil market's "
+  },
+  {
+   "id": "c92aa7ab-fc6d-4c72-931d-59fe87aab75b",
+   "name": "Low-intensity conflict scenario",
+   "labels": [
+    "ConflictScenario"
+   ],
+   "summary": "Weighting the scenario centrals yields roughly $4,150 per troy ounce for end-2027 gold, with a range of roughly 3,650–4,800 dollars per ounce.\nWeighting the scenario centrals yields roughly $20 per MMBtu for end-2027 TTF, with a range of roughly 10.5–34 dollars per MMBtu, below September 2026 readings.\nThe Foundation for Strategic Research documents a cohesive IRGC coercive apparatus with intermittent US negotiations after Khamenei's killing, providing the material basis for the Low-intensity conflict — 45% path of Iran suppressed but not collapsing.\nThe evidence contains no Chinese- or Russia"
+  },
+  {
+   "id": "c7061359-be1f-4c49-8f8e-12db5708e01b",
+   "name": "S&P Global Ratings",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "S&P Global Ratings is reported to have upgraded Saudi Arabia to 'A+', though the date was not confirmed on the fetched page"
+  },
+  {
+   "id": "c36513b9-412b-4095-aed6-35977bd0da95",
+   "name": "Iran's nuclear program",
+   "labels": [
+    "NuclearProgram"
+   ],
+   "summary": "The US opposes Iran's nuclear program, with potential direct US strikes on Iranian nuclear targets contemplated in the renewed large-scale strikes scenario\nNetanyahu's minimum goal is nuclear suppression, and in his October 2026 campaign speech he named Iran's new supreme leader developing 'the bombs of death' as the threat, saying the only way to remove it is to overthrow the regime in Iran.\nThe World Bank projects a 7.7% contraction for Iran's fiscal year 2026-27 (a projection Iran rejects), a constraint on Iran's side in the standoff.\nThe renewed large-scale strikes scenario is triggered if"
+  },
+  {
+   "id": "be41daa3-fa47-4c82-a4e4-46daf7e5b8db",
+   "name": "GCC markets",
+   "labels": [
+    "CommodityMarket"
+   ],
+   "summary": "The inflation pass-through from renewed large-scale strikes would drag growth and hit GCC and Israeli markets."
+  },
+  {
+   "id": "bc8c7d99-e2dd-43a0-8475-2ce69e69dcb8",
+   "name": "Bank for International Settlements",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "BIS data show policy rates for September 2026: United States 3.875% per year (federal funds midpoint) and euro area 2.5% per year; BIS August 2026 euro-area reading of 3.249% also recorded. Central banks remain restrictive as the conflict's inflation pass-through persists.\nBIS published the US central bank policy rate (end of period) at 3.875% per year for September 2026, down -0.25 pp year-on-year, within a five-year range of 0.125% to 5.375%.\nBIS published the euro-area central bank policy rate (end of period) at 2.5% per year for September 2026, up +0.5 pp year-on-year, within a five-year r"
+  },
+  {
+   "id": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "name": "Donald Trump",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Launched the February 28, 2026 strikes ('Operation Epic Fury') that killed Khamenei, then imposed and renewed the naval blockade; has repeatedly canceled plans for return to major combat; approved pla\nTrump steered US military planners away from oil infrastructure targets, with Pickaxe Mountain a candidate target, per an October 21, 2026 New York Times report on a planned 'short but intensive operation' after the November 3 midterms\nOn October 12, 2026, President Trump temporarily lifted sanctions on Russian diesel while Washington weighed letting \"legal oil\" move on previously sanctioned shad"
+  },
+  {
+   "id": "b72e05a2-1f8b-47e3-8471-7e20ccbe7c2f",
+   "name": "Red Sea",
+   "labels": [
+    "CommodityMarket"
+   ],
+   "summary": "Red Sea transits and proxy attacks are a leading indicator (tracked via IMF PortWatch, ACLED); proxy reconstitution raises shipping costs and signals escalation of the low-intensity conflict.\nThe Houthis resumed attacks in July 2026 after a half-year hiatus, launching twelve attacks on commercial vessels in the southern Red Sea, leaving transits below one-third of pre-October-2023 levels.\nWar-risk insurance for southern Red Sea voyages surged after the July 2026 Houthi blockade announcement, and Red Sea transits remain below one-third of pre-October-2023 volumes as of late October 2026\nKpler a"
+  },
+  {
+   "id": "b5e74aa8-8b75-4eff-80f2-1192ad3e43ba",
+   "name": "US federal funds rate",
+   "labels": [
+    "CommodityMarket"
+   ],
+   "summary": "Federal funds rate midpoint ended September 2026 at 3.875%.\nThe FOMC raised the federal funds target range by a quarter point to 3-3/4 to 4 percent on September 16, 2026 by a 12-0 vote, citing elevated inflation and geopolitical uncertainty, bringing the midpoint to 3.875% at end-September 2026, with officials signaling at least one more hike possible before year-end ahead of the October 27-28, 2026 meeting."
+  },
+  {
+   "id": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "Gold market",
+   "labels": [
+    "CommodityMarket"
+   ],
+   "summary": "Gold averaged 4,334.7467 U.S. dollars per troy ounce on the IMF monthly average in September 2026; LBMA PM auction printed $4,124.5/oz on 2026-10-20, with late-October quotes clustering below the September average even as oil firmed. End-2027 forecast: roughly $4,150/oz weighting scenario centrals, range ~3,650–4,800. Scenario paths: Low-intensity conflict (45%) — sanctions enforcement sustains official-sector diversification buying, plateauing at an elevated trend beneath 3,900–4,200 $/oz; Renewed large-scale strikes (25%) — official buying accelerates, raising the floor beneath 4,400–5,200 $"
+  },
+  {
+   "id": "b3eedf4c-9273-4df5-aa3a-26482442abde",
+   "name": "Kpler",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Data provider used to track Iranian oil loadings and Chinese arrivals; a sustained rebound signals the blockade on Iranian flows is failing.\nKpler monitors the status of China's 45-million-barrel crude buffer, whose exhaustion would complete China's substitution toward Gulf and Atlantic barrels\nKpler's crude-only Hormuz transit reading was 13.5 million b/d on September 30, 2026, measured against its own prewar crude baseline\nKpler and Vortexa are the settling sources tracking flow claims (crude purchases, sanctions-evasion logistics) for Iran patron support through 31 December 2027.\nKpler's pu"
+  },
+  {
+   "id": "b1c220ba-d89c-45d2-b211-d8b75ca6cf57",
+   "name": "Council on Foreign Relations",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The Council on Foreign Relations published a report 'After Khamenei: Planning for Iran's Leadership Transition' on planning for Iran's leadership transition after Ali Khamenei."
+  },
+  {
+   "id": "ae4ca379-7ea7-4dac-ac90-594182a65ece",
+   "name": "FRED",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "FRED (Federal Reserve Economic Data) is a data repository used with EIA for WTI Cushing crude oil price readings (September 2026 average 97.3081 dollars per barrel; 107.89 daily on October 20, 2026).\nEU gas prices are anchored on the FRED Global price of Natural gas, EU series\nFRED published WTI Cushing, Oklahoma crude oil at a monthly mean of 97.3081 dollars per barrel for September 2026, up +33.349 (+52.1%) year-on-year, with the latest daily value of 107.89 on 2026-10-20; five-year range 57.9723 to 114.84.\nFRED published the US CPI for All Urban Consumers at a 3.717% year-over-year change f"
+  },
+  {
+   "id": "adf57615-8462-4afc-bf9f-94d2dc9605e2",
+   "name": "Regime crisis scenario",
+   "labels": [
+    "ConflictScenario"
+   ],
+   "summary": "Scenario assigned 5% probability: blockade-driven economic collapse triggers succession upheaval in Iran; a tail risk absent a visible challenger coalition. Assembly of Experts succession signals are the leading indicator — an open rupture lifts this tail.\nThe regime crisis scenario requires the death, removal or contested succession of Supreme Leader Mojtaba Khamenei\nForbes on 28 February 2026 put the probability of a popular uprising seizing the post-Khamenei vacuum at 25%, with IRGC consolidation around collective leadership with a clerical figurehead at about 35% and a protracted power con"
+  },
+  {
+   "id": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "name": "IAEA",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "IAEA has had no access to Iran's declared enrichment sites since January 2026 and cannot verify the enriched-uranium stockpile, centrifuge status, or conclude no diversion. Iran replied on February 2, 2026 that normal safeguards implementation was 'legally untenable and materially impracticable' and refuses design-information and inventory verification at Isfahan, citing 'illegal military attacks'. The Board of Governors urged cooperation on June 10 and again on September 9, 2026 (GOV/2026/61). IAEA estimated Iran held 440.9 kg of up-to-60% uranium on the eve of the June 2025 strikes; Grossi s"
+  },
+  {
+   "id": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "name": "European Central Bank",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "ECB deposit rate stood at 2.5% at end-September 2026 after a September 25 bp hike from 2.25%; rates were 2% February–May and 2.25% in June. Markets assign roughly 96% probability (ECB Watch) to holding the deposit rate at 2.50% at the October 29, 2026 Governing Council meeting, which discriminates the energy-shock response; euro-area HICP at 3.75–3.8% y/y with energy contributing +1.71 pp. Scenario paths: under Low-intensity conflict (45%) the ECB holds at 2.50%; under Renewed large-scale strikes (25%) it extends hikes alongside the Fed as inflation pass-through keeps policy restrictive; under"
+  },
+  {
+   "id": "a5753484-7d1e-4218-b97d-512ecceb08f8",
+   "name": "Al Jazeera",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Al Jazeera is a news organization cited as a source for the report that Mojtaba Khamenei was announced as successor after Khamenei was killed February 28, 2026 (announced March 8–9, 2026).\nAl Jazeera reported on March 8, 2026 that Iran named Mojtaba Khamenei as new supreme leader after his father's killing.\nAl Jazeera reported (October 20, 2026) that Iran denies collapse is close as the US claims the IRGC is running out of money."
+  },
+  {
+   "id": "a4270bb8-4bd2-4bc3-a77f-c6e116fcdd22",
+   "name": "oil market",
+   "labels": [
+    "CommodityMarket"
+   ],
+   "summary": "October 2026 commentary describes an 'oil up, dollar up, gold down' dynamic linking oil and gold markets.\nThe U.S. Energy Information Administration reported that risk of oil supply disruptions can have an immediate effect on oil prices (Today in Energy, id=42675)."
+  },
+  {
+   "id": "a17fae90-6df1-4016-9be0-21b95f03cb7e",
+   "name": "Low-intensity conflict",
+   "labels": [
+    "ConflictScenario"
+   ],
+   "summary": "Scenario defined as no US/Israeli campaign of direct strikes on Iranian targets for at least 90 days while blockade, sabotage, cyber and proxy attacks persist. Assigned 45% probability as the modal end-2027 state; Iran held suppressed but unresolved under a persistent, bounded war premium.\nThe Low-intensity conflict scenario (45% probability) is assessed as the modal continuation of the current attrition, consistent with CRS-reported patterns of strike plans drafted and aborted.\nThe IAEA's inability to verify stockpiles or centrifuge status means red-line breaches are undetectable in advance, "
+  },
+  {
+   "id": "9de5f009-1028-4281-91fe-7227dfda1948",
+   "name": "Fordow",
+   "labels": [
+    "NuclearProgram"
+   ],
+   "summary": "Iranian nuclear site where centrifuge reinstallation is monitored as a leading indicator; reinstallation points to the Renewed large-scale strikes scenario. IAEA access has collapsed.\nActivity around the Fordow above-ground support site is high, and a planned two-cascade building there, nominally for iridium/tellurium separation, could be used for uranium enrichment if its feed stocks were not yet introduced.\nVerified centrifuge reconstitution at Fordow's support site is a mover raising the renewed large-scale strikes scenario.\nVerified centrifuge reconstitution at Fordow's support site is a m"
+  },
+  {
+   "id": "9d9312d5-b3b1-4a97-bc41-99733626b77f",
+   "name": "IMF",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Source for monthly-average Brent crude price: 102.0181 U.S. dollars per barrel in September 2026.\nThe IMF and EIA/FRED September 2026 oil averages diverge (102.0181 vs 114.1591 dollars per barrel), a source-and-definition gap carried explicitly rather than averaged.\nIMF monthly-average Brent ran from 69.4095 U.S. dollars per barrel in February 2026 to 102.0181 U.S. dollars per barrel in September 2026.\nThe IMF all-commodity index read 222.4285 (2016=100).\nGold on the IMF monthly average was 4334.7467 U.S. dollars per troy ounce in September 2026.\nIMF Brent price history shows oil spikes decayi"
+  },
+  {
+   "id": "96ad7823-7e0b-460d-9208-866c3740f213",
+   "name": "IAEA Board of Governors",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The IAEA Board of Governors urged Iran's cooperation on June 10 and again on September 9, 2026 (GOV/2026/61)."
+  },
+  {
+   "id": "93baf576-21a4-4151-968d-fe8d468649a6",
+   "name": "Organization",
+   "labels": [
+    "Organization"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "92c6c111-2a58-490b-b999-5273bf72c453",
+   "name": "The Africa Center",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The Africa Center reports that the Houthis resumed attacks in July 2026 after a half-year hiatus, with twelve attacks on commercial vessels in the southern Red Sea since.\nThe Africa Center's reporting of Houthi attacks since July 2026 raises the probability assigned to the Low-intensity conflict scenario."
+  },
+  {
+   "id": "927e48ff-35bd-4b3f-bc38-e1d400336417",
+   "name": "Fordow enrichment plant",
+   "labels": [
+    "NuclearProgram"
+   ],
+   "summary": "As of the January 29, 2026 letter, the IAEA has no access at declared enrichment sites including Fordow, badly damaged in the June 2025 strikes.\nISIS reported ~80 kg of 60% uranium at Fordow as of mid-2026."
+  },
+  {
+   "id": "9140b463-795c-463d-a1a3-bc5d7e4a3c7c",
+   "name": "Houthi movement",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Resumed attacks in July 2026 after a half-year hiatus - twelve attacks on commercial vessels in the southern Red Sea since, including ballistic-missile attacks on Saudi tankers Amzan, Encelia and Layl\nThe Houthis resumed attacks in July 2026 after a half-year hiatus, launching twelve attacks on commercial vessels in the southern Red Sea, leaving transits below one-third of pre-October-2023 levels.\nThe Houthis announced a blockade on Saudi ports and Bab al-Mandeb shipping, prompting a surge in war-risk insurance costs, per Reuters.\nThe Africa Center reports that the Houthis resumed attacks in J"
+  },
+  {
+   "id": "8d61f8f0-6967-46dc-a3c2-09a61ed2c662",
+   "name": "US House of Representatives",
+   "labels": [
+    "Government"
+   ],
+   "summary": "The House passed a war-ending resolution 214–208 in July 2026 seeking to end the US war against Iran\nThe US House of Representatives passed H.Con.Res. 89, urging an end to the war, by a vote of 214-208 in July 2026.\nThe US House of Representatives, by passing H.Con.Res. 89 urging an end to the war 214-208 in July 2026, opposed Trump's continuation of the war."
+  },
+  {
+   "id": "8c2a5633-1b60-42f4-8d1d-127eb448bcd5",
+   "name": "FOMC October 2026 meeting",
+   "labels": [],
+   "summary": "The Federal Reserve's FOMC meeting is scheduled for October 27–28, 2026."
+  },
+  {
+   "id": "8b1c3750-9d54-43bf-9d92-53d7d9bb9ef0",
+   "name": "Israel Defense Forces",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Conducted the June 2025 and 2026 campaigns; maintaining stepped-up exercises and overflights of Iran; enforcing the Lebanon ceasefire with declared readiness for a large-scale operation over Hezbollah\nThe IDF, alongside CENTCOM, pursues attrition and holds plans for a 'short but intensive operation' against Iran under Mojtaba Khamenei.\nA first CENTCOM/IDF strike on Iranian nuclear or regime targets after the November 3, 2026 midterms is the tripwire for the Renewed large-scale strikes scenario (25%)."
+  },
+  {
+   "id": "84edd5b2-c0af-4347-b498-ecff038ff1bc",
+   "name": "ISIS (Institute for Science and International Security)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "ISIS's post-ceasefire imagery puts 265–287 kg of 60%-enriched uranium in the Isfahan tunnels, over half the 60% stock.\nThe Institute for Science and International Security published an analysis of IAEA Iran verification and monitoring and NPT safeguards reports in June 2026, and a comprehensive imagery report on nuclear enrichment-related sites post-April ceasefire."
+  },
+  {
+   "id": "81f51516-337b-4e32-8bf4-4a0e954faa5f",
+   "name": "EU natural gas",
+   "labels": [
+    "CommodityMarket"
+   ],
+   "summary": "EU gas price stood at 25.494 U.S. dollars per million metric British thermal units in September 2026 amid the Iran conflict shock.\nEU gas prices are anchored on the FRED Global price of Natural gas, EU series\nUnder the Low-intensity conflict scenario (45% probability), EU gas is projected at 15–20 $/MMBtu at end-2027, with the product constraint persisting and gas near March 2026's 17.67 $/MMBtu average.\nUnder the Renewed large-scale strikes scenario (25% probability), EU gas is projected at 28–45 $/MMBtu at end-2027, driven principally by Qatari LNG re-disruption.\nUnder the Durable ceasefire "
+  },
+  {
+   "id": "7f6c3eb5-cb7c-4d25-9fe0-b2fda2befa00",
+   "name": "ISIS",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "ISIS estimates 74–96 kg of 60% uranium remained at Natanz as of mid-2026.\nISIS reported ~80 kg of 60% uranium at Fordow as of mid-2026.\nISIS imagery shows continuing tunnel construction at the Pickaxe Mountain nuclear site, which has not been attacked."
+  },
+  {
+   "id": "7c7d6289-9fb8-4777-a36f-96f4f442575b",
+   "name": "LBMA",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "LBMA gold price prints are used as a de-escalation signal: LBMA prints sustained below the $4,000–4,400 per troy ounce third-quarter 2026 band would signal de-escalation repricing. Gold's IMF monthly average was 4,334.7467 USD/oz in September 2026, and late-October gold quotes clustered below that September average even as oil firmed.\nEnd-2027 gold prices settle at the LBMA auction, whose latest PM reading was $4,124.5 per troy ounce on 2026-10-20.\nGold prices are measured at LBMA auctions; the 2026 monthly peak was $5,014.645 per troy ounce in February, and there is a 30% forecast probability"
+  },
+  {
+   "id": "7b2010bb-0f77-47d1-9a4a-05fa22208531",
+   "name": "TTF gas market",
+   "labels": [
+    "CommodityMarket"
+   ],
+   "summary": "Weighting the scenario centrals yields roughly $20 per MMBtu for end-2027 TTF, with a range of roughly 10.5–34 dollars per MMBtu, below September 2026 readings.\nReuters reported a 46% intraday jump in front-month TTF on March 2, 2026 as strikes hit Qatari LNG, a Saudi refinery and Israeli energy fields — a daily move the monthly series smooths."
+  },
+  {
+   "id": "76b044d4-a488-445b-b302-cecefb6d7f1a",
+   "name": "Assembly of Experts",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Congressional Research Service reporting notes Assembly of Experts succession signals as a factor affecting the Regime crisis tail; an open rupture in the Assembly would lift that tail.\nThe Assembly of Experts installed Mojtaba Khamenei, a figure with deep IRGC ties, as successor within about a week of the February 28, 2026 strikes"
+  },
+  {
+   "id": "7679f7a1-7925-4401-8dc7-47831b56ef7c",
+   "name": "CFR",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "CFR assessed the post-Khamenei leader (Mojtaba Khamenei, announced March 8–9, 2026) as lacking administrative experience and strong theological credentials, a factor in the Regime crisis path."
+  },
+  {
+   "id": "75165eb5-9e59-45c4-bf41-ae366f115dd9",
+   "name": "U.S. Conflict with Iran",
+   "labels": [
+    "ConflictScenario"
+   ],
+   "summary": "U.S. Central Command (CENTCOM) maintains strict enforcement of the U.S. blockade against Iran as part of the U.S. Conflict with Iran, per an official CENTCOM public release."
+  },
+  {
+   "id": "72864947-6e73-49ea-af94-a2fd759456cf",
+   "name": "Pickaxe Mountain complex",
+   "labels": [
+    "NuclearProgram"
+   ],
+   "summary": "Construction continues at the unattacked Pickaxe Mountain complex south of Natanz, not yet operational.\nTrump would steer planned renewed strikes away from oil infrastructure, with the Pickaxe Mountain nuclear site among the candidate targets.\nISIS imagery shows continuing tunnel construction at the Pickaxe Mountain nuclear site, which has not been attacked.\nA 'short but intensive' post-midterm operation under the renewed large-scale strikes scenario would target the Pickaxe Mountain complex, a candidate target per planning reports.\nVerified reconstitution at Pickaxe Mountain would move the lo"
+  },
+  {
+   "id": "71b275e7-8aa5-49fa-8e68-022c6020f6a3",
+   "name": "NPT Safeguards Agreement",
+   "labels": [
+    "NuclearProgram"
+   ],
+   "summary": "The IAEA Board of Governors issued reports (GOV/2026/8 and GOV/2026/50) on the implementation of the NPT Safeguards Agreement with Iran."
+  },
+  {
+   "id": "68403c06-db58-45d5-8bac-5e89a44c0581",
+   "name": "Putin",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Putin pledged \"unwavering\" support for Mojtaba Khamenei as new supreme leader"
+  },
+  {
+   "id": "66b83ba4-4926-4027-bc36-fc65567702e5",
+   "name": "2026 Iran war ceasefire",
+   "labels": [
+    "ConflictScenario"
+   ],
+   "summary": "Conflict scenario set scored as of October 23, 2026: Low-intensity conflict 45% (blockade, sabotage, cyber and proxy attacks continue without renewed state-on-state strikes, Iran suppressed but unresolved under a bounded war premium); Renewed large-scale strikes 25% (reconstruction or breakout crosses US/Israeli red lines, re-strikes trigger retaliation); Durable ceasefire 15% (economic exhaustion pushes Tehran to accept verification without nuclear diplomacy); Negotiated framework 10%; Regime crisis 5%. A ceasefire counts as durable only after 90 unbroken days without state-on-state strikes. "
+  },
+  {
+   "id": "5a6aeba2-5f2c-4761-aed2-c5325787598f",
+   "name": "Alma",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Alma is a research institute whose estimate of Hezbollah's arsenal is cited in an October 2026 conflict forecast; the report flags its figure as an institute estimate rather than a measured inventory."
+  },
+  {
+   "id": "5a3ebcf0-6b2f-4143-a2d5-15aeda124a19",
+   "name": "US Central Command",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Enforces the blockade under a ladder of warning, redirect, disabling propulsion and destroying shadow-network vessels; commands Gulf posture that shapes escalation risk; assessments note finite capaci\nReporting on US-Iran strikes is settled on CENTCOM and CRS reporting, reflecting CENTCOM's role in the US military posture toward Iran\nCENTCOM pursues attrition against Iran, holding 'short but intensive operation' plans and stepped-up exercises and overflights, though CRS assesses finite capacity to counter Iranian attacks.\nCENTCOM releases and CRS reporting jointly serve as the settling sources"
+  },
+  {
+   "id": "5691d623-95fd-45f9-8338-5c8d8ce9dbfe",
+   "name": "JP Morgan",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "JP Morgan put Hormuz crude shipments near 17.5 million b/d (98% of pre-war) in early October 2026"
+  },
+  {
+   "id": "53dd0512-118d-49ad-975c-ca5e010173f8",
+   "name": "Israeli operation in Lebanon",
+   "labels": [
+    "ConflictScenario"
+   ],
+   "summary": "Hezbollah is reported rebuilding with upgraded FPV drones amid a declared Israeli operation in Lebanon, with an arsenal of ~25,000 rockets per Israel's Alma center."
+  },
+  {
+   "id": "52cf243e-211a-4399-8c8f-0de385d2f5a9",
+   "name": "H.Con.Res. 89",
+   "labels": [],
+   "summary": "The US House of Representatives passed H.Con.Res. 89, urging an end to the war, by a vote of 214-208 in July 2026.\nThe US Senate rejected H.Con.Res. 89, the war-ending resolution, by a vote of 49-50 in October 2026, with most Republicans sticking with Trump."
+  },
+  {
+   "id": "50ca99c1-9712-492f-b9ef-4206763720de",
+   "name": "Natanz",
+   "labels": [
+    "NuclearProgram"
+   ],
+   "summary": "Iranian nuclear site with centrifuge reinstallation underway, monitored as a leading indicator; reinstallation points to the Renewed large-scale strikes scenario. IAEA access has collapsed.\nConstruction continues at the unattacked Pickaxe Mountain complex south of Natanz, not yet operational."
+  },
+  {
+   "id": "48e2e6ed-67eb-4d0b-a19f-084457065f75",
+   "name": "Hezbollah",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Holds an arsenal of approximately 25,000 rockets and missiles per Israel's Alma center, with FPV payloads raised from 2.5 kg to 4-6 kg and fibre-optic range from 20 km to over 30 km; rebuilding both s\nHezbollah aims to keep its arms north of the Litani and is rebuilding its arsenal and deterrent capability in anticipation of a wider conflict against Israel.\nThe LAF seized an explosives truck, an action against Hezbollah, though the ceasefire security annex is silent on what happens if Hezbollah refuses to disarm.\nIsrael has threatened a large-scale operation against Hezbollah, seen as a tripwi"
+  },
+  {
+   "id": "4877a7d6-9aa7-4439-a3dd-46ab4228d444",
+   "name": "Central banks (gold buyers)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "No official purchase figures for 2025-26 exist in the evidence, but gold's stickiness - averaging 4334.7467 $/oz in September 2026 against a 4075.0968 July trough - is consistent with structural offic"
+  },
+  {
+   "id": "475a6b91-510a-4b00-9025-555b99a2793b",
+   "name": "Forbes",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Forbes, in a 28 February 2026 assessment, rated IRGC consolidation around collective leadership with a clerical figurehead at roughly 35%, a protracted power contest at about 30%, and a popular uprising seizing the vacuum at 25%.\nForbes on 28 February 2026 put the probability of a popular uprising seizing the post-Khamenei vacuum at 25%, with IRGC consolidation around collective leadership with a clerical figurehead at about 35% and a protracted power contest at about 30%."
+  },
+  {
+   "id": "47066d76-6deb-4019-a4c6-9d0a6ba8857d",
+   "name": "Strait of Hormuz",
+   "labels": [
+    "CommodityMarket"
+   ],
+   "summary": "Disruption of the Strait is the key fat-tail channel of the Renewed large-scale strikes scenario (25%), adding a war premium to oil on the 1990, 2019 Abqaiq and 2025–2026 precedents.\nIran's September–October 2026 offer via Qatar proposed reopening the Strait of Hormuz within seven days under Iranian control in exchange for a US blockade lift, eased export limits and released assets\nKpler's crude-only Hormuz transit reading was 13.5 million b/d on September 30, 2026, measured against its own prewar crude baseline\nThe IEA's October report put September 2026 Hormuz flows at 10.9 million b/d, up 3"
+  },
+  {
+   "id": "4532410d-28f4-49c3-b035-8e1168de4c52",
+   "name": "Qatar",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Qatari mediators carried an Iranian offer in September–October 2026 to reopen the Strait of Hormuz within seven days under Iranian control in exchange for a blockade lift, eased export limits and released assets\nQatar mediates deadlocked US-Iran talks as of October 20, 2026, with no agreed text; Iran offered Hormuz reopening within seven days under Iranian control in exchange for a blockade lift, eased export limits, released frozen assets, and an end to hostilities, but sequencing is disputed.\nIran uses Qatari mediators in indirect talks with the US; on 20 October 2026 Iran offered via Qatar "
+  },
+  {
+   "id": "40abfd33-4558-42aa-a8e4-48bae8965437",
+   "name": "ICE BofA US High Yield option-adjusted spread (OAS)",
+   "labels": [
+    "CommodityMarket"
+   ],
+   "summary": "Credit-market anchor in the report's Market and Macro Baseline (readings pinned to 2026-10-23), used as the high-yield credit spread indicator [S32] against the backdrop of the US-Iran war-of-attrition and naval blockade driving a persistent oil war premium.\nHigh-yield spreads widened from 2.755% in September to 3.27% on October 21, 2026, alongside gold averaging 4334.7467 $/oz in September."
+  },
+  {
+   "id": "404ee0b2-eb91-4d94-b596-996f08659efb",
+   "name": "Lebanon",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Israel and Lebanon are parties to a US-backed ceasefire framework in force since April 2026, requiring disarmament, gradual withdrawal and LAF deployment, following a ten-day cessation of hostilities from April 16, 2026, 17:00 EST."
+  },
+  {
+   "id": "3b4267fd-936d-4544-8925-3f146105bf82",
+   "name": "Macron",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Macron was present at the signing of the June 2026 US–Iran Memorandum of Understanding\nMacron was present at the signing of the US-Iran war-ending agreement at Versailles in mid-2026."
+  },
+  {
+   "id": "34e21f4f-027e-47ff-adeb-4bafc324c6a7",
+   "name": "Reuters",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Reuters reported the above-ground Natanz was destroyed and underground Natanz badly damaged, believed out of action, in the June 2025 campaign.\nReuters/Baltic reported supertanker rates near WS776 on the Gulf of Oman–China route on October 16, 2026, down from record highs but elevated, against a Week-41 TD3C average of WS1,288 on a different route\nReuters reported Kpler tracker estimates on Chinese imports of Iranian crude and Iranian crude afloat outside the blockade zone.\nReuters, citing Vortexa data, reported that Iranian October 2026 oil exports stood at zero.\nReuters cites a Vortexa repor"
+  },
+  {
+   "id": "336fe751-b67e-4d72-ad6a-cdb48af56c41",
+   "name": "Durable ceasefire scenario",
+   "labels": [
+    "ConflictScenario"
+   ],
+   "summary": "Scenario assigned 15% probability: economic exhaustion and blockade attrition push Tehran to accept verification without nuclear diplomacy. Deflates the blockade premium on oil; alongside Negotiated framework, lowers gold and TTF war premia. A signed ceasefire text is the falsifier for high-premium states.\nUnder the Durable ceasefire scenario (15% probability), EU gas is projected at 10–13 $/MMBtu at end-2027, via a 2022-style collapse.\nUnder the Durable ceasefire scenario (15% probability), gold is projected at 3,600–3,900 $/oz at end-2027, via a 2025-style unwind."
+  },
+  {
+   "id": "332ecea8-22c6-4e23-8083-d93eba4f9e3b",
+   "name": "Vortexa",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Data provider used to track Iranian oil loadings and Chinese arrivals; a sustained rebound signals the blockade on Iranian flows is failing.\nVortexa observed Iranian loadings at 210,000 b/d in mid-September 2026.\nReuters cites a Vortexa report that Iranian October 2026 exports were zero.\nVortexa tracks Hormuz flows; a recovery of Hormuz product flows above 2 million bpd would normalize LPG cracks per Vortexa data [S56]"
+  },
+  {
+   "id": "2ff7b77c-38d1-42a8-8aed-d769933bdddb",
+   "name": "CRS",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Congressional Research Service; as of late October 2026 it characterized the US-Iran standoff as a 'war of attrition' with the US and Iran 'again trading limited strikes' after the June 2026 Memorandum of Understanding collapsed and formally expired in August 2026. Its reporting is used to settle definitions of renewed large-scale strikes.\nCongressional Research Service reporting notes Assembly of Experts succession signals as a factor affecting the Regime crisis tail; an open rupture in the Assembly would lift that tail.\nCENTCOM releases and CRS reporting jointly serve as the settling sources"
+  },
+  {
+   "id": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "name": "US-Iran",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Pakistan mediated the two-week US-Iran ceasefire dated April 8, 2026, which lapsed.\nQatar mediates deadlocked US-Iran talks as of October 20, 2026, with no agreed text; Iran offered Hormuz reopening within seven days under Iranian control in exchange for a blockade lift, eased export limits, released frozen assets, and an end to hostilities, but sequencing is disputed.\nMojtaba Khamenei endorsed direct talks under the mid-2026 war-ending agreement (signed at Versailles with Macron present) that started a 60-day nuclear negotiating clock and lifted the blockade.\nTrump signed the June 2026 Memora"
+  },
+  {
+   "id": "2bc2911d-521d-4605-8b0c-8642fc880f6e",
+   "name": "Kpler weekly Hormuz crude transits",
+   "labels": [
+    "CommodityMarket"
+   ],
+   "summary": "The baseline shifts if Kpler weekly Hormuz crude transits fall below the IEA's September reading of 10.9 million b/d for two consecutive weeks.\nHormuz crude transits below 10 million b/d for 30 consecutive days during 2027 (Kpler 7-day average was 13.5 million b/d in late September 2026) would partly indicate the Renewed large-scale strikes scenario.\nKpler's published 7-day Hormuz crude transit data is the resolution criterion for whether transits fall below 10 million b/d for 14 consecutive days before end-2027 (20% probability)."
+  },
+  {
+   "id": "2b2c9500-5e3e-4052-890d-bb9da22eb6e9",
+   "name": "US Senate",
+   "labels": [
+    "Government"
+   ],
+   "summary": "The Senate rejected the war-ending resolution on the US–Iran war 49–50 in October 2026\nThe US Senate rejected H.Con.Res. 89, the war-ending resolution, by a vote of 49-50 in October 2026, with most Republicans sticking with Trump.\nMost Senate Republicans stuck with Trump when rejecting the war-ending resolution H.Con.Res. 89 in October 2026, showing institutional checks failing.\nThe US Senate's 49-50 rejection of an end-war resolution in October 2026 shows Congress will not force an exit, raising the likelihood of renewed large-scale strikes."
+  },
+  {
+   "id": "28bddaee-6d13-44e3-ad1c-0d8fa5ac8294",
+   "name": "October 2026 ECB meeting",
+   "labels": [],
+   "summary": "The European Central Bank's meeting is scheduled for October 29, 2026."
+  },
+  {
+   "id": "275a40b0-4ece-4a4a-8289-022a8103851e",
+   "name": "The New York Times",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Reported on October 21, 2026 that the US and Israeli militaries have specific plans for a 'short but intensive operation' against Iran after the November 3 midterms.\nThe New York Times reported on October 21, 2026 that US and Israeli militaries have specific plans for a 'short but intensive operation' of renewed strikes after the November 3 midterms, with Trump steering strikes away from oil infrastructure.\nThe New York Times reports drafted US military plans for a 'short but intensive' post-midterm operation, while Iranian officials prolong talks past the 3 November midterms.\nThe New York Tim"
+  },
+  {
+   "id": "273a7bd0-85a3-4863-a976-1a8fd1b4c0ea",
+   "name": "Russia",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Russian crude is shut-in and excluded from the IEA's effective-capacity measure, contributing to effective OPEC spare capacity of just 0.04 million b/d in June 2026 versus headline claims of 4-6 million b/d. On October 12, 2026, President Trump temporarily lifted US sanctions on Russian diesel while Washington weighed allowing \"legal oil\" to move on previously sanctioned shadow-fleet vessels, a move capping the war-driven oil premium.\nRussia made the S-400 air defence system a priority in its defense cooperation with Iran.\nRussia, alongside China, is shaping the 2026 Iran Conflict through stra"
+  },
+  {
+   "id": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "name": "US Federal Reserve",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The FOMC raised the federal funds target range by a quarter point to 3-3/4 to 4 percent on September 16, 2026 by a 12-0 vote, citing elevated inflation, bringing the end-September midpoint to 3.875% (BIS). Officials are reported to signal at least one more hike before year-end, with the next meeting October 27–28, 2026. The September 2026 backdrop: US CPI 3.717% y/y, WTI averaging $97.31/bbl, IMF Brent monthly average $102.02. Under the Low-intensity conflict scenario (45%), the Fed delivers the additional 2026 hike then holds with cautious late-2027 cuts. Under Renewed large-scale strikes (25"
+  },
+  {
+   "id": "21ebbb35-b092-42f8-917f-6faa2bd42e30",
+   "name": "Gulf Cooperation Council states",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Saudi 5Y USD CDS at 67.75 bps (October 15, 2026, Investing.com, provisional anchor); Saudi output ramping with exports above pre-war levels; S&P reported to have upgraded Saudi Arabia to 'A+'; Qatar i"
+  },
+  {
+   "id": "21e76d7e-e6aa-41ae-a125-9b063d8ab3ea",
+   "name": "Government of Russia",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Putin pledged 'unwavering' support for Mojtaba Khamenei's appointment; supersonic cruise-missile technology shared since 2023 (Financial Times via Soufan Center); critical intelligence and satellite i\nPutin pledged \"unwavering\" support for Mojtaba Khamenei, reported by Al Jazeera in March 2026.\nRussia has shared supersonic cruise-missile technology with Iran since 2023 (Financial Times, via the Soufan Center)"
+  },
+  {
+   "id": "1de2aced-c72e-4884-94ac-57507d1b594a",
+   "name": "EIA",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The U.S. Energy Information Administration (EIA), sourced via FRED, provides WTI Cushing crude oil price data used in the report (September 2026 average 97.3081 dollars per barrel; daily 107.89 on October 20, 2026).\nBrent crude oil prices are anchored on the EIA/FRED DCOILBRENTEU series, with the 2026-09 monthly observation and latest daily value cited as distinct observations\nWTI crude oil prices are anchored on the EIA/FRED DCOILWTICO series, with monthly and daily observations cited separately\nThe EIA estimates conflict-related Iranian shut-ins peaked at 10.9 million b/d in May 2026, fallin"
+  },
+  {
+   "id": "1d3d33ab-b56c-4374-8584-300f5fc1ecb3",
+   "name": "ECB Governing Council",
+   "labels": [
+    "CentralBank"
+   ],
+   "summary": "The ECB Governing Council is the ECB body deciding policy, with an October 29, 2026 meeting whose market-implied probability of holding rates is about 96% per ECB Watch.\nThe ECB deposit rate stood at 2.5% at end-September 2026, with a market-implied ~96% probability of holding at 2.50% at the October 29, 2026 meeting."
+  },
+  {
+   "id": "1c609ff3-af2f-4cfb-bbc8-61f94f947bf9",
+   "name": "Congressional Research Service",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The Congressional Research Service published a report on the attacks on Saudi oil facilities, their effects and responses (CRS IN11173)."
+  },
+  {
+   "id": "1ba79f03-9590-4e96-be4e-8b408a8ee623",
+   "name": "Bab al-Mandeb",
+   "labels": [],
+   "summary": "The Houthis announced a blockade on Saudi ports and Bab al-Mandeb shipping, prompting a surge in war-risk insurance costs, per Reuters.\nThe Houthi movement seeks to keep leverage over the 32 km-wide Bab al-Mandeb strait, having conducted about 530 attacks on shipping since November 2023 at a 2:1 drone-to-missile ratio, with attacks resuming in July 2026 after a half-year hiatus."
+  },
+  {
+   "id": "1b15eed7-4dda-46d4-a243-dfdbe7cec736",
+   "name": "IEA",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "On October 15, 2026, the IEA agreed to release over 20 million barrels of diesel alongside remaining volumes of a record March 2026 emergency-reserve release, actively capping the war premium in the oil market.\nThe baseline shifts if Kpler weekly Hormuz crude transits fall below the IEA's September reading of 10.9 million b/d for two consecutive weeks.\nThe IEA agreed on October 15, 2026 to release over 20 million barrels of diesel as supply-side relief, while assessing cumulative observed inventories were 509 million barrels below pre-war levels by end-September 2026, with balances in deficit "
+  },
+  {
+   "id": "1af9b028-f69d-42df-9d7c-ca62e5ed90b3",
+   "name": "IEA diesel release of October 2026",
+   "labels": [],
+   "summary": "The IEA agreed on October 15, 2026 to release over 20 million barrels of diesel as supply-side relief, while assessing cumulative observed inventories were 509 million barrels below pre-war levels by end-September 2026, with balances in deficit through end-2026 and 2027 demand forecast 620 kb/d below 2025.\nPresident Trump complemented the IEA's diesel release with supply-side relief by temporarily lifting sanctions on Russian diesel on October 12, 2026."
+  },
+  {
+   "id": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "name": "United States",
+   "labels": [
+    "Government"
+   ],
+   "summary": "The US naval blockade of Iran, renewed in mid-July 2026, has effectively halted Iranian crude exports since mid-July 2026 per Vortexa\nAs of late October 2026 the US and Iran are trading limited strikes, a CRS-described 'war of attrition' after the June 2026 Memorandum of Understanding collapsed and formally expired in August 2026\nThe US opposes Iran's nuclear program, with potential direct US strikes on Iranian nuclear targets contemplated in the renewed large-scale strikes scenario\nReporting on US-Iran strikes is settled on CENTCOM and CRS reporting, reflecting CENTCOM's role in the US milita"
+  },
+  {
+   "id": "18356b94-6ca6-4f9f-ba71-c5b01cdb5eeb",
+   "name": "Saudi Arabia",
+   "labels": [
+    "Government"
+   ],
+   "summary": "S&P Global Ratings is reported to have upgraded Saudi Arabia to 'A+', though the date was not confirmed on the fetched page\nSaudi Arabia's 5-year USD CDS was quoted at 67.75 bps on October 15, 2026, after 65.60 bps on October 13 and 66.31 bps on October 14 — a tier-3 aggregator quote not corroborated by any primary dealer print\nSaudi Arabia led the OPEC+ ramp in September 2026, adding 2.1 million b/d month-on-month as global supply rose 2.5 million b/d to 102.3 million b/d.\nThe Congressional Research Service published a report on the attacks on Saudi oil facilities, their effects and responses"
+  },
+  {
+   "id": "1707c0d0-47d8-4848-bcce-8c9726b52d27",
+   "name": "Foundation for Strategic Research",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Foundation for Strategic Research documented that Iran retains a cohesive coercive apparatus and engaged in intermittent US negotiations after Khamenei's killing (February 28, 2026).\nThe FRS documents a cohesive coercive apparatus that replaced killed officials, lowering the assessed probability of the Regime crisis scenario.\nThe Foundation for Strategic Research published a study titled 'Iran after Ali Khamenei: power, security governance, and the emerging political order' analyzing the post-Khamenei transition."
+  },
+  {
+   "id": "1555b024-5f77-46d0-866b-90f5f1cf76e7",
+   "name": "Negotiated framework scenario",
+   "labels": [
+    "ConflictScenario"
+   ],
+   "summary": "The Negotiated framework scenario involves a signed text with partial sanctions relief and restored IAEA access; restored access is a leading indicator pointing to this scenario.\nThe evidence contains no Chinese- or Russian-mediated track, consistent with the modest 10% weight on the Negotiated framework versus the 45% Low-intensity conflict path, which is underpinned by Iran's severed revenue, internal cohesion, and patrons unwilling to break the blockade.\nAn IAEA Board resolution on Iran's nuclear program being implemented rather than urged is a signpost of the negotiated framework scenario."
+  },
+  {
+   "id": "153ba9cd-05a6-4cc8-a423-b0391e7fa9fd",
+   "name": "WTI Cushing crude oil market",
+   "labels": [
+    "CommodityMarket"
+   ],
+   "summary": "WTI Cushing averaged 97.3081 dollars per barrel in September 2026, hit 107.89 daily on October 20, 2026, versus 63.959 a year earlier, reflecting the Iran conflict premium.\nWTI crude oil prices are anchored on the EIA/FRED DCOILWTICO series, with monthly and daily observations cited separately\nThe EIA/FRED series shows WTI printed 107.89 dollars per barrel on 2026-10-20."
+  },
+  {
+   "id": "12efa1ce-2e23-435c-9a0a-63a5c1f9cc63",
+   "name": "OPEC+ (Saudi Arabia-led)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Saudi-led OPEC+ added 2.1 million b/d month-on-month in September 2026; Gulf crude exports up 4.4 million b/d to 13.9 million b/d, over 75% of pre-war levels - but effective spare capacity (excluding \nSaudi Arabia led the OPEC+ ramp in September 2026, adding 2.1 million b/d month-on-month as global supply rose 2.5 million b/d to 102.3 million b/d.\nIn September 2026 Saudi-led OPEC+ Gulf crude exports rose 4.4 million b/d to 13.9 million b/d, over 75% of pre-war levels, while about 40% of Gulf crude bypasses the Strait of Hormuz by pipeline, up from 17% prewar."
+  },
+  {
+   "id": "1255251b-a763-44ee-b378-9b6002852548",
+   "name": "Pakistan",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Pakistan mediated the two-week US–Iran ceasefire window dated April 8–July 8, 2026\nPakistan mediated the two-week ceasefire between the US and Iran agreed April 8, 2026\nPakistan mediated the two-week US-Iran ceasefire dated April 8, 2026, which lapsed."
+  },
+  {
+   "id": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "name": "Supreme Leader Mojtaba Khamenei",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Son of Ali Khamenei, elected by the 88-member Assembly of Experts within about nine days of his father's killing in the February 28, 2026 strikes; deep IRGC ties but never held elected office and mode\nMojtaba Khamenei was announced as successor to Khamenei (who was killed February 28, 2026) on March 8–9, 2026.\nCENTCOM pursues attrition against Iran, holding 'short but intensive operation' plans and stepped-up exercises and overflights, though CRS assesses finite capacity to counter Iranian attacks.\nThe IDF, alongside CENTCOM, pursues attrition and holds plans for a 'short but intensive operati"
+  },
+  {
+   "id": "0e9542a6-02cf-4a0f-9fb4-fe1fa2e3133f",
+   "name": "Natanz enrichment plant",
+   "labels": [
+    "NuclearProgram"
+   ],
+   "summary": "As of the January 29, 2026 letter, the IAEA has no access at declared enrichment sites including Natanz, whose underground plant was badly damaged in the June 2025 strikes.\nISIS estimates 74–96 kg of 60% uranium remained at Natanz as of mid-2026.\nReuters reported the above-ground Natanz was destroyed and underground Natanz badly damaged, believed out of action, in the June 2025 campaign."
+  },
+  {
+   "id": "0aa6e073-b276-4282-8a87-f06e38107fb5",
+   "name": "LAF",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The LAF is enforcing Hezbollah disarmament, seizing rearmament convoys — one truck seized in October 2026; sustained seizures would move toward Durable ceasefire."
+  },
+  {
+   "id": "081e858e-306a-430c-841f-40c077cdd668",
+   "name": "NBC",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "An NBC poll found 33% of US voters call the Iran war worth it, against 62% who do not.\nAn NBC News September 2026 poll found only 33% of registered voters say the war is worth it versus 62% who do not, applying electoral pressure on Trump's war policy."
+  },
+  {
+   "id": "037a2be2-dee4-4053-ab8e-b656a7f58b97",
+   "name": "Iranian diplomatic faction (Foreign Ministry)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Carries the US channel through Qatari mediators; survived reformist arrests after the 2025-26 protests but is sidelined by hardliners; proposed Hormuz reopening within seven days in exchange for block"
+  },
+  {
+   "id": "02d1c290-2082-48b1-a9e1-feb2c510ab42",
+   "name": "Mike Rogers",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Mike Rogers is a candidate in a competitive race who, as of late October 2026, calls for ending the US-Iran war."
+  },
+  {
+   "id": "02122463-b446-404e-9c93-e1a1c9f010f4",
+   "name": "US Treasury",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The US Treasury, through Treasury Secretary Bessent's August 2026 warning that Iran \"could face economic collapse in months,\" maintains sanctions/blockade pressure that the Iranian authorities reject; Iranian oil loadings collapsed to 210 kbd by mid-September with October exports at zero per Vortexa.\nScott Bessent serves as Treasury Secretary, warning in August 2026 that Iran \"could face economic collapse in months.\"\nU.S. Treasury designations 'effectively neutralize the vast majority of Iran's remaining shadow fleet network', per Treasury statement.\nThe U.S. Department of the Treasury's Opera"
+  },
+  {
+   "id": "01dd7367-b0ca-4f5c-aeb5-c2d9b59696f1",
+   "name": "IRGC",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Cohesive Revolutionary Guard that survived the decapitation strikes, replaced killed officials, and anchors the SNSC-centred coalition; former commander Mohsen Rezaei was appointed SNSC secretary in A\nMojtaba Khamenei's goals — a blockade lift, eased export limits, and released frozen assets — align with the IRGC, which holds leverage through Hormuz 'kill box' attacks and pre-delegated missile authority.\nConfirmed large-scale IRGC resupply of Hezbollah would deepen the low-intensity conflict scenario (a posited change-of-view indicator).\nThe Foundation for Strategic Research documents a cohesi"
+  },
+  {
+   "id": "0053216e-8733-4352-8df7-476fd700e718",
+   "name": "EIA/FRED",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The IMF and EIA/FRED September 2026 oil averages diverge (102.0181 vs 114.1591 dollars per barrel), a source-and-definition gap carried explicitly rather than averaged.\nWithin the EIA/FRED series, October 2026 month-to-date mean of 124.9636 dollars per barrel sits above the latest daily value of 115.22 — an internal inconsistency flagged, with the daily print anchoring the oil price level."
+  }
+ ],
+ "links": [
+  {
+   "source": "1555b024-5f77-46d0-866b-90f5f1cf76e7",
+   "target": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "name": "INFLUENCES",
+   "fact": "Restoration of IAEA access or a Board-verified inventory would raise the probability of the Negotiated framework scenario."
+  },
+  {
+   "source": "c7061359-be1f-4c49-8f8e-12db5708e01b",
+   "target": "18356b94-6ca6-4f9f-ba71-c5b01cdb5eeb",
+   "name": "UPGRADES",
+   "fact": "S&P Global Ratings is reported to have upgraded Saudi Arabia to 'A+', though the date was not confirmed on the fetched page"
+  },
+  {
+   "source": "1de2aced-c72e-4884-94ac-57507d1b594a",
+   "target": "153ba9cd-05a6-4cc8-a423-b0391e7fa9fd",
+   "name": "REPORTS_ON",
+   "fact": "The EIA/FRED series shows WTI printed 107.89 dollars per barrel on 2026-10-20."
+  },
+  {
+   "source": "2ff7b77c-38d1-42a8-8aed-d769933bdddb",
+   "target": "76b044d4-a488-445b-b302-cecefb6d7f1a",
+   "name": "INFLUENCES",
+   "fact": "Congressional Research Service reporting notes Assembly of Experts succession signals as a factor affecting the Regime crisis tail; an open rupture in the Assembly would lift that tail."
+  },
+  {
+   "source": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "target": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "IAEA 亦称 International Atomic Energy Agency"
+  },
+  {
+   "source": "0aa6e073-b276-4282-8a87-f06e38107fb5",
+   "target": "48e2e6ed-67eb-4d0b-a19f-084457065f75",
+   "name": "OPPOSES",
+   "fact": "The LAF seized an explosives truck, an action against Hezbollah, though the ceasefire security annex is silent on what happens if Hezbollah refuses to disarm."
+  },
+  {
+   "source": "e6b559b9-3edc-4cd3-b82e-edf6fc205943",
+   "target": "e6b559b9-3edc-4cd3-b82e-edf6fc205943",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Benjamin Netanyahu 亦称 Netanyahu"
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "273a7bd0-85a3-4863-a976-1a8fd1b4c0ea",
+   "name": "SUPPORTS",
+   "fact": "Russia, alongside China, is shaping the 2026 Iran Conflict through strategic attrition and fueling Iran's war effort (Soufan Center, October 16, 2026)."
+  },
+  {
+   "source": "e6b559b9-3edc-4cd3-b82e-edf6fc205943",
+   "target": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "name": "DEPENDS_ON",
+   "fact": "Reported US block of a mid-October 2026 strike, which Netanyahu denies [S26]（sign=+，strength=0.7，valence=transactional，polarity=0.30）"
+  },
+  {
+   "source": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "target": "fe28583c-8a79-4918-aaad-288220d849ab",
+   "name": "DISRUPTS",
+   "fact": "The Renewed large-scale strikes scenario's principal priced channel is re-disruption of Qatari LNG supply."
+  },
+  {
+   "source": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "target": "1de2aced-c72e-4884-94ac-57507d1b594a",
+   "name": "INFLUENCES",
+   "fact": "EIA's October STEO projects 2027 average Brent at $84/b, informing the forecast that 2027 average Brent above $90/b has 50% probability."
+  },
+  {
+   "source": "2b2c9500-5e3e-4052-890d-bb9da22eb6e9",
+   "target": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "name": "INFLUENCES",
+   "fact": "The US Senate's 49-50 rejection of an end-war resolution in October 2026 shows Congress will not force an exit, raising the likelihood of renewed large-scale strikes."
+  },
+  {
+   "source": "7c7d6289-9fb8-4777-a36f-96f4f442575b",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "SETTLES_PRICE_FOR",
+   "fact": "End-2027 gold prices settle at the LBMA auction, whose latest PM reading was $4,124.5 per troy ounce on 2026-10-20."
+  },
+  {
+   "source": "1de2aced-c72e-4884-94ac-57507d1b594a",
+   "target": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "name": "FORECASTS_FOR",
+   "fact": "EIA projects Brent crude oil averaging $105/b in 4Q26, $87/b by 2Q27 and $74/b in 4Q27, conditional on Middle East export workarounds."
+  },
+  {
+   "source": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "target": "d0f4d5cd-8a62-427b-b63b-f8a9ad92a462",
+   "name": "TRIGGERED_BY",
+   "fact": "The Isfahan tunnel uranium stock is one of the triggers for the renewed large-scale strikes scenario, alongside breakout progress invisible to inspectors."
+  },
+  {
+   "source": "9140b463-795c-463d-a1a3-bc5d7e4a3c7c",
+   "target": "1ba79f03-9590-4e96-be4e-8b408a8ee623",
+   "name": "OPPOSES",
+   "fact": "The Houthis announced a blockade on Saudi ports and Bab al-Mandeb shipping, prompting a surge in war-risk insurance costs, per Reuters."
+  },
+  {
+   "source": "b3eedf4c-9273-4df5-aa3a-26482442abde",
+   "target": "b72e05a2-1f8b-47e3-8471-7e20ccbe7c2f",
+   "name": "REPORTS_ON",
+   "fact": "Kpler and related trackers show Red Sea transits under one-third of pre-October 2023 levels in late October 2026."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "name": "REFUSES_COOPERATION",
+   "fact": "Iran replied on February 2, 2026 that normal safeguards implementation was 'legally untenable and materially impracticable' and refuses design-information and inventory verification at Isfahan on the ground that the sites were 'subjected to illegal military attacks'."
+  },
+  {
+   "source": "037a2be2-dee4-4053-ab8e-b656a7f58b97",
+   "target": "037a2be2-dee4-4053-ab8e-b656a7f58b97",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Iranian diplomatic faction (Foreign Ministry) 亦称 Foreign Ministry"
+  },
+  {
+   "source": "9140b463-795c-463d-a1a3-bc5d7e4a3c7c",
+   "target": "1ba79f03-9590-4e96-be4e-8b408a8ee623",
+   "name": "CONTROLS",
+   "fact": "The Houthi movement seeks to keep leverage over the 32 km-wide Bab al-Mandeb strait, having conducted about 530 attacks on shipping since November 2023 at a 2:1 drone-to-missile ratio, with attacks resuming in July 2026 after a half-year hiatus."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "d4173b83-0fe6-4c5f-ba42-9f732579b491",
+   "name": "PARTNERS_WITH",
+   "fact": "China and Iran are linked by the 2021 25-year Cooperation Program, which is economic- and energy-focused"
+  },
+  {
+   "source": "9140b463-795c-463d-a1a3-bc5d7e4a3c7c",
+   "target": "92c6c111-2a58-490b-b999-5273bf72c453",
+   "name": "REPORTED_BY",
+   "fact": "The Africa Center reports that the Houthis resumed attacks in July 2026 after a half-year hiatus, with twelve attacks on commercial vessels in the southern Red Sea since."
+  },
+  {
+   "source": "4532410d-28f4-49c3-b035-8e1168de4c52",
+   "target": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "name": "PARTNERS_WITH",
+   "fact": "Qatar mediates deadlocked US-Iran talks as of October 20, 2026, with no agreed text; Iran offered Hormuz reopening within seven days under Iranian control in exchange for a blockade lift, eased export limits, released frozen assets, and an end to hostilities, but sequencing is disputed."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "name": "OPPOSES",
+   "fact": "Israel joined the US in the war against Iran opening February 28, 2026, striking IRGC, Basij and security targets"
+  },
+  {
+   "source": "48e2e6ed-67eb-4d0b-a19f-084457065f75",
+   "target": "8b1c3750-9d54-43bf-9d92-53d7d9bb9ef0",
+   "name": "OPPOSES",
+   "fact": "Framework requires disarmament; Israel threatens large-scale operation [S67][S83]（sign=-，strength=0.65，valence=adversarial，polarity=-0.70）"
+  },
+  {
+   "source": "48e2e6ed-67eb-4d0b-a19f-084457065f75",
+   "target": "53dd0512-118d-49ad-975c-ca5e010173f8",
+   "name": "OPPOSES",
+   "fact": "Hezbollah is reported rebuilding with upgraded FPV drones amid a declared Israeli operation in Lebanon, with an arsenal of ~25,000 rockets per Israel's Alma center."
+  },
+  {
+   "source": "b1c220ba-d89c-45d2-b211-d8b75ca6cf57",
+   "target": "d181aac2-b917-44bb-af93-8692ad91c81f",
+   "name": "PUBLISHED_ANALYSIS_OF",
+   "fact": "The Council on Foreign Relations published a report 'After Khamenei: Planning for Iran's Leadership Transition' on planning for Iran's leadership transition after Ali Khamenei."
+  },
+  {
+   "source": "9140b463-795c-463d-a1a3-bc5d7e4a3c7c",
+   "target": "9140b463-795c-463d-a1a3-bc5d7e4a3c7c",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Houthi movement 亦称 Ansar Allah"
+  },
+  {
+   "source": "475a6b91-510a-4b00-9025-555b99a2793b",
+   "target": "adf57615-8462-4afc-bf9f-94d2dc9605e2",
+   "name": "PUBLISHED_PROBABILITY_ASSESSMENT_FOR",
+   "fact": "Forbes on 28 February 2026 put the probability of a popular uprising seizing the post-Khamenei vacuum at 25%, with IRGC consolidation around collective leadership with a clerical figurehead at about 35% and a protracted power contest at about 30%."
+  },
+  {
+   "source": "01dd7367-b0ca-4f5c-aeb5-c2d9b59696f1",
+   "target": "48e2e6ed-67eb-4d0b-a19f-084457065f75",
+   "name": "SUPPORTS",
+   "fact": "Confirmed large-scale IRGC resupply of Hezbollah would deepen the low-intensity conflict scenario (a posited change-of-view indicator)."
+  },
+  {
+   "source": "fac7e755-7d06-4b28-8d47-e482bf149312",
+   "target": "d181aac2-b917-44bb-af93-8692ad91c81f",
+   "name": "FOLLOWS_DEATH_OF",
+   "fact": "The 2026 Iranian supreme leader election was triggered by the death of Ali Khamenei (killed February 28, 2026, per prior context)."
+  },
+  {
+   "source": "a17fae90-6df1-4016-9be0-21b95f03cb7e",
+   "target": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "name": "INFLUENCES",
+   "fact": "Under the Low-intensity conflict scenario (45%), the ECB is expected to hold its 2.5% policy rate."
+  },
+  {
+   "source": "76b044d4-a488-445b-b302-cecefb6d7f1a",
+   "target": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "name": "BACKS",
+   "fact": "The Assembly of Experts installed Mojtaba Khamenei, a figure with deep IRGC ties, as successor within about a week of the February 28, 2026 strikes"
+  },
+  {
+   "source": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "target": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "name": "INFLUENCES",
+   "fact": "Under the Renewed large-scale strikes scenario (25%), shut-ins return toward the 10.9 million b/d May 2026 peak, though reported planning would steer strikes away from oil infrastructure."
+  },
+  {
+   "source": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "Under the Renewed large-scale strikes scenario (25% probability), gold is projected at 4,400–5,200 $/oz at end-2027, retesting the 5014.645 peak zone."
+  },
+  {
+   "source": "b3eedf4c-9273-4df5-aa3a-26482442abde",
+   "target": "47066d76-6deb-4019-a4c6-9d0a6ba8857d",
+   "name": "REPORTS_ON",
+   "fact": "Kpler's 7-day Hormuz crude transit average was 13.5 million b/d (at prewar levels) in late October 2026, with products at 677 kbd versus ~3.6 million prewar."
+  },
+  {
+   "source": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "target": "9d9312d5-b3b1-4a97-bc41-99733626b77f",
+   "name": "PUBLISHES_PRICE_DATA_FOR",
+   "fact": "The International Monetary Fund publishes the Brent Crude monthly unit price series (US dollars per barrel) used as a source in the report."
+  },
+  {
+   "source": "01dd7367-b0ca-4f5c-aeb5-c2d9b59696f1",
+   "target": "a5753484-7d1e-4218-b97d-512ecceb08f8",
+   "name": "REPORTS_ON",
+   "fact": "Al Jazeera reported (October 20, 2026) that Iran denies collapse is close as the US claims the IRGC is running out of money."
+  },
+  {
+   "source": "2b2c9500-5e3e-4052-890d-bb9da22eb6e9",
+   "target": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "name": "INFLUENCES",
+   "fact": "The Senate rejected the war-ending resolution on the US–Iran war 49–50 in October 2026"
+  },
+  {
+   "source": "d8ce778d-12ef-44ac-96cb-fd24d1ff12e5",
+   "target": "47066d76-6deb-4019-a4c6-9d0a6ba8857d",
+   "name": "SECURES_TRANSIT_THROUGH",
+   "fact": "Iraq arranged passage for its own tankers through the Strait of Hormuz region in August 2026 despite blockade conditions."
+  },
+  {
+   "source": "336fe751-b67e-4d72-ad6a-cdb48af56c41",
+   "target": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "name": "INFLUENCES",
+   "fact": "Restoration of IAEA access or a Board-verified inventory would raise the probability of the Durable ceasefire scenario."
+  },
+  {
+   "source": "1555b024-5f77-46d0-866b-90f5f1cf76e7",
+   "target": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "name": "PARTNERS_WITH",
+   "fact": "The Negotiated framework scenario involves a signed text with partial sanctions relief and restored IAEA access; restored access is a leading indicator pointing to this scenario."
+  },
+  {
+   "source": "336fe751-b67e-4d72-ad6a-cdb48af56c41",
+   "target": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "name": "INFLUENCES",
+   "fact": "Under the Durable ceasefire scenario (15%), the ECB is expected to pivot to cuts in 2027."
+  },
+  {
+   "source": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "target": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "name": "REGULATES",
+   "fact": "No access to declared enrichment sites since January 2026 [S15][S16][S19]（sign=-，strength=0.5，valence=directional，polarity=-0.30）"
+  },
+  {
+   "source": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "target": "7c7d6289-9fb8-4777-a36f-96f4f442575b",
+   "name": "PRICE_AUCTIONED_AT",
+   "fact": "Gold prices are measured at LBMA auctions; the 2026 monthly peak was $5,014.645 per troy ounce in February, and there is a 30% forecast probability of gold exceeding $5,000 at any LBMA auction before end-2027."
+  },
+  {
+   "source": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "target": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "name": "DEPENDS_ON",
+   "fact": "The renewed large-scale strikes scenario is shifted up from a single-digit base rate partly by collapsed IAEA access to Iran's nuclear program"
+  },
+  {
+   "source": "adf57615-8462-4afc-bf9f-94d2dc9605e2",
+   "target": "2ff7b77c-38d1-42a8-8aed-d769933bdddb",
+   "name": "INFLUENCES",
+   "fact": "CRS sees no imminent collapse of the Iranian regime while keeping the possibility open, supporting a low single-digit weight for the Regime crisis scenario."
+  },
+  {
+   "source": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "target": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Donald Trump 亦称 Trump"
+  },
+  {
+   "source": "21e76d7e-e6aa-41ae-a125-9b063d8ab3ea",
+   "target": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "name": "BACKS",
+   "fact": "Putin pledged \"unwavering\" support for Mojtaba Khamenei, reported by Al Jazeera in March 2026."
+  },
+  {
+   "source": "18356b94-6ca6-4f9f-ba71-c5b01cdb5eeb",
+   "target": "12efa1ce-2e23-435c-9a0a-63a5c1f9cc63",
+   "name": "LEADS",
+   "fact": "Saudi Arabia led the OPEC+ ramp in September 2026, adding 2.1 million b/d month-on-month as global supply rose 2.5 million b/d to 102.3 million b/d."
+  },
+  {
+   "source": "9d9312d5-b3b1-4a97-bc41-99733626b77f",
+   "target": "0053216e-8733-4352-8df7-476fd700e718",
+   "name": "COMPETES_WITH",
+   "fact": "The IMF and EIA/FRED September 2026 oil averages diverge (102.0181 vs 114.1591 dollars per barrel), a source-and-definition gap carried explicitly rather than averaged."
+  },
+  {
+   "source": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "target": "72864947-6e73-49ea-af94-a2fd759456cf",
+   "name": "CONSIDERS_TARGET_OF_STRIKES",
+   "fact": "Trump would steer planned renewed strikes away from oil infrastructure, with the Pickaxe Mountain nuclear site among the candidate targets."
+  },
+  {
+   "source": "48e2e6ed-67eb-4d0b-a19f-084457065f75",
+   "target": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "name": "OPPOSES",
+   "fact": "Hezbollah aims to keep its arms north of the Litani and is rebuilding its arsenal and deterrent capability in anticipation of a wider conflict against Israel."
+  },
+  {
+   "source": "a17fae90-6df1-4016-9be0-21b95f03cb7e",
+   "target": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "name": "DEPENDS_ON",
+   "fact": "The IAEA's inability to verify stockpiles or centrifuge status means red-line breaches are undetectable in advance, sustaining the Low-intensity conflict scenario as the modal continuation."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "name": "OPPOSES",
+   "fact": "Israel maintains an adversarial stance toward Iran, with potential direct strikes on Iranian nuclear, military or regime targets considered part of a renewed large-scale campaign scenario"
+  },
+  {
+   "source": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "The FOMC's September 16, 2026 hike of its target range by 1/4 point to 3-3/4 to 4 percent (12-0 vote), citing elevated inflation, keeps real-rate pressure on gold."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "name": "OPPOSES",
+   "fact": "The US and Israel plan renewed Iran strikes after the midterms, per source S114."
+  },
+  {
+   "source": "48e2e6ed-67eb-4d0b-a19f-084457065f75",
+   "target": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "name": "OPPOSES",
+   "fact": "Hezbollah rebuilds military capabilities in Beirut and prepares for renewed fighting against Israel"
+  },
+  {
+   "source": "df3c04ea-6f1c-484d-b438-f7337a928a44",
+   "target": "d181aac2-b917-44bb-af93-8692ad91c81f",
+   "name": "OPPOSES",
+   "fact": "Strikes beginning February 28, 2026 under the US operation designated 'Operation Epic Fury' killed Supreme Leader Ali Khamenei and dozens of senior leaders"
+  },
+  {
+   "source": "336fe751-b67e-4d72-ad6a-cdb48af56c41",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "Under the Durable ceasefire scenario (15% probability), gold is projected at 3,600–3,900 $/oz at end-2027, via a 2025-style unwind."
+  },
+  {
+   "source": "c92aa7ab-fc6d-4c72-931d-59fe87aab75b",
+   "target": "72864947-6e73-49ea-af94-a2fd759456cf",
+   "name": "LOWERED_BY",
+   "fact": "Verified reconstitution at Pickaxe Mountain would move the low-intensity conflict scenario's probability down."
+  },
+  {
+   "source": "336fe751-b67e-4d72-ad6a-cdb48af56c41",
+   "target": "e681a6e8-db14-444e-868f-9637a5585171",
+   "name": "INFLUENCES",
+   "fact": "The World Bank's projected 7.7% contraction of Iran's economy in fiscal 2026-27 is cited as raising the probability of the Durable ceasefire scenario."
+  },
+  {
+   "source": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "target": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "name": "PARTNERS_WITH",
+   "fact": "The U.S. and Israel are jointly planning for a possible post-midterms attack on Iran"
+  },
+  {
+   "source": "e681a6e8-db14-444e-868f-9637a5585171",
+   "target": "c36513b9-412b-4095-aed6-35977bd0da95",
+   "name": "INFLUENCES",
+   "fact": "The World Bank projects a 7.7% contraction for Iran's fiscal year 2026-27 (a projection Iran rejects), a constraint on Iran's side in the standoff."
+  },
+  {
+   "source": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "target": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "name": "INFLUENCES",
+   "fact": "Under the Renewed large-scale strikes scenario (25%), the ECB is expected to extend hikes alongside the Fed."
+  },
+  {
+   "source": "8b1c3750-9d54-43bf-9d92-53d7d9bb9ef0",
+   "target": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "name": "OPPOSES",
+   "fact": "The IDF, alongside CENTCOM, pursues attrition and holds plans for a 'short but intensive operation' against Iran under Mojtaba Khamenei."
+  },
+  {
+   "source": "8d61f8f0-6967-46dc-a3c2-09a61ed2c662",
+   "target": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "name": "INFLUENCES",
+   "fact": "The House passed a war-ending resolution 214–208 in July 2026 seeking to end the US war against Iran"
+  },
+  {
+   "source": "c92aa7ab-fc6d-4c72-931d-59fe87aab75b",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "Under the Low-intensity conflict scenario (45% probability), gold is projected at 3,900–4,200 $/oz at end-2027, with the Fed at 3.875% end-September against CPI of 3.717%."
+  },
+  {
+   "source": "275a40b0-4ece-4a4a-8289-022a8103851e",
+   "target": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "name": "REPORTS_ON",
+   "fact": "The New York Times reports drafted US military plans for a 'short but intensive' post-midterm operation, while Iranian officials prolong talks past the 3 November midterms."
+  },
+  {
+   "source": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "target": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "name": "INFLUENCES",
+   "fact": "IAEA's loss of verification access (IAEA blindness) raises the probability assigned to the Renewed large-scale strikes scenario."
+  },
+  {
+   "source": "84edd5b2-c0af-4347-b498-ecff038ff1bc",
+   "target": "dea42676-ba6b-40db-b013-f613d96b4d57",
+   "name": "ESTIMATED_HOLDINGS",
+   "fact": "ISIS's post-ceasefire imagery puts 265–287 kg of 60%-enriched uranium in the Isfahan tunnels, over half the 60% stock."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "b3eedf4c-9273-4df5-aa3a-26482442abde",
+   "name": "PARTNERS_WITH",
+   "fact": "Kpler and Vortexa are the settling sources tracking flow claims (crude purchases, sanctions-evasion logistics) for Iran patron support through 31 December 2027."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "02122463-b446-404e-9c93-e1a1c9f010f4",
+   "name": "SANCTIONS",
+   "fact": "U.S. Treasury designations 'effectively neutralize the vast majority of Iran's remaining shadow fleet network', per Treasury statement."
+  },
+  {
+   "source": "5a3ebcf0-6b2f-4143-a2d5-15aeda124a19",
+   "target": "75165eb5-9e59-45c4-bf41-ae366f115dd9",
+   "name": "PARTICIPATES_IN",
+   "fact": "U.S. Central Command (CENTCOM) maintains strict enforcement of the U.S. blockade against Iran as part of the U.S. Conflict with Iran, per an official CENTCOM public release."
+  },
+  {
+   "source": "c92aa7ab-fc6d-4c72-931d-59fe87aab75b",
+   "target": "9de5f009-1028-4281-91fe-7227dfda1948",
+   "name": "LOWERED_BY",
+   "fact": "Verified centrifuge reconstitution at Fordow's support site is a mover lowering the low-intensity conflict scenario."
+  },
+  {
+   "source": "adf57615-8462-4afc-bf9f-94d2dc9605e2",
+   "target": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "name": "INFLUENCES",
+   "fact": "The regime crisis scenario requires the death, removal or contested succession of Supreme Leader Mojtaba Khamenei"
+  },
+  {
+   "source": "081e858e-306a-430c-841f-40c077cdd668",
+   "target": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "name": "REPORTS_ON",
+   "fact": "An NBC News September 2026 poll found only 33% of registered voters say the war is worth it versus 62% who do not, applying electoral pressure on Trump's war policy."
+  },
+  {
+   "source": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "target": "be41daa3-fa47-4c82-a4e4-46daf7e5b8db",
+   "name": "INFLUENCES",
+   "fact": "The inflation pass-through from renewed large-scale strikes would drag growth and hit GCC and Israeli markets."
+  },
+  {
+   "source": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "target": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "name": "DEPENDS_ON",
+   "fact": "Under the Low-intensity conflict scenario, the Fed delivers the additional 2026 hike Reuters reports officials have signaled and then holds before cautious late-2027 cuts, while the ECB stays on hold at 2.50%, with market pricing implying roughly a 96% probability the ECB holds its deposit rate at 2.50% at its October 29, 2026 meeting."
+  },
+  {
+   "source": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "target": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "name": "INFLUENCES",
+   "fact": "September 16, 2026 hike to 3.75-4% citing inflation [S11]（sign=-，strength=0.4，valence=neutral，polarity=-0.20）"
+  },
+  {
+   "source": "8d61f8f0-6967-46dc-a3c2-09a61ed2c662",
+   "target": "52cf243e-211a-4399-8c8f-0de385d2f5a9",
+   "name": "PASSED",
+   "fact": "The US House of Representatives passed H.Con.Res. 89, urging an end to the war, by a vote of 214-208 in July 2026."
+  },
+  {
+   "source": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "target": "47066d76-6deb-4019-a4c6-9d0a6ba8857d",
+   "name": "INFLUENCES",
+   "fact": "Mojtaba Khamenei and the IRGC hold leverage over the Strait of Hormuz through 'kill box' attacks, and late-February 2026 reporting indicates missile launch authority was pre-delegated to lower-ranking officers."
+  },
+  {
+   "source": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "target": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "name": "INFLUENCES",
+   "fact": "On October 12, 2026, President Trump temporarily lifted sanctions on Russian diesel while Washington weighed letting \"legal oil\" move on previously sanctioned shadow-fleet vessels, policy acting to cap the oil market's war premium."
+  },
+  {
+   "source": "0aa6e073-b276-4282-8a87-f06e38107fb5",
+   "target": "48e2e6ed-67eb-4d0b-a19f-084457065f75",
+   "name": "INFLUENCES",
+   "fact": "Verified Hezbollah disarmament milestones with LAF deployment would strengthen the durable ceasefire scenario."
+  },
+  {
+   "source": "b3eedf4c-9273-4df5-aa3a-26482442abde",
+   "target": "2bc2911d-521d-4605-8b0c-8642fc880f6e",
+   "name": "INFLUENCES",
+   "fact": "Kpler's published 7-day Hormuz crude transit data is the resolution criterion for whether transits fall below 10 million b/d for 14 consecutive days before end-2027 (20% probability)."
+  },
+  {
+   "source": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "target": "d181aac2-b917-44bb-af93-8692ad91c81f",
+   "name": "SUCCEEDED",
+   "fact": "Mojtaba Khamenei was announced as successor to Khamenei (who was killed February 28, 2026) on March 8–9, 2026."
+  },
+  {
+   "source": "a17fae90-6df1-4016-9be0-21b95f03cb7e",
+   "target": "2ff7b77c-38d1-42a8-8aed-d769933bdddb",
+   "name": "DEPENDS_ON",
+   "fact": "The Low-intensity conflict scenario (45% probability) is assessed as the modal continuation of the current attrition, consistent with CRS-reported patterns of strike plans drafted and aborted."
+  },
+  {
+   "source": "2bc2911d-521d-4605-8b0c-8642fc880f6e",
+   "target": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "name": "INDICATES",
+   "fact": "Hormuz crude transits below 10 million b/d for 30 consecutive days during 2027 (Kpler 7-day average was 13.5 million b/d in late September 2026) would partly indicate the Renewed large-scale strikes scenario."
+  },
+  {
+   "source": "01dd7367-b0ca-4f5c-aeb5-c2d9b59696f1",
+   "target": "01dd7367-b0ca-4f5c-aeb5-c2d9b59696f1",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "IRGC 亦称 Islamic Revolutionary Guard Corps"
+  },
+  {
+   "source": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "target": "c36513b9-412b-4095-aed6-35977bd0da95",
+   "name": "DEPENDS_ON",
+   "fact": "The forecast (15% probability) that the IAEA regains access to any declared Iranian enrichment site before end-2027 depends on IAEA reports to the Board."
+  },
+  {
+   "source": "3b4267fd-936d-4544-8925-3f146105bf82",
+   "target": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "name": "PARTNERS_WITH",
+   "fact": "Macron was present at the signing of the US-Iran war-ending agreement at Versailles in mid-2026."
+  },
+  {
+   "source": "e6b559b9-3edc-4cd3-b82e-edf6fc205943",
+   "target": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "name": "SUPPORTS",
+   "fact": "Netanyahu has framed overthrowing the Iranian regime as his directive, supporting the strike path; CENTCOM or IDF strikes on Pickaxe Mountain or the Isfahan tunnels after November 3 would confirm it."
+  },
+  {
+   "source": "7f6c3eb5-cb7c-4d25-9fe0-b2fda2befa00",
+   "target": "927e48ff-35bd-4b3f-bc38-e1d400336417",
+   "name": "REPORTS_ON",
+   "fact": "ISIS reported ~80 kg of 60% uranium at Fordow as of mid-2026."
+  },
+  {
+   "source": "01dd7367-b0ca-4f5c-aeb5-c2d9b59696f1",
+   "target": "c92aa7ab-fc6d-4c72-931d-59fe87aab75b",
+   "name": "SUPPORTS",
+   "fact": "The Foundation for Strategic Research documents a cohesive IRGC coercive apparatus with intermittent US negotiations after Khamenei's killing, providing the material basis for the Low-intensity conflict — 45% path of Iran suppressed but not collapsing."
+  },
+  {
+   "source": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "DIVERGES_FROM",
+   "fact": "In late October 2026, gold quotes clustered below the September monthly average even as the oil market firmed"
+  },
+  {
+   "source": "21ebbb35-b092-42f8-917f-6faa2bd42e30",
+   "target": "9140b463-795c-463d-a1a3-bc5d7e4a3c7c",
+   "name": "OPPOSES",
+   "fact": "Attacks on Saudi tankers Amzan, Encelia, Layla [S48][S49]（sign=-，strength=0.6，valence=adversarial，polarity=-0.70）"
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "name": "OPPOSES",
+   "fact": "Since early 2026 the IAEA has had no access to any declared Iranian enrichment facility and can verify neither stockpiles nor centrifuge status, making red-line breaches undetectable in advance."
+  },
+  {
+   "source": "1555b024-5f77-46d0-866b-90f5f1cf76e7",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "Under the Negotiated framework scenario (10% probability), gold war premia unwind on the 2025 path, with the July 2026 trough of 4075.0968 $/oz implying a plateau rather than a collapse."
+  },
+  {
+   "source": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "target": "5a3ebcf0-6b2f-4143-a2d5-15aeda124a19",
+   "name": "PARTNERS_WITH",
+   "fact": "Reporting on US-Iran strikes is settled on CENTCOM and CRS reporting, reflecting CENTCOM's role in the US military posture toward Iran"
+  },
+  {
+   "source": "48e2e6ed-67eb-4d0b-a19f-084457065f75",
+   "target": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "name": "OPPOSES",
+   "fact": "Hezbollah saw a new war with Israel as inevitable and had rearmed for months, per Reuters reporting from March 2026."
+  },
+  {
+   "source": "7f6c3eb5-cb7c-4d25-9fe0-b2fda2befa00",
+   "target": "72864947-6e73-49ea-af94-a2fd759456cf",
+   "name": "MONITORS",
+   "fact": "ISIS imagery shows continuing tunnel construction at the Pickaxe Mountain nuclear site, which has not been attacked."
+  },
+  {
+   "source": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "target": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "name": "SANCTIONS",
+   "fact": "Blockade renewed July 13, 2026; exports effectively halted [S3][S4][S45]（sign=-，strength=0.85，valence=adversarial，polarity=-0.80）"
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "name": "SANCTIONS",
+   "fact": "A US naval blockade of Iran began April 13, 2026 as an enforcement action with no text"
+  },
+  {
+   "source": "bc8c7d99-e2dd-43a0-8475-2ce69e69dcb8",
+   "target": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "name": "PUBLISHES_DATA_ON",
+   "fact": "BIS published the US central bank policy rate (end of period) at 3.875% per year for September 2026, down -0.25 pp year-on-year, within a five-year range of 0.125% to 5.375%."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "fba1daee-d312-4458-8120-7d363a3247f2",
+   "name": "INFLUENCES",
+   "fact": "Explosions on two oil tankers near Iran in the June 2019 Gulf of Oman incident sent oil prices about 2% higher."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "e6b559b9-3edc-4cd3-b82e-edf6fc205943",
+   "name": "OPPOSES",
+   "fact": "Netanyahu said 'there's only one way to remove this threat once and for all — overthrow the regime in Iran'"
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "4532410d-28f4-49c3-b035-8e1168de4c52",
+   "name": "PARTNERS_WITH",
+   "fact": "Qatari mediators carried an Iranian offer in September–October 2026 to reopen the Strait of Hormuz within seven days under Iranian control in exchange for a blockade lift, eased export limits and released assets"
+  },
+  {
+   "source": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "target": "404ee0b2-eb91-4d94-b596-996f08659efb",
+   "name": "PARTNERS_WITH",
+   "fact": "Israel and Lebanon are parties to a US-backed ceasefire framework in force since April 2026, requiring disarmament, gradual withdrawal and LAF deployment, following a ten-day cessation of hostilities from April 16, 2026, 17:00 EST."
+  },
+  {
+   "source": "1707c0d0-47d8-4848-bcce-8c9726b52d27",
+   "target": "d181aac2-b917-44bb-af93-8692ad91c81f",
+   "name": "PUBLISHED_ANALYSIS_OF",
+   "fact": "The Foundation for Strategic Research published a study titled 'Iran after Ali Khamenei: power, security governance, and the emerging political order' analyzing the post-Khamenei transition."
+  },
+  {
+   "source": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "target": "c36513b9-412b-4095-aed6-35977bd0da95",
+   "name": "OPPOSES",
+   "fact": "The US opposes Iran's nuclear program, with potential direct US strikes on Iranian nuclear targets contemplated in the renewed large-scale strikes scenario"
+  },
+  {
+   "source": "1b15eed7-4dda-46d4-a243-dfdbe7cec736",
+   "target": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "name": "INFLUENCES",
+   "fact": "On October 15, 2026, the IEA agreed to release over 20 million barrels of diesel alongside remaining volumes of a record March 2026 emergency-reserve release, actively capping the war premium in the oil market."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "47066d76-6deb-4019-a4c6-9d0a6ba8857d",
+   "name": "DEPENDS_ON",
+   "fact": "Iran's September–October 2026 offer via Qatar proposed reopening the Strait of Hormuz within seven days under Iranian control in exchange for a US blockade lift, eased export limits and released assets"
+  },
+  {
+   "source": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "Under the Renewed large-scale strikes scenario (25% probability), official gold buying should accelerate and raise the floor beneath the 4,400–5,200 $/oz range, as sanctions immobilization risk is what gold insures against."
+  },
+  {
+   "source": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "target": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "name": "INFLUENCES",
+   "fact": "An inflation pass-through from the Renewed large-scale strikes scenario would keep the Fed and ECB restrictive."
+  },
+  {
+   "source": "5a3ebcf0-6b2f-4143-a2d5-15aeda124a19",
+   "target": "01dd7367-b0ca-4f5c-aeb5-c2d9b59696f1",
+   "name": "OPPOSES",
+   "fact": "Blockade ladder and shadow-network vessel destruction [S2][S68][S4]（sign=-，strength=0.75，valence=adversarial，polarity=-0.70）"
+  },
+  {
+   "source": "48e2e6ed-67eb-4d0b-a19f-084457065f75",
+   "target": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "name": "OPPOSES",
+   "fact": "Hezbollah saw a new war with Israel as inevitable and rearmed for months in advance (Reuters, March 6, 2026)."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "21e76d7e-e6aa-41ae-a125-9b063d8ab3ea",
+   "name": "SUPPLIES",
+   "fact": "Russia has shared supersonic cruise-missile technology with Iran since 2023 (Financial Times, via the Soufan Center)"
+  },
+  {
+   "source": "404ee0b2-eb91-4d94-b596-996f08659efb",
+   "target": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "name": "PARTNERS_WITH",
+   "fact": "Israel and Lebanon concluded a security annex, which the Stimson Center assessed as adding new problems without solving old ones."
+  },
+  {
+   "source": "1555b024-5f77-46d0-866b-90f5f1cf76e7",
+   "target": "c36513b9-412b-4095-aed6-35977bd0da95",
+   "name": "REQUIRES_VERIFICATION_OF",
+   "fact": "An IAEA Board resolution on Iran's nuclear program being implemented rather than urged is a signpost of the negotiated framework scenario."
+  },
+  {
+   "source": "df3c04ea-6f1c-484d-b438-f7337a928a44",
+   "target": "01dd7367-b0ca-4f5c-aeb5-c2d9b59696f1",
+   "name": "OPPOSES",
+   "fact": "Operation Epic Fury strikes hit IRGC, Basij and regime-security targets"
+  },
+  {
+   "source": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "target": "1de2aced-c72e-4884-94ac-57507d1b594a",
+   "name": "PRICED_BY",
+   "fact": "Brent crude oil prices are anchored on the EIA/FRED DCOILBRENTEU series, with the 2026-09 monthly observation and latest daily value cited as distinct observations"
+  },
+  {
+   "source": "5691d623-95fd-45f9-8338-5c8d8ce9dbfe",
+   "target": "47066d76-6deb-4019-a4c6-9d0a6ba8857d",
+   "name": "ESTIMATES_TRANSIT_READING",
+   "fact": "JP Morgan put Hormuz crude shipments near 17.5 million b/d (98% of pre-war) in early October 2026"
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "1255251b-a763-44ee-b378-9b6002852548",
+   "name": "PARTNERS_WITH",
+   "fact": "Pakistan mediated the two-week ceasefire between the US and Iran agreed April 8, 2026"
+  },
+  {
+   "source": "332ecea8-22c6-4e23-8083-d93eba4f9e3b",
+   "target": "5a3ebcf0-6b2f-4143-a2d5-15aeda124a19",
+   "name": "PARTNERS_WITH",
+   "fact": "CENTCOM releases and Vortexa loadings data together serve as resolution criteria for whether the US naval blockade is lifted for 90 or more consecutive days before end-2027 (25% probability)."
+  },
+  {
+   "source": "c92aa7ab-fc6d-4c72-931d-59fe87aab75b",
+   "target": "1555b024-5f77-46d0-866b-90f5f1cf76e7",
+   "name": "COMPETES_WITH",
+   "fact": "The evidence contains no Chinese- or Russian-mediated track, consistent with the modest 10% weight on the Negotiated framework versus the 45% Low-intensity conflict path, which is underpinned by Iran's severed revenue, internal cohesion, and patrons unwilling to break the blockade."
+  },
+  {
+   "source": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "target": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "US Federal Reserve 亦称 Fed"
+  },
+  {
+   "source": "404ee0b2-eb91-4d94-b596-996f08659efb",
+   "target": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "name": "OPPOSES",
+   "fact": "Israel has threatened a large-scale operation against Lebanon in messages to Lebanon, with an operation launch a signpost for Renewed large-scale strikes before end-2027."
+  },
+  {
+   "source": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "target": "b5e74aa8-8b75-4eff-80f2-1192ad3e43ba",
+   "name": "RAISED",
+   "fact": "The FOMC raised the federal funds target range by a quarter point to 3-3/4 to 4 percent on September 16, 2026 by a 12-0 vote, citing elevated inflation and geopolitical uncertainty, bringing the midpoint to 3.875% at end-September 2026, with officials signaling at least one more hike possible before year-end ahead of the October 27-28, 2026 meeting."
+  },
+  {
+   "source": "d4173b83-0fe6-4c5f-ba42-9f732579b491",
+   "target": "d8ce778d-12ef-44ac-96cb-fd24d1ff12e5",
+   "name": "CUSTOMER_OF",
+   "fact": "Chinese teapots substituted at least 12 million barrels of Iraqi crude for October–November delivery"
+  },
+  {
+   "source": "2ff7b77c-38d1-42a8-8aed-d769933bdddb",
+   "target": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "name": "REPORTS_ON",
+   "fact": "CRS describes the United States and Iran as 'again trading limited strikes' in a war of attrition after the June 2026 memorandum of understanding collapsed and expired in August 2026."
+  },
+  {
+   "source": "81f51516-337b-4e32-8bf4-4a0e954faa5f",
+   "target": "ae4ca379-7ea7-4dac-ac90-594182a65ece",
+   "name": "REPORTED_BY",
+   "fact": "EU gas prices are anchored on the FRED Global price of Natural gas, EU series"
+  },
+  {
+   "source": "153ba9cd-05a6-4cc8-a423-b0391e7fa9fd",
+   "target": "1de2aced-c72e-4884-94ac-57507d1b594a",
+   "name": "PRICED_BY",
+   "fact": "WTI crude oil prices are anchored on the EIA/FRED DCOILWTICO series, with monthly and daily observations cited separately"
+  },
+  {
+   "source": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "target": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "name": "SET",
+   "fact": "The ECB deposit rate stood at 2.5% at end-September 2026, after being 2% from February through May and 2.25% in June; markets assign roughly 96% probability to the ECB holding the deposit rate at 2.50% at its October 29, 2026 Governing Council meeting."
+  },
+  {
+   "source": "f4deaf01-5b61-4b67-9482-51b451b8508c",
+   "target": "fac7e755-7d06-4b28-8d47-e482bf149312",
+   "name": "ORGANIZES",
+   "fact": "The Assembly of Experts moved to form an interim leadership council in connection with the 2026 Iranian supreme leader election process."
+  },
+  {
+   "source": "68403c06-db58-45d5-8bac-5e89a44c0581",
+   "target": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "name": "BACKS",
+   "fact": "Putin pledged \"unwavering\" support for Mojtaba Khamenei as new supreme leader"
+  },
+  {
+   "source": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "target": "9de5f009-1028-4281-91fe-7227dfda1948",
+   "name": "TRIGGERED_BY",
+   "fact": "Verified centrifuge reconstitution at Fordow's support site is a mover raising the renewed large-scale strikes scenario."
+  },
+  {
+   "source": "1de2aced-c72e-4884-94ac-57507d1b594a",
+   "target": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "name": "PROJECTS",
+   "fact": "The EIA projects Brent crude easing to an $84/b average in 2027 and $74/b in 4Q27 as Iranian export workarounds restore regional flows, consistent with the Low-intensity conflict scenario."
+  },
+  {
+   "source": "b3eedf4c-9273-4df5-aa3a-26482442abde",
+   "target": "47066d76-6deb-4019-a4c6-9d0a6ba8857d",
+   "name": "REPORTS_TRANSIT_READING",
+   "fact": "Kpler's crude-only Hormuz transit reading was 13.5 million b/d on September 30, 2026, measured against its own prewar crude baseline"
+  },
+  {
+   "source": "adf57615-8462-4afc-bf9f-94d2dc9605e2",
+   "target": "e6b559b9-3edc-4cd3-b82e-edf6fc205943",
+   "name": "INFLUENCES",
+   "fact": "Netanyahu's stated aim to 'overthrow the regime in Iran' raises the weight of the Renewed large-scale strikes scenario over Regime crisis."
+  },
+  {
+   "source": "d4173b83-0fe6-4c5f-ba42-9f732579b491",
+   "target": "47066d76-6deb-4019-a4c6-9d0a6ba8857d",
+   "name": "DEPENDS_ON",
+   "fact": "Under the low-intensity conflict scenario, Chinese refiners substitute Iraqi, Qatari and Atlantic barrels while Iranian arrivals to China near zero, reducing dependence on Hormuz-routed Iranian crude."
+  },
+  {
+   "source": "adf57615-8462-4afc-bf9f-94d2dc9605e2",
+   "target": "e681a6e8-db14-444e-868f-9637a5585171",
+   "name": "FORECASTS_FOR",
+   "fact": "In the Regime crisis scenario (5%), the World Bank projects a 7.7% contraction for Iran in fiscal 2026-27, with first-order effects running through gold and credit spreads rather than consumer prices."
+  },
+  {
+   "source": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "target": "48e2e6ed-67eb-4d0b-a19f-084457065f75",
+   "name": "OPPOSES",
+   "fact": "Israel and Hezbollah have observed a ceasefire since 21 June 2026, with no Hezbollah cross-border strike killing Israelis since then; any occurrence would move toward Renewed large-scale strikes."
+  },
+  {
+   "source": "a4270bb8-4bd2-4bc3-a77f-c6e116fcdd22",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "October 2026 commentary describes an 'oil up, dollar up, gold down' dynamic linking oil and gold markets."
+  },
+  {
+   "source": "8d61f8f0-6967-46dc-a3c2-09a61ed2c662",
+   "target": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "name": "OPPOSES",
+   "fact": "The US House of Representatives, by passing H.Con.Res. 89 urging an end to the war 214-208 in July 2026, opposed Trump's continuation of the war."
+  },
+  {
+   "source": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "target": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "European Central Bank 亦称 ECB"
+  },
+  {
+   "source": "bc8c7d99-e2dd-43a0-8475-2ce69e69dcb8",
+   "target": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "name": "PUBLISHES_DATA_ON",
+   "fact": "BIS published the euro-area central bank policy rate (end of period) at 2.5% per year for September 2026, up +0.5 pp year-on-year, within a five-year range of 0% to 4.5%."
+  },
+  {
+   "source": "9140b463-795c-463d-a1a3-bc5d7e4a3c7c",
+   "target": "b72e05a2-1f8b-47e3-8471-7e20ccbe7c2f",
+   "name": "OPPOSES",
+   "fact": "The Houthis resumed attacks in July 2026 after a half-year hiatus, launching twelve attacks on commercial vessels in the southern Red Sea, leaving transits below one-third of pre-October-2023 levels."
+  },
+  {
+   "source": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "target": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "name": "INFLUENCES",
+   "fact": "The FOMC statement determines whether the federal funds target is above 4% at end-2027 (25% probability; range is 3.75–4% after the September 16, 2026 hike), an outcome tied to the oil-price pass-through."
+  },
+  {
+   "source": "d4173b83-0fe6-4c5f-ba42-9f732579b491",
+   "target": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "name": "BACKS",
+   "fact": "China opposed any targeting of the new supreme leader Mojtaba Khamenei"
+  },
+  {
+   "source": "1555b024-5f77-46d0-866b-90f5f1cf76e7",
+   "target": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "name": "INFLUENCES",
+   "fact": "Under the Negotiated framework scenario (10%), the ECB is expected to move toward its former 2% policy setting."
+  },
+  {
+   "source": "d4173b83-0fe6-4c5f-ba42-9f732579b491",
+   "target": "01dd7367-b0ca-4f5c-aeb5-c2d9b59696f1",
+   "name": "CUSTOMER_OF",
+   "fact": "Treasury assessment; September 2026 arrivals 590,000 bpd [S43][S40]（sign=+，strength=0.7，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "target": "28bddaee-6d13-44e3-ad1c-0d8fa5ac8294",
+   "name": "HOLDS",
+   "fact": "The European Central Bank's meeting is scheduled for October 29, 2026."
+  },
+  {
+   "source": "f4deaf01-5b61-4b67-9482-51b451b8508c",
+   "target": "2ff7b77c-38d1-42a8-8aed-d769933bdddb",
+   "name": "PARTNERS_WITH",
+   "fact": "Regime crisis settlement relies on Assembly of Experts and official Iranian statements corroborated by Congressional Research Service (CRS) reporting, with the window running through December 31, 2027."
+  },
+  {
+   "source": "9140b463-795c-463d-a1a3-bc5d7e4a3c7c",
+   "target": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "name": "OPPOSES",
+   "fact": "Houthis have attacked at roughly one attack every two weeks under the low-intensity conflict path; a Houthi attack sinking a tanker in the southern Red Sea would move toward renewed large-scale strikes."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "name": "CANNOT_VERIFY",
+   "fact": "The IAEA cannot verify Iran's enriched-uranium stockpile or centrifuge status and cannot conclude that no declared material has been diverted."
+  },
+  {
+   "source": "1555b024-5f77-46d0-866b-90f5f1cf76e7",
+   "target": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "name": "INFLUENCES",
+   "fact": "Under the Negotiated framework scenario (10%), the Fed is expected to deliver one to two cuts."
+  },
+  {
+   "source": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "target": "9d9312d5-b3b1-4a97-bc41-99733626b77f",
+   "name": "PUBLISHES_DATA_ON",
+   "fact": "The IMF published the Brent Crude monthly unit price of 102.0181 U.S. dollars per barrel for September 2026, up +34.409 (+50.9%) year-on-year, within a five-year range of 61.8109 to 117.6927."
+  },
+  {
+   "source": "9d9312d5-b3b1-4a97-bc41-99733626b77f",
+   "target": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "name": "REPORTS_ON",
+   "fact": "IMF monthly-average Brent ran from 69.4095 U.S. dollars per barrel in February 2026 to 102.0181 U.S. dollars per barrel in September 2026."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "name": "PARTNERS_WITH",
+   "fact": "The US and Iran signed a Memorandum of Understanding in June 2026 with a 60-day negotiating clock, with Macron present at signing and the blockade lifted on entry; it collapsed and formally expired in August 2026"
+  },
+  {
+   "source": "336fe751-b67e-4d72-ad6a-cdb48af56c41",
+   "target": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "name": "INFLUENCES",
+   "fact": "Under the Durable ceasefire scenario (15%), the Fed is expected to pivot to cuts in 2027."
+  },
+  {
+   "source": "1de2aced-c72e-4884-94ac-57507d1b594a",
+   "target": "c92aa7ab-fc6d-4c72-931d-59fe87aab75b",
+   "name": "SUPPORTS",
+   "fact": "EIA's easing oil-price path remaining intact is a signpost supporting the low-intensity conflict scenario."
+  },
+  {
+   "source": "34e21f4f-027e-47ff-adeb-4bafc324c6a7",
+   "target": "7b2010bb-0f77-47d1-9a4a-05fa22208531",
+   "name": "REPORTS_ON",
+   "fact": "Reuters reported a 46% intraday jump in front-month TTF on March 2, 2026 as strikes hit Qatari LNG, a Saudi refinery and Israeli energy fields — a daily move the monthly series smooths."
+  },
+  {
+   "source": "21e76d7e-e6aa-41ae-a125-9b063d8ab3ea",
+   "target": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "name": "BACKS",
+   "fact": "Putin's pledge; satellite imagery on US naval movements [S17][S96][S97]（sign=+，strength=0.5，valence=allied，polarity=0.60）"
+  },
+  {
+   "source": "84edd5b2-c0af-4347-b498-ecff038ff1bc",
+   "target": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "name": "ANALYZES",
+   "fact": "The Institute for Science and International Security published an analysis of IAEA Iran verification and monitoring and NPT safeguards reports in June 2026, and a comprehensive imagery report on nuclear enrichment-related sites post-April ceasefire."
+  },
+  {
+   "source": "1b15eed7-4dda-46d4-a243-dfdbe7cec736",
+   "target": "47066d76-6deb-4019-a4c6-9d0a6ba8857d",
+   "name": "REPORTS_TRANSIT_READING",
+   "fact": "The IEA's October report put September 2026 Hormuz flows at 10.9 million b/d, up 3.7 million b/d on the month, against a chokepoint reference of about 20 million b/d of crude and products averaged through the strait in 2025"
+  },
+  {
+   "source": "5a6aeba2-5f2c-4761-aed2-c5325787598f",
+   "target": "48e2e6ed-67eb-4d0b-a19f-084457065f75",
+   "name": "REPORTS_ON",
+   "fact": "Israel's Alma center reports Hezbollah is rebuilding with upgraded FPV drones and retains an arsenal of ~25,000 rockets."
+  },
+  {
+   "source": "1555b024-5f77-46d0-866b-90f5f1cf76e7",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "Under the Negotiated framework scenario (10% probability), gold is projected at 3,500–3,800 $/oz at end-2027."
+  },
+  {
+   "source": "12efa1ce-2e23-435c-9a0a-63a5c1f9cc63",
+   "target": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "name": "SUPPLIES",
+   "fact": "September ramp of 2.1 million b/d; Gulf exports 13.9 million b/d [S57]（sign=+，strength=0.6，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "1b15eed7-4dda-46d4-a243-dfdbe7cec736",
+   "target": "1af9b028-f69d-42df-9d7c-ca62e5ed90b3",
+   "name": "AUTHORIZED",
+   "fact": "The IEA agreed on October 15, 2026 to release over 20 million barrels of diesel as supply-side relief, while assessing cumulative observed inventories were 509 million barrels below pre-war levels by end-September 2026, with balances in deficit through end-2026 and 2027 demand forecast 620 kb/d below 2025."
+  },
+  {
+   "source": "1d3d33ab-b56c-4374-8584-300f5fc1ecb3",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "The ECB deposit rate stood at 2.5% at end-September 2026, with a market-implied ~96% probability of holding at 2.50% at the October 29, 2026 meeting."
+  },
+  {
+   "source": "3b4267fd-936d-4544-8925-3f146105bf82",
+   "target": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "name": "PARTNERS_WITH",
+   "fact": "Macron was present at the signing of the June 2026 US–Iran Memorandum of Understanding"
+  },
+  {
+   "source": "ae4ca379-7ea7-4dac-ac90-594182a65ece",
+   "target": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "name": "PUBLISHES_DATA_ON",
+   "fact": "FRED published the US CPI for All Urban Consumers at a 3.717% year-over-year change for September 2026, up +0.695 pp, within a five-year range of 2.325% to 8.979%."
+  },
+  {
+   "source": "0053216e-8733-4352-8df7-476fd700e718",
+   "target": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "name": "MEASURES",
+   "fact": "Within the EIA/FRED series, October 2026 month-to-date mean of 124.9636 dollars per barrel sits above the latest daily value of 115.22 — an internal inconsistency flagged, with the daily print anchoring the oil price level."
+  },
+  {
+   "source": "9140b463-795c-463d-a1a3-bc5d7e4a3c7c",
+   "target": "9140b463-795c-463d-a1a3-bc5d7e4a3c7c",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Houthi movement 亦称 Houthis"
+  },
+  {
+   "source": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "target": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "name": "PARTNERS_WITH",
+   "fact": "Trump signed the June 2026 Memorandum of Understanding with Iran (Macron present at the Versailles signing); it collapsed weeks later and formally expired in August 2026."
+  },
+  {
+   "source": "332ecea8-22c6-4e23-8083-d93eba4f9e3b",
+   "target": "34e21f4f-027e-47ff-adeb-4bafc324c6a7",
+   "name": "PARTNERS_WITH",
+   "fact": "Reuters, citing Vortexa data, reported that Iranian October 2026 oil exports stood at zero."
+  },
+  {
+   "source": "475a6b91-510a-4b00-9025-555b99a2793b",
+   "target": "01dd7367-b0ca-4f5c-aeb5-c2d9b59696f1",
+   "name": "INFLUENCES",
+   "fact": "Forbes, in a 28 February 2026 assessment, rated IRGC consolidation around collective leadership with a clerical figurehead at roughly 35%, a protracted power contest at about 30%, and a popular uprising seizing the vacuum at 25%."
+  },
+  {
+   "source": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "target": "01dd7367-b0ca-4f5c-aeb5-c2d9b59696f1",
+   "name": "PARTNERS_WITH",
+   "fact": "Mojtaba Khamenei's goals — a blockade lift, eased export limits, and released frozen assets — align with the IRGC, which holds leverage through Hormuz 'kill box' attacks and pre-delegated missile authority."
+  },
+  {
+   "source": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "The FOMC's October 27–28, 2026 decision (hike vs hold, after the September 16 hike to 3.75–4 percent) shapes macro outcomes and end-2027 price paths including gold."
+  },
+  {
+   "source": "21e76d7e-e6aa-41ae-a125-9b063d8ab3ea",
+   "target": "21e76d7e-e6aa-41ae-a125-9b063d8ab3ea",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Government of Russia 亦称 Kremlin"
+  },
+  {
+   "source": "adf57615-8462-4afc-bf9f-94d2dc9605e2",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "Under the Regime crisis scenario (5% probability), gold is projected at 4,000–4,500 $/oz at end-2027."
+  },
+  {
+   "source": "72864947-6e73-49ea-af94-a2fd759456cf",
+   "target": "50ca99c1-9712-492f-b9ef-4206763720de",
+   "name": "LOCATED_NEAR",
+   "fact": "Construction continues at the unattacked Pickaxe Mountain complex south of Natanz, not yet operational."
+  },
+  {
+   "source": "8b1c3750-9d54-43bf-9d92-53d7d9bb9ef0",
+   "target": "8b1c3750-9d54-43bf-9d92-53d7d9bb9ef0",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Israel Defense Forces 亦称 IDF"
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "d4173b83-0fe6-4c5f-ba42-9f732579b491",
+   "name": "SUPPORTS",
+   "fact": "China played an enabling role in Iran's war effort during and after Operation Epic Fury, per the U.S.-China Economic and Security Review Commission timeline."
+  },
+  {
+   "source": "f4deaf01-5b61-4b67-9482-51b451b8508c",
+   "target": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "name": "BACKS",
+   "fact": "Mojtaba Khamenei's continuation as Supreme Leader (5% probability he ceases before end-2027) would be decided via an Assembly of Experts announcement."
+  },
+  {
+   "source": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "target": "81f51516-337b-4e32-8bf4-4a0e954faa5f",
+   "name": "INFLUENCES",
+   "fact": "Under the Renewed large-scale strikes scenario (25% probability), EU gas is projected at 28–45 $/MMBtu at end-2027, driven principally by Qatari LNG re-disruption."
+  },
+  {
+   "source": "4877a7d6-9aa7-4439-a3dd-46ab4228d444",
+   "target": "01dd7367-b0ca-4f5c-aeb5-c2d9b59696f1",
+   "name": "ASSET_FREEZE_DEMONSTRATION_REINFORCES_GOLD_DIVERSIFICATION",
+   "fact": "Frozen-asset demands in Iran's proposal; sticky gold prices [S23][S10]（sign=+，strength=0.3，valence=directional，polarity=0.20）"
+  },
+  {
+   "source": "332ecea8-22c6-4e23-8083-d93eba4f9e3b",
+   "target": "47066d76-6deb-4019-a4c6-9d0a6ba8857d",
+   "name": "PARTNERS_WITH",
+   "fact": "Vortexa tracks Hormuz flows; a recovery of Hormuz product flows above 2 million bpd would normalize LPG cracks per Vortexa data [S56]"
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "name": "OPPOSES",
+   "fact": "Israel conducted strikes on Iranian assets, 2013–2024, with 1 of 7 escalating to large-scale state-on-state strikes within two years."
+  },
+  {
+   "source": "adf57615-8462-4afc-bf9f-94d2dc9605e2",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "Under the Regime crisis scenario (5% probability), official-sector gold behavior is two-sided: insurance buying abroad into the spike, then settlement-driven retracement."
+  },
+  {
+   "source": "5a3ebcf0-6b2f-4143-a2d5-15aeda124a19",
+   "target": "8b1c3750-9d54-43bf-9d92-53d7d9bb9ef0",
+   "name": "PARTNERS_WITH",
+   "fact": "A first CENTCOM/IDF strike on Iranian nuclear or regime targets after the November 3, 2026 midterms is the tripwire for the Renewed large-scale strikes scenario (25%)."
+  },
+  {
+   "source": "2bc2911d-521d-4605-8b0c-8642fc880f6e",
+   "target": "1b15eed7-4dda-46d4-a243-dfdbe7cec736",
+   "name": "BENCHMARKED_AGAINST",
+   "fact": "The baseline shifts if Kpler weekly Hormuz crude transits fall below the IEA's September reading of 10.9 million b/d for two consecutive weeks."
+  },
+  {
+   "source": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "target": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "name": "INFLUENCES",
+   "fact": "The outcome distribution for FOMC policy (fed funds range 3.75-4% after the September 16, 2026 hike) is tied to whether renewed large-scale strikes occur before end-2027 (25% weight)."
+  },
+  {
+   "source": "0aa6e073-b276-4282-8a87-f06e38107fb5",
+   "target": "48e2e6ed-67eb-4d0b-a19f-084457065f75",
+   "name": "COMPETES_WITH",
+   "fact": "The LAF is enforcing Hezbollah disarmament, seizing rearmament convoys — one truck seized in October 2026; sustained seizures would move toward Durable ceasefire."
+  },
+  {
+   "source": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "target": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "name": "INFLUENCES",
+   "fact": "The Renewed large-scale strikes scenario is the fat right tail for Brent, implying Hormuz disruption and a war premium on the 1990, 2019 Abqaiq and 2025–2026 precedents."
+  },
+  {
+   "source": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "The ECB's October 29, 2026 decision — hold at 2.50% vs hike, with a roughly 96% market-implied probability of holding — influences macro conditions and priced outcomes including gold."
+  },
+  {
+   "source": "1555b024-5f77-46d0-866b-90f5f1cf76e7",
+   "target": "81f51516-337b-4e32-8bf4-4a0e954faa5f",
+   "name": "INFLUENCES",
+   "fact": "Under the Negotiated framework scenario (10% probability), EU gas is projected at 9–12 $/MMBtu at end-2027, as product flows normalize toward 3.6 million bpd."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "153ba9cd-05a6-4cc8-a423-b0391e7fa9fd",
+   "name": "PRICED_CONFLICT_PREMIUM",
+   "fact": "WTI Cushing averaged 97.3081 dollars per barrel in September 2026, hit 107.89 daily on October 20, 2026, versus 63.959 a year earlier, reflecting the Iran conflict premium."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "9de5f009-1028-4281-91fe-7227dfda1948",
+   "name": "SUSPECTED_ENRICHMENT_USE",
+   "fact": "Activity around the Fordow above-ground support site is high, and a planned two-cascade building there, nominally for iridium/tellurium separation, could be used for uranium enrichment if its feed stocks were not yet introduced."
+  },
+  {
+   "source": "1d3d33ab-b56c-4374-8584-300f5fc1ecb3",
+   "target": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "name": "GOVERNING_BODY_OF",
+   "fact": "The ECB Governing Council is the ECB body deciding policy, with an October 29, 2026 meeting whose market-implied probability of holding rates is about 96% per ECB Watch."
+  },
+  {
+   "source": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "target": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "name": "INFLUENCES",
+   "fact": "An inflation pass-through from the Renewed large-scale strikes scenario would keep the ECB and Fed restrictive."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "4532410d-28f4-49c3-b035-8e1168de4c52",
+   "name": "PARTNERS_WITH",
+   "fact": "Iran uses Qatari mediators in indirect talks with the US; on 20 October 2026 Iran offered via Qatar to reopen Hormuz within seven days under Iranian control for a blockade lift, eased export limits, released frozen assets and an end to hostilities"
+  },
+  {
+   "source": "48e2e6ed-67eb-4d0b-a19f-084457065f75",
+   "target": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "name": "INFLUENCES",
+   "fact": "Hezbollah entered a renewed US-Iran round on 2 March 2026, a path element of the renewed large-scale strikes scenario."
+  },
+  {
+   "source": "037a2be2-dee4-4053-ab8e-b656a7f58b97",
+   "target": "21ebbb35-b092-42f8-917f-6faa2bd42e30",
+   "name": "PARTNERS_WITH",
+   "fact": "Talks via Qatari mediators deadlocked as of October 20, 2026 [S23]（sign=+，strength=0.5，valence=transactional，polarity=0.40）"
+  },
+  {
+   "source": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "target": "8c2a5633-1b60-42f4-8d1d-127eb448bcd5",
+   "name": "HOLDS",
+   "fact": "The Federal Reserve's FOMC meeting is scheduled for October 27–28, 2026."
+  },
+  {
+   "source": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "target": "c36513b9-412b-4095-aed6-35977bd0da95",
+   "name": "INFLUENCES",
+   "fact": "The renewed large-scale strikes scenario is triggered if Iran's nuclear program centrifuge reconstruction or breakout progress crosses Israeli or US red lines"
+  },
+  {
+   "source": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "target": "e6b559b9-3edc-4cd3-b82e-edf6fc205943",
+   "name": "PARTNERS_WITH",
+   "fact": "Trump and Netanyahu are drawing up war plans together for renewed strikes on Iran after the November 2026 midterm elections"
+  },
+  {
+   "source": "40abfd33-4558-42aa-a8e4-48bae8965437",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "CORRELATES_WITH",
+   "fact": "High-yield spreads widened from 2.755% in September to 3.27% on October 21, 2026, alongside gold averaging 4334.7467 $/oz in September."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "d4173b83-0fe6-4c5f-ba42-9f732579b491",
+   "name": "CUSTOMER_OF",
+   "fact": "China buys approximately 90 percent of Iran's oil exports"
+  },
+  {
+   "source": "5a3ebcf0-6b2f-4143-a2d5-15aeda124a19",
+   "target": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "name": "OPPOSES",
+   "fact": "CENTCOM pursues attrition against Iran, holding 'short but intensive operation' plans and stepped-up exercises and overflights, though CRS assesses finite capacity to counter Iranian attacks."
+  },
+  {
+   "source": "21ebbb35-b092-42f8-917f-6faa2bd42e30",
+   "target": "21ebbb35-b092-42f8-917f-6faa2bd42e30",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Gulf Cooperation Council states 亦称 GCC"
+  },
+  {
+   "source": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "target": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "name": "INFLUENCES",
+   "fact": "Trump's repeated cancellations of strike plans lower the probability assigned to the Renewed large-scale strikes scenario."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "name": "OPPOSES",
+   "fact": "Israel attacked Iran on June 13, 2025, and traded air strikes with Iran, sending oil prices up as much as 7%."
+  },
+  {
+   "source": "12efa1ce-2e23-435c-9a0a-63a5c1f9cc63",
+   "target": "47066d76-6deb-4019-a4c6-9d0a6ba8857d",
+   "name": "SUPPLIES",
+   "fact": "In September 2026 Saudi-led OPEC+ Gulf crude exports rose 4.4 million b/d to 13.9 million b/d, over 75% of pre-war levels, while about 40% of Gulf crude bypasses the Strait of Hormuz by pipeline, up from 17% prewar."
+  },
+  {
+   "source": "d4173b83-0fe6-4c5f-ba42-9f732579b491",
+   "target": "66b83ba4-4926-4027-bc36-fc65567702e5",
+   "name": "INFLUENCES",
+   "fact": "China is shaping the 2026 Iran Conflict through strategic attrition, fueling Iran's war effort."
+  },
+  {
+   "source": "8b1c3750-9d54-43bf-9d92-53d7d9bb9ef0",
+   "target": "01dd7367-b0ca-4f5c-aeb5-c2d9b59696f1",
+   "name": "COMPETES_WITH",
+   "fact": "June 2025 and 2026 campaigns; 'trading limited strikes' [S13][S1]（sign=-，strength=0.8，valence=adversarial，polarity=-0.80）"
+  },
+  {
+   "source": "e6b559b9-3edc-4cd3-b82e-edf6fc205943",
+   "target": "c36513b9-412b-4095-aed6-35977bd0da95",
+   "name": "OPPOSES",
+   "fact": "Netanyahu's minimum goal is nuclear suppression, and in his October 2026 campaign speech he named Iran's new supreme leader developing 'the bombs of death' as the threat, saying the only way to remove it is to overthrow the regime in Iran."
+  },
+  {
+   "source": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "target": "0e9542a6-02cf-4a0f-9fb4-fe1fa2e3133f",
+   "name": "ACCESS_BLOCKED_TO",
+   "fact": "As of the January 29, 2026 letter, the IAEA has no access at declared enrichment sites including Natanz, whose underground plant was badly damaged in the June 2025 strikes."
+  },
+  {
+   "source": "332ecea8-22c6-4e23-8083-d93eba4f9e3b",
+   "target": "db0e3832-1159-495a-a43b-53124723b1f4",
+   "name": "MONITORS",
+   "fact": "Vortexa tracks Iranian crude loadings, with a restart above 210 kbd marking the de-escalation and disinflation track."
+  },
+  {
+   "source": "adf57615-8462-4afc-bf9f-94d2dc9605e2",
+   "target": "1707c0d0-47d8-4848-bcce-8c9726b52d27",
+   "name": "INFLUENCES",
+   "fact": "The FRS documents a cohesive coercive apparatus that replaced killed officials, lowering the assessed probability of the Regime crisis scenario."
+  },
+  {
+   "source": "18356b94-6ca6-4f9f-ba71-c5b01cdb5eeb",
+   "target": "21ebbb35-b092-42f8-917f-6faa2bd42e30",
+   "name": "HAS_CREDIT_SPREAD",
+   "fact": "Saudi Arabia's 5-year USD CDS was quoted at 67.75 bps on October 15, 2026, after 65.60 bps on October 13 and 66.31 bps on October 14 — a tier-3 aggregator quote not corroborated by any primary dealer print"
+  },
+  {
+   "source": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "target": "c36513b9-412b-4095-aed6-35977bd0da95",
+   "name": "CANNOT_VERIFY",
+   "fact": "The IAEA has had no access to any declared Iranian enrichment facility since January 2026 and can verify neither the stockpile nor centrifuges of the Iranian nuclear enrichment program."
+  },
+  {
+   "source": "d0f4d5cd-8a62-427b-b63b-f8a9ad92a462",
+   "target": "dea42676-ba6b-40db-b013-f613d96b4d57",
+   "name": "STORED_AT",
+   "fact": "On the eve of the June 13, 2025 strike the IAEA estimated Iran held 440.9 kg of uranium enriched to up to 60% — enough, if enriched further, for ten nuclear weapons by an IAEA yardstick; surviving holdings include a bit more than 200 kg remaining in the Isfahan tunnel complex per Grossi, March 2026."
+  },
+  {
+   "source": "7c7d6289-9fb8-4777-a36f-96f4f442575b",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "LBMA fixings are the resolution criterion for whether gold exceeds $5,000 per troy ounce at any auction before end-2027 (30% probability); the 2026 monthly peak was $5,014.645 in February."
+  },
+  {
+   "source": "c92aa7ab-fc6d-4c72-931d-59fe87aab75b",
+   "target": "81f51516-337b-4e32-8bf4-4a0e954faa5f",
+   "name": "INFLUENCES",
+   "fact": "Under the Low-intensity conflict scenario (45% probability), EU gas is projected at 15–20 $/MMBtu at end-2027, with the product constraint persisting and gas near March 2026's 17.67 $/MMBtu average."
+  },
+  {
+   "source": "1555b024-5f77-46d0-866b-90f5f1cf76e7",
+   "target": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "name": "INFLUENCES",
+   "fact": "Under the Negotiated framework scenario (10%), EIA's $74/b 4Q27 Brent projection becomes a ceiling as some sanctioned barrels return to the market."
+  },
+  {
+   "source": "2b2c9500-5e3e-4052-890d-bb9da22eb6e9",
+   "target": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "name": "BACKS",
+   "fact": "Most Senate Republicans stuck with Trump when rejecting the war-ending resolution H.Con.Res. 89 in October 2026, showing institutional checks failing."
+  },
+  {
+   "source": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "target": "1af9b028-f69d-42df-9d7c-ca62e5ed90b3",
+   "name": "SUPPORTS",
+   "fact": "President Trump complemented the IEA's diesel release with supply-side relief by temporarily lifting sanctions on Russian diesel on October 12, 2026."
+  },
+  {
+   "source": "7f6c3eb5-cb7c-4d25-9fe0-b2fda2befa00",
+   "target": "0e9542a6-02cf-4a0f-9fb4-fe1fa2e3133f",
+   "name": "REPORTS_ON",
+   "fact": "ISIS estimates 74–96 kg of 60% uranium remained at Natanz as of mid-2026."
+  },
+  {
+   "source": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "target": "93baf576-21a4-4151-968d-fe8d468649a6",
+   "name": "IS_A",
+   "fact": "Euro-area monetary policy under energy-shock scenarios；- 角色定位: Euro-area monetary policy under energy-shock scenarios；- 立场: Restrictive hold at 2.50%；- 影响力: high；- 目标/动机: Return HICP to 2%；Avoid second-round effects from gas and oil；- 约束: Gas at 25.494 $/MMBtu, +131.7% y/y；Growth weakness；- 资源/能力: Policy rate at 2.50%；Credibility；- 软肋/红线: Renewed Qatari LNG disruption would rebuild the energy cont"
+  },
+  {
+   "source": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "target": "81f51516-337b-4e32-8bf4-4a0e954faa5f",
+   "name": "HOLDS_RATE_AGAINST",
+   "fact": "The ECB deposit rate stood at 2.5% at end-September 2026, with a market-implied probability of about 96% that the ECB holds its deposit rate at 2.50% at its October 29, 2026 meeting."
+  },
+  {
+   "source": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "target": "71b275e7-8aa5-49fa-8e68-022c6020f6a3",
+   "name": "MONITORS",
+   "fact": "The IAEA Board of Governors issued reports (GOV/2026/8 and GOV/2026/50) on the implementation of the NPT Safeguards Agreement with Iran."
+  },
+  {
+   "source": "34e21f4f-027e-47ff-adeb-4bafc324c6a7",
+   "target": "b3eedf4c-9273-4df5-aa3a-26482442abde",
+   "name": "PARTNERS_WITH",
+   "fact": "Reuters reported Kpler tracker estimates on Chinese imports of Iranian crude and Iranian crude afloat outside the blockade zone."
+  },
+  {
+   "source": "01dd7367-b0ca-4f5c-aeb5-c2d9b59696f1",
+   "target": "9140b463-795c-463d-a1a3-bc5d7e4a3c7c",
+   "name": "BACKS",
+   "fact": "Houthi attacks resumed July 2026; Saudi tankers targeted [S48]（sign=+，strength=0.5，valence=allied，polarity=0.60）"
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "273a7bd0-85a3-4863-a976-1a8fd1b4c0ea",
+   "name": "SUPPLIES",
+   "fact": "Russia made the S-400 air defence system a priority in its defense cooperation with Iran."
+  },
+  {
+   "source": "336fe751-b67e-4d72-ad6a-cdb48af56c41",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "Under the Durable ceasefire scenario (15% probability), gold war premia unwind on the 2025 path but the July 2026 trough of 4075.0968 $/oz implies a plateau rather than a collapse."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "332ecea8-22c6-4e23-8083-d93eba4f9e3b",
+   "name": "MEASURES",
+   "fact": "Vortexa observed Iranian loadings at 210,000 b/d in mid-September 2026."
+  },
+  {
+   "source": "9140b463-795c-463d-a1a3-bc5d7e4a3c7c",
+   "target": "b72e05a2-1f8b-47e3-8471-7e20ccbe7c2f",
+   "name": "BLOCKADES",
+   "fact": "War-risk insurance for southern Red Sea voyages surged after the July 2026 Houthi blockade announcement, and Red Sea transits remain below one-third of pre-October-2023 volumes as of late October 2026"
+  },
+  {
+   "source": "12efa1ce-2e23-435c-9a0a-63a5c1f9cc63",
+   "target": "12efa1ce-2e23-435c-9a0a-63a5c1f9cc63",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "OPEC+ (Saudi Arabia-led) 亦称 OPEC+"
+  },
+  {
+   "source": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "target": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "name": "BACKS",
+   "fact": "Mojtaba Khamenei endorsed direct talks under the mid-2026 war-ending agreement (signed at Versailles with Macron present) that started a 60-day nuclear negotiating clock and lifted the blockade."
+  },
+  {
+   "source": "9d9312d5-b3b1-4a97-bc41-99733626b77f",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "REPORTS_ON",
+   "fact": "Gold on the IMF monthly average was 4334.7467 U.S. dollars per troy ounce in September 2026."
+  },
+  {
+   "source": "c92aa7ab-fc6d-4c72-931d-59fe87aab75b",
+   "target": "7b2010bb-0f77-47d1-9a4a-05fa22208531",
+   "name": "INFLUENCES",
+   "fact": "Weighting the scenario centrals yields roughly $20 per MMBtu for end-2027 TTF, with a range of roughly 10.5–34 dollars per MMBtu, below September 2026 readings."
+  },
+  {
+   "source": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "target": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Supreme Leader Mojtaba Khamenei 亦称 Mojtaba Khamenei"
+  },
+  {
+   "source": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "target": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "name": "INFLUENCES",
+   "fact": "Under the Renewed large-scale strikes scenario (25%), the Fed is expected to extend hikes, as its 12-0 September vote shows willingness."
+  },
+  {
+   "source": "9d9312d5-b3b1-4a97-bc41-99733626b77f",
+   "target": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "name": "INFLUENCES",
+   "fact": "End-2027 Brent is tracked on the EIA/FRED daily series and cross-checked on the IMF monthly series (102.0181 U.S. dollars per barrel, 2026-09), making the IMF series a benchmark input for the Brent forecast."
+  },
+  {
+   "source": "275a40b0-4ece-4a4a-8289-022a8103851e",
+   "target": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "name": "REPORTS_ON",
+   "fact": "The New York Times reported on October 21, 2026 that US and Israeli militaries have specific plans for a 'short but intensive operation' of renewed strikes after the November 3 midterms, with Trump steering strikes away from oil infrastructure."
+  },
+  {
+   "source": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "target": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "name": "INFLUENCES",
+   "fact": "Trump steered US military planners away from oil infrastructure targets, with Pickaxe Mountain a candidate target, per an October 21, 2026 New York Times report on a planned 'short but intensive operation' after the November 3 midterms"
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "name": "OPPOSES",
+   "fact": "As of late October 2026 the US and Iran are trading limited strikes, a CRS-described 'war of attrition' after the June 2026 Memorandum of Understanding collapsed and formally expired in August 2026"
+  },
+  {
+   "source": "92c6c111-2a58-490b-b999-5273bf72c453",
+   "target": "a17fae90-6df1-4016-9be0-21b95f03cb7e",
+   "name": "INFLUENCES",
+   "fact": "The Africa Center's reporting of Houthi attacks since July 2026 raises the probability assigned to the Low-intensity conflict scenario."
+  },
+  {
+   "source": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "target": "c36513b9-412b-4095-aed6-35977bd0da95",
+   "name": "INSPECTS",
+   "fact": "A Negotiated framework or Durable ceasefire scenario would restore IAEA access to Iran's declared enrichment sites; restoration before 2028 resolves a key binary tied to those scenarios."
+  },
+  {
+   "source": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "target": "927e48ff-35bd-4b3f-bc38-e1d400336417",
+   "name": "ACCESS_BLOCKED_TO",
+   "fact": "As of the January 29, 2026 letter, the IAEA has no access at declared enrichment sites including Fordow, badly damaged in the June 2025 strikes."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "name": "OPPOSES",
+   "fact": "Reports indicate the U.S. and Israel are set to restart major operations in Iran"
+  },
+  {
+   "source": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "target": "9de5f009-1028-4281-91fe-7227dfda1948",
+   "name": "DENIED_ACCESS_TO",
+   "fact": "The IAEA has had no access to Iranian enrichment sites, including Fordow, since early 2026, though Fordow support-site activity is high and Pickaxe Mountain work continues."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "5a3ebcf0-6b2f-4143-a2d5-15aeda124a19",
+   "name": "SANCTIONS",
+   "fact": "U.S. Central Command forces disabled a cargo vessel attempting to violate the U.S. naval blockade on Iran"
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "96ad7823-7e0b-460d-9208-866c3740f213",
+   "name": "URGED_COOPERATION",
+   "fact": "The IAEA Board of Governors urged Iran's cooperation on June 10 and again on September 9, 2026 (GOV/2026/61)."
+  },
+  {
+   "source": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "target": "72864947-6e73-49ea-af94-a2fd759456cf",
+   "name": "TARGETS",
+   "fact": "A 'short but intensive' post-midterm operation under the renewed large-scale strikes scenario would target the Pickaxe Mountain complex, a candidate target per planning reports."
+  },
+  {
+   "source": "2b2c9500-5e3e-4052-890d-bb9da22eb6e9",
+   "target": "52cf243e-211a-4399-8c8f-0de385d2f5a9",
+   "name": "REJECTED",
+   "fact": "The US Senate rejected H.Con.Res. 89, the war-ending resolution, by a vote of 49-50 in October 2026, with most Republicans sticking with Trump."
+  },
+  {
+   "source": "34e21f4f-027e-47ff-adeb-4bafc324c6a7",
+   "target": "332ecea8-22c6-4e23-8083-d93eba4f9e3b",
+   "name": "CITES",
+   "fact": "Reuters cites a Vortexa report that Iranian October 2026 exports were zero."
+  },
+  {
+   "source": "1255251b-a763-44ee-b378-9b6002852548",
+   "target": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "name": "PARTNERS_WITH",
+   "fact": "Pakistan mediated the two-week US–Iran ceasefire window dated April 8–July 8, 2026"
+  },
+  {
+   "source": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "target": "a8aef061-0b69-4f26-97aa-ce7f0a90eb9f",
+   "name": "COORDINATES_EASING_WITH",
+   "fact": "In the negotiated framework scenario, both the Federal Reserve and the ECB are forecast to ease as US CPI approaches 2-2.5% during 2027."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "name": "OPPOSES",
+   "fact": "Israel struck Iran's nuclear facilities on June 13, 2025, beginning a 12-day US-Israeli campaign that destroyed or badly damaged all three then-operating enrichment plants."
+  },
+  {
+   "source": "1b15eed7-4dda-46d4-a243-dfdbe7cec736",
+   "target": "47066d76-6deb-4019-a4c6-9d0a6ba8857d",
+   "name": "SUPPLIES",
+   "fact": "The IEA agreed on October 15, 2026 to release over 20 million barrels of diesel, easing product tightness in Hormuz product flows"
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "name": "OPPOSES",
+   "fact": "War opened on February 28, 2026 between the US and Israel on one side and Iran on the other, with IRGC, Basij and security targets struck and Khamenei and dozens of senior leaders killed"
+  },
+  {
+   "source": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "target": "9d9312d5-b3b1-4a97-bc41-99733626b77f",
+   "name": "PRICED_BY",
+   "fact": "Brent crude oil prices are anchored on the IMF monthly average series"
+  },
+  {
+   "source": "a17fae90-6df1-4016-9be0-21b95f03cb7e",
+   "target": "24947942-3661-4a8f-a2c0-93b6f0dc2664",
+   "name": "INFLUENCES",
+   "fact": "Under the Low-intensity conflict scenario (45%), the Fed is expected to hold the 3-3/4 to 4 percent range with at most one late-2027 cut."
+  },
+  {
+   "source": "1255251b-a763-44ee-b378-9b6002852548",
+   "target": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "name": "PARTNERS_WITH",
+   "fact": "Pakistan mediated the two-week US-Iran ceasefire dated April 8, 2026, which lapsed."
+  },
+  {
+   "source": "a5753484-7d1e-4218-b97d-512ecceb08f8",
+   "target": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "name": "REPORTED_ABOUT",
+   "fact": "Al Jazeera reported on March 8, 2026 that Iran named Mojtaba Khamenei as new supreme leader after his father's killing."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "1de2aced-c72e-4884-94ac-57507d1b594a",
+   "name": "ESTIMATES",
+   "fact": "The EIA estimates conflict-related Iranian shut-ins peaked at 10.9 million b/d in May 2026, falling to 5.8 million b/d in August and 4.8 million b/d in September, with 4.5 million b/d assumed for 4Q26."
+  },
+  {
+   "source": "336fe751-b67e-4d72-ad6a-cdb48af56c41",
+   "target": "81f51516-337b-4e32-8bf4-4a0e954faa5f",
+   "name": "INFLUENCES",
+   "fact": "Under the Durable ceasefire scenario (15% probability), EU gas is projected at 10–13 $/MMBtu at end-2027, via a 2022-style collapse."
+  },
+  {
+   "source": "e6b559b9-3edc-4cd3-b82e-edf6fc205943",
+   "target": "1090c555-c3a1-4fa3-b1ae-ef54c18b93e5",
+   "name": "OPPOSES",
+   "fact": "Netanyahu's stated directive to 'overthrow the regime in Iran' [S26]（sign=-，strength=0.9，valence=adversarial，polarity=-0.90）"
+  },
+  {
+   "source": "5a3ebcf0-6b2f-4143-a2d5-15aeda124a19",
+   "target": "5a3ebcf0-6b2f-4143-a2d5-15aeda124a19",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "US Central Command 亦称 CENTCOM"
+  },
+  {
+   "source": "2ff7b77c-38d1-42a8-8aed-d769933bdddb",
+   "target": "c36513b9-412b-4095-aed6-35977bd0da95",
+   "name": "INFLUENCES",
+   "fact": "CRS assesses no imminent collapse of the Iranian regime while keeping the possibility open, relevant to scenario weighting over Iran's nuclear program standoff."
+  },
+  {
+   "source": "5a3ebcf0-6b2f-4143-a2d5-15aeda124a19",
+   "target": "2ff7b77c-38d1-42a8-8aed-d769933bdddb",
+   "name": "PARTNERS_WITH",
+   "fact": "CENTCOM releases and CRS reporting jointly serve as the settling sources for tripwire events such as US or Israeli strikes on Iranian nuclear or regime targets beyond the limited exchange before March 31, 2027."
+  },
+  {
+   "source": "ad0b6767-d2e9-45db-8e37-3620374a0d76",
+   "target": "c36513b9-412b-4095-aed6-35977bd0da95",
+   "name": "INFLUENCES",
+   "fact": "IAEA access status to Iran's nuclear program is a defining criterion distinguishing the negotiated framework scenario (restored access) from the renewed large-scale strikes scenario (collapsed access)"
+  },
+  {
+   "source": "275a40b0-4ece-4a4a-8289-022a8103851e",
+   "target": "fa81ed67-c55b-405e-be32-34fe228ebddf",
+   "name": "REPORTED_ON",
+   "fact": "The New York Times reported post-midterm plans for a 'short but intensive operation,' which executing would realize the renewed large-scale strikes scenario."
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "18ce51f1-7b1e-4876-9184-057ddf2d7ea4",
+   "name": "SANCTIONS",
+   "fact": "The US naval blockade of Iran, renewed in mid-July 2026, has effectively halted Iranian crude exports since mid-July 2026 per Vortexa"
+  },
+  {
+   "source": "e681a6e8-db14-444e-868f-9637a5585171",
+   "target": "db0e3832-1159-495a-a43b-53124723b1f4",
+   "name": "PROJECTS_CONTRACTION_OF",
+   "fact": "The World Bank projects Iran's economy to contract 7.7% in fiscal year 2026-27."
+  },
+  {
+   "source": "a17fae90-6df1-4016-9be0-21b95f03cb7e",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "Under the Low-intensity conflict scenario (45% probability), continuing sanctions enforcement keeps gold official-buying diversification alive, plateauing at an elevated trend beneath 3,900–4,200 $/oz."
+  },
+  {
+   "source": "02d1c290-2082-48b1-a9e1-feb2c510ab42",
+   "target": "b7aa1818-7a7a-44be-8136-b397134095ba",
+   "name": "OPPOSES",
+   "fact": "GOP candidate Mike Rogers, in a competitive race, now calls for ending the war, opposing Trump's war policy."
+  },
+  {
+   "source": "7679f7a1-7925-4401-8dc7-47831b56ef7c",
+   "target": "d181aac2-b917-44bb-af93-8692ad91c81f",
+   "name": "ASSESSED",
+   "fact": "CFR assessed the post-Khamenei leader (Mojtaba Khamenei, announced March 8–9, 2026) as lacking administrative experience and strong theological credentials, a factor in the Regime crisis path."
+  },
+  {
+   "source": "1c609ff3-af2f-4cfb-bbc8-61f94f947bf9",
+   "target": "18356b94-6ca6-4f9f-ba71-c5b01cdb5eeb",
+   "name": "SUPPORTS",
+   "fact": "The Congressional Research Service published a report on the attacks on Saudi oil facilities, their effects and responses (CRS IN11173)."
+  },
+  {
+   "source": "f4410f04-a4ac-478c-bcf5-e643f3fa0cb8",
+   "target": "48e2e6ed-67eb-4d0b-a19f-084457065f75",
+   "name": "OPPOSES",
+   "fact": "Israel has threatened a large-scale operation against Hezbollah, seen as a tripwire toward renewed large-scale strikes."
+  },
+  {
+   "source": "34e21f4f-027e-47ff-adeb-4bafc324c6a7",
+   "target": "0e9542a6-02cf-4a0f-9fb4-fe1fa2e3133f",
+   "name": "REPORTS_ON",
+   "fact": "Reuters reported the above-ground Natanz was destroyed and underground Natanz badly damaged, believed out of action, in the June 2025 campaign."
+  },
+  {
+   "source": "adf57615-8462-4afc-bf9f-94d2dc9605e2",
+   "target": "81f51516-337b-4e32-8bf4-4a0e954faa5f",
+   "name": "INFLUENCES",
+   "fact": "Under the Regime crisis scenario (5% probability), EU gas is projected at 15–25 $/MMBtu at end-2027, a two-sided tail of outage panic then settlement."
+  },
+  {
+   "source": "01dd7367-b0ca-4f5c-aeb5-c2d9b59696f1",
+   "target": "037a2be2-dee4-4053-ab8e-b656a7f58b97",
+   "name": "COMPETES_WITH",
+   "fact": "Reformist arrests; FRS assessment of IRGC-heavy coalition [S87][S85]（sign=-，strength=0.5，valence=adversarial，polarity=-0.40）"
+  },
+  {
+   "source": "2efb7a16-f36f-4fdd-8f22-e48e33a09940",
+   "target": "f4deaf01-5b61-4b67-9482-51b451b8508c",
+   "name": "BACKS",
+   "fact": "After Khamenei's death, the Assembly of Experts moved to name a permanent leader and formed an interim leadership council for Iran."
+  },
+  {
+   "source": "c92aa7ab-fc6d-4c72-931d-59fe87aab75b",
+   "target": "b5e47c47-abdd-4c84-a903-c0f5572b30a3",
+   "name": "INFLUENCES",
+   "fact": "Weighting the scenario centrals yields roughly $4,150 per troy ounce for end-2027 gold, with a range of roughly 3,650–4,800 dollars per ounce."
+  },
+  {
+   "source": "153ba9cd-05a6-4cc8-a423-b0391e7fa9fd",
+   "target": "ae4ca379-7ea7-4dac-ac90-594182a65ece",
+   "name": "PUBLISHES_DATA_ON",
+   "fact": "FRED published WTI Cushing, Oklahoma crude oil at a monthly mean of 97.3081 dollars per barrel for September 2026, up +33.349 (+52.1%) year-on-year, with the latest daily value of 107.89 on 2026-10-20; five-year range 57.9723 to 114.84."
+  },
+  {
+   "source": "2ff7b77c-38d1-42a8-8aed-d769933bdddb",
+   "target": "a17fae90-6df1-4016-9be0-21b95f03cb7e",
+   "name": "FORECASTS_FOR",
+   "fact": "CRS frames US options as open between attrition (the Low-intensity conflict baseline) and escalation."
+  },
+  {
+   "source": "01dd7367-b0ca-4f5c-aeb5-c2d9b59696f1",
+   "target": "48e2e6ed-67eb-4d0b-a19f-084457065f75",
+   "name": "SUPPORTS",
+   "fact": "Rebuilding both sides of the Litani with Iranian support [S67][S83]（sign=+，strength=0.7，valence=allied，polarity=0.80）"
+  },
+  {
+   "source": "9d9312d5-b3b1-4a97-bc41-99733626b77f",
+   "target": "ca382e97-3347-460a-9b1b-465d744e72a2",
+   "name": "INFLUENCES",
+   "fact": "IMF Brent price history shows oil spikes decaying by at least half within three to six months absent sustained supply loss; the oil premium unwound within roughly ten trading days of the June 24, 2025 ceasefire."
+  }
+ ],
+ "graph_id": "mirofish_3701e81b7b4b46fe"
+}

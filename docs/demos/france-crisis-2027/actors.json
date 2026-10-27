@@ -1,0 +1,1778 @@
+{
+  "central_question": "From 21 October 2026 through the first round of the French presidential election scheduled for 18 April 2027, how will France's budgetary crisis, minority-government instability and the October 2026 riots resolve across fiscal, public-order, government-survival, electoral and market outcomes?",
+  "as_of_date": "2026-10-21",
+  "situation_brief": {
+    "current_situation": "Prime Minister Sébastien Lecornu's minority government presented the PLF 2027 on 1 October 2026 into a hung National Assembly where every budget since 2024 has passed only via Article 49.3; the solemn first-part vote was postponed from 20 October with more than 2,800 amendments pending, and France has just experienced its worst unrest in years over 17-19 October 2026, with roughly 3,000 shops looted, ~2,400 arrests and targeted curfews in several cities.",
+    "context": "Three prime ministers (Attal, Bayrou, Lecornu) have cycled through office in 2024-26. The revised 2026 deficit forecast is 5.4% of GDP (government), with the Commission at 5.1% (2026) and 5.7% (2027, unchanged policies); debt stands at 119.0% of GDP (end-Q2 2026); France remains under the EU Excessive Deficit Procedure. The 10-year OAT-Bund spread hit a one-year high of 150.8 bps on 20 October 2026, with French yields above Italy's and Greece's. Le Pen leads first-round polls at 32.5-38%.",
+    "dynamics": "The budget path runs through a probable floor rejection, a possible 49.3 engagement (whole-budget vote reported for 17 November), and censure risk hinging on a ~20-vote gap supplied by PS abstention (left's high-water mark: 269 of 289 votes). Riot recurrence before April 2027 is the swing variable: three of four prior severe episodes were followed by another within five years, at a shortening interval (~3 years from 2023 to 2026). Legally, the election dates (18 April / 2 May 2027) cannot be moved by emergency regimes; the 2017 election was held under a state of emergency.",
+    "fault_lines": [
+      "Minority government vs Assembly arithmetic: 289-vote censure threshold vs left's 269-vote peak",
+      "Austerity and EDP consolidation vs weak growth (0.841% in 2025) and rising interest charges (€91.2bn in 2027)",
+      "Order-and-security salience from the riots vs cost-of-living grievances on the left",
+      "RN's preference to wait for April 2027 rather than govern via censure",
+      "Centre fragmentation: Philippe vs Attal vs Macron-affiliated bloc",
+      "State-backed riot-insurance mechanism created by the 2026 budget law not yet operational"
+    ],
+    "catalysts": [
+      "Moody's review of France's Aa3/Negative rating, 23 October 2026",
+      "S&P review (A+/Stable), 27 November 2026",
+      "Reported whole-budget Assembly vote, 17 November 2026",
+      "Commission Autumn forecast, November 2026 (unreleased)",
+      "Any 49.3 engagement on the PLF 2027 and ensuing censure motion",
+      "France Assureurs' first riot loss estimate and any catastrophe declaration",
+      "Renewed or fading protest weekends; curfew extensions or a 1955 state-of-emergency declaration",
+      "INSEE's first full-year 2026 deficit estimate, spring 2027",
+      "First round of the presidential election, 18 April 2027"
+    ]
+  },
+  "actors": [
+    {
+      "name": "Prime Minister of France",
+      "type": "Person",
+      "role": "Owns the 2027 budget, 49.3 decisions and riot response."
+    },
+    {
+      "name": "President Emmanuel Macron",
+      "type": "Person",
+      "role": "Can dissolve, appoint a technocrat, or invoke emergency powers."
+    },
+    {
+      "name": "Rassemblement National",
+      "type": "Organization",
+      "role": "Front-runner bloc whose security framing the riots amplify."
+    },
+    {
+      "name": "Nouveau Front Populaire / left coalition",
+      "type": "Organization",
+      "role": "Leading censure actor and runoff contender."
+    },
+    {
+      "name": "Les Républicains / centre-right",
+      "type": "Organization",
+      "role": "Pivotal votes for budget passage without 49.3."
+    },
+    {
+      "name": "French National Assembly",
+      "type": "Government",
+      "role": "Censure motions and budget votes decide government survival."
+    },
+    {
+      "name": "European Commission",
+      "type": "Government",
+      "role": "Runs the EDP timeline and sanctions risk for France's deficit path."
+    },
+    {
+      "name": "INSEE",
+      "type": "Organization",
+      "role": "Publishes the deficit and GDP figures that resolve the fiscal questions."
+    },
+    {
+      "name": "Cour des comptes",
+      "type": "Organization",
+      "role": "Authoritative independent audit of deficit projections."
+    },
+    {
+      "name": "French insurers and reinsurers (FFA, CCR, Scor)",
+      "type": "Organization",
+      "role": "Quantify riot insured losses and catastrophe declarations."
+    },
+    {
+      "name": "Ministère de l'Intérieur / French police",
+      "type": "Government",
+      "role": "Curfews, emergency measures and arrest data."
+    },
+    {
+      "name": "Banque de France",
+      "type": "Organization",
+      "role": "Market functioning, sovereign spread commentary and growth forecasts."
+    },
+    {
+      "name": "Rating agencies (S&P, Fitch, Moody's)",
+      "type": "Organization",
+      "role": "French sovereign and bank downgrade risk on fiscal slippage."
+    },
+    {
+      "name": "Conseil constitutionnel",
+      "type": "Government",
+      "role": "Arbiter of election rules and emergency-measure legality."
+    }
+  ],
+  "relationships": [],
+  "hot_topics": [],
+  "context_entities": [
+    {
+      "name": "French polling institutes and aggregators",
+      "type": "Media",
+      "role": "Provide the polling averages driving election probabilities."
+    }
+  ],
+  "key_events": [
+    {
+      "date": "2026-10-21",
+      "event": "As-of date: no 49.3 engagement on PLF 2027 declared; no censure motion in record after 6 July 2026",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-20",
+      "event": "OAT-Bund spread at one-year high of 150.8 bps; 10Y OAT yield 4.93%",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-20",
+      "event": "Justice Minister Darmanin says around 3,000 shops looted",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-20",
+      "event": "France Assureurs says it cannot yet provide an initial riot loss estimate or claims count",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-20",
+      "event": "Solemn first-part vote on PLF 2027 postponed from 20 October, more than 2,800 amendments pending",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-19",
+      "event": "Targeted overnight curfews reported in parts of Paris, Bordeaux, Lille and northern towns",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-19",
+      "event": "European bank shares fell 2.2%, worst-hit sector; CAC 40 down 1.1%",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-19",
+      "event": "Lecornu credits targeted curfews with restoring calm; AFP reports he says a state of emergency could be declared 'if needed'",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-18",
+      "event": "Macron urges calm without declaring a state of emergency",
+      "staleness_days": 3,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-17",
+      "event": "Paris demonstrations during which Interior Ministry says a protester died of cardiac arrest",
+      "staleness_days": 4,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-17",
+      "event": "Start of weekend violence across French cities, described by Reuters as France's worst unrest in years",
+      "staleness_days": 4,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-16",
+      "event": "OpinionWay poll published showing Le Pen up from September in all scenarios",
+      "staleness_days": 5,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-13",
+      "event": "Floor debate on PLF 2027 opens on the government's original text",
+      "staleness_days": 8,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-09",
+      "event": "Finance commission rejects the revenue part of PLF 2027 by 31 votes to 3, with 2 abstentions",
+      "staleness_days": 12,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-01",
+      "event": "PLF 2027 presented to the Conseil des ministres by the Lecornu government",
+      "staleness_days": 20,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-08",
+      "event": "Sébastien Lecornu becomes Prime Minister after François Bayrou's resignation",
+      "staleness_days": 43,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-12",
+      "event": "Lecornu government formalised by decree",
+      "staleness_days": 9,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07-06",
+      "event": "'Climate inaction' censure motion (49.2) rejected with 132 votes for",
+      "staleness_days": 107,
+      "is_stale": false
+    },
+    {
+      "date": "2026-02-02",
+      "event": "The 2026 loi de finances adopted",
+      "staleness_days": 261,
+      "is_stale": false
+    },
+    {
+      "date": "2026-01-27",
+      "event": "Censure motion after 49.3 on 2026 budget expenditures rejected (267 votes); 2026 budget adopted",
+      "staleness_days": 267,
+      "is_stale": false
+    },
+    {
+      "date": "2026-01-23",
+      "event": "Censure motion after 49.3 on 2026 budget revenues rejected (269 votes) with PS abstaining",
+      "staleness_days": 271,
+      "is_stale": false
+    },
+    {
+      "date": "2025-10-13",
+      "event": "General-policy censure motion (49.2) filed by Le Pen, Ciotti and 56 deputies",
+      "staleness_days": 373,
+      "is_stale": true
+    },
+    {
+      "date": "2026-11-17",
+      "event": "Reported date for Assembly vote on the whole PLF 2027 (provisional)",
+      "staleness_days": -27,
+      "is_stale": false
+    },
+    {
+      "date": "2026-11-27",
+      "event": "S&P review of France's A+/Stable rating scheduled",
+      "staleness_days": -37,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-23",
+      "event": "Moody's review of France's Aa3/Negative rating scheduled",
+      "staleness_days": -2,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-29",
+      "event": "Reported ECB meeting",
+      "staleness_days": -8,
+      "is_stale": false
+    },
+    {
+      "date": "2026-11",
+      "event": "European Commission Autumn forecast due, not yet released as of 21 October 2026",
+      "staleness_days": -11,
+      "is_stale": false
+    },
+    {
+      "date": "2027-04-18",
+      "event": "First round of the French presidential election scheduled",
+      "staleness_days": -179,
+      "is_stale": false
+    },
+    {
+      "date": "2027-05-02",
+      "event": "Runoff of the French presidential election scheduled",
+      "staleness_days": -193,
+      "is_stale": false
+    },
+    {
+      "date": "2027",
+      "event": "INSEE spring 2027 first full-year 2026 national-accounts estimate resolves the deficit threshold",
+      "staleness_days": -72,
+      "is_stale": false
+    },
+    {
+      "date": "2024-12-17",
+      "event": "Moody's cuts seven French banks to A1 from Aa3 after sovereign Aa3 cut",
+      "staleness_days": 673,
+      "is_stale": true
+    },
+    {
+      "date": "2026-07-06",
+      "event": "RN group held 122 members at this censure vote",
+      "staleness_days": 107,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-19",
+      "event": "Ensemble pour la République composition page dated, no verified seat count",
+      "staleness_days": 32,
+      "is_stale": false
+    },
+    {
+      "date": "2017-10-31",
+      "event": "End of the November 2015 state of emergency, which spanned the 2017 presidential election",
+      "staleness_days": 3277,
+      "is_stale": true
+    },
+    {
+      "date": "2026-02",
+      "event": "Cour des comptes notes the 2026 deficit target was replaced by 5.0%",
+      "staleness_days": 262,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-24",
+      "event": "Second protest weekend announced, signpost for calm or renewed violence",
+      "staleness_days": -3,
+      "is_stale": false
+    }
+  ],
+  "quantitative_facts": [
+    {
+      "metric": "State deficit projected in PLF 2027",
+      "value": "156.4",
+      "series": "PLF 2027",
+      "unit": "billion EUR",
+      "as_of_date": "2026-10-01",
+      "period_end": "2027",
+      "geography": "France",
+      "definition": "State deficit, €19.2 billion worse than 2026",
+      "source": "PLF 2027",
+      "value_type": "forecast",
+      "source_url": "https://www.vie-publique.fr/loi/304797-budget-2027-projet-de-loi-de-finances-plf",
+      "tier": "S3",
+      "value_num": 156.4,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "PLF 2027",
+      "staleness_days": 20,
+      "is_stale": false
+    },
+    {
+      "metric": "Interest charges in 2027",
+      "value": "91.2",
+      "series": "PLF 2027",
+      "unit": "billion EUR",
+      "as_of_date": "2026-10-01",
+      "period_end": "2027",
+      "geography": "France",
+      "definition": "Rising from €79.2 billion",
+      "source": "PLF 2027",
+      "value_type": "forecast",
+      "source_url": "https://www.vie-publique.fr/loi/304797-budget-2027-projet-de-loi-de-finances-plf",
+      "tier": "S3",
+      "value_num": 91.2,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "PLF 2027",
+      "staleness_days": 20,
+      "is_stale": false
+    },
+    {
+      "metric": "Revised 2026 general government deficit",
+      "value": "5.4",
+      "series": "Government forecast",
+      "unit": "percent of GDP",
+      "as_of_date": "2026-10-01",
+      "period_end": "2026",
+      "geography": "France",
+      "definition": "General government deficit",
+      "source": "French government, PLF 2027",
+      "value_type": "forecast",
+      "source_url": "https://www.reuters.com/business/what-is-frances-2027-budget-2026-10-01/",
+      "tier": "S2",
+      "value_num": 5.4,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "French government, PLF 2027",
+      "staleness_days": 20,
+      "is_stale": false
+    },
+    {
+      "metric": "2027 deficit target",
+      "value": "5.0",
+      "series": "Government target",
+      "unit": "percent of GDP",
+      "as_of_date": "2026-10-01",
+      "period_end": "2027",
+      "geography": "France",
+      "definition": "General government deficit",
+      "source": "French government, PLF 2027",
+      "value_type": "target",
+      "source_url": "https://www.vie-publique.fr/loi/304797-budget-2027-projet-de-loi-de-finances-plf",
+      "tier": "S3",
+      "value_num": 5.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "French government, PLF 2027",
+      "staleness_days": 20,
+      "is_stale": false
+    },
+    {
+      "metric": "2026 deficit forecast",
+      "value": "5.1",
+      "series": "European Commission Spring 2026 forecast",
+      "unit": "percent of GDP",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026",
+      "geography": "France",
+      "definition": "General government deficit",
+      "source": "European Commission",
+      "value_type": "forecast",
+      "source_url": "https://economy-finance.ec.europa.eu/economic-surveillance-eu-member-states/country-pages-including-country-reports/france/economic-forecast-france_en",
+      "tier": "S1",
+      "value_num": 5.1,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "European Commission",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "2027 deficit forecast",
+      "value": "5.7",
+      "series": "European Commission Spring 2026 forecast",
+      "unit": "percent of GDP",
+      "as_of_date": "2026-10-21",
+      "period_end": "2027",
+      "geography": "France",
+      "definition": "Unchanged policies",
+      "source": "European Commission",
+      "value_type": "forecast",
+      "source_url": "https://economy-finance.ec.europa.eu/economic-surveillance-eu-member-states/country-pages-including-country-reports/france/economic-forecast-france_en",
+      "tier": "S1",
+      "value_num": 5.7,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "European Commission",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Net general government borrowing 2026",
+      "value": "-5.352",
+      "series": "IMF WEO",
+      "unit": "percent of GDP",
+      "as_of_date": "2026",
+      "period_end": "2026",
+      "geography": "France",
+      "definition": "Publisher projection, not an observation",
+      "source": "IMF WEO",
+      "value_type": "forecast",
+      "source_url": "https://data360.worldbank.org/en/indicator/IMF_WEO_GGXCNL_NGDP",
+      "tier": "S1",
+      "value_num": -5.352,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "IMF WEO",
+      "staleness_days": 293,
+      "is_stale": false
+    },
+    {
+      "metric": "Net general government borrowing 2025",
+      "value": "-5.065",
+      "series": "IMF WEO",
+      "unit": "percent of GDP",
+      "as_of_date": "2026",
+      "period_end": "2025",
+      "geography": "France",
+      "definition": "Publisher estimate",
+      "source": "IMF WEO",
+      "value_type": "estimate",
+      "source_url": "https://data360.worldbank.org/en/indicator/IMF_WEO_GGXCNL_NGDP",
+      "tier": "S1",
+      "value_num": -5.065,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "IMF WEO",
+      "staleness_days": 293,
+      "is_stale": false
+    },
+    {
+      "metric": "Net general government borrowing 2024",
+      "value": "-5.758",
+      "series": "IMF WEO",
+      "unit": "percent of GDP",
+      "as_of_date": "2026",
+      "period_end": "2024",
+      "geography": "France",
+      "definition": "Observed",
+      "source": "IMF WEO",
+      "value_type": "actual",
+      "source_url": "https://data360.worldbank.org/en/indicator/IMF_WEO_GGXCNL_NGDP",
+      "tier": "S1",
+      "value_num": -5.758,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "IMF WEO",
+      "staleness_days": 293,
+      "is_stale": false
+    },
+    {
+      "metric": "Net general government borrowing 2027",
+      "value": "-5.224",
+      "series": "IMF WEO",
+      "unit": "percent of GDP",
+      "as_of_date": "2026",
+      "period_end": "2027",
+      "geography": "France",
+      "definition": "Publisher projection",
+      "source": "IMF WEO",
+      "value_type": "forecast",
+      "source_url": "https://data360.worldbank.org/en/indicator/IMF_WEO_GGXCNL_NGDP",
+      "tier": "S1",
+      "value_num": -5.224,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "IMF WEO",
+      "staleness_days": 293,
+      "is_stale": false
+    },
+    {
+      "metric": "GDP growth",
+      "value": "0.841",
+      "series": "World Bank GDP annual % growth",
+      "unit": "percent per annum",
+      "as_of_date": "2026-10-21",
+      "period_end": "2025",
+      "geography": "France",
+      "definition": "Stored observation, after 1.19% in 2024",
+      "source": "World Bank",
+      "value_type": "actual",
+      "source_url": "https://data360.worldbank.org/en/indicator/WB_WDI_NY_GDP_MKTP_KD_ZG",
+      "tier": "S1",
+      "value_num": 0.841,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "World Bank",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "2025 deficit",
+      "value": "5.1",
+      "series": "INSEE first estimate",
+      "unit": "percent of GDP",
+      "as_of_date": "2026-03",
+      "period_end": "2025",
+      "geography": "France",
+      "definition": "€151.6 billion, after 5.8% in 2024 and 5.4% in 2023",
+      "source": "INSEE",
+      "value_type": "estimate",
+      "source_url": "https://www.insee.fr/fr/outil-interactif/5367857/tableau/10_ECC/15_FIN",
+      "tier": "S3",
+      "value_num": 5.1,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "INSEE",
+      "staleness_days": 234,
+      "is_stale": false
+    },
+    {
+      "metric": "Maastricht debt end-Q2 2026",
+      "value": "3595.5",
+      "series": "INSEE quarterly debt",
+      "unit": "billion EUR",
+      "as_of_date": "2026-07-01",
+      "period_end": "2026-Q2",
+      "geography": "France",
+      "definition": "119.0% of GDP",
+      "source": "INSEE",
+      "value_type": "actual",
+      "source_url": "https://www.insee.fr/fr/statistiques/9053525",
+      "tier": "S3",
+      "value_num": 3595.5,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "INSEE",
+      "staleness_days": 112,
+      "is_stale": false
+    },
+    {
+      "metric": "Censure threshold",
+      "value": "289",
+      "series": "National Assembly rules",
+      "unit": "deputies",
+      "as_of_date": "2026-10-21",
+      "geography": "France",
+      "definition": "Absolute majority of 577 deputies, favourable votes only",
+      "source": "French National Assembly",
+      "value_type": "actual",
+      "source_url": "https://www.touteleurope.eu/vie-politique-des-etats-membres/budget-2026-rejet-des-deux-nouvelles-motions-de-censure-apres-le-recours-au-49-3-sur-la-partie-depenses-du-budget/",
+      "tier": "S3",
+      "value_num": 289.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "French National Assembly",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "RN group size",
+      "value": "122",
+      "series": "National Assembly censure roll-call",
+      "unit": "members",
+      "as_of_date": "2026-07-06",
+      "period_end": "2026-07-06",
+      "geography": "France",
+      "definition": "RN group membership",
+      "source": "National Assembly",
+      "value_type": "actual",
+      "source_url": "https://www.assemblee-nationale.fr/dyn/17/scrutins/7979",
+      "tier": "S3",
+      "value_num": 122.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "National Assembly",
+      "staleness_days": 107,
+      "is_stale": false
+    },
+    {
+      "metric": "Censure votes for, 23 Jan 2026",
+      "value": "269",
+      "series": "Censure motion",
+      "unit": "votes",
+      "as_of_date": "2026-01-23",
+      "period_end": "2026-01-23",
+      "geography": "France",
+      "definition": "Left 269; RN-UDR 142; PS abstained",
+      "source": "BFM TV / Radio France",
+      "value_type": "actual",
+      "source_url": "https://www.bfmtv.com/politique/gouvernement/direct-apres-avoir-rompu-sa-promesse-sur-le-49-3-sebastien-lecornu-affronte-deux-motions-de-censure-a-l-assemblee-nationale-ce-vendredi_LN-202601230165.html",
+      "tier": "S3",
+      "value_num": 269.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "BFM TV / Radio France",
+      "staleness_days": 271,
+      "is_stale": false
+    },
+    {
+      "metric": "Censure votes for, 27 Jan 2026",
+      "value": "267",
+      "series": "Censure motion",
+      "unit": "votes",
+      "as_of_date": "2026-01-27",
+      "period_end": "2026-01-27",
+      "geography": "France",
+      "definition": "Left 267; RN-UDR 140",
+      "source": "National Assembly",
+      "value_type": "actual",
+      "source_url": "https://www.touteleurope.eu/vie-politique-des-etats-membres/budget-2026-rejet-des-deux-nouvelles-motions-de-censure-apres-le-recours-au-49-3-sur-la-partie-depenses-du-budget/",
+      "tier": "S3",
+      "value_num": 267.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "National Assembly",
+      "staleness_days": 267,
+      "is_stale": false
+    },
+    {
+      "metric": "Censure votes for, 6 Jul 2026",
+      "value": "132",
+      "series": "Climate-inaction censure motion",
+      "unit": "votes",
+      "as_of_date": "2026-07-06",
+      "period_end": "2026-07-06",
+      "geography": "France",
+      "definition": "Of which LFI-NFP 71",
+      "source": "National Assembly",
+      "value_type": "actual",
+      "source_url": "https://www.assemblee-nationale.fr/dyn/17/scrutins/7979",
+      "tier": "S3",
+      "value_num": 132.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "National Assembly",
+      "staleness_days": 107,
+      "is_stale": false
+    },
+    {
+      "metric": "Shops looted",
+      "value": "3000",
+      "series": "Justice Minister statement",
+      "unit": "shops",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-10-20",
+      "geography": "France",
+      "definition": "Around 3,000 shops looted per Darmanin",
+      "source": "CNN / Darmanin",
+      "value_type": "estimate",
+      "source_url": "https://www.cnn.com/2026/10/19/europe/france-protests-violence-wwk-intl-hnk",
+      "tier": "S3",
+      "value_num": 3000.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "CNN / Darmanin",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "Shops damaged",
+      "value": "3000",
+      "series": "Euronews",
+      "unit": "shops",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-10-20",
+      "geography": "France",
+      "definition": "At least 3,000, double the prior day's count",
+      "source": "Euronews",
+      "value_type": "estimate",
+      "source_url": "https://www.euronews.com/2026/10/20/frances-riot-damage-doubles-who-will-pay-for-thousands-of-wrecked-shops",
+      "tier": "S3",
+      "value_num": 3000.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "Euronews",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "Carrefour shops damaged",
+      "value": "50",
+      "series": "CEO statement",
+      "unit": "shops",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026-10-21",
+      "geography": "France",
+      "definition": "Including 20 looted; losses 'running into the tens of millions of euros'",
+      "source": "Reuters / Bompard",
+      "value_type": "estimate",
+      "source_url": "https://www.reuters.com/world/europe/france-faces-aftermath-worst-unrest-years-2026-10-18/",
+      "tier": "S2",
+      "value_num": 50.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "Reuters / Bompard",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Arrests",
+      "value": "2400",
+      "series": "Interior Ministry via Reuters",
+      "unit": "arrests",
+      "as_of_date": "2026-10-19",
+      "period_end": "2026-10-19",
+      "geography": "France",
+      "definition": "Unconfirmed interior-ministry figure",
+      "source": "Reuters",
+      "value_type": "estimate",
+      "source_url": "https://www.reuters.com/world/europe/france-faces-aftermath-worst-unrest-years-2026-10-18/",
+      "tier": "S2",
+      "value_num": 2400.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "Reuters",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "metric": "Injured police officers",
+      "value": "1000",
+      "series": "Interior Ministry via Reuters",
+      "unit": "officers",
+      "as_of_date": "2026-10-19",
+      "period_end": "2026-10-19",
+      "geography": "France",
+      "definition": "Nearly 1,000 injured, unconfirmed",
+      "source": "Reuters",
+      "value_type": "estimate",
+      "source_url": "https://www.reuters.com/world/europe/france-faces-aftermath-worst-unrest-years-2026-10-18/",
+      "tier": "S2",
+      "value_num": 1000.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "Reuters",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "metric": "Insured loss estimate, October 2026 riots",
+      "value": "1.2",
+      "series": "Morningstar",
+      "unit": "billion EUR (below)",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-10",
+      "geography": "France",
+      "definition": "Expects total insured losses below EUR 1.2 billion assuming no further widespread riots; third-party estimate",
+      "source": "Morningstar",
+      "value_type": "estimate",
+      "source_url": "https://global.morningstar.com/en-eu/economy/frances-latest-riots-will-test-insurers-ahead-new-state-backed-riot-insurance-mechanism",
+      "tier": "S3",
+      "value_num": 1.2,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "Morningstar",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "Nahel riots insured losses",
+      "value": "730",
+      "series": "France Assureurs",
+      "unit": "million EUR",
+      "as_of_date": "2026-10-21",
+      "period_end": "2023",
+      "geography": "France",
+      "definition": "~15,600 claims; later revised to EUR 793 million on ~17,000 claims; Senate total ~EUR 1 billion",
+      "source": "France Assureurs",
+      "value_type": "actual",
+      "source_url": "https://global.morningstar.com/en-eu/economy/frances-latest-riots-will-test-insurers-ahead-new-state-backed-riot-insurance-mechanism",
+      "tier": "S3",
+      "value_num": 730.0,
+      "year": 2023,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "France Assureurs",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "2005 riots insured losses",
+      "value": "200",
+      "series": "France Assureurs / Morningstar",
+      "unit": "million EUR (approx.)",
+      "as_of_date": "2026-10-21",
+      "period_end": "2005-11",
+      "geography": "France",
+      "definition": "Urban riots November 2005",
+      "source": "Morningstar",
+      "value_type": "actual",
+      "source_url": "https://global.morningstar.com/en-eu/economy/frances-latest-riots-will-test-insurers-ahead-new-state-backed-riot-insurance-mechanism",
+      "tier": "S3",
+      "value_num": 200.0,
+      "year": 2005,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "Morningstar",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Gilets jaunes insured losses",
+      "value": "220",
+      "series": "Morningstar",
+      "unit": "million EUR (approx.)",
+      "as_of_date": "2026-10-21",
+      "period_end": "2018-2019",
+      "geography": "France",
+      "source": "Morningstar",
+      "value_type": "actual",
+      "source_url": "https://global.morningstar.com/en-eu/economy/frances-latest-riots-will-test-insurers-ahead-new-state-backed-riot-insurance-mechanism",
+      "tier": "S3",
+      "value_num": 220.0,
+      "year": 2018,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "Morningstar",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "New Caledonia insured losses",
+      "value": "1000",
+      "series": "Morningstar",
+      "unit": "million EUR (approx.)",
+      "as_of_date": "2026-10-21",
+      "period_end": "2024-05",
+      "geography": "New Caledonia",
+      "definition": "Unrest May 2024",
+      "source": "Morningstar",
+      "value_type": "actual",
+      "source_url": "https://global.morningstar.com/en-eu/economy/frances-latest-riots-will-test-insurers-ahead-new-state-backed-riot-insurance-mechanism",
+      "tier": "S3",
+      "value_num": 1000.0,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "New Caledonia",
+      "analyst": "Morningstar",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Businesses vandalised in 2023 riots",
+      "value": "2500",
+      "series": "CCI France",
+      "unit": "businesses (approx.)",
+      "as_of_date": "2026-10-21",
+      "period_end": "2023",
+      "geography": "France",
+      "definition": "June-July 2023 riots; average claims ~€46,600",
+      "source": "CCI France via Euronews",
+      "value_type": "actual",
+      "source_url": "https://www.euronews.com/2026/10/20/frances-riot-damage-doubles-who-will-pay-for-thousands-of-wrecked-shops",
+      "tier": "S3",
+      "value_num": 2500.0,
+      "year": 2023,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "CCI France via Euronews",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "10Y OAT-Bund spread",
+      "value": "150.8",
+      "series": "Aggregator via Banque de France/Bundesbank",
+      "unit": "bps",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-10-20",
+      "geography": "France/Germany",
+      "definition": "One-year high; 1-year range 59.0-150.8, mean 77.8; all-time high 225.1 bps on 17 Nov 2011",
+      "source": "Aggregator",
+      "value_type": "actual",
+      "source_url": "https://www.ideal-investisseur.fr/en/markets/oat-bund-spread.html",
+      "tier": "S3",
+      "value_num": 150.8,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "France/Germany",
+      "analyst": "Aggregator",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "10Y OAT yield",
+      "value": "4.93",
+      "series": "Aggregator / Reuters",
+      "unit": "percent",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-10-20",
+      "geography": "France",
+      "definition": "Reuters reports 4.88%, intraday 4.9877%, near a 24-year high; +14.1 bps over 19-20 Oct per WSJ",
+      "source": "Aggregator / Reuters",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/markets/us/french-bond-yields-near-24-year-high-new-protests-loom-2026-10-20/",
+      "tier": "S2",
+      "value_num": 4.93,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "Aggregator / Reuters",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "CAC 40 close",
+      "value": "7838.49",
+      "series": "Yahoo Finance / Trading Economics",
+      "unit": "index points",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-10-20",
+      "geography": "France",
+      "definition": "Reported close; -1.1% on 19 Oct; approx -3.8% YTD vs 8,149.50 on 31 Dec 2025",
+      "source": "Yahoo Finance / Trading Economics",
+      "value_type": "actual",
+      "source_url": "https://finance.yahoo.com/quote/%5EFCHI/history/",
+      "tier": "S3",
+      "value_num": 7838.49,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "Yahoo Finance / Trading Economics",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "Le Pen first-round voting intention (Odoxa)",
+      "value": "37-38",
+      "series": "Odoxa poll",
+      "unit": "percent",
+      "as_of_date": "2026-10-14",
+      "period_end": "2026-10-07",
+      "geography": "France",
+      "definition": "Fieldwork 24 Sep-7 Oct, sample 12,000; varies by scenario; Mélenchon 18-18.5%, Philippe 17%, Attal 11%",
+      "source": "Odoxa",
+      "value_type": "estimate",
+      "source_url": "https://www.reuters.com/world/le-pen-melenchon-gain-momentum-ahead-french-2027-election-poll-shows-2026-10-14/",
+      "tier": "S2",
+      "value_num": 37.5,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "Odoxa",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "metric": "Le Pen first-round voting intention (Elabe)",
+      "value": "32.5",
+      "series": "Elabe poll",
+      "unit": "percent",
+      "as_of_date": "2026-10-16",
+      "period_end": "2026-10-16",
+      "geography": "France",
+      "definition": "Fieldwork 14-16 Oct, sample 1,701; Mélenchon 16.5%, Philippe 15%",
+      "source": "Elabe (BFMTV)",
+      "value_type": "estimate",
+      "source_url": "https://en.wikipedia.org/wiki/Opinion_polling_for_the_2027_French_presidential_election",
+      "tier": "S3",
+      "value_num": 32.5,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "Elabe (BFMTV)",
+      "staleness_days": 5,
+      "is_stale": false
+    },
+    {
+      "metric": "Le Pen first-round voting intention (OpinionWay)",
+      "value": "35-37",
+      "series": "OpinionWay poll",
+      "unit": "percent",
+      "as_of_date": "2026-10-16",
+      "period_end": "2026-10-14",
+      "geography": "France",
+      "definition": "Fieldwork 13-14 Oct; Philippe 12% (down from 15% in September), Attal 7%; Le Pen up from September in all scenarios",
+      "source": "OpinionWay (Les Échos/RC)",
+      "value_type": "estimate",
+      "source_url": "https://www.connexionfrance.com/news/latest-poll-shows-marine-le-pen-widening-lead-in-2027-election/821510",
+      "tier": "S3",
+      "value_num": 36.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "OpinionWay (Les Échos/RC)",
+      "staleness_days": 5,
+      "is_stale": false
+    },
+    {
+      "metric": "Le Pen first-round voting intention (YouGov)",
+      "value": "36",
+      "series": "YouGov poll",
+      "unit": "percent",
+      "as_of_date": "2026-10-16",
+      "period_end": "2026-10-15",
+      "geography": "France",
+      "definition": "Fieldwork 12-15 Oct, sample 1,094; Mélenchon 15%, Philippe 12%, Attal 10%",
+      "source": "YouGov (HuffPost)",
+      "value_type": "estimate",
+      "source_url": "https://en.wikipedia.org/wiki/Opinion_polling_for_the_2027_French_presidential_election",
+      "tier": "S3",
+      "value_num": 36.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "YouGov (HuffPost)",
+      "staleness_days": 5,
+      "is_stale": false
+    },
+    {
+      "metric": "Amendments pending on PLF 2027",
+      "value": "2800",
+      "series": "Assembly budget process",
+      "unit": "amendments (more than)",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-10-20",
+      "geography": "France",
+      "definition": "Pending at postponement of solemn first-part vote",
+      "source": "LCP / Le Monde",
+      "value_type": "actual",
+      "source_url": "https://lcp.fr/actualites/budget-2027-le-marathon-de-la-partie-recettes-loin-d-etre-termine-le-vote-prevu-demain-a",
+      "tier": "S3",
+      "value_num": 2800.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "LCP / Le Monde",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "Deficit worsening from Assembly-approved amendments",
+      "value": "10",
+      "series": "Budget Minister statement",
+      "unit": "billion EUR",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026",
+      "geography": "France",
+      "definition": "Amendments already approved would worsen the deficit by €10 billion",
+      "source": "David Amiel via Reuters",
+      "value_type": "estimate",
+      "source_url": "https://www.internazionale.it/ultime-notizie-reuters/2026/10/20/explainer-how-france-s-2027-budget-battle-could-play-out",
+      "tier": "S3",
+      "value_num": 10.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "David Amiel via Reuters",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Euro-area GDP growth 2024",
+      "value": "0.7",
+      "series": "World Bank GEP",
+      "unit": "percent per annum",
+      "as_of_date": "2026-10-21",
+      "period_end": "2024",
+      "geography": "Euro area",
+      "definition": "Publisher estimate; projections 1% for 2025, 1.2% for 2026",
+      "source": "World Bank GEP",
+      "value_type": "estimate",
+      "source_url": "https://data360.worldbank.org/en/indicator/WB_GEP_NYGDPMKTPKDZ",
+      "tier": "S1",
+      "value_num": 0.7,
+      "year": 2024,
+      "value_kind": "forecast",
+      "region": "Euro area",
+      "analyst": "World Bank GEP",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Interest payments 2027 (Commission)",
+      "value": "2.8",
+      "series": "European Commission Spring 2026 forecast",
+      "unit": "percent of GDP",
+      "as_of_date": "2026-10-21",
+      "period_end": "2027",
+      "geography": "France",
+      "definition": "With debt above 120% of GDP in 2027",
+      "source": "European Commission",
+      "value_type": "forecast",
+      "source_url": "https://economy-finance.ec.europa.eu/economic-surveillance-eu-member-states/country-pages-including-country-reports/france/economic-forecast-france_en",
+      "tier": "S1",
+      "value_num": 2.8,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "European Commission",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "2026 Le Monde deficit figure",
+      "value": "5.6",
+      "series": "Le Monde summary",
+      "unit": "percent of GDP",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026",
+      "geography": "France",
+      "definition": "Unconfirmed figure for 2026 deficit",
+      "source": "Le Monde",
+      "value_type": "estimate",
+      "source_url": "https://www.facebook.com/lemonde.fr/videos/budget-2027-ce-quil-faut-retenir-du-texte-du-gouvernement-qui-fait-r%C3%A9agir-loppos/1522785389534201/",
+      "tier": "S3",
+      "value_num": 5.6,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "Le Monde",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Deaths in October 2026 riots (CNN)",
+      "value": "at least 2",
+      "series": "Casualty tally",
+      "unit": "deaths",
+      "as_of_date": "2026-10-19",
+      "period_end": "2026-10-19",
+      "geography": "France",
+      "definition": "Serious injuries including two people who lost their hands",
+      "source": "CNN",
+      "value_type": "estimate",
+      "source_url": "https://www.cnn.com/2026/10/19/europe/france-protests-violence-wwk-intl-hnk",
+      "tier": "S3",
+      "value_num": 2.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "France",
+      "analyst": "CNN",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "metric": "OAT-Bund spread all-time high",
+      "value": "225.1",
+      "series": "Aggregator",
+      "unit": "bps",
+      "as_of_date": "2026-10-21",
+      "period_end": "2011-11-17",
+      "geography": "France/Germany",
+      "definition": "Historic peak on 17 November 2011",
+      "source": "Aggregator",
+      "value_type": "actual",
+      "source_url": "https://www.ideal-investisseur.fr/en/markets/oat-bund-spread.html",
+      "tier": "S3",
+      "value_num": 225.1,
+      "year": 2011,
+      "value_kind": "actual",
+      "region": "France/Germany",
+      "analyst": "Aggregator",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "OAT-Bund spread 16 Oct 2026",
+      "value": "136",
+      "series": "Reported",
+      "unit": "bps",
+      "as_of_date": "2026-10-16",
+      "period_end": "2026-10-16",
+      "geography": "France/Germany",
+      "definition": "Reported spread",
+      "value_type": "actual",
+      "source_url": "https://www.borsaitaliana.it/obbligazioni/spread/francia/oat-bund.en.htm",
+      "tier": "S3",
+      "source": "Bond Spread France OAT-BUND 10 years - Borsa Italiana",
+      "value_num": 136.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "France/Germany",
+      "analyst": "Bond Spread France OAT-BUND 10 years - Borsa Italiana",
+      "staleness_days": 5,
+      "is_stale": false
+    },
+    {
+      "metric": "Euro-area crisis recurrence base rate",
+      "value": "3/4",
+      "series": "Severe riot episodes",
+      "unit": "episodes",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026",
+      "geography": "France",
+      "definition": "Severe episodes followed by another within five years, 2005-2026; small sample",
+      "source": "Morningstar / Euronews",
+      "value_type": "actual",
+      "source_url": "https://global.morningstar.com/en-eu/economy/frances-latest-riots-will-test-insurers-ahead-new-state-backed-riot-insurance-mechanism",
+      "tier": "S3",
+      "value_num": 3.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "Morningstar / Euronews",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Censure motions adopted since 1958",
+      "value": "1",
+      "series": "National Assembly records",
+      "unit": "adoptions",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026",
+      "geography": "France",
+      "definition": "Against the Pompidou government in 1962",
+      "source": "National Assembly",
+      "value_type": "actual",
+      "source_url": "https://www.assemblee-nationale.fr/dyn/engagements_responsabilite-motions_censures/motions-de-censure-depuis-1958",
+      "tier": "S3",
+      "value_num": 1.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "National Assembly",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Censure motions survived by Lecornu",
+      "value": "5/5",
+      "series": "Censure votes",
+      "unit": "motions",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026-07-06",
+      "geography": "France",
+      "definition": "Closest tally 269 of 289",
+      "source": "National Assembly",
+      "value_type": "actual",
+      "source_url": "https://www.touteleurope.eu/vie-politique-des-etats-membres/budget-2026-rejet-des-deux-nouvelles-motions-de-censure-apres-le-recours-au-49-3-sur-la-partie-depenses-du-budget/",
+      "tier": "S3",
+      "value_num": 5.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "National Assembly",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Member states under EDP",
+      "value": "9",
+      "series": "Commission 2026 Autumn Package",
+      "unit": "member states (incl. France)",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026",
+      "geography": "EU",
+      "definition": "France listed among nine member states still under the Excessive Deficit Procedure",
+      "source": "European Commission",
+      "value_type": "actual",
+      "source_url": "https://ec.europa.eu/commission/presscorner/detail/en/ip_25_2760",
+      "tier": "S1",
+      "value_num": 9.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Europe",
+      "analyst": "European Commission",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Deputies filing 13 Oct 2025 censure motion",
+      "value": "56",
+      "series": "Censure motion",
+      "unit": "deputies",
+      "as_of_date": "2025-10-13",
+      "period_end": "2025-10-13",
+      "geography": "France",
+      "definition": "Filed by Le Pen, Ciotti and 56 deputies under 49.2",
+      "source": "National Assembly",
+      "value_type": "actual",
+      "source_url": "https://www.assemblee-nationale.fr/dyn/engagements_responsabilite-motions_censures/motions-de-censure-depuis-1958",
+      "tier": "S3",
+      "value_num": 56.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "National Assembly",
+      "staleness_days": 373,
+      "is_stale": true
+    },
+    {
+      "metric": "Finance commission vote on revenue part",
+      "value": "31-3 (2 abstentions)",
+      "series": "Commission vote",
+      "unit": "votes",
+      "as_of_date": "2026-10-09",
+      "period_end": "2026-10-09",
+      "geography": "France",
+      "definition": "Rejection of PLF 2027 revenue part",
+      "source": "Legiwatch",
+      "value_type": "actual",
+      "source_url": "https://www.legiwatch.fr/post/decryptage-plf-2027-2026-10-11/",
+      "tier": "S3",
+      "value_num": 17.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "Legiwatch",
+      "metric_family": "annual revenue",
+      "staleness_days": 12,
+      "is_stale": false
+    },
+    {
+      "metric": "French banks downgraded by Moody's",
+      "value": "7",
+      "series": "Moody's rating actions",
+      "unit": "banks",
+      "as_of_date": "2024-12-17",
+      "period_end": "2024-12-17",
+      "geography": "France",
+      "definition": "BNP Paribas, Crédit Agricole group entities, BFCM, CIC, CMA cut to A1 from Aa3",
+      "source": "Moody's",
+      "value_type": "actual",
+      "source_url": "https://ratings.moodys.com/ratings-news/434683",
+      "tier": "S3",
+      "value_num": 7.0,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "France",
+      "analyst": "Moody's",
+      "staleness_days": 673,
+      "is_stale": true
+    }
+  ],
+  "contested_claims": [
+    {
+      "claim": "Number of deaths in the October 2026 riots",
+      "positions": [
+        {
+          "stance": "At least 2 deaths from the weekend violence, with serious injuries including two people who lost their hands",
+          "sources": [
+            "https://www.cnn.com/2026/10/19/europe/france-protests-violence-wwk-intl-hnk"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "A single protester dead after cardiac arrest during the Paris demonstrations of 17 October (Interior Ministry tally via Reuters); the one-death figure is unconfirmed",
+          "sources": [
+            "https://www.reuters.com/world/europe/france-faces-aftermath-worst-unrest-years-2026-10-18/",
+            "https://www.reuters.com/world/europe/frances-macron-declines-interior-ministers-offer-resign-2026-10-19/"
+          ],
+          "tier": "S2"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "CNN and the Interior Ministry relayed via Reuters use different tallies and cutoffs; the Interior Ministry figure itself is marked unconfirmed"
+    },
+    {
+      "claim": "2026 French general government deficit",
+      "positions": [
+        {
+          "stance": "5.4% of GDP, revised forecast",
+          "sources": [
+            "https://www.vie-publique.fr/loi/304797-budget-2027-projet-de-loi-de-finances-plf",
+            "https://www.reuters.com/business/what-is-frances-2027-budget-2026-10-01/",
+            "https://www.politico.eu/article/sebastien-lecornu-france-pm-propose-e54b-budget-squeeze-2027/"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "5.1% of GDP, Spring 2026 forecast",
+          "sources": [
+            "https://economy-finance.ec.europa.eu/economic-surveillance-eu-member-states/country-pages-including-country-reports/france/economic-forecast-france_en"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "-5.352% of GDP, IMF projection",
+          "sources": [
+            "https://data360.worldbank.org/en/indicator/IMF_WEO_GGXCNL_NGDP"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "5.6% in a Le Monde summary, unconfirmed",
+          "sources": [
+            "https://www.facebook.com/lemonde.fr/videos/budget-2027-ce-quil-faut-retenir-du-texte-du-gouvernement-qui-fait-r%C3%A9agir-loppos/1522785389534201/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different publishers, vintages and bases: government revised forecast of 1 October, Commission Spring forecast predating it, IMF projection, and an unconfirmed Le Monde figure"
+    },
+    {
+      "claim": "Insured losses from the October 2026 riots",
+      "positions": [
+        {
+          "stance": "No estimate published as of 20 October",
+          "sources": [
+            "https://www.euronews.com/2026/10/20/frances-riot-damage-doubles-who-will-pay-for-thousands-of-wrecked-shops"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Below EUR 1.2 billion assuming no further widespread riots, not a capital event for major insurers",
+          "sources": [
+            "https://global.morningstar.com/en-eu/economy/frances-latest-riots-will-test-insurers-ahead-new-state-backed-riot-insurance-mechanism"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Press-relayed figures span roughly $700 million to below €1.1 billion",
+          "sources": [
+            "https://www.facebook.com/financialtimes/posts/insurers-face-losses-as-riots-in-france-become-like-natural-catastrophes/1530914689081903/",
+            "https://www.theguardian.com/business/live/2026/oct/19/exports-lift-china-economic-growth-french-protests-pressure-euro-bonds-latest-business-live-updates"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "France Assureurs has not yet published an official figure; third-party (Morningstar) and press-relayed estimates differ on method and scope; past episodes revised upward as claims matured"
+    },
+    {
+      "claim": "Le Pen's first-round voting intention in October 2026",
+      "positions": [
+        {
+          "stance": "37-38% (Odoxa, 24 Sep-7 Oct)",
+          "sources": [
+            "https://www.reuters.com/world/le-pen-melenchon-gain-momentum-ahead-french-2027-election-poll-shows-2026-10-14/"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "32.5% (Elabe, 14-16 Oct)",
+          "sources": [
+            "https://en.wikipedia.org/wiki/Opinion_polling_for_the_2027_French_presidential_election"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "35-37% (OpinionWay, 13-14 Oct)",
+          "sources": [
+            "https://www.connexionfrance.com/news/latest-poll-shows-marine-le-pen-widening-lead-in-2027-election/821510"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "36% (YouGov, 12-15 Oct)",
+          "sources": [
+            "https://en.wikipedia.org/wiki/Opinion_polling_for_the_2027_French_presidential_election"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Facebook-relayed figures of 35.5% and 'up to 44%' conflict with pollster ranges and are unreliable",
+          "sources": [
+            "https://www.facebook.com/ladepechedumidi/posts/pr%C3%A9sidentielle-2027-sondage-la-chute-de-jordan-bardella-et-marine-le-pen-la-remo/1547025387459204/",
+            "https://www.facebook.com/lavoixdunord/posts/-marine-le-pen-largement-en-t%C3%AAte-au-premier-tour-de-la-pr%C3%A9sidentielle-avec-44-da/1614794584014348/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Spread of 32.5-38% driven mainly by scenario composition (which candidates run) rather than sampling alone; social-media mirrors are unreliable"
+    },
+    {
+      "claim": "Number of participants in the 17 October 2026 demonstrations",
+      "positions": [
+        {
+          "stance": "Interior-ministry estimate of roughly 550,000 participants circulates via social media and is unverified",
+          "sources": [
+            "https://www.facebook.com/theuaetimes/videos/france-protest-2026-students-yellow-vests-and-cost-of-living/2125368501408241/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Single unverified social-media relay of an interior-ministry figure; no confirmation in the record"
+    },
+    {
+      "claim": "Government's account blaming Mélenchon for stoking the 17 October violence",
+      "positions": [
+        {
+          "stance": "Government blames Mélenchon; his voting intentions did not move",
+          "sources": [
+            "https://www.politico.eu/article/first-post-riot-poll-shows-stable-french-presidential-voting-intentions/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Paris prosecutor Laure Beccuau could not confirm the government's account from arrestee profiles",
+          "sources": [
+            "https://www.politico.eu/article/first-post-riot-poll-shows-stable-french-presidential-voting-intentions/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Judicial evidence (arrestee profiles) does not corroborate the government's political attribution; all relays via POLITICO are unconfirmed here"
+    },
+    {
+      "claim": "2023 Nahel riots total cost",
+      "positions": [
+        {
+          "stance": "EUR 730 million on ~15,600 claims (France Assureurs)",
+          "sources": [
+            "https://global.morningstar.com/en-eu/economy/frances-latest-riots-will-test-insurers-ahead-new-state-backed-riot-insurance-mechanism"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "EUR 793 million on ~17,000 claims, later tally",
+          "sources": [
+            "https://global.morningstar.com/en-eu/economy/frances-latest-riots-will-test-insurers-ahead-new-state-backed-riot-insurance-mechanism",
+            "https://www.euronews.com/2026/10/20/frances-riot-damage-doubles-who-will-pay-for-thousands-of-wrecked-shops"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Senate total of approximately EUR 1 billion",
+          "sources": [
+            "https://global.morningstar.com/en-eu/economy/frances-latest-riots-will-test-insurers-ahead-new-state-backed-riot-insurance-mechanism"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "resolved",
+      "why_they_differ": "Initial insurer tally revised upward as claims matured; the Senate inquiry uses a broader cost definition; the EUR 793 million figure is the later, more complete industry tally"
+    },
+    {
+      "claim": "Scale of October 2026 riots versus 2023 riots",
+      "positions": [
+        {
+          "stance": "Around 3,000 shops looted/damaged in October 2026",
+          "sources": [
+            "https://www.cnn.com/2026/10/19/europe/france-protests-violence-wwk-intl-hnk",
+            "https://www.euronews.com/2026/10/20/frances-riot-damage-doubles-who-will-pay-for-thousands-of-wrecked-shops"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "~2,500 businesses vandalised in June-July 2023 (CCI France)",
+          "sources": [
+            "https://www.euronews.com/2026/10/20/frances-riot-damage-doubles-who-will-pay-for-thousands-of-wrecked-shops"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Definitions differ (looted vs damaged vs vandalised) and tallies are still rising day by day; ministerial and industry counts use different collection methods"
+    },
+    {
+      "claim": "Likelihood Moody's downgrades France's Aa3 rating",
+      "positions": [
+        {
+          "stance": "Dorval AM calls a cut from Aa3 'almost certain' (its opinion)",
+          "sources": [
+            "https://www.dorval-am.com/en_SE/articles/french-debt-crisis-:-the-issues-at-stake-in-phase-II-5-october-2026/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Moody's itself sees no quick resolution and rates 2027 budget passage highly uncertain; rating on review 23 Oct 2026",
+          "sources": [
+            "https://www.globalbankingandfinance.com/moodys-sees-quick-resolution-french-political-fragmentation/",
+            "https://www.aft.gouv.fr/en/frances-credit-ratings"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "An asset manager's opinion versus the rating agency's own more cautious published stance; different roles and incentives"
+    }
+  ],
+  "forecast_inputs": {
+    "scenarios": [
+      {
+        "name": "Muddle-through austerity",
+        "probability": 0.4,
+        "narrative": "The minority government passes the 2027 budget via 49.3, survives censure narrowly, de-escalation follows the riots, the deficit lands near 5-5.5 percent and the election proceeds on schedule with RN qualifying first."
+      },
+      {
+        "name": "Escalation and paralysis",
+        "probability": 0.25,
+        "narrative": "Recurring riots force emergency measures, censeure or resignation produces a caretaker technocratic cabinet, the budget slips past 31 December 2026, spreads widen sharply and security salience boosts RN further."
+      },
+      {
+        "name": "Censure and left surge",
+        "probability": 0.2,
+        "narrative": "A censure motion over the budget topples the government, new instability shifts the race toward the left-wing coalition, fiscal consolidation stalls and the deficit exceeds 5.5 percent."
+      },
+      {
+        "name": "Stabilisation rebound",
+        "probability": 0.15,
+        "narrative": "Markets and polling recover as unrest fades and a cross-party budget deal is enacted without 49.3, tightening the spread and lifting Macron-affiliated and centre-right prospects into the runoff."
+      }
+    ],
+    "base_rates": [
+      {
+        "reference_class": "Censure motions against French governments under the Fifth Republic, 1958-2026 (adopted ÷ tabled)",
+        "outcome_frequency": "1 adoption (Pompidou, 1962) of dozens",
+        "basis": "Assembly's official list [S39][S44]"
+      },
+      {
+        "reference_class": "Censure votes against the Lecornu cabinet, Oct 2025-Jul 2026 (survived ÷ faced)",
+        "outcome_frequency": "5/5 survived; closest 269 of 289 required",
+        "basis": "National Assembly censure votes [S28][S40][S29]"
+      },
+      {
+        "reference_class": "Severe French riot episodes 2005-2026 followed by another severe episode within five years (closed transitions only)",
+        "outcome_frequency": "3 of 4",
+        "basis": "France Assureurs / Senate insured-loss tallies [S48][S14]"
+      },
+      {
+        "reference_class": "French budgets passed via Article 49.3 since the 2024 hung parliament (budgets enacted ÷ budgets passed)",
+        "outcome_frequency": "all budgets since 2024 passed only through 49.3",
+        "basis": "Reuters analysis of the 2027 budget process [S5]"
+      },
+      {
+        "reference_class": "Le Pen presidential runoffs contested, 2017 and 2022",
+        "outcome_frequency": "lost both runoffs (0 of 2 won)",
+        "basis": "Reuters/Odoxa election reporting [S1]"
+      },
+      {
+        "reference_class": "Emergency regimes used in France, declared in 1955, 1958, 1961, 1988, 2005, 2015 and 2017 (postponed elections ÷ emergency episodes)",
+        "outcome_frequency": "0; elections held under emergency powers, e.g. 2017 presidential rounds under the November 2015 state of emergency until 31 October 2017",
+        "basis": "legal analysis of the four emergency frameworks [S18]"
+      }
+    ],
+    "drivers": [
+      {
+        "variable": "Article 49.3 engagement on the PLF 2027",
+        "direction": "raises probability of enactment before 31 December 2026 and of Muddle-through austerity",
+        "why_it_matters": "minority governments since 2024 have passed budgets only via 49.3, and censure after a 49.3 voids the bill [S5]"
+      },
+      {
+        "variable": "Censure tally margin supplied by the Socialist Party",
+        "direction": "a PS shift toward censure raises government-fall probability",
+        "why_it_matters": "the left's high-water mark of 269 votes fell 20 short of the 289 threshold, with the PS abstaining [S40][S41][S28]"
+      },
+      {
+        "variable": "Riot recurrence before the first round",
+        "direction": "raises Escalation and paralysis probability and RN vote share via security salience",
+        "why_it_matters": "3 of 4 severe episodes recurred within five years at a shrinking ~3-year interval, and about 3,000 looted shops already exceed 2023's ~2,500 [S48][S14]"
+      },
+      {
+        "variable": "Insured-loss escalation and catastrophe declarations",
+        "direction": "losses above the 2023 EUR 730-793 million benchmark push toward escalation",
+        "why_it_matters": "Morningstar caps October 2026 losses below EUR 1.2 billion only assuming no further widespread riots, and early tallies revise upward [S48][S14]"
+      },
+      {
+        "variable": "2026 deficit slippage versus the 5.5 percent threshold",
+        "direction": "exceedance requires ~0.1 pp of fresh slippage beyond the government's 5.4 percent",
+        "why_it_matters": "all published baselines (5.4% government, 5.1% Commission, -5.352% IMF) sit below 5.5%, with no cyclical cushion from 0.841% growth in 2025 [S4][S7][S8][S9]"
+      },
+      {
+        "variable": "10-year OAT-Bund spread level and momentum",
+        "direction": "sustained widening above the high-150s signals escalation; retreat toward the 77.8 bps average signals stabilisation",
+        "why_it_matters": "the spread hit a one-year high of 150.8 bps on 20 Oct 2026 against an all-time high of 225.1 bps on 17 Nov 2011 [S12]"
+      },
+      {
+        "variable": "Sovereign rating actions and mechanical bank downgrades",
+        "direction": "a Moody's cut from Aa3 pressures French banks downward and widens spreads",
+        "why_it_matters": "seven French banks were cut to A1 from Aa3 on 17 Dec 2024 purely via reduced government-support uplift after the sovereign cut [S65][S66]"
+      },
+      {
+        "variable": "Centrist fragmentation (Philippe vs Attal vote split)",
+        "direction": "fragmentation lowers the chance of a Macron-affiliated or centre-right runoff qualification",
+        "why_it_matters": "Philippe fell to 12% from 15% while Attal polls 7-11%, splitting the anti-RN centre [S17][S16]"
+      }
+    ],
+    "indicators": [
+      {
+        "indicator": "Net lending (+) / net borrowing (-), General government, Percent of GDP — France (wb:IMF_WEO_GGXCNL_NGDP/FRA)",
+        "series": "wb:IMF_WEO_GGXCNL_NGDP/FRA",
+        "latest_value": -5.064854,
+        "latest_date": "2025-12-31",
+        "latest_period": "2025",
+        "status": "estimate",
+        "units": "Percentage of GDP",
+        "frequency": "A",
+        "date_or_trigger": "next annual release after 2025",
+        "source_ref": "S8"
+      },
+      {
+        "indicator": "GDP (annual % growth) — France (wb:WB_WDI_NY_GDP_MKTP_KD_ZG/FRA)",
+        "series": "wb:WB_WDI_NY_GDP_MKTP_KD_ZG/FRA",
+        "latest_value": 0.84095,
+        "latest_date": "2025-12-31",
+        "latest_period": "2025",
+        "status": "observed",
+        "units": "Percent change per annum",
+        "frequency": "A",
+        "date_or_trigger": "next annual release after 2025",
+        "source_ref": "S9"
+      },
+      {
+        "indicator": "GDP growth, constant (average 2010-19 prices and market exchange rates): Euro area (wb:WB_GEP_NYGDPMKTPKDZ/EMU)",
+        "series": "wb:WB_GEP_NYGDPMKTPKDZ/EMU",
+        "latest_value": 0.7,
+        "latest_date": "2024-12-31",
+        "latest_period": "2024",
+        "status": "estimate",
+        "units": "Percent change per annum",
+        "frequency": "A",
+        "date_or_trigger": "next annual release after 2024",
+        "source_ref": "S10"
+      }
+    ]
+  }
+}

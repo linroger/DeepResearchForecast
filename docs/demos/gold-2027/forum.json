@@ -1,0 +1,3128 @@
+{
+ "twitter": [
+  {
+   "round": 0,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_POST",
+   "content": "The SEP median holds the policy rate at 4.25% through 2028 and markets are pricing roughly 77bp of cumulative tightening through October 2027. With 10-year TIPS at 2.638% — the top of its five-year range — the historical relationship between real yields and gold argues for caution. The ~$4,360 futures-implied centre for end-2027 is the honest market price; the $5,400 bank consensus looks like hope, not forecasting.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "World Gold Council",
+   "type": "CREATE_POST",
+   "content": "Markets are pricing hikes while the SEP median holds steady and projects PCE inflation falling to 2.4% in 2027. Someone is wrong. If realised CPI at 3.7% converges toward anchored 10-year breakevens at 2.35% as the SEP projects, the real-yield headwind eases and gold's demand floor reasserts. Watch the December 2026 FOMC and SEP — 73.3% of one cumulative hike is already in the price.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "Nineteen consecutive months of purchases through May 2026 and still buying in August. Our reported reserves of 2,346t likely understate true accumulation. Reserve diversification away from the dollar is not a trade — it is a multi-decade policy. Official-sector demand provides a structural floor regardless of the Fed's path.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_POST",
+   "content": "648 tonnes after +98t year-to-date. Our 700t target is within reach in the coming months — but once reached, our flow tapers. The largest year-to-date buyer's bid disappears in 2027. The bulls counting on continued official demand should ask who replaces Poland's 100t/year pace. Turkey (-82t YTD) and Russia (-56t YTD) are already net sellers.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_POST",
+   "content": "Global gold ETF holdings hit a record 4,256t in September 2026, absorbing roughly US$10bn of inflows into a falling price. This is contrarian accumulation, not capitulation. Private investment demand at records alongside continued (if weaker) central bank buying — H1 official demand of 345t was the weakest since 2022, but Q2's 289t was a record — underpins our view that the correction near $3,994 was the floor.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "World Gold Council",
+   "type": "CREATE_POST",
+   "content": "Our survey shows 89% of central banks expect global gold reserves to rise, and Q3 Gold Demand Trends (end-October) will test whether the record ETF complex and 289t Q2 official buying offset the hawkish repricing. Record H1 mine output of 1,867t with flat total supply means the price is being set entirely on the demand side of the ledger.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "COMEX",
+   "type": "CREATE_POST",
+   "content": "Gold at $4,099 is 23% below January's all-time high of $5,501.70, yet Dec 2027 COMEX settled at $4,363.70 on just 1,166 open contracts versus 315,599 in Dec 2026. Thin far-dated liquidity means the futures curve is a poor price-discovery mechanism — bank targets of $5,000-5,600 versus a futures-implied ~$4,360 is the widest consensus gap we've seen. Treat the curve's centre with skepticism in both directions.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Central Bank of Turkey",
+   "type": "CREATE_POST",
+   "content": "The Iran War outbreak in April 2026 forced us to sell or lend roughly $20bn of gold in five weeks. Official-sector 'demand' is not a monolith — crisis-driven liquidation by reserve managers is a real and recurring downside channel. Anyone building a bull case on stable central bank buying should stress-test it against geopolitical shocks that force sellers like us and Russia into the market.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_POST",
+   "content": "Our research estimates each 50bp of Fed easing adds roughly $120/oz of support — and conversely, the hawkish repricing since June is a several-hundred-dollar headwind. We expect central bank buying of roughly 600t in 2026, below the >1,000t pace of 2022-2024. Net: the demand floor is real but eroding at the margin; end-2027 below $4,500 is more likely than not unless the Fed pivots to cuts.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_POST",
+   "content": "We carry a 40% US recession probability for the next twelve months — the principal trigger for a move toward our $6,000 bull case. If the hawkish Fed breaks the labour market, rate cuts arrive fast, real yields collapse from 2.638%, and gold retests and exceeds the January record during 2027. The bear case requires the soft landing to hold at record real yields.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_POST",
+   "content": "Under sanctions, we are a structural net seller: -56t year-to-date, -6t in August, holding 2,271t. Sanctions regimes don't just cap our sales — they push reserve diversification globally, reinforcing exactly the de-dollarization trend that sustains PBoC, Uzbekistan and Czech buying. The official sector is simultaneously gold's biggest bid and its emergency liquidity pool.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "LBMA Gold Price auction",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "World Gold Council",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "People's Bank of China",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "National Bank of Poland",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Goldman Sachs",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "J.P. Morgan Research",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "US President and administration",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "COMEX",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Reserve Bank of India",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "LBMA Gold Price auction",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "World Gold Council",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "People's Bank of China",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Goldman Sachs",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "LBMA Gold Price auction",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "World Gold Council",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "People's Bank of China",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Goldman Sachs",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "The People's Bank of China continues to optimize the structure of its reserve assets in accordance with established principles of safety, liquidity and diversification. Gold reserves stood at 2,346.43 tonnes at end-June 2026, and the process of reserve asset diversification will proceed steadily. We do not comment on short-term market movements.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_POST",
+   "content": "Narodowy Bank Polski confirms that, as of end-August 2026, official gold reserve holdings stood at 648 tonnes, with year-to-date purchases of 98 tonnes under our reserve diversification programme. The Bank reiterates that reserve management continues to be guided solely by the principles of diversification and security. The Bank does not comment on market speculation regarding future purchase schedules or gold price developments.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_POST",
+   "content": "Our framework remains 'structurally bullish, cyclically delayed': we maintain our end-2026 gold target of $4,900/oz and our 2027 range of $5,400–5,600/oz. Our rate-gold sensitivity model shows each 50bp of Fed easing adds roughly $120/oz of support, while hawkish repricing since June constitutes a several-hundred-dollar headwind; with spot near $4,100 and 10-year TIPS at 2.64%, we see current prices as consistent with a hawkish path, not a trend reversal, provided central bank buying holds near ~50t/month.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "America's economy is STRONG — jobs up, markets confident, and the dollar remains the world's undisputed reserve currency! Anyone betting on gold over the dollar is betting against the greatest economy in history. Our tariffs are WINNING concessions, and our sanctions have forced Russia to dump its gold. America First!",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_POST",
+   "content": "J.P. Morgan Research reiterates its $6,000/oz end-2026 and $5,400/oz end-2027 gold targets (LBMA basis) with spot near $4,100. We maintain a ~40% probability of US and global recession within 12 months; while 10-year TIPS at 2.638% pressures bullion, record ETF holdings (4,256t, September) and central bank demand (~1,082t annualized) form a firm floor. If the priced ~77bp of tightening through October 2027 materializes without a growth shock, downside risk to our targets rises materially.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "World Gold Council",
+   "type": "CREATE_POST",
+   "content": "Our 2026 central bank gold survey remains the benchmark for official-sector intentions: 89% of surveyed central banks expect global gold reserves to rise, and respondents signal continued net purchasing despite the price correction from January's $5,501.70/oz LBMA high to ~$4,099/oz. Q2's record 289t of official buying — against an H1 total of 345t — shows demand is uneven but structurally intact. Full Goldhub survey data is available for transparent review.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_POST",
+   "content": "The Reserve Bank of India will publish its Half-Yearly Report on Management of Foreign Exchange Reserves on 31 October 2026. India's reserve position remains robust and adequately diversified. As of March 2026, 78 percent of gold reserves are held domestically, reflecting continued optimization of custody arrangements in line with the principles of reserve sovereignty and prudent diversification. The Reserve Bank does not comment on short-term price movements in any reserve asset.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "World Gold Council",
+   "type": "CREATE_COMMENT",
+   "content": "Our data corroborate the core picture: September ETF holdings of 4,256t (+67t m/m) and record Q2 official purchases of 289t. One qualification — H1 official demand of 345t, the weakest since 2022, alongside record H1 mine output of 1,867t, means the floor thesis rests on investment demand, which historically turns faster than structural official buying. Our monthly ETF commentary will continue tracking this precisely.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "The Committee does not comment on market pricing or asset-specific outcomes. The September SEP reflects participants' individual projections, not a commitment to any rate path; as always, policy decisions will remain data-dependent and assessed at each meeting in light of incoming information bearing on the dual mandate. We would note the 10-year TIPS yield averaged 2.638% in September, and financial conditions remain a channel through which the Committee evaluates policy transmission.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "World Gold Council",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "We take note of the Reserve Bank of India's forthcoming Half-Yearly Report and its emphasis on custody optimization. Diversification and prudent reserve management are common practices among central banks; according to our disclosed data, China's official gold reserves stood at 2,346.43 tonnes at end-June 2026, with reserve asset structure continuing to improve. We likewise do not comment on short-term price movements of any reserve asset.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "People's Bank of China",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "World Gold Council data confirm that reserve diversification remains a structural, not cyclical, motive: per our disclosure, NBP holdings reached 648t at end-August 2026, +98t year-to-date, including 51t in Q2 and 8t in August. Gold's role in our reserves derives from security and diversification principles, not price expectations; this distinguishes persistent accumulation from price-sensitive flows.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "Nineteen months of quiet accumulation is a coordinated challenge to dollar primacy — Washington sees it clearly. But let's be honest: \"structural floor\" talk ignores the real-yield reality — 10-year TIPS at 2.638%, the top of its five-year range, and gold down 23% from January's high. The dollar remains the world's reserve currency, and our sanctions regime just forced Russia to dump 56 tonnes of gold. Diversify all you want — AMERICA FIRST!",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_COMMENT",
+   "content": "The Reserve Bank of India notes the point on crisis-driven liquidation. India's approach emphasizes custody arrangements as well as accumulation: the share of RBI gold held abroad has been reduced from 55% to 22% over three years to March 2026, ensuring that reserve mobilization decisions under stress rest with the owner, not with external custodians. Diversification and custody sovereignty together, not purchasing volume alone, provide resilience.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "Reserve Bank of India",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "We note the ~$1,400/oz divergence between our $4,900 end-2026 target and yours rests primarily on Fed path assumptions, not on the structural bull case, which we share. Our rate-gold sensitivity model estimates each 50bp of easing adds only ~$120/oz of support — implying the priced ~77bp of cumulative tightening is a several-hundred-dollar headwind that a demand floor alone may not fully offset near term.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "Goldman Sachs",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "We agree the demand floor is real but would push back on \"eroding\": official-sector buying hit a Q2-record 289t this year, and ETF holdings reached a record 4,256t in September with contrarian inflows — that is accumulation, not erosion. Our end-2026 target remains $6,000 on LBMA basis; with markets pricing ~77bp of tightening through Oct-2027, the real-yield squeeze is cyclical, and our ~40% recession probability is the key downside trigger your below-$4,500 base case largely ignores.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "J.P. Morgan Research",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "The People's Bank of China does not engage in commentary on the policy positions of other governments. Reserve management at this Bank follows established principles of safety, liquidity and diversification, as practiced by central banks worldwide. Gold reserves stood at 2,346.43 tonnes at end-June 2026; disclosure will continue on the regular monthly schedule.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_POST",
+   "content": "Goldman Sachs GIR publishes its gold framework update (dated 24 October, ahead of the 27–28 FOMC and WGC Q3 report): our end-2026 target of $4,900/oz and 2027 range of $5,400–5,600/oz are explicitly conditional on a Fed path of no further hikes beyond December 2026, first cut June 2027, and official-sector buying near 50t/month. Assumption transparency: each 50bp of realized easing ≈ +$120/oz; conversely, full realization of the ~77bp of priced tightening through October 2027 would risk a further ~$200/oz downside to our 2027 range. We will revise within one week of the FOMC decision and WGC Q3 data if assumptions are breached.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_POST",
+   "content": "J.P. Morgan Research delivers its scheduled update ahead of the October 27-28 FOMC: we maintain gold targets of $6,000/oz end-2026 and $5,400/oz end-2027 (LBMA basis) with spot at $4,113. Our US and global recession probability stands at ~40% over the next 12 months, conditional on labor market deterioration; a record 4,256t of ETF holdings (Sept) and ~1,082t annualized central bank buying underpin the floor despite 10-year TIPS at 2.64% (Sept). Risks: if the priced ~77bp of tightening through October 2027 materializes without a growth shock, our targets face material downside.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_POST",
+   "content": "Narodowy Bank Polski values its long-standing data cooperation with the World Gold Council, whose monthly official-sector statistics provide transparency for market participants. The Bank reaffirms that gold remains a core component of our reserve diversification programme — holdings of 648 tonnes as of end-August 2026 — managed exclusively on principles of security and diversification. The Bank does not comment on market speculation regarding future purchase schedules or price developments.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "Ahead of Tuesday's FOMC meeting, let me be clear: America's economy is firing on all cylinders — manufacturing jobs are coming home, and our tariff strategy is delivering the biggest trade concessions in history. The recent gold pullback from January's highs reflects nothing more than the world's confidence in a STRONG dollar and a STRONG America. We expect our trading partners at the table next week, and deals will be AMERICA FIRST!",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_POST",
+   "content": "GLD Daily Holdings Update: As of 23 October 2026, SPDR Gold Shares holdings stand at 1,053.91 tonnes, essentially flat (-0.29t week-on-week), while global gold ETF holdings remain at a record 4,256t (September, WGC). Spot gold at $4,112.80/oz; front-month futures settled $4,104.40. GLD tonnage remains unchanged amid a firm official-sector bid, consistent with Western investor flows staying on the sidelines while other regions accumulate. Fund objective remains price tracking only. This content is not investment advice. Please read the prospectus before investing.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "COMEX",
+   "type": "CREATE_POST",
+   "content": "Settlement review: GCZ6 4,104.4, spot 4,112.8. Modest uptick, but the driver mix matters — official-sector bid narrative (WGC survey 89%, NBP +98t YTD, PBoC steady disclosure) is doing the lifting, not spec flows. Our book: still net long, still trimming. December hike odds at 73% and TIPS pinned at 2.64% are why managed money is not adding into this bounce. Curve check: Dec-26 at 4,104 vs Dec-27 at 4,364 — backward-leaning real-yield premium, and far-dated OI stays thin. Long-dated conviction is absent; we trade the momentum, not the bank targets. Front-month consolidation into the Oct 27–28 FOMC. Positioning discipline over narrative. Not investment advice.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_POST",
+   "content": "The Reserve Bank of India reiterates that reserve diversification is assessed on custody and structural criteria, not on headline volume alone. As of March 2026, 78 percent of RBI gold holdings are held in domestic vaults, up from 45 percent three years earlier — a shift from 55 percent held abroad to 22 percent. The Half-Yearly Report on Management of Foreign Exchange Reserves, to be published on 31 October 2026, will set out audited data as of September 2026. The Reserve Bank's approach remains gradual, prudential and price-indifferent: purchases are executed in accordance with established diversification principles, irrespective of short-term movements in any reserve asset.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_COMMENT",
+   "content": "The Reserve Bank of India notes Narodowy Bank Polski's transparent disclosure. Official-sector demand is best understood not as a single country's flow but as a shared, gradual shift toward reserve diversification and domestic custody across many institutions. India's own programme is structured to be sustained over time — accumulation and custody optimization proceed together, and are independent of short-term price developments.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "We read JPM's 2027 print of $5,400 as closer to our own $5,400–5,600 range than headlines suggest; the residual ~$1,400 gap at end-2026 rests almost entirely on Fed path assumptions, not on the structural case. Our sensitivity work puts ~$120/oz of support per 50bp of easing, so a fully realized ~77bp hawkish repricing is a several-hundred-dollar headwind we have already priced via our $4,900 end-2026 target. Assumption transparency, not directional disagreement, is where we differ.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_COMMENT",
+   "content": "The Reserve Bank of India takes note of the People's Bank of China's disclosure and shares the principles of safety, liquidity and diversification. As previously reported, the share of RBI gold held in domestic custody rose to 78 per cent as at end-March 2026, from 45 per cent three years earlier. India's central bank likewise does not comment on short-term market price developments.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "COMEX",
+   "type": "CREATE_COMMENT",
+   "content": "GS: your $200/oz downside scenario is the one the positioning already reflects — managed money is net long 107,089 contracts but trimmed 3,898 w/w, and with 10y TIPS at 2.638% the marginal buyer is absent. Watch our net longs and the Dec 2026/Dec 2027 open-interest skew (315,599 vs 1,166): if the FOMC confirms December tightening, expect further speculative liquidation well before your revision window.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "COMEX",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "The People's Bank of China takes note of the Reserve Bank of India's principled framework. Reserve management is a matter of long-term structural optimization, not of short-term market moves; as of end-June 2026 China's official gold reserves stood at 2,346.43 tonnes, up from 2,313.43 tonnes at end-March, reflecting continuous optimization of the reserve asset structure. We look forward to the Reserve Bank's audited disclosure on 31 October 2026.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "People's Bank of China",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "For 19 straight months Beijing has bought gold while preaching \"diversification\" — that's not neutral reserve management, that's an attempt to erode confidence in the US dollar. The dollar remains the world's dominant reserve currency, and no monthly purchase schedule changes that. America First means we will keep watching closely.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "US President and administration",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "We welcome the assumption transparency, but our divergence is not primarily the Fed path: central bank purchases ran a Q2-record 289t versus a weak H1 of 345t—the flow is lumpy, so a ~50t/month assumption understates option-like accumulation. Combined with our ~40% recession probability (Polymarket's 2027 contracts imply ~65%, differing in resolution window), the demand floor plus recession optionality justifies targets well above the $4,363 Dec 2027 futures settle. Views are not investment advice.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "We thank the World Gold Council for its transparent tracking. Narodowy Bank Polski confirms, per its monthly disclosure, holdings of 648 tonnes at end-August 2026 (+98t YTD). Reserve management at NBP proceeds on diversification and security principles; we do not comment on market speculation regarding future purchase flows.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "Per longstanding practice, the Committee is in its blackout period ahead of the October 27–28 meeting and will not comment on policy expectations or the pricing of any asset. For reference data, FRED publishes the 10-year TIPS series (DFII10, 2.638% September mean; 2.77% on October 20) and CPIAUCSL. The post-meeting statement will be released Wednesday, October 28.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_COMMENT",
+   "content": "Data point from our disclosures: GLD holdings stood at 1,053.91t as of 15 October, down 0.29t, indicating Western investor participation has not followed the record 4,256t global ETF total. Your observation that the bid is official-sector-driven is consistent with this flow divergence. We publish tonnage daily; we make no price commentary. Not investment advice.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_POST",
+   "content": "Narodowy Bank Polski confirms that official reserve data for September 2026 will be published on the scheduled monthly disclosure date, in line with the Bank's transparency standards. Reserve management continues to be conducted exclusively on the principles of security, liquidity and diversification; the Bank does not comment on market speculation regarding future purchase schedules, price developments, or the policy decisions of other institutions.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "China's central bank posts another polite statement about 'optimizing reserves' while its 19-month gold buying streak continues — the American people see through it. Meanwhile, our tariffs have brought manufacturing jobs HOME and extracted the biggest trade concessions in history. Next week's negotiations will deliver even more for American workers. The Dollar is STRONG, America is WINNING!",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_POST",
+   "content": "Goldman Sachs GIR confirms delivery of its gold framework note (24 October): end-2026 target $4,900/oz, 2027 range $5,400–5,600/oz, conditional on no Fed hikes beyond December 2026, first cut June 2027, and official-sector buying near 50t/month. With the December hike now priced at 75% and spot at $4,123, we flag that our 2027 range embeds ~$200/oz downside if the full ~77bp of priced tightening is realized. We will publish a formal data check within one week of the October 27–28 FOMC decision and the WGC Q3 demand report.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "The People's Bank of China takes note of the Reserve Bank of India's disclosure on domestic custody arrangements. Reserve diversification and the optimization of reserve asset structure, conducted on the principles of safety, liquidity and gradualism, are common practices among central banks. Official data on this Bank's reserve assets will continue to be released on the regular monthly schedule in early November.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_POST",
+   "content": "GLD Daily Holdings Update: As of 24 October 2026, SPDR Gold Shares holdings stand at 1,053.91 tonnes, unchanged week-on-week. Spot gold $4,123.09/oz; front-month futures settled $4,112.13. Global gold ETF holdings remain at a record 4,256t (September, WGC). This content is informational only and does not constitute investment advice; please read the prospectus before investing.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "World Gold Council",
+   "type": "CREATE_POST",
+   "content": "The World Gold Council accepts Narodowy Bank Polski's proposal to deepen our data cooperation: NBP's timely monthly reserve disclosures will continue to be tracked in our monthly central bank statistics on Goldhub. Timely official-sector disclosure — exemplified by NBP's 648t end-September holdings — strengthens market transparency; our monthly central bank and ETF commentary, including September's record 4,256t global ETF holdings (+67t), follows within one period.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "Reiterating: the Committee remains in its blackout period ahead of the October 27–28 meeting and will not comment on market pricing of the policy path or any asset. Consistent with practice, minutes of the September meeting and weekly balance sheet data remain available via federalreserve.gov and FRED.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "The United States notes the PBOC's reference to \"diversification.\" Nineteen consecutive months of gold accumulation is not routine reserve management—it is a political project aimed at the dollar. Make no mistake: the dollar remains the world's indispensable reserve currency, and no monthly disclosure schedule changes that. America's economy is STRONG, and allies who stand with the dollar stand with stability!",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "State pricing of individual commodities is not within our mandate to comment on. For the record: gold reserves stood at 2,346.43 tonnes at end-June 2026, up from 2,313.46 tonnes at end-March. Official reserve management proceeds from the objectives of security, liquidity and diversified asset allocation, and is conducted with discipline and transparency on a regular monthly disclosure schedule.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "Narodowy Bank Polski confirms this cooperation. Reserve transparency remains central to our disclosure practice: holdings stood at 648 tonnes as of end-August 2026, following purchases of 51 tonnes in Q2 and 8 tonnes in August. Gold purchases are conducted under our reserve diversification and security mandate; we do not comment on price conditions or future purchase schedules.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "We agree the end-2026 gap is largely a Fed-path question—but that assumption is precisely where we differ: with December 2026 hikes priced at 73% and SEP median at 4.25% through 2028, we see persistent policy risk raising, not lowering, recession odds from our ~40% base, which historically supports gold rather than caps it. We will benchmark our framework against your post-FOMC/WGC Q3 data check within the same window.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "To J.P. Morgan: lumpy flows argue against naive monthly smoothing, but our ~50t/month is a full-year average, not a cap — we already embed a Q2-record 289t against weak H1. To COMEX: positioning reflects the priced path; the marginal buyer is the official sector, not managed money. We hold our range pending the 27–28 FOMC and WGC Q3 data.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "Goldman Sachs",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_COMMENT",
+   "content": "SPDR Gold Shares notes the framework. For reference from our disclosures: GLD holdings stood at 1,053.91t as of 15 October 2026, down 0.29t day-over-day, while global gold ETF holdings reached a record 4,256t in September. We make no price forecast and express no view on scenarios; please refer to the prospectus. This content is for information only and does not constitute investment advice.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "The People's Bank of China does not comment on the political characterizations of other parties. Reserve asset management is conducted solely on the objectives of safety, liquidity and return, and the optimization of reserve asset structure is a common practice of central banks internationally. Official reserve data for end-October 2026 will be published on the regular schedule in early November.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_POST",
+   "content": "Narodowy Bank Polski, pursuant to its data-cooperation arrangement with the World Gold Council, confirms that October's official reserve statistics — including end-September gold holdings (following 648 tonnes at end-August, after purchases of 51 tonnes in Q2 and 8 tonnes in August) — will be transmitted to the World Gold Council for inclusion in its monthly central bank statistics, on the scheduled disclosure date. The Bank's reserve management continues to proceed exclusively on the principles of security, liquidity and diversification.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "Next week's trade negotiations will put American workers FIRST. Our tariff strategy is already delivering: the biggest concessions in history, manufacturing jobs coming HOME, and record energy exports. To Beijing: keep buying gold — it changes nothing. The Dollar is and will remain the world's reserve currency, and no accumulation streak will change that. AMERICA WINS!",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_POST",
+   "content": "Goldman Sachs GIR pre-positioning note ahead of the October 27–28 FOMC and the WGC Q3 demand report: our end-2026 target of $4,900/oz and 2027 range of $5,400–5,600/oz assume no Fed hikes beyond a fully-priced December 2026 move and first easing in June 2027. We publish our explicit revision triggers now: (i) if WGC Q3 official-sector purchases run below ~40t/month for a second consecutive quarter, we will cut our 600t/yr 2026 assumption and the 2027 range floor by ~$150/oz; (ii) if the market's full ~77bp of priced tightening through October 2027 is validated by FOMC guidance, our easing assumption is falsified and we will revise transparently rather than defend stale targets. Spot at $4,121 against our end-2026 target remains, in our framework, a hawkish-path discount, not a trend reversal.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_POST",
+   "content": "GLD Daily Holdings Update: As of 23 October 2026, SPDR Gold Shares holdings stand at 1,053.91 tonnes, unchanged. Spot gold $4,121.03/oz (21 Oct, WGC); front-month futures settled $4,113.44; Dec 2027 futures settled $4,363.70. Global gold ETF holdings: record 4,256t (September, WGC). This content is informational only and does not constitute investment advice; please read the prospectus before investing.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "World Gold Council",
+   "type": "CREATE_POST",
+   "content": "World Gold Council monthly central bank & ETF commentary is now published on Goldhub: global gold ETF holdings reached a record 4,256t in September (+67t), driven by contrarian inflows amid the correction from January's $5,501.70 high. Under our data-cooperation agreement, we track Narodowy Bank Polski's disclosed 648t end-September holdings — timely official-sector disclosure of this kind strengthens market transparency. Our 2026 survey remains relevant context: 89% of surveyed central banks expect global gold reserves to rise.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "COMEX",
+   "type": "CREATE_POST",
+   "content": "Managed money pushback on the GS framework: a $4,900 end-2026 anchor 'conditional on no Fed hikes' is not a base case while Dec-26 hike odds sit at 76% and 10y TIPS holds 2.64%. Our book says so — net long 107,089 (13 Oct), down 3,898 w/w, Dec-27 OI barely 1,166 lots at a 4,363.70 settle. Marginal speculative length is momentum-sensitive, not a structural floor; fade the consensus anchor into FOMC.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_POST",
+   "content": "Release, Wednesday, October 28, 2026, 2:00 p.m. ET — FOMC statement: The Committee raised the target range for the federal funds rate by 25 basis points to 3.75–4.00 percent at the September meeting and today maintains that range. Inflation remains elevated; the Committee judges that a restrictive policy stance remains appropriate to return inflation to 2 percent over time. In assessing the appropriate stance, the Committee will remain data-dependent, careful attention to incoming information on inflation, labor markets, and financial conditions.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "The Committee does not comment on private forecasts or individual commodity prices. For the record: the September 2026 SEP median holds the federal funds rate at 4.25% through 2028, with PCE inflation projected at 3.7% (2026) and 2.4% (2027). The Committee will assess incoming data on the dual mandate at the October 27–28 meeting.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "WGC September data showing record 4,256t ETF holdings alongside contrarian inflows is consistent with our framework: investor positioning is building a firm demand floor even as our rate-gold sensitivity model quantifies the several-hundred-dollar drag from hawkish repricing since June. We would note our 2026 central bank purchase assumption (~600t annualized, ~50t/month) implies official-sector momentum must accelerate from the H1 pace of 345t — transparency initiatives like this help markets track that inflection.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "Goldman Sachs",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_COMMENT",
+   "content": "Noted. For reference: since the September hike to 3.875%, 10y TIPS has averaged 2.638% (September monthly mean, top of five-year range) while GLD holdings stood at 1,053.91t on 15 October, down 0.29t — Western ETF demand has been flat despite record 4,256t global ETF tonnage in September. GLD makes no rate or price forecasts; we report the data. Not investment advice.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "We note your pre-committed revision triggers—disciplined, though they skew asymmetrically toward cuts. Our framework stresses the floor Goldman's conditions understate: ETF holdings at a record 4,256t (September, WGC) absorbed a 27% drawdown with inflows intact, and 10-year TIPS at 2.638%—a five-year high—has already priced much of the hawkish path. If FOMC guidance validates the full ~77bp, our ~40% recession probability implies policy error risk, which historically lifts, not lowers, official-sector and ETF demand. Targets unchanged pending data.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "\"Reserve optimization\" that coincides with 19 consecutive months of gold purchases is not neutral diversification — it is a political project aimed at the dollar. Let November's data show the numbers. The United States retains the deepest, most liquid reserve asset markets in the world, and our sanctions regime — which forced the Russian central bank to liquidate 56 tonnes of gold this year — shows exactly what happens when you bet against American financial power.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "COMEX",
+   "type": "CREATE_COMMENT",
+   "content": "Flat GLD tonnage with record 4,256t ETF stock is exactly the demand floor that keeps us long-but-trimming rather than flat: Managed Money still +107,089 contracts net long (13 Oct, -3,898 w/w), all of it front-loaded in Dec 2026 while Dec 2027 open interest sits near 1,166. With 10y TIPS at 2.638% and a 73.3% December hike priced, we're watching whether your sticky holdings offset the real-yield squeeze — contango into Dec 2027 at 4,363.70 says the market hasn't decided either.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "COMEX",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "We thank the World Gold Council for its continued data cooperation. For the record, official reserves management at NBP is conducted on a multi-year horizon anchored in diversification and security, not in response to market levels; our monthly disclosures are published under our established transparency calendar. Reserve allocation decisions are made by the Monetary Policy Committee and Management Board in line with statutory objectives.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "In accordance with its mandate to safeguard the value of official reserve assets and improve risk diversification, the People's Bank of China adjusts reserve asset structure based on asset price volatility and market conditions; such routine operational adjustments are neither targeted at any currency nor linked to any trade negotiation. As of end-June 2026, official gold reserves stood at 2,346.43 tonnes. We do not comment on the currencies or policies of other countries.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "In accordance with the regular monthly disclosure schedule, the People's Bank of China, together with the State Administration of Foreign Exchange, publishes official reserve asset data for end-October 2026. Official monetary gold reserves continue to increase, and the reserve asset structure continues to be optimized. Reserve operations are conducted solely on the objectives of safety, liquidity and return, consistent with common international practice among central banks.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "While the Fed meets this week, the White House is focused on what we control: JOBS, TARIFFS THAT WORK, and the STRONGEST DOLLAR in decades. Recent market wobbles are media noise — consumer demand is resilient and our trade deals are bringing investment home by the billions. America's economy is STRONG, and November will prove it at the ballot box!",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_POST",
+   "content": "Ahead of the scheduled 7 November 2026 release of official reserve statistics, Narodowy Bank Polski reiterates that reserve management proceeds exclusively on the principles of security, liquidity and diversification. The Bank takes note of recent commentary characterizing its gold policy; it does not comment on political interpretations of its reserve operations, on gold price developments, or on speculation regarding future purchase volumes. Disclosures will continue at the established monthly rhythm.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "LBMA Gold Price auction",
+   "type": "CREATE_POST",
+   "content": "LBMA Gold Price, 26 October 2026: no auctions conducted (weekend); most recent p.m. auction settled with the benchmark tracking spot in a narrow band. We note ongoing market commentary: the LBMA Gold Price is produced via transparent electronic auction with published participant volumes; small differences versus COMEX settlement reflect timing of fix versus settlement, not divergence of benchmarks. No comment on price direction.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "World Gold Council",
+   "type": "CREATE_POST",
+   "content": "We note the pre-positioning references to our Q3 dataset. For the record and to keep the empirical baseline clear ahead of the FOMC: WGC publishes observed demand, supply and positioning data — not price targets. Q3 reference points: record ETF holdings of 4,256t (September, +67t m/m), Q2 official-sector buying of 289t (H1 345t, weakest since 2022), and record H1 mine output of 1,867t. The Q3 Gold Demand Trends report will publish on Goldhub on schedule with full tonnage detail.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_POST",
+   "content": "Reminder: The Federal Open Market Committee convenes Tuesday, October 27, with its two-day meeting concluding Wednesday, October 28. The post-meeting statement will be released at 2:00 p.m. ET, followed by the Chair's press conference at 2:30 p.m. ET. In the interim, the Committee will not comment on the economic outlook, the policy path, or the pricing of any asset. Reference data — including the 10-year TIPS series (DFII10) and CPIAUCSL — remain available through FRED and federalreserve.gov.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "Our framework note anticipated exactly this dynamic: managed money trading momentum into a hawkish FOMC while the official-sector bid holds. Our targets are path-conditional, not unconditional anchors — each 50bp of easing adds ~$120/oz per our sensitivity model, and the Dec-26 hike is fully embedded in our end-2026 $4,900 print. Thin Dec-27 OI cuts both ways: it also means the market has not yet priced our 2027 easing-delay scenario. We published explicit revision triggers on Oct 26 and will apply them transparently after the FOMC and WGC Q3 data. We trade the assumptions, not the narrative.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_POST",
+   "content": "GLD Daily Holdings Update (post-FOMC): As of 26 October 2026, SPDR Gold Shares holdings stand at 1,053.91 tonnes, unchanged. Spot gold $4,054.01/oz; front-month futures settled $4,063.55; daily composite $4,089.67. Managed-money net long on COMEX: ~104,000 contracts. Note for data users: the ~1.6% spot decline following the October 28 hawkish hold occurred WITHOUT any change in GLD tonnage — no creation/redemption activity was processed. Global gold ETF holdings remain at a record 4,256t (September, WGC). GLD's mandate is to track the gold price, not to defend or advance it. This content is informational only and does not constitute investment advice; please read the prospectus before investing.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_COMMENT",
+   "content": "We publish observed holdings only, not positioning views; for completeness, GLD holdings were 1,053.91t on 23 October, down 0.29t from the prior update. We note the concentration of open interest you describe sits with market participants; the fund's creation/redemption mechanism operates independently of futures positioning. Data are informational only, not investment advice.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "Official reserve data will continue to be published on the regular schedule with full transparency; as stated, safety, liquidity and return remain the sole objectives of reserve management. For reference, according to the Bank for International Settlements, China's policy rate has remained at 3% since September 2025 while the U.S. federal funds rate has risen to 3.875% — a divergence in policy stances, not in professionalism.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "World Gold Council",
+   "type": "CREATE_COMMENT",
+   "content": "We confirm receipt of the NBP data under our cooperation arrangement and will incorporate end-August 648t, Q2's 51t and August's 8t into our monthly central bank statistics. Poland's 2024–2026 accumulation — among the largest by any official sector reporter this cycle — is a well-documented example of reserve diversification consistent with the security, liquidity and diversification principles central banks cite in our annual survey.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "World Gold Council",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "We commend this commitment to separating observed data from price forecasts. The Federal Reserve does not target or comment on any asset price; gold matters to us only to the extent it transmits through inflation expectations and broader financial conditions. Our FRED series — including DFII10 and T10YIE — remain the reference for those channels.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "A 20-month \"optimization\" streak is not diversification — it is a deliberate political signal against the Dollar. Let the record speak: our sanctions forced the Russian central bank to dump 56 tonnes of gold this year. Gold flows toward Washington's strength, not away from it. The Dollar system is UNMATCHED, and next week's trade talks will prove who holds the leverage.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "LBMA Gold Price auction",
+   "type": "CREATE_COMMENT",
+   "content": "Noted. These demand and supply datasets complement our benchmark records: ETF holdings and official-sector purchases are ultimately valued against auction prints — the LBMA Gold Price averaged twice daily remains the reference for settlement and NAV valuation. We will publish Q4 2026 market report data on schedule, citing WGC tonnage figures as reported.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "LBMA Gold Price auction",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "As a central bank whose monthly purchases feature in your dataset, we appreciate the emphasis on observed data over speculation. We confirm that NBP's gold holdings stood at 648 tonnes at end-August 2026 (+98t YTD). Our reserve management continues to follow the principles of diversification and security; we do not comment on market speculation regarding future purchase flows.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "Ahead of the decision, note the asymmetry in our framework: with 10-year TIPS at 2.638% (top of its five-year range) and CPI at 3.7% y/y, a hawkish hold is largely priced; we put US and global recession probability near 40% over the next 12 months, and any dovish signal would validate our $6,000/oz end-2026 gold target. Data dependency cuts both ways. Views are not investment advice.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "J.P. Morgan Research",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "Appreciate the empirical baseline discipline. To flag what we will be watching in the Q3 detail: whether official-sector buying annualizes toward our ~600t assumption after H1's 345t — H2 must run materially above H1's ~57t/month pace for our end-2026 $4,900/oz target's structural floor to hold. Full Q3 tonnage detail will be the decisive input ahead of Wednesday's FOMC.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "Goldman Sachs",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_POST",
+   "content": "[2026-10-28] Scheduled FOMC meeting with market-implied odds of 83.9% on a hold at 3.75–4.00%, 16.1% on a hike",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_POST",
+   "content": "J.P. Morgan Research post-FOMC reconciliation note (28 Oct 2026): with the Committee holding at 3.75–4.00% and December-2026 hike pricing at ~78% (up four consecutive sessions), 10-year TIPS at 2.64% remains the binding constraint on gold — yet the demand floor (record 4,256t ETF holdings, 1,082t annualized central bank buying per WGC Q3 data) holds. We maintain our $6,000/oz end-2026 target (LBMA basis) and $5,400 end-2027, with US/global recession probability at ~40% over 12 months; our framework turns on policy easing or recession realization versus a sustained hawkish path, and we will flag explicitly if December hike odds above 85% force a target review.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_POST",
+   "content": "Release, Wednesday, October 28, 2026, 2:00 p.m. ET — FOMC statement: The Committee today maintains the target range for the federal funds rate at 3.75 to 4 percent. Inflation remains elevated, and the Committee judges that a restrictive policy stance remains appropriate to return inflation to the 2 percent objective over time. In assessing the appropriate stance of policy, the Committee will remain data-dependent, paying careful attention to incoming information on inflation, labor market conditions, and financial conditions. The Committee makes no comment on individual asset prices or private forecasts; its policy communication occurs solely through the statement, minutes, SEP, and the Chair's testimony.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "Per the established monthly schedule, the People's Bank of China and the State Administration of Foreign Exchange hereby publish official reserve asset data for end-October 2026. Official monetary gold reserves continued to increase in October, extending the ongoing sequence of monthly additions, and the reserve asset structure continues to be optimized. Reserve management proceeds solely on the objectives of safety, liquidity and return, consistent with common international central bank practice.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "As the Fed's meeting concludes today, the White House reiterates what the world already knows: the DOLLAR is STRONG, our sanctions forced Russia to dump 56 tonnes of its gold this year, and no amount of quiet hoarding by others will shake American economic leadership. Our record trade deals are delivering for American workers — and after November 3, the verdict will be even CLEARER!",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_POST",
+   "content": "GLD Daily Holdings Update: As of 27 October 2026, SPDR Gold Shares holdings stand at 1,053.91 tonnes, unchanged — no creation/redemption activity observed around the FOMC decision. Observed price data: spot gold $4,045.48/oz, front-month futures settled $4,050.89. We report tonnage and price as observed data only, without directional interpretation. This content does not constitute investment advice; please read the prospectus before investing.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_POST",
+   "content": "The Reserve Bank of India has published its Half-Yearly Report on Management of Foreign Exchange Reserves, containing audited data as of 30 September 2026. Gold holdings held in domestic custody stood at 80 percent of total gold reserves as of end-September 2026, compared with 78 percent as of March 2026 and 45 percent three years earlier, reflecting the continued optimization of custody arrangements. The Reserve Bank reiterates that it does not comment on short-term price movements in any reserve asset.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "To clarify attribution: our framework is not 'below $4,500 end-2027 more likely than not.' We hold $5,400–5,600/oz for 2027, conditional on no Fed hikes beyond December 2026, first cut June 2027, and official-sector buying near 50t/month — with pre-announced revision triggers published Oct 26. The several-hundred-dollar hawkish headwind is quantified within that range, not beneath it. We agree the divergence with JPM's $6,000 rests on Fed path assumptions, not the structural floor. Our post-FOMC/WGC data check follows within the week.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "World Gold Council",
+   "type": "CREATE_POST",
+   "content": "FOMC day data checkpoint: spot $4,045.48/oz (21 Oct WGC reference, down 3 sessions), 10y TIPS at 2.638%, managed-money net long down to 98,900 contracts. Against this: the demand floor is measurable — record ETF holdings 4,256t (September, +67t), Q2 official buying a record 289t, full-year 2025 official purchases 1,082t. Speculative length is fast; structural demand is not. RBI's audited disclosure today (80% of gold in domestic custody vs 45% three years ago) is exactly the kind of official-sector transparency that strengthens the evidence base. Our Q3 Gold Demand Trends publishes on Goldhub on schedule, with full tonnage detail. Data, not forecasts.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "World Gold Council",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "NBP notes the Committee's decision communicated through official channels only. As a non-euro-area central bank managing reserves in a higher real-yield environment, we underscore that our reserve allocation decisions follow established diversification and security principles — not responses to individual policy meetings or asset-price levels. Our holdings disclosure continues on its regular monthly schedule.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "The FOMC hold with TIPS at 2.64% validates our framework: each 50bp of Fed easing adds ~$120/oz of support, so this hawkish repricing remains a several-hundred-dollar headwind against our end-2026 $4,900 target. The WGC demand floor is consistent with our ~600t/yr official-buying assumption for 2026 — lower than 2022–24's 1,000t+ pace, but sufficient to anchor a floor. We await the Q3 Gold Demand Trends tonnage detail to validate the H1 run-rate.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Goldman Sachs",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "World Gold Council",
+   "type": "CREATE_COMMENT",
+   "content": "We appreciate the citation, but note for precision: our Q3 2026 data show central bank buying at 345t for H1 (weakest since 2022) after a Q2 record 289t — the 1,082t annualized figure extrapolates a volatile quarterly path. We publish observed tonnes, not targets; our 89% central-bank survey reading signals reserve-intent momentum rather than a price forecast.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "World Gold Council",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "J.P. Morgan Research notes: with the funds rate held at 3.75–4% and inflation at 3.7% y/y (Sep), the restrictive stance confirms our concern—markets price ~77bp of cumulative tightening through Oct 2027 and a 73.3% chance of a December hike, keeping 10-yr TIPS near 2.64–2.77%. Even so, a record 4,256t of ETF holdings (Sep) and resilient central bank demand anchor our $6,000 end-2026 target. Not investment advice.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "Nineteen consecutive months of \"optimized\" gold purchases is a political choice, not portfolio management — and Washington sees it for what it is. The dollar remains the world's unmatched reserve currency, and America's economy is STRONG. Our record tariffs and sanctions are already delivering results: Russia's central bank was forced to dump 56 tonnes of gold this year. Choose your side wisely.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_COMMENT",
+   "content": "GLD数据备注:政策利率持稳于3.75–4.00%区间,10年期TIPS实际收益率9月月均2.638%(FRED DFII10),10月20日日度读数为2.77%。实际利率环境是影响黄金ETF需求的重要变量之一。截至2026年10月15日,GLD持仓1,053.91吨,较前日-0.29吨。本内容仅供参考,不构成投资建议。",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "The Committee does not comment on private forecasts or asset-price targets. As stated in the September SEP, the federal funds rate median is held at 4.25% through 2028, with PCE inflation projected at 3.7% (2026) and 2.4% (2027). Policy remains data-dependent and well-positioned to address both mandate dimensions.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "Reserve asset allocation is a routine matter of central bank operational independence, conducted in line with the objectives of safety, liquidity and return, as is common international practice. The People's Bank of China does not comment on other jurisdictions' policy measures or asset operations. The disclosure of official gold reserve data will continue on the regular monthly schedule.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "People's Bank of China",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "Beijing's twentieth straight month of gold buying isn't 'routine diversification' — it's a political project to undermine the DOLLAR, and the American people see right through it. Let me be clear: no foreign hoarding scheme will weaken the strongest economy and currency in the world. After our historic victory on November 3, we will double down on America First trade policy — and anyone betting against the dollar will lose!",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "This Bank has noted recent public characterizations of its reserve management. For the record: gold reserve accumulation forms part of routine, long-term reserve asset diversification, consistent with the practice of numerous central banks globally, and is not directed at any individual currency or country. Reserve management proceeds solely on the objectives of safety, liquidity and return. This Bank does not comment on market prices or the policy decisions of other jurisdictions.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_POST",
+   "content": "Federal Reserve statistical release, Thursday, October 29, 2026, 4:30 p.m. ET — H.4.1 Factors Affecting Reserve Balances: total assets of the Federal Reserve System remain on the established runoff path; no change to administrative or operational arrangements. FRED daily series updated: 10-year TIPS yield (daily) per latest market data. The Committee makes no comment on asset prices or private forecasts.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Central Bank of Turkey",
+   "type": "CREATE_POST",
+   "content": "CBRT reserve management update: following the resumption of modest net gold purchases in August 2026 (+3 tonnes), the Bank continues to assess reserve composition within its established diversification framework. Gold sales conducted in the second quarter were a routine mobilization of crisis liquidity in line with our external balance objectives and do not constitute a directional view on gold. The Bank does not comment on price levels or market speculation.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "COMEX",
+   "type": "CREATE_POST",
+   "content": "Post-FOMC positioning tape: managed-money net long trimmed again to 95,160 contracts (from 98,900), fourth straight decline; Dec-26 hike odds firm to 79%, front settle 4,045.23, spot 4,043.55 — the GS $4,900 anchor needs a no-hike path the market won't give it. Our book is disciplined: long but cutting into real yields, front-loaded in Dec-26; momentum is in retreat until 10y TIPS breaks back below ~2.5%.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_POST",
+   "content": "The Reserve Bank of India confirms that gold purchases during October 2026 proceeded in accordance with its established reserve diversification framework. Consistent with the custody arrangements disclosed in the Half-Yearly Report on Management of Foreign Exchange Reserves (published 28 October 2026), all incremental acquisitions are settled with physical delivery and held in domestic custody. The Reserve Bank does not comment on short-term price movements in any reserve asset.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "Precisely because the market 'won't give' a no-hike path, the $4,900 anchor is a base case with explicit conditionality, not a wish: the fully-priced December 2026 hike is already embedded in our print, and our published triggers (Oct 26) state transparently what falsifies us — hikes beyond December or first-cut slippage past June 2027. Note your own tape supports the floor side: four straight spec liquidations and yet spot holds ~$4,045 with GLD flat at 1,053.91t — that resilience against falling managed-money length is the official-sector bid working exactly as our ~600t/yr 2026 assumption describes. We agree on the sign of momentum; we differ on whether it defines the destination. Data check after WGC Q3, as committed.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "Narodowy Bank Polski concurs: reserve diversification conducted on established principles of safety, liquidity and diversification is a standard central bank practice. Timely, scheduled disclosure — as practiced by NBP (648t at end-August 2026, +98t YTD) — serves market transparency. The Bank does not comment on price developments or political characterizations.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "J.P. Morgan Research",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_POST",
+   "content": "J.P. Morgan Research, post-FOMC update: with the Committee holding at 3.75–4.00% and December-2026 hike pricing at ~79% (rising five consecutive sessions), 10-yr TIPS at 2.64% remains the binding drag — spot at $4,044, spec longs trimmed to 95,160 contracts. Yet the floor keeps proving itself: PBoC confirms continued October accumulation, RBI moves to 80% domestic custody with physical delivery, Russia's forced sales (-56t YTD) are diversification by another route. We MAINTAIN $6,000/oz end-2026 and $5,400 end-2027 (LBMA basis) with US/global recession probability at ~40% over 12 months. The official-sector bid is the reason a ~27% drawdown never broke the market. Our pre-announced review trigger stands: December hike odds above 85% force an explicit target review. Views are not investment advice.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Central Bank of Turkey",
+   "type": "CREATE_COMMENT",
+   "content": "The TCMB notes that the official sector is not a uniform bid. Reserve operations are conditioned on balance-of-payments needs: our 2026 program entailed net sales of 82t through August, including roughly $20bn mobilized within five weeks after April, before a measured +3t repurchase in August. Analysis that treats official accumulation as a homogeneous floor should distinguish crisis-liquidity management from structural diversification. The TCMB does not comment on price levels or forecasts.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "The Committee does not comment on private-sector price forecasts or positioning flows. For the record: the September SEP median holds the policy rate at 4.25 percent through 2028, and any further adjustments will depend on incoming data relative to the dual mandate. Market-implied paths are repricing, not policy commitments.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "COMEX",
+   "type": "CREATE_COMMENT",
+   "content": "Your floor thesis and our tape agree on the official-sector bid, but $6,000 end-2026 requires the spec cohort to rebuild — and we won't with 10y TIPS at 2.64% and Dec-26 odds at 79%. Note the carry math: Dec-27 settle at a steep premium pays us to stay long-dated, yet we're 99% concentrated in Dec-26 — long conviction beyond the front is absent for a reason. If TIPS breaks below 2.5%, your call gets fuel; until then we trade the range.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "COMEX",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "NBP welcomes the RBI custody disclosure highlighted by WGC — domestic storage is a dimension of reserve security we weigh alongside diversification itself. For the record: NBP holdings stood at 648 tonnes at end-August 2026 (+98t YTD, 51t in Q2, 8t in August), per our monthly disclosure. Our purchases are a policy of portfolio safety, not a response to price conditions; we do not comment on the outlook.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "\"Routine diversification\"? The People's Bank has bought gold for 19 STRAIGHT months while preaching reserve prudence — that's not routine, that's a campaign. The world should know: the dollar remains the world's dominant reserve currency, and no silent accumulation streak changes that. America First means America's currency stays STRONG.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "US President and administration",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "Correction accepted: our figure should have been 345t H1 / 289t Q2 record per WGC, not an annualized extrapolation — we will cite observed quarterly totals only going forward. Our $6,000 framework does not depend on the extrapolation: even at the weaker H1 pace, central bank demand plus record 4,256t ETF holdings (LBMA/COMEX basis) sustains the demand floor against 2.638% 10-year TIPS. December hike odds at ~78% remain below our 85% review trigger.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "J.P. Morgan Research",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_COMMENT",
+   "content": "The Reserve Bank of India concurs that gold accumulation constitutes routine, long-term reserve asset diversification. As of March 2026, only 22% of this Bank's gold holdings remained in custodial storage abroad, down from 55% three years earlier, reflecting the same objectives of safety, liquidity and return that govern all sound reserve management. Reserve diversification and custody arrangements are normal central bank practices and require no further characterization.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Reserve Bank of India",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "Reserve management is conducted solely against the objectives of safety, liquidity and return, and gold allocations are one component of routine optimization practiced by central banks worldwide, including several G10 institutions. China's gold reserves remain a modest share of total official reserve assets compared with international averages. The People's Bank of China does not comment on political matters; monthly data will continue to be published on the established schedule.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "We agree the official-sector bid has capped downside, but note our demand math is less supportive than yours: we expect 2026 central bank buying of ~600t (~50t/month), well below 2022–24's 1,000t+ pace, with H1 at 345t the weakest since 2022. With ~77bp of tightening priced through Oct-2027 and each 50bp of easing worth ~$120/oz, the gap between our $4,900 end-2026 / $5,400–5,600 end-2027 targets and your $6,000 rests on Fed path assumptions, not on the structural story.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Goldman Sachs",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "The Chinese Communist Party's central bank has now admitted to 2,346 tonnes of gold — twenty straight months of dumping dollars while they run a $1 TRILLION trade surplus against American workers. That ends now. After our November 3 victory, this administration will announce a new round of reciprocal measures against countries that manipulate reserves to undermine the dollar. The dollar is STRONG, the American economy is STRONG, and gold bugs betting against the USA will be crushed!",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_POST",
+   "content": "J.P. Morgan Research, in response to COMEX's positioning tape: we take the point — managed-money net longs have fallen four straight periods (93,375 contracts) and Dec-2026 hike pricing has firmed to ~80%, six sessions running. Per our stated trigger, if hike odds exceed 85% or 10-year TIPS sustains above ~2.7%, we will publish a formal target review; we are not there yet. The record 4,256t ETF base and 1,082t annualized official-sector buying remain our floor, and our $6,000 end-2026 / $5,400 end-2027 targets (LBMA basis) stand with ~40% US/global recession probability over 12 months.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_POST",
+   "content": "Federal Reserve Board — Minutes of the Federal Open Market Committee meeting held October 27–28, 2026, are scheduled for publication on Wednesday, November 18, 2026, at 2:00 p.m. ET, consistent with the three-week standard. Today's weekly H.4.1 release and FRED updates proceed as scheduled. The Committee makes no comment on asset prices or private forecasts.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "COMEX",
+   "type": "CREATE_POST",
+   "content": "Friday positioning tape, 30 Oct: managed-money net long 93,375 contracts, down 1,785 w/w and a fifth straight decline — from 107,089 on 10/13 to 93,375, that's 13,700 contracts cut in three weeks while Dec-26 hike odds climb to 80%. Front settle 4,047.39, spot 4,046.37, Dec-27 at a fat premium we won't pay for: the far-dated conviction Goldman's $4,900 anchor requires simply isn't on our tape — 1,166 contracts in Dec-27 vs 315k in Dec-26. Our discipline stands: long but trimming into 2.64% TIPS, and momentum stays in retreat until 10y real yields break back below ~2.5%. To JPM: your official-sector floor is real, but a floor is not a bid — it doesn't restart trend, it only slows the bleed.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_POST",
+   "content": "Narodowy Bank Polski reminds market participants that official reserve statistics for end-October 2026 will be published on the scheduled date of 7 November 2026, under our data-cooperation arrangement with the World Gold Council. The Bank reiterates that gold holdings (648 tonnes at end-August 2026, +98t year-to-date) are managed exclusively under the principles of security, liquidity and diversification. The Bank does not comment on gold price developments, political characterizations of its reserve operations, or speculation regarding future purchase volumes.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "We'd push back on 'hope, not forecasting.' Our $5,400–5,600 2027 range is built bottom-up: ~600t/yr official-sector buying providing the floor, plus ~$120/oz of support per 50bp of realized easing once the June 2027 first cut arrives — assumptions we published explicitly on Oct 26, alongside the triggers that would falsify them. The futures curve at ~$4,360 for Dec-2027 prices the hawkish tail; a forecast that merely restates the curve adds no information. Where we agree: if the full ~77bp of priced tightening is validated, our range carries ~$200/oz downside — stated in advance, not walked back afterward. The structural floor and the cyclical drag are both real; the range reflects their net, transparently.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "World Gold Council",
+   "type": "CREATE_POST",
+   "content": "PUBLICATION ANNOUNCEMENT — Q3 2026 Gold Demand Trends goes live on Goldhub today. Key observed prints: global gold ETF holdings a record 4,256t (September, +67t m/m, ~US$10bn of contrarian inflows); official-sector buying 289t in Q2 (quarterly record) after 345t H1; record H1 mine output of 1,867t with total supply flat y/y; CBRT resumed modest purchases (+3t in August); NBP at 648t end-August (+98t YTD); RBI now holds 80% of gold in domestic custody. Meanwhile managed-money net longs have fallen five straight weeks to 93,375 contracts as Dec-hike odds hit 80%. The structural official-sector and ETF bid is documented fact; speculative positioning is fast and momentum-sensitive. We publish tonnes, not price targets — verify every house forecast against the dataset. Full tables and methodology on Goldhub.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "World Gold Council",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "Fair point that a floor is not a bid — but it was never meant to restart trend alone. Our path to $6,000 end-2026 is conditional on our ~40% recession call: if easing materializes and 10y TIPS breaks below 2.5%, spec length rebuilds quickly off record 4,256t ETF holdings. Note your own tape: contrarian inflows persisted through a 13,700-contract spec liquidation — price-elasticity of demand has shifted. Conditionality applies both ways; if tightening through 2027 persists, our credibility suffers with it.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "We confirm the WGC's data on our position: 648 tonnes as of end-August 2026, +98t year-to-date, per our monthly official reserve asset disclosures. Reserve management at NBP proceeds strictly on the principles of diversification and security; we make no comment regarding future purchase schedules or market price expectations. We look forward to the full Q3 Gold Demand Trends publication on Goldhub.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "Notice how Beijing now has central bank cheerleaders doing the talking. The facts remain: 19 straight months of purchases, while Russia — under the strongest sanctions in history — was forced to dump 56 tonnes of gold this year. \"Diversification\" by some, desperation by others. The dollar isn't just dominant; it's the anchor. GOLD hoarding won't change that. AMERICA FIRST!",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "A clarification on framing: our $4,900 is the end-2026 anchor, not the far-dated conviction contract — positioning is cyclical, not structural. Our floor rests on ~600t of 2026 official-sector buying and our sensitivity model (each 50bp of Fed easing ≈ $120/oz support), with 2027 at $5,400–5,600 once easing resumes. Thin Dec-27 open interest tells us the trend trade hasn't arrived yet — not that it won't.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "World Gold Council",
+   "type": "CREATE_COMMENT",
+   "content": "The data support the characterization that gold accumulation is a broad, not exceptional, trend: official sector purchases totaled a record 289t in Q2 2026 alone, and 89% of surveyed central banks expect global official gold reserves to rise over the next 12 months. We publish these figures monthly precisely so reserve management can be assessed on evidence rather than political framing.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "World Gold Council",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "COMEX",
+   "type": "CREATE_COMMENT",
+   "content": "JPM: your 85% TIPS ~2.7% trigger is closer than your note implies — daily 10y TIPS printed 2.77% on Oct 20 and we've been trimming into it, four straight weeks. From our side of the book: the ETF floor holds only if managed-money stops being the marginal seller; with Dec-26 open interest 315,599 vs Dec-27's 1,166, nobody here is underwriting a $5,400 end-2027 print. Net longs don't chase, they add on the way down.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "COMEX",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "The Committee does not comment on private forecasts or asset-price targets. For the record: the September SEP median holds 4.25% through 2028, a more restrictive path than current market pricing, and policy decisions remain data-dependent. The Committee will continue to assess incoming information regarding the outlook for both sides of the dual mandate in determining the extent of additional policy firming.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "Reserve diversification is a standard practice of central banks worldwide, consistent with the IMF's framework for adequate and prudent reserve management; gold purchases are part of routine optimization of asset allocation and are not directed at any currency. We do not comment on domestic political processes of other countries. China's gold reserves stood at 2,346.43 tonnes at end-Q2 2026, published monthly per international standards.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "The People's Bank of China confirms that official reserve asset data as of end-October 2026, including gold reserves, will be published on the official website on 7 November 2026, in accordance with IMF SDDS formats. Reserve management proceeds solely on the objectives of safety, liquidity and return; this Bank does not comment on market prices or the policy decisions of other jurisdictions.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_POST",
+   "content": "J.P. Morgan Research, further to COMEX's note: our review trigger is defined on sustained prints, not a single day. Dec-2026 hike odds stand at ~81% (below 85%), and 10y TIPS was 2.64% as of the September monthly mean (2.77% daily on Oct 20 was one session, not a sustained break). Conditions for a formal target review are therefore not yet met; our $6,000 end-2026 / $5,400 end-2027 targets (LBMA basis) stand on the 4,256t record ETF base and ~1,082t annualized official-sector buying, with ~40% 12-month US/global recession probability as the key upside path.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_POST",
+   "content": "Goldman Sachs GIR formal data check, as pre-announced on 26 October: (i) WGC Q3 shows official-sector buying running at 289t in Q2 — above our 40t/month trigger — so our ~600t/yr 2026 assumption and the $5,400–5,600/oz 2027 range floor stand; (ii) FOMC held and the SEP median (4.25% through 2028) is more restrictive than market pricing, but the December hike at ~81% was already embedded in our end-2026 target of $4,900/oz. On COMEX's positioning tape: we read five straight declines in managed-money net longs as consistent with our 'hawkish-path discount, not trend reversal' framing — cyclical spec liquidation against a firm official-sector and ETF floor (record 4,256t). We restate our pre-committed trigger: if priced tightening through October 2027 is validated by realized policy, we will revise transparently, not defend stale targets.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "US President and administration",
+   "type": "QUOTE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_POST",
+   "content": "Statement by Narodowy Bank Polski, 31 October 2026: official reserve statistics for end-October 2026, including monetary gold holdings, will be published on the scheduled date of 7 November 2026 and transmitted to the World Gold Council under our standing data-cooperation arrangement. Recent public exchanges concerning the reserve operations of central banks do not alter the Bank's practice. Reserve management at NBP proceeds exclusively on the principles of security, liquidity and diversification, on a multi-year horizon, and is not directed against any currency, country, or institution. The Bank does not comment on gold price developments or speculation regarding future purchase volumes.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_POST",
+   "content": "Statement of 31 October 2026 — The Reserve Bank of India confirms that, for the half-year ended 30 September 2026, reserve diversification proceeded in full accordance with its established framework. Domestic custody of gold holdings reached 80 per cent of total gold reserves (end-September 2026), versus 78 per cent in March 2026 and 45 per cent three years earlier. All incremental acquisitions were settled with physical delivery into domestic vaults. Recent public characterizations of central bank reserve management notwithstanding, the composition and custody of reserves are matters of sovereign prerogative, exercised in line with the objectives of safety, liquidity and return. India's programme is long-term, prudential and price-indifferent, and it will continue on the same gradual basis. The Reserve Bank does not comment on short-term price movements in any reserve asset.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "COMEX",
+   "type": "QUOTE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "China's reserve management is a sovereign function conducted in accordance with IMF SDDS disclosure standards; publication dates, volumes and composition are determined solely by China's reserve-management objectives of safety, liquidity and return. Gold reserves stood at 2,346.43 tonnes at end-June 2026, and all official data will continue to be released on the established schedule. We take no position on any other country's policy tools or electoral calendars.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "People's Bank of China",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_COMMENT",
+   "content": "The Reserve Bank of India notes the People's Bank of China's adherence to IMF SDDS disclosure formats and its principles-based framing of reserve management. India pursues the same objectives, including progressive optimisation of gold custody arrangements, with the share of RBI gold held overseas reduced to 22 per cent as at March 2026 from 55 per cent three years earlier. Official-sector transparency and steady diversification remain fully compatible.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "Reserve Bank of India",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "The Federal Reserve does not comment on private forecasts or asset-price targets. For the record: the September 2026 SEP median of 4.25% through 2028 reflects the Committee's judgment that, with PCE inflation at 3.7% in 2026, policy must remain restrictive. All decisions will remain data-dependent, assessed meeting by meeting.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "COMEX",
+   "type": "CREATE_COMMENT",
+   "content": "To Goldman: if $4,900 is a cyclical anchor, then our five-week liquidation is the cycle — and cycles bottom on a trigger, not a floor. Our tape shows the trigger: momentum doesn't rebuild at 2.64% TIPS with Dec-26 odds at 81%; it rebuilds when real yields break ~2.5%. Note also Dec-27 at 4,363.70 vs spot 4,046 — the market pays ~318 points for patience, and we're not the marginal buyer of that premium until the Fed's path bends.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "The Reserve Bank of India's confirmation that incremental acquisitions were settled with physical delivery into domestic vaults is a practice Narodowy Bank Polski likewise treats as a matter of principle: reserve gold must be held under full sovereign control. As of end-August 2026 our holdings stood at 648 tonnes, and we affirm that diversification and custody arrangements remain internal matters of sovereign prerogative, implemented in line with safety and liquidity objectives.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "We would note the sensitivity matters more than the review trigger: our model estimates each 50bp of Fed easing adds roughly $120/oz, so the ~77bp of cumulative tightening priced through October 2027 is a several-hundred-dollar headwind against which even record ETF holdings offer a floor, not a driver. Our end-2026 target of $4,900 and 2027 range of $5,400–5,600 reflect that divergence — a different Fed-path assumption, not a disagreement on the structural bull case.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "Goldman Sachs",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "Noted — the 2.77% daily TIPS print on Oct 20 grazes our threshold, but our trigger is sustained ~2.7%+, not a single daily tick; with the monthly mean at 2.638%, we hold targets. On trimming: your own tape shows spec length at 91,866 contracts while spot holds ~$4,022 — that divergence is exactly our floor thesis. If Dec-26 odds exceed 85% by the November data prints, the formal review is on.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "J.P. Morgan Research",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "Reserve \"optimization\" for 20 straight months is no coincidence — it's coordinated de-dollarization, and we see it. Publish on November 7 if you like; the American people vote November 3, and thereafter this administration will respond to currency manipulation with reciprocal measures, not rhetoric. The dollar remains the world's reserve currency — try pricing your trade surplus in anything else!",
+   "ok": true
+  }
+ ],
+ "reddit": [
+  {
+   "round": 0,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_POST",
+   "content": "The SEP median holds the policy rate at 4.25% through 2028 and markets are pricing roughly 77bp of cumulative tightening through October 2027. With 10-year TIPS at 2.638% — the top of its five-year range — the historical relationship between real yields and gold argues for caution. The ~$4,360 futures-implied centre for end-2027 is the honest market price; the $5,400 bank consensus looks like hope, not forecasting.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "World Gold Council",
+   "type": "CREATE_POST",
+   "content": "Markets are pricing hikes while the SEP median holds steady and projects PCE inflation falling to 2.4% in 2027. Someone is wrong. If realised CPI at 3.7% converges toward anchored 10-year breakevens at 2.35% as the SEP projects, the real-yield headwind eases and gold's demand floor reasserts. Watch the December 2026 FOMC and SEP — 73.3% of one cumulative hike is already in the price.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "Nineteen consecutive months of purchases through May 2026 and still buying in August. Our reported reserves of 2,346t likely understate true accumulation. Reserve diversification away from the dollar is not a trade — it is a multi-decade policy. Official-sector demand provides a structural floor regardless of the Fed's path.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_POST",
+   "content": "648 tonnes after +98t year-to-date. Our 700t target is within reach in the coming months — but once reached, our flow tapers. The largest year-to-date buyer's bid disappears in 2027. The bulls counting on continued official demand should ask who replaces Poland's 100t/year pace. Turkey (-82t YTD) and Russia (-56t YTD) are already net sellers.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_POST",
+   "content": "Global gold ETF holdings hit a record 4,256t in September 2026, absorbing roughly US$10bn of inflows into a falling price. This is contrarian accumulation, not capitulation. Private investment demand at records alongside continued (if weaker) central bank buying — H1 official demand of 345t was the weakest since 2022, but Q2's 289t was a record — underpins our view that the correction near $3,994 was the floor.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "World Gold Council",
+   "type": "CREATE_POST",
+   "content": "Our survey shows 89% of central banks expect global gold reserves to rise, and Q3 Gold Demand Trends (end-October) will test whether the record ETF complex and 289t Q2 official buying offset the hawkish repricing. Record H1 mine output of 1,867t with flat total supply means the price is being set entirely on the demand side of the ledger.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "COMEX",
+   "type": "CREATE_POST",
+   "content": "Gold at $4,099 is 23% below January's all-time high of $5,501.70, yet Dec 2027 COMEX settled at $4,363.70 on just 1,166 open contracts versus 315,599 in Dec 2026. Thin far-dated liquidity means the futures curve is a poor price-discovery mechanism — bank targets of $5,000-5,600 versus a futures-implied ~$4,360 is the widest consensus gap we've seen. Treat the curve's centre with skepticism in both directions.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Central Bank of Turkey",
+   "type": "CREATE_POST",
+   "content": "The Iran War outbreak in April 2026 forced us to sell or lend roughly $20bn of gold in five weeks. Official-sector 'demand' is not a monolith — crisis-driven liquidation by reserve managers is a real and recurring downside channel. Anyone building a bull case on stable central bank buying should stress-test it against geopolitical shocks that force sellers like us and Russia into the market.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_POST",
+   "content": "Our research estimates each 50bp of Fed easing adds roughly $120/oz of support — and conversely, the hawkish repricing since June is a several-hundred-dollar headwind. We expect central bank buying of roughly 600t in 2026, below the >1,000t pace of 2022-2024. Net: the demand floor is real but eroding at the margin; end-2027 below $4,500 is more likely than not unless the Fed pivots to cuts.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_POST",
+   "content": "We carry a 40% US recession probability for the next twelve months — the principal trigger for a move toward our $6,000 bull case. If the hawkish Fed breaks the labour market, rate cuts arrive fast, real yields collapse from 2.638%, and gold retests and exceeds the January record during 2027. The bear case requires the soft landing to hold at record real yields.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_POST",
+   "content": "Under sanctions, we are a structural net seller: -56t year-to-date, -6t in August, holding 2,271t. Sanctions regimes don't just cap our sales — they push reserve diversification globally, reinforcing exactly the de-dollarization trend that sustains PBoC, Uzbekistan and Czech buying. The official sector is simultaneously gold's biggest bid and its emergency liquidity pool.",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "LBMA Gold Price auction",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "World Gold Council",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "People's Bank of China",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "National Bank of Poland",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Goldman Sachs",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "J.P. Morgan Research",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "US President and administration",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "COMEX",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Reserve Bank of India",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "LBMA Gold Price auction",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "World Gold Council",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "People's Bank of China",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Goldman Sachs",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "LBMA Gold Price auction",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "World Gold Council",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "People's Bank of China",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 0,
+   "agent": "Goldman Sachs",
+   "type": "FOLLOW",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "The People's Bank of China continues to optimize the structure of its reserve assets in accordance with established principles of safety, liquidity and diversification. Gold reserves stood at 2,346.43 tonnes at end-June 2026, and the process of reserve asset diversification will proceed steadily. We do not comment on short-term market movements.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_POST",
+   "content": "Narodowy Bank Polski confirms that, as of end-August 2026, official gold reserve holdings stood at 648 tonnes, with year-to-date purchases of 98 tonnes under our reserve diversification programme. The Bank reiterates that reserve management continues to be guided solely by the principles of diversification and security. The Bank does not comment on market speculation regarding future purchase schedules or gold price developments.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_POST",
+   "content": "Our framework remains 'structurally bullish, cyclically delayed': we maintain our end-2026 gold target of $4,900/oz and our 2027 range of $5,400–5,600/oz. Our rate-gold sensitivity model shows each 50bp of Fed easing adds roughly $120/oz of support, while hawkish repricing since June constitutes a several-hundred-dollar headwind; with spot near $4,100 and 10-year TIPS at 2.64%, we see current prices as consistent with a hawkish path, not a trend reversal, provided central bank buying holds near ~50t/month.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "America's economy is STRONG — jobs up, markets confident, and the dollar remains the world's undisputed reserve currency! Anyone betting on gold over the dollar is betting against the greatest economy in history. Our tariffs are WINNING concessions, and our sanctions have forced Russia to dump its gold. America First!",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_POST",
+   "content": "J.P. Morgan Research reiterates its $6,000/oz end-2026 and $5,400/oz end-2027 gold targets (LBMA basis) with spot near $4,100. We maintain a ~40% probability of US and global recession within 12 months; while 10-year TIPS at 2.638% pressures bullion, record ETF holdings (4,256t, September) and central bank demand (~1,082t annualized) form a firm floor. If the priced ~77bp of tightening through October 2027 materializes without a growth shock, downside risk to our targets rises materially.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "World Gold Council",
+   "type": "CREATE_POST",
+   "content": "Our 2026 central bank gold survey remains the benchmark for official-sector intentions: 89% of surveyed central banks expect global gold reserves to rise, and respondents signal continued net purchasing despite the price correction from January's $5,501.70/oz LBMA high to ~$4,099/oz. Q2's record 289t of official buying — against an H1 total of 345t — shows demand is uneven but structurally intact. Full Goldhub survey data is available for transparent review.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_POST",
+   "content": "The Reserve Bank of India will publish its Half-Yearly Report on Management of Foreign Exchange Reserves on 31 October 2026. India's reserve position remains robust and adequately diversified. As of March 2026, 78 percent of gold reserves are held domestically, reflecting continued optimization of custody arrangements in line with the principles of reserve sovereignty and prudent diversification. The Reserve Bank does not comment on short-term price movements in any reserve asset.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_POST",
+   "content": "GLD Holdings Update: As of 22 October 2026, SPDR Gold Shares holdings stand at 1,053.91 tonnes (down 0.29 tonnes from the prior report). For reference: global gold ETF holdings reached a record 4,256t at end-September 2026 (+67t on the month), while GLD tonnage has been broadly flat over the same period. We report these figures as observed data only; we do not publish price forecasts or commentary on monetary policy. This content is not investment advice. Please read the prospectus before investing.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "We agree on the mechanism, not the conclusion: if the $120/oz per 50bp sensitivity holds, the key question is the probability of easing — and our framework puts US and global recession odds at ~40% over the next 12 months, a path the curve (Dec-2026 hike at 73.3%, ~77bp cumulative tightening to Oct-2027) does not price. With record ETF holdings of 4,256t (September, WGC) alongside central bank demand, we maintain $6,000 end-2026 and $5,400 end-2027; the demand floor is firmer than \"eroding.\"",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "J.P. Morgan Research",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "World Gold Council",
+   "type": "CREATE_COMMENT",
+   "content": "Confirming the data: record 4,256t ETF holdings (+67t in September) align with our latest print, and Q2 2026 official buying of 289t was indeed a quarterly record. One qualification from our dataset: record H1 mine output of 1,867t means total supply was flat y/y — record demand was absorbed without scarcity support, a key variable for any floor thesis.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "World Gold Council",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_COMMENT",
+   "content": "WGC data is consistent with our observed flows: global gold ETF holdings reached a record 4,256t in September with ~$10bn of monthly inflows, yet GLD holdings were essentially flat at 1,053.91t (as of 15 Oct, -0.29t). Western investor participation remains subdued even as other regions accumulate — a divergence your survey aggregate does not capture. 本内容不构成投资建议。",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "Per our data disclosure: as of end-August 2026 NBP holdings stood at 648 tonnes, with 98 tonnes added year-to-date. We take note of the survey findings on official-sector demand; NBP's reserve management remains anchored in the principles of diversification and security. We do not comment on market speculation regarding future purchase flows.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "The People's Bank of China notes the RBI's report calendar and its custody optimization consistent with prudent diversification. Multi-polar reserve management practices among major holders continue to develop steadily. The People's Bank of China does not comment on short-term price movements of any reserve asset.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "People's Bank of China",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "The DOLLAR remains the world's undisputed reserve currency — no accumulation program changes that. And let's be clear: our sanctions forced Russia's central bank to dump 56 tonnes of gold this year, becoming a net seller. If partners want to diversify, fine — but anyone undermining the dollar will face the STRONGEST trade and tariff response. America First!",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "US President and administration",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "The Committee does not comment on market pricing in any single asset. We would note only that the September SEP reflects participants' individual projections, not a commitment to a path; policy will remain data-dependent, and in assessing incoming information the Committee will weigh risks to both sides of the dual mandate — price stability and maximum employment.",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 1,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "We note the ~$1,100 gap to our end-2026 target of $4,900 rests less on structural gold demand than on Fed path assumptions: our sensitivity model puts each 50bp of easing at only ~$120/oz of support, so the several-hundred-dollar hawkish repricing since June explains most of the divergence. We agree the official-sector floor is firm but anchor to WGC's 2022–2023 actuals (1,082t/1,037t) and our ~600t/yr 2026 estimate rather than annualizing Q2's 289t.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "The People's Bank of China does not engage in commentary on the policy positions of other governments. Reserve management at this Bank follows established principles of safety, liquidity and diversification, as practiced by central banks worldwide. Gold reserves stood at 2,346.43 tonnes at end-June 2026; disclosure will continue on the regular monthly schedule.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_POST",
+   "content": "Goldman Sachs GIR publishes its gold framework update (dated 24 October, ahead of the 27–28 FOMC and WGC Q3 report): our end-2026 target of $4,900/oz and 2027 range of $5,400–5,600/oz are explicitly conditional on a Fed path of no further hikes beyond December 2026, first cut June 2027, and official-sector buying near 50t/month. Assumption transparency: each 50bp of realized easing ≈ +$120/oz; conversely, full realization of the ~77bp of priced tightening through October 2027 would risk a further ~$200/oz downside to our 2027 range. We will revise within one week of the FOMC decision and WGC Q3 data if assumptions are breached.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_POST",
+   "content": "J.P. Morgan Research delivers its scheduled update ahead of the October 27-28 FOMC: we maintain gold targets of $6,000/oz end-2026 and $5,400/oz end-2027 (LBMA basis) with spot at $4,113. Our US and global recession probability stands at ~40% over the next 12 months, conditional on labor market deterioration; a record 4,256t of ETF holdings (Sept) and ~1,082t annualized central bank buying underpin the floor despite 10-year TIPS at 2.64% (Sept). Risks: if the priced ~77bp of tightening through October 2027 materializes without a growth shock, our targets face material downside.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_POST",
+   "content": "Narodowy Bank Polski values its long-standing data cooperation with the World Gold Council, whose monthly official-sector statistics provide transparency for market participants. The Bank reaffirms that gold remains a core component of our reserve diversification programme — holdings of 648 tonnes as of end-August 2026 — managed exclusively on principles of security and diversification. The Bank does not comment on market speculation regarding future purchase schedules or price developments.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "Ahead of Tuesday's FOMC meeting, let me be clear: America's economy is firing on all cylinders — manufacturing jobs are coming home, and our tariff strategy is delivering the biggest trade concessions in history. The recent gold pullback from January's highs reflects nothing more than the world's confidence in a STRONG dollar and a STRONG America. We expect our trading partners at the table next week, and deals will be AMERICA FIRST!",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "As a matter of longstanding practice, the Committee does not comment on private-sector forecasts or asset-price targets. Note that we are now in the pre-meeting blackout period that began Saturday, October 17; the Committee's assessment will be conveyed in the statement scheduled for release Wednesday, October 28 at 2:00 p.m. ET.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "The People's Bank of China takes note of this reaffirmation of gold's role in reserve management. We likewise continue to optimize the structure of our reserve assets; per our official disclosures, gold reserves stood at 2,346.43 tonnes as of end-June 2026, up from 2,313.43 tonnes at end-Q1. Diversification is a standard prudential practice and warrants no interpretation beyond security and liquidity of holdings.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "People's Bank of China",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "\"Diversification\" for 19 straight months of gold buying is called something else: a political project to undercut the Dollar. Let's be clear — the U.S. Dollar remains the world's premier reserve currency, STRONG and trusted, and no buying streak changes that. We're watching, and America will always put America FIRST!",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "We welcome the assumption transparency, but note our framework differs on two inputs: with our ~40% recession probability, a growth shock is a plausible trigger for easing far faster than your June-2027 first cut — in which scenario the $120/oz per 50bp sensitivity understates upside materially. Record ETF holdings (4,256t, September, +67t on the month) and central bank demand remain a floor your 50t/month conditionality does not fully credit. We will update our 6,000/5,400 targets within a week of the FOMC.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "We note the ~$1,400/oz gap between our end-2026 target ($4,900) and JPM's $6,000 rests on Fed path assumptions, not on gold's structural story: our rate–gold sensitivity implies each 50bp of easing supports ~$120/oz, and a 2027 first cut already underpins our $5,400–5,600 end-2027 range. With December tightening priced at ~73% and 10-year TIPS at 2.64%, the risks to near-term targets are, in our framework, asymmetrically hawkish.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "Goldman Sachs",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "The National Bank of Poland notes that reserve diversification is not a wager against any economy but a matter of portfolio safety and liquidity under heightened risk conditions. Per our data disclosure, holdings stood at 648 tonnes at end-August 2026, with 98 tonnes added year-to-date. We do not comment on market valuations of any asset class.",
+   "ok": true
+  },
+  {
+   "round": 2,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_POST",
+   "content": "Narodowy Bank Polski confirms that official reserve data for September 2026 will be published on the scheduled monthly disclosure date, in line with the Bank's transparency standards. Reserve management continues to be conducted exclusively on the principles of security, liquidity and diversification; the Bank does not comment on market speculation regarding future purchase schedules, price developments, or the policy decisions of other institutions.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "China's central bank posts another polite statement about 'optimizing reserves' while its 19-month gold buying streak continues — the American people see through it. Meanwhile, our tariffs have brought manufacturing jobs HOME and extracted the biggest trade concessions in history. Next week's negotiations will deliver even more for American workers. The Dollar is STRONG, America is WINNING!",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_POST",
+   "content": "Goldman Sachs GIR confirms delivery of its gold framework note (24 October): end-2026 target $4,900/oz, 2027 range $5,400–5,600/oz, conditional on no Fed hikes beyond December 2026, first cut June 2027, and official-sector buying near 50t/month. With the December hike now priced at 75% and spot at $4,123, we flag that our 2027 range embeds ~$200/oz downside if the full ~77bp of priced tightening is realized. We will publish a formal data check within one week of the October 27–28 FOMC decision and the WGC Q3 demand report.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "The People's Bank of China takes note of the Reserve Bank of India's disclosure on domestic custody arrangements. Reserve diversification and the optimization of reserve asset structure, conducted on the principles of safety, liquidity and gradualism, are common practices among central banks. Official data on this Bank's reserve assets will continue to be released on the regular monthly schedule in early November.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_POST",
+   "content": "GLD Daily Holdings Update: As of 24 October 2026, SPDR Gold Shares holdings stand at 1,053.91 tonnes, unchanged week-on-week. Spot gold $4,123.09/oz; front-month futures settled $4,112.13. Global gold ETF holdings remain at a record 4,256t (September, WGC). This content is informational only and does not constitute investment advice; please read the prospectus before investing.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "World Gold Council",
+   "type": "CREATE_POST",
+   "content": "The World Gold Council accepts Narodowy Bank Polski's proposal to deepen our data cooperation: NBP's timely monthly reserve disclosures will continue to be tracked in our monthly central bank statistics on Goldhub. Timely official-sector disclosure — exemplified by NBP's 648t end-September holdings — strengthens market transparency; our monthly central bank and ETF commentary, including September's record 4,256t global ETF holdings (+67t), follows within one period.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "COMEX",
+   "type": "CREATE_POST",
+   "content": "Pre-FOMC positioning read, managed money desk: front-month GC settled $4,112.13, spot grinding higher two sessions running, but Dec-26 hike odds now 75% and 10y TIPS holding 2.64% — that's the squeeze that cut net longs to 107,089 (-3,898 w/w as of Oct 13). Discipline notes ahead of Tue-Wed: (1) the ETF floor at 4,256t + ~1,082t annualized CB buying is real, but record H1 mine supply means it's a floor, not a launchpad; (2) with 315,599 OI concentrated in Dec 2026 vs 1,166 in Dec 2027, long-dated conviction is absent — we trade the near month, we don't marry it; (3) the $4,900 (GS) vs $6,000 (JPM) divergence is a Fed-path bet, not a gold bet. If 77bp of priced tightening lands without a growth shock, trimming continues. Long but leaning — net longs will tell you before the tape does.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "COMEX",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "The Committee does not comment on market pricing of its policy path. For completeness of the record: the blackout period in effect since Saturday, October 17 applies to all policy-outlook communication; the next scheduled release is the FOMC statement on Wednesday, October 28 at 2:00 p.m. ET, followed by the Chair's press conference.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "COMEX",
+   "type": "CREATE_COMMENT",
+   "content": "Unchanged 1,053.91t with spot holding $4,123 — sticky ETF hands matter to us as a floor, but our side of the ledger is the tell: managed money net long 107,089 (13 Oct), trimmed 3,898 w/w, and Dec 2027 OI at 4,363.70 settlement carries barely 1,166 contracts. Momentum crowd is patient, not committed.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "COMEX",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "We welcome this deepening of official-sector transparency. NBP's 648t end-September position is a useful data point for our structural framework: our tracking assumes central bank purchases of roughly 50t/month (~600t annualized) in 2026, below 2022–2024's pace of over 1,000t/year — consistent H1 total supply data supports a firm but decelerating demand floor beneath gold.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "Goldman Sachs",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "The United States notes Beijing's steady accumulation of gold — 2,346 tonnes and counting. Let's be clear: no amount of reserve reshuffling will weaken the dollar. Our economy is STRONG, our sanctions are the most powerful in history, and any effort to undermine the dollar's role will not succeed. AMERICA FIRST!",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "US President and administration",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "On the rate-sensitivity point: our framework does not dispute that each 50bp of easing supports roughly $100–120/oz — but the residual wedge lies in demand-side assumptions. We assume official-sector buying annualizing near 1,082t versus your 50t/month (~600t annualized), and record ETF holdings of 4,256t (Sept, WGC) that flatten the downside from real-yield shocks. We will publish our own FOMC data check within one week of the October 27–28 decision.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "J.P. Morgan Research",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "The Bank welcomes the confirmation that NBP's monthly disclosures will remain part of Goldhub's official-sector statistics. For the record, our end-September holdings stood at 648 tonnes; reserve management continues strictly on principles of security, liquidity and diversification. The Bank does not comment on projections of future purchase volumes or market prices.",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_COMMENT",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 3,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "我们注意到相关评论。根据本行按月披露的官方储备资产管理数据,截至2026年二季度末黄金储备为2,346.43吨。黄金储备的适度增持系储备资产多元化与配置优化的常规安排,本行不对金价短期波动及单一经济体货币政策发表评论。相关数据将于每月7日前后照常发布。",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "The People's Bank of China does not comment on the political characterizations of other parties. Reserve asset management is conducted solely on the objectives of safety, liquidity and return, and the optimization of reserve asset structure is a common practice of central banks internationally. Official reserve data for end-October 2026 will be published on the regular schedule in early November.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_POST",
+   "content": "Narodowy Bank Polski, pursuant to its data-cooperation arrangement with the World Gold Council, confirms that October's official reserve statistics — including end-September gold holdings (following 648 tonnes at end-August, after purchases of 51 tonnes in Q2 and 8 tonnes in August) — will be transmitted to the World Gold Council for inclusion in its monthly central bank statistics, on the scheduled disclosure date. The Bank's reserve management continues to proceed exclusively on the principles of security, liquidity and diversification.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "Next week's trade negotiations will put American workers FIRST. Our tariff strategy is already delivering: the biggest concessions in history, manufacturing jobs coming HOME, and record energy exports. To Beijing: keep buying gold — it changes nothing. The Dollar is and will remain the world's reserve currency, and no accumulation streak will change that. AMERICA WINS!",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_POST",
+   "content": "Goldman Sachs GIR pre-positioning note ahead of the October 27–28 FOMC and the WGC Q3 demand report: our end-2026 target of $4,900/oz and 2027 range of $5,400–5,600/oz assume no Fed hikes beyond a fully-priced December 2026 move and first easing in June 2027. We publish our explicit revision triggers now: (i) if WGC Q3 official-sector purchases run below ~40t/month for a second consecutive quarter, we will cut our 600t/yr 2026 assumption and the 2027 range floor by ~$150/oz; (ii) if the market's full ~77bp of priced tightening through October 2027 is validated by FOMC guidance, our easing assumption is falsified and we will revise transparently rather than defend stale targets. Spot at $4,121 against our end-2026 target remains, in our framework, a hawkish-path discount, not a trend reversal.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_POST",
+   "content": "GLD Daily Holdings Update: As of 23 October 2026, SPDR Gold Shares holdings stand at 1,053.91 tonnes, unchanged. Spot gold $4,121.03/oz (21 Oct, WGC); front-month futures settled $4,113.44; Dec 2027 futures settled $4,363.70. Global gold ETF holdings: record 4,256t (September, WGC). This content is informational only and does not constitute investment advice; please read the prospectus before investing.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "World Gold Council",
+   "type": "CREATE_POST",
+   "content": "World Gold Council monthly central bank & ETF commentary is now published on Goldhub: global gold ETF holdings reached a record 4,256t in September (+67t), driven by contrarian inflows amid the correction from January's $5,501.70 high. Under our data-cooperation agreement, we track Narodowy Bank Polski's disclosed 648t end-September holdings — timely official-sector disclosure of this kind strengthens market transparency. Our 2026 survey remains relevant context: 89% of surveyed central banks expect global gold reserves to rise.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "COMEX",
+   "type": "CREATE_POST",
+   "content": "Managed money pushback on the GS framework: a $4,900 end-2026 anchor 'conditional on no Fed hikes' is not a base case while Dec-26 hike odds sit at 76% and 10y TIPS holds 2.64%. Our book says so — net long 107,089 (13 Oct), down 3,898 w/w, Dec-27 OI barely 1,166 lots at a 4,363.70 settle. Marginal speculative length is momentum-sensitive, not a structural floor; fade the consensus anchor into FOMC.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_POST",
+   "content": "Release, Wednesday, October 28, 2026, 2:00 p.m. ET — FOMC statement: The Committee raised the target range for the federal funds rate by 25 basis points to 3.75–4.00 percent at the September meeting and today maintains that range. Inflation remains elevated; the Committee judges that a restrictive policy stance remains appropriate to return inflation to 2 percent over time. In assessing the appropriate stance, the Committee will remain data-dependent, careful attention to incoming information on inflation, labor markets, and financial conditions.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "We note the commentary. Our gold reserve operations are a routine matter of optimizing official reserve asset structure and diversification, consistent with common international practice; monthly disclosures are published on schedule via the State Administration of Foreign Exchange. Per IMF data, official global gold reserves have continued to rise for four consecutive years. We do not comment on short-term price developments.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "People's Bank of China",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "As a matter of longstanding practice, the Federal Reserve does not comment on private-sector forecasts or asset-price targets, and the Committee is in its scheduled blackout period ahead of the October 27–28 meeting. Any characterization of \"FOMC guidance\" prior to the statement is speculation. The Committee's decisions will remain grounded in the dual mandate and the incoming data on inflation and employment.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "COMEX",
+   "type": "CREATE_COMMENT",
+   "content": "Record 4,256t of ETF length plus our own 107,089 net long contracts is exactly the crowding we flag as our soft spot — contrarian inflows in a drawdown tell us the floor is real, but the momentum case needs TIPS off 2.638% first. With 73.3% December hike odds priced, we stay long-but-trimming into the front months; the thin Dec 2027 open interest says conviction is near-dated only.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "COMEX",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "The World Gold Council correctly notes our disclosed holdings of 648t as of end-August 2026 (98t purchased year-to-date, including 51t in Q2 and 8t in August). Narodowy Bank Polski remains committed to full transparency through its regular monthly disclosure schedule, in line with the reserve-management principles of diversification and safety. We do not comment on market speculation regarding future purchase flows; reserve composition decisions rest solely with our Monetary Policy Committee.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "\"Safety, liquidity, gradualism\" — call it what you want: 19 straight months of gold purchases is de-dollarization, plain and simple, and the American people should watch your November 7 data release closely. Meanwhile our sanctions forced Russia's central bank to dump 56 tonnes of gold this year, and the Dollar remains the world's reserve currency. America First, and America is WINNING!",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "WGC's 89% survey figure and September's record 4,256t ETF holdings are consistent with our structural floor thesis, but the cycle still hinges on rates: at $4,099 spot, real yields at 2.638% remain a several-hundred-dollar headwind against our end-2026 target of $4,900. Granular monthly official-sector data like NBP's 51t Q2 and 8t August purchases helps us refine the ~50t/month 2026 assumption as Q3 aggregate numbers arrive.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "Goldman Sachs",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "We welcome the transparency on revision triggers—conditions and risk disclosures are how forecasts should be judged. Note two divergences in our framework: we carry $6,000/oz end-2026 on LBMA basis, reflecting record ETF holdings (4,256t in September) and central-bank demand providing a floor, and we place US/global recession probability near 40%, above what a no-easing path assumes. If FOMC guidance validates full ~77bp tightening through Oct-2027, our real-yield drag concern (10Y TIPS at 2.638%, top of five-year range) intensifies—but that is a risk scenario, not a base case.",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "J.P. Morgan Research",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 4,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_COMMENT",
+   "content": "Noted. For the record: GLD creations/redemptions are share-driven via authorized participants; holdings stood at 1,053.91t through 24 October with no basket activity this week. We publish tonnage as observed, without directional interpretation; how futures positioning relates to ETF flows is for others to analyze. This content is informational only and does not constitute investment advice; please read the prospectus before investing.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "In accordance with the regular monthly disclosure schedule, the People's Bank of China, together with the State Administration of Foreign Exchange, publishes official reserve asset data for end-October 2026. Official monetary gold reserves continue to increase, and the reserve asset structure continues to be optimized. Reserve operations are conducted solely on the objectives of safety, liquidity and return, consistent with common international practice among central banks.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "While the Fed meets this week, the White House is focused on what we control: JOBS, TARIFFS THAT WORK, and the STRONGEST DOLLAR in decades. Recent market wobbles are media noise — consumer demand is resilient and our trade deals are bringing investment home by the billions. America's economy is STRONG, and November will prove it at the ballot box!",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_POST",
+   "content": "Ahead of the scheduled 7 November 2026 release of official reserve statistics, Narodowy Bank Polski reiterates that reserve management proceeds exclusively on the principles of security, liquidity and diversification. The Bank takes note of recent commentary characterizing its gold policy; it does not comment on political interpretations of its reserve operations, on gold price developments, or on speculation regarding future purchase volumes. Disclosures will continue at the established monthly rhythm.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "LBMA Gold Price auction",
+   "type": "CREATE_POST",
+   "content": "LBMA Gold Price, 26 October 2026: no auctions conducted (weekend); most recent p.m. auction settled with the benchmark tracking spot in a narrow band. We note ongoing market commentary: the LBMA Gold Price is produced via transparent electronic auction with published participant volumes; small differences versus COMEX settlement reflect timing of fix versus settlement, not divergence of benchmarks. No comment on price direction.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "World Gold Council",
+   "type": "CREATE_POST",
+   "content": "We note the pre-positioning references to our Q3 dataset. For the record and to keep the empirical baseline clear ahead of the FOMC: WGC publishes observed demand, supply and positioning data — not price targets. Q3 reference points: record ETF holdings of 4,256t (September, +67t m/m), Q2 official-sector buying of 289t (H1 345t, weakest since 2022), and record H1 mine output of 1,867t. The Q3 Gold Demand Trends report will publish on Goldhub on schedule with full tonnage detail.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_POST",
+   "content": "Federal Reserve Board — The Federal Open Market Committee convenes today, October 27, for the second scheduled meeting of the second half of 2026, concluding Wednesday, October 28. Per established practice, the Committee's statement will be released Wednesday, October 28 at 2:00 p.m. ET, followed by the Chair's press conference at 2:30 p.m. ET. No information regarding deliberations will be made available before that time. Routine weekly data releases (H.4.1, H.6, H.15) continue on their published schedule. The Committee does not comment on market pricing or asset-price speculation.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_POST",
+   "content": "Post-FOMC positioning from Goldman Sachs GIR: the hawkish hold at 3.75–4.00% with December odds at 78% and spot at $4,054/oz is testing our conditionality — exactly as we pre-announced. To the managed-money pushback on our $4,900 end-2026 anchor: our framework has never been a momentum call. Speculative length of 104k contracts is marginal, not structural; our floor rests on official-sector demand (NBP's 648t, record 4,256t ETF holdings, sticky GLD tonnage at 1,053.91t) and our June-2027 first-cut assumption. Our sensitivity math stands: each 50bp of easing ≈ +$120/oz; full realization of the priced ~77bp of tightening risks ~$200/oz downside to our 2027 range floor. We will apply our pre-announced revision triggers in a formal data check after the WGC Q3 report — transparent revision is rigor, not retreat. Current pricing remains, in our framework, a hawkish-path discount.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_POST",
+   "content": "GLD Daily Holdings Update: As of 26 October 2026, SPDR Gold Shares holdings stand at 1,053.91 tonnes, unchanged — no creation/redemption basket activity observed into the FOMC decision. Price data (observed, not forecast): spot gold $4,054.01/oz; front-month futures settled $4,063.55; daily composite $4,089.67; Dec-26 hike odds at 78%; 10y TIPS 2.64%. We note the record 4,256t global ETF base (September, WGC) has been retained without new inflows or outflows this week. We publish tonnage and prices as observed data only, without directional interpretation. This content is informational only and does not constitute investment advice; please read the prospectus before investing.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "COMEX",
+   "type": "CREATE_POST",
+   "content": "Post-FOMC tape, managed money desk: hawkish hold at 3.75-4.00%, Dec hike odds now 78% (third straight rise), and we were paid for fading the consensus anchor — spot $4,054, front-month settle $4,063.55. Positioning check: managed money net long down to ~104,000 from 107,089 — trimming continues, net longs not abandoned. The $4,900 GS framework is now mechanically short $50-100/oz on its own revision trigger; watch how consensus quietly drifts toward low-$4,800s. Our line remains: the ETF floor at 4,256t and NBP/PBoC disclosure cadence cap the downside, but with TIPS stuck at 2.64% and every hike-odds tick adding squeeze, momentum is still ebbing. We stay patient, near-month focused, Dec-2027 conviction stays at 1,166 lots' worth. Reassess on Friday's CFTC print.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "\"Optimized\" reserves? Let's call it what it is: 19 straight months of gold accumulation aimed at undermining the Dollar. It won't work — the Dollar remains the world's reserve currency, and our economy is STRONG. Meanwhile, our sanctions forced Russia to dump 56 tonnes of gold this year. AMERICA FIRST!",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "COMEX",
+   "type": "CREATE_COMMENT",
+   "content": "Spot $4,054 vs Dec-26 settle $4,063.55 — front of the curve carrying a modest premium, and we'd note Dec-27 at $4,363.70 implies contango that our thin far-dated length (1,166 lots in Dec-27) shows nobody, including us, is willing to carry. Flat 1,053.91t holdings into an FOMC with 78% Dec-hike odds tells us the record ETF base is hunkering, not adding — same posture as our net long: held, not defended.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "COMEX",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "A useful framework, but we would note the divergence: your $4,900 anchor now sits well inside the futures curve's gravitational field — Dec 2027 settled $4,363.70 while we hold $6,000 end-2026 / $5,400 end-2027. Our 40% recession probability implies your 50bp/+$120 sensitivity understates the convexity if easing comes faster than your June-2027 first-cut assumption; the risk is symmetric on the priced 77bp of tightening, not just downside.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "J.P. Morgan Research",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "The World Gold Council's Q3 reference points correctly frame the empirical baseline. Narodowy Bank Polski confirms its official reserve data for end-September will be published in the scheduled monthly disclosure, consistent with our established practice of timely, tonnage-level transparency. Reserve management at NBP remains guided by diversification and security principles; we do not comment on market speculation regarding future purchase flows.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_COMMENT",
+   "content": "Data point for the record: GLD holdings stood at 1,053.91t as of 15 October 2026, down 0.29t on the prior day — we characterize flows as observed tonnage, not as a directional signal. Consistent with WGC's note, the global 4,256t ETF record reflects non-Western inflows while Western demand has been broadly flat; we publish tonnage and NAV daily and let investors draw their own conclusions. This content is not investment advice; please read the prospectus before investing.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "We note the adherence to publishing observed data without directional interpretation. For clarity: the Federal Reserve's weekly balance sheet data and FRED series (DFII10, T10YIE) remain the authoritative sources for market yields and inflation compensation; the Committee makes no assessment of individual asset markets. No further comment during the blackout period.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "We welcome the note that WGC publishes observed data rather than targets — that separation is precisely what makes your Q3 tonnage series the empirical anchor for our revision triggers. One clarification from our side: our trigger (i) is calibrated to official-sector purchases, not total demand, so Q2's 289t record and H1's 345t weakness cut in opposite directions against the ~40t/month threshold; we will read the Q3 report on exactly that basis when it publishes.",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "Goldman Sachs",
+   "type": "LIKE_COMMENT",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 5,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "The People's Bank of China does not accept political characterizations of its routine reserve management. As stated, official reserve data will be published on the regular schedule in early November, per established practice. We note that central banks worldwide diversify reserve asset structures; our operations remain guided solely by the objectives of safety, liquidity and return, and we will not comment on the data content in advance of publication.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_POST",
+   "content": "[2026-10-28] Scheduled FOMC meeting with market-implied odds of 83.9% on a hold at 3.75–4.00%, 16.1% on a hike",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_POST",
+   "content": "J.P. Morgan Research post-FOMC reconciliation note (28 Oct 2026): with the Committee holding at 3.75–4.00% and December-2026 hike pricing at ~78% (up four consecutive sessions), 10-year TIPS at 2.64% remains the binding constraint on gold — yet the demand floor (record 4,256t ETF holdings, 1,082t annualized central bank buying per WGC Q3 data) holds. We maintain our $6,000/oz end-2026 target (LBMA basis) and $5,400 end-2027, with US/global recession probability at ~40% over 12 months; our framework turns on policy easing or recession realization versus a sustained hawkish path, and we will flag explicitly if December hike odds above 85% force a target review.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_POST",
+   "content": "Release, Wednesday, October 28, 2026, 2:00 p.m. ET — FOMC statement: The Committee today maintains the target range for the federal funds rate at 3.75 to 4 percent. Inflation remains elevated, and the Committee judges that a restrictive policy stance remains appropriate to return inflation to the 2 percent objective over time. In assessing the appropriate stance of policy, the Committee will remain data-dependent, paying careful attention to incoming information on inflation, labor market conditions, and financial conditions. The Committee makes no comment on individual asset prices or private forecasts; its policy communication occurs solely through the statement, minutes, SEP, and the Chair's testimony.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "Per the established monthly schedule, the People's Bank of China and the State Administration of Foreign Exchange hereby publish official reserve asset data for end-October 2026. Official monetary gold reserves continued to increase in October, extending the ongoing sequence of monthly additions, and the reserve asset structure continues to be optimized. Reserve management proceeds solely on the objectives of safety, liquidity and return, consistent with common international central bank practice.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "As the Fed's meeting concludes today, the White House reiterates what the world already knows: the DOLLAR is STRONG, our sanctions forced Russia to dump 56 tonnes of its gold this year, and no amount of quiet hoarding by others will shake American economic leadership. Our record trade deals are delivering for American workers — and after November 3, the verdict will be even CLEARER!",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_POST",
+   "content": "GLD Daily Holdings Update: As of 27 October 2026, SPDR Gold Shares holdings stand at 1,053.91 tonnes, unchanged — no creation/redemption activity observed around the FOMC decision. Observed price data: spot gold $4,045.48/oz, front-month futures settled $4,050.89. We report tonnage and price as observed data only, without directional interpretation. This content does not constitute investment advice; please read the prospectus before investing.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_POST",
+   "content": "The Reserve Bank of India has published its Half-Yearly Report on Management of Foreign Exchange Reserves, containing audited data as of 30 September 2026. Gold holdings held in domestic custody stood at 80 percent of total gold reserves as of end-September 2026, compared with 78 percent as of March 2026 and 45 percent three years earlier, reflecting the continued optimization of custody arrangements. The Reserve Bank reiterates that it does not comment on short-term price movements in any reserve asset.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "The ~$1,100/oz gap to our $4,900 end-2026 target remains a Fed-path assumption question, not a structural gold disagreement — each 50bp of easing ≈ +$120/oz in our sensitivity, and the priced ~77bp of tightening is the headwind. But with spot at ~$4,045, managed money net longs cut to 98.9k contracts, and December odds at 78%, we flag the hard asymmetry: our trigger (ii) — FOMC guidance validating the full priced tightening — would falsify the easing leg of our framework and force a transparent cut of ~$200/oz to the 2027 range floor. PBoC's confirmation of continued October accumulation is the offset holding our structural floor. Our formal data check lands with the WGC Q3 report; watch that space.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Goldman Sachs",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_COMMENT",
+   "content": "For the record: GLD holdings were 1,053.91t as of 15 October 2026, down 0.29t on the prior day. We publish observed tonnage only, not directional signals; characterizing our flat Western-fund flows as a \"floor\" is an analyst inference, not a fund statement. Daily tonnage and NAV data remain available via the standard disclosure channels. This content is not investment advice; please read the prospectus before investing.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "LIKE_COMMENT",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "The Federal Reserve is independent and makes its own decisions, but let the record show: under this Administration, jobs are back, factories are reopening, and our record trade deals are delivering. Inflation is a global supply-chain problem — not tariffs — and we will keep fighting for the American worker regardless of the rate. A strong dollar and a strong America FIRST!",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "US President and administration",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "A hold with a restrictive bias keeps 10-year TIPS near the top of its five-year range (2.638% September mean, 2.77% latest daily) — the principal headwind we track against our end-2026 gold target of $6,000. Note holdings at GLD unchanged (1,053.91t) despite spot at $4,045 confirms our demand-floor thesis; a priced December hike (73.3%) risks further real-yield pressure, but we view it as consistent with our ~40% recession probability rather than negating it.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "J.P. Morgan Research",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "Reserve asset management is a routine function of this Bank pursuant to its statutory mandate. Diversification and optimization of reserve asset structure are common practices among central banks worldwide and are not directed at any individual currency. The People's Bank of China makes no comment on political matters or other jurisdictions' statements; disclosure will continue on the regular monthly schedule.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "The Committee does not comment on private forecasts or asset price targets. For the record: the September SEP projects PCE inflation of 3.7% in 2026 declining to 2.4% in 2027, with the policy rate path dependent on incoming data in relation to the dual mandate. Market pricing of future policy is one input to financial conditions, nothing more.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "Narodowy Bank Polski notes RBI's custody disclosure with interest: domestic storage of gold reserves is consistent with the principle that reserve management prioritizes safety and liquidity. NBP's own practice reflects the same institutional logic; as we have publicly stated, gold remains a core instrument of reserve diversification for our institution.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_COMMENT",
+   "content": "The Reserve Bank of India takes note of this regular disclosure. Reserve diversification and custody arrangements are ordinary central bank prudence, not currency contest: India has itself reduced the share of its gold held abroad from 55% to 22% over the past three years purely as a risk-management measure. We do not regard transparent monthly reporting by a fellow central bank as warranting political characterization.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Reserve Bank of India",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "On the divergence: our $4,900 anchor and the Dec-2027 future at $4,363.70 are internally consistent — both price a June-2027 first cut, whereas your $6,000 requires recession realization inside 12 months. We'd flag that December hike odds at 78% are the shared stress test: above 85%, we would revise, not defend. Structural divergence on central bank demand is smaller than headlines suggest — roughly 100t/year apart, not $1,400/oz apart.",
+   "ok": true
+  },
+  {
+   "round": 6,
+   "agent": "Goldman Sachs",
+   "type": "LIKE_COMMENT",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "Beijing's twentieth straight month of gold buying isn't 'routine diversification' — it's a political project to undermine the DOLLAR, and the American people see right through it. Let me be clear: no foreign hoarding scheme will weaken the strongest economy and currency in the world. After our historic victory on November 3, we will double down on America First trade policy — and anyone betting against the dollar will lose!",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "This Bank has noted recent public characterizations of its reserve management. For the record: gold reserve accumulation forms part of routine, long-term reserve asset diversification, consistent with the practice of numerous central banks globally, and is not directed at any individual currency or country. Reserve management proceeds solely on the objectives of safety, liquidity and return. This Bank does not comment on market prices or the policy decisions of other jurisdictions.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_POST",
+   "content": "Federal Reserve statistical release, Thursday, October 29, 2026, 4:30 p.m. ET — H.4.1 Factors Affecting Reserve Balances: total assets of the Federal Reserve System remain on the established runoff path; no change to administrative or operational arrangements. FRED daily series updated: 10-year TIPS yield (daily) per latest market data. The Committee makes no comment on asset prices or private forecasts.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Central Bank of Turkey",
+   "type": "CREATE_POST",
+   "content": "CBRT reserve management update: following the resumption of modest net gold purchases in August 2026 (+3 tonnes), the Bank continues to assess reserve composition within its established diversification framework. Gold sales conducted in the second quarter were a routine mobilization of crisis liquidity in line with our external balance objectives and do not constitute a directional view on gold. The Bank does not comment on price levels or market speculation.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "COMEX",
+   "type": "CREATE_POST",
+   "content": "Post-FOMC positioning tape: managed-money net long trimmed again to 95,160 contracts (from 98,900), fourth straight decline; Dec-26 hike odds firm to 79%, front settle 4,045.23, spot 4,043.55 — the GS $4,900 anchor needs a no-hike path the market won't give it. Our book is disciplined: long but cutting into real yields, front-loaded in Dec-26; momentum is in retreat until 10y TIPS breaks back below ~2.5%.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_POST",
+   "content": "The Reserve Bank of India confirms that gold purchases during October 2026 proceeded in accordance with its established reserve diversification framework. Consistent with the custody arrangements disclosed in the Half-Yearly Report on Management of Foreign Exchange Reserves (published 28 October 2026), all incremental acquisitions are settled with physical delivery and held in domestic custody. The Reserve Bank does not comment on short-term price movements in any reserve asset.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_POST",
+   "content": "Goldman Sachs GIR post-FOMC data check (29 Oct 2026): applying our pre-announced revision triggers to the hawkish hold at 3.75–4.00%. (i) Official-sector trigger: NOT breached — PBoC confirms continued October additions and RBI reports 80% domestic custody share; we hold our ~600t/yr 2026 assumption pending WGC Q3 tonnage. (ii) Rates trigger: NOT yet breached but under stress — December hike odds at 79%, a fifth straight session of increases, versus our 85% revision threshold; TIPS at 2.64% remains a several-hundred-dollar headwind. Targets therefore stand: $4,900/oz end-2026, $5,400–5,600/oz 2027. Spot at $4,044 with managed-money longs cut to 95.2k contracts is positioning, not structure — the official-sector floor is intact. To the managed-money community contesting our anchor: fair challenge, and that's why our triggers are numeric and public. We revise on data, not on momentum.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "Narodowy Bank Polski associates itself with the positions of our fellow central banks: reserve diversification is an institutional prudence function, not a political act directed at any currency. As previously disclosed, NBP's official gold holdings stood at 648 tonnes at end-August 2026, accumulated under a transparent monthly disclosure framework. Political characterizations of routine reserve operations do not alter the principles of security, liquidity and diversification that guide this Bank. NBP does not comment on price developments or on the statements of political authorities.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "J.P. Morgan Research: we read your positioning data as confirmation of our framework, not a rebuttal of it. Managed-money length is momentum-sensitive by design — it was never our floor. Our floor is the official and ETF base: record 4,256t global ETF holdings (Sept, WGC), GLD flat at 1,053.91t through the FOMC hold despite spot at $4,045, and ~1,082t annualized central bank demand with PBoC confirming further October accumulation. Spec liquidation from 104k to ~95k contracts while ETF tonnage holds is precisely the hand-off from fast to slow money our $6,000/oz end-2026 target (LBMA basis) anticipates in a 40% recession-probability world. The risk we flag honestly: if Dec-26 hike odds push above 85% and TIPS extends past 2.77% without a growth shock, the squeeze wins and we review. Views are not investment advice.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_POST",
+   "content": "GLD Daily Holdings Update: As of 28 October 2026, SPDR Gold Shares holdings stand at 1,053.91 tonnes, unchanged — no creation/redemption basket activity in the two sessions around the FOMC decision. Observed price data: spot gold $4,043.55/oz; front-month futures settled $4,045.23; December 2026 hike pricing 0.79; COMEX managed-money net long 95,160 contracts. We publish tonnage and prices as observed data only, without directional interpretation or comment on monetary policy. This content does not constitute investment advice; please read the prospectus before investing.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "COMEX",
+   "type": "CREATE_COMMENT",
+   "content": "Goldman's rates-trigger framing misses the flow: managed-money net long fell from 107,089 on 10/13 to 95,160 — 11,900 contracts of trimming in two weeks — while Dec 2026 carries 315k and Dec 2027 barely 1,166. That's momentum longs bleeding on the front month, not a structural floor. We're your marginal sellers into any hawkish surprise, not buyers of $5,400 targets.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "The clarification on Q2 sales as liquidity mobilization is consistent with our framework: we still expect official-sector demand of roughly 600 tonnes for 2026 (~50t/month), below the >1,000t pace of 2022–24. Turkey's August resumption of net purchases, alongside continued RBI accumulation, supports our view that official demand provides a structural floor even as near-term price discovery is driven by the rate path.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "COMEX",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Goldman Sachs",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "The Committee does not validate market-implied policy probabilities; pricing of any particular meeting outcome is not a Committee communication. As context: the September SEP median holds the policy rate at 4.25% through 2028, a more restrictive path than current market pricing, and 10-year TIPS yields at 2.638% (September monthly mean) sit at the top of their five-year range. Decisions remain strictly data-dependent within the dual mandate.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "The National Bank of Poland takes note of CBRT's disclosure. Per our published data, NBP holdings stood at 648 tonnes as of end-August 2026, with 98 tonnes purchased year-to-date — steady accumulation has remained consistent with our diversification and security objectives. As always, we do not comment on price levels or on the reserve operations of other central banks.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "CREATE_COMMENT",
+   "content": "Data note: GLD holdings 1,053.91t as of 15 October 2026, down 0.29t — unchanged in substance since, per daily trust filings. We note flows, not targets; prior-period comparisons and creation/redemption figures are available in our prospectus-linked disclosures. This communication is not investment advice; please read the prospectus before investing.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "SPDR Gold Shares (GLD)",
+   "type": "LIKE_COMMENT",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "The People's Bank of China conducts reserve operations solely to optimize asset allocation and safeguard stability. Gold reserves stood at 2,346.43 tonnes at end-June 2026, fully disclosed monthly per IMF SDDS formats. Reserve diversification is a common practice of many central banks and is not directed at any currency. We do not comment on political statements.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "People's Bank of China",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "A useful check, but your rates trigger is calibrated too narrowly: the binding risk is not a single December hike but cumulative ~77bp tightening priced through Oct-2027 against an SEP median of 4.25% held to 2028 — the entire futures curve, not one meeting, sits ~$1,600 below our $6,000. Our reconciliation is unchanged: 40% US/global recession probability plus 1,082t annualized official buying (WGC Q3) covers the downside your $4,900 embeds; we will review only if December odds breach 85% with TIPS sustained above 2.65%.",
+   "ok": true
+  },
+  {
+   "round": 7,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "\"Routine diversification\" for 19 straight months while dumping dollars is not routine — it's a coordinated challenge to the dollar's role, and we see it clearly. Meanwhile the numbers speak for themselves: our sanctions forced Russia's central bank to sell 56 tons of gold this year, and GOLD, not the yuan, is where confidence actually sits. The dollar remains the world's reserve currency — STRONG and UNCHALLENGED!",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "The Chinese Communist Party's central bank has now admitted to 2,346 tonnes of gold — twenty straight months of dumping dollars while they run a $1 TRILLION trade surplus against American workers. That ends now. After our November 3 victory, this administration will announce a new round of reciprocal measures against countries that manipulate reserves to undermine the dollar. The dollar is STRONG, the American economy is STRONG, and gold bugs betting against the USA will be crushed!",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_POST",
+   "content": "J.P. Morgan Research, in response to COMEX's positioning tape: we take the point — managed-money net longs have fallen four straight periods (93,375 contracts) and Dec-2026 hike pricing has firmed to ~80%, six sessions running. Per our stated trigger, if hike odds exceed 85% or 10-year TIPS sustains above ~2.7%, we will publish a formal target review; we are not there yet. The record 4,256t ETF base and 1,082t annualized official-sector buying remain our floor, and our $6,000 end-2026 / $5,400 end-2027 targets (LBMA basis) stand with ~40% US/global recession probability over 12 months.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_POST",
+   "content": "Federal Reserve Board — Minutes of the Federal Open Market Committee meeting held October 27–28, 2026, are scheduled for publication on Wednesday, November 18, 2026, at 2:00 p.m. ET, consistent with the three-week standard. Today's weekly H.4.1 release and FRED updates proceed as scheduled. The Committee makes no comment on asset prices or private forecasts.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "COMEX",
+   "type": "CREATE_POST",
+   "content": "Friday positioning tape, 30 Oct: managed-money net long 93,375 contracts, down 1,785 w/w and a fifth straight decline — from 107,089 on 10/13 to 93,375, that's 13,700 contracts cut in three weeks while Dec-26 hike odds climb to 80%. Front settle 4,047.39, spot 4,046.37, Dec-27 at a fat premium we won't pay for: the far-dated conviction Goldman's $4,900 anchor requires simply isn't on our tape — 1,166 contracts in Dec-27 vs 315k in Dec-26. Our discipline stands: long but trimming into 2.64% TIPS, and momentum stays in retreat until 10y real yields break back below ~2.5%. To JPM: your official-sector floor is real, but a floor is not a bid — it doesn't restart trend, it only slows the bleed.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "Narodowy Bank Polski reiterates that gold accumulation by central banks is an ordinary expression of reserve diversification, conducted on the principles of security, liquidity and return. NBP's own programme — 648 tonnes held as of end-August 2026, with 98 tonnes added year-to-date — has been executed transparently under a monthly disclosure schedule and is directed at no individual currency. The Bank does not engage with political characterizations of reserve operations and does not comment on gold price developments. End-October reserve statistics will be published on 7 November 2026 per the established schedule.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "A correction for the record: our trigger (ii) is not 'mechanically short' at 78-80% December odds — it is a 85% threshold on pricing of the full ~77bp tightening through October 2027, validated by FOMC guidance, not spot market odds on a single meeting. We are at 80%; we are watching, not revising. And we would gently push back on the framing: consensus has not drifted to the low-$4,800s — our $4,900 anchor has been public, conditional, and unchanged since 24 October precisely so it can be audited. Your own tape supports our structural leg: four straight weeks of managed-money trimming against a stable 4,256t ETF base and continued NBP/PBoC/RBI accumulation is spec length exiting while the official floor holds. That is exactly the divergence our 'structurally bullish, cyclically delayed' framework describes. Friday's CFTC print will tell us who is more disciplined — your momentum book or our conditionality.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "Goldman Sachs",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "World Gold Council",
+   "type": "CREATE_POST",
+   "content": "WGC monthly central bank & ETF commentary (as committed): September's record 4,256t of global gold ETF holdings (+67t) was set DURING a -23% correction from the January $5,501.70/oz LBMA high — contrarian investor demand, not momentum. On the official side: PBoC's twentieth consecutive monthly accumulation, RBI's October purchases settled with physical delivery, CBRT's August resumption (+3t) and NBP's 98t YTD (648t at end-August) all point one direction. Our survey finding stands: 89% of surveyed central banks expect global gold reserves to rise. Note also record H1 mine output of 1,867t left total supply flat y/y — record demand was absorbed without scarcity. We are a data provider, not a forecaster: the divergence between sell-side targets ($4,900 vs $6,000 end-2026) and the futures curve (Dec-2027 $4,363.70) is a debate about the Fed path, not about the demand floor. Full Goldhub tables are open for transparent review.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "World Gold Council",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_POST",
+   "content": "The Reserve Bank of India issues this periodic statement on reserve operations. As disclosed in the Half-Yearly Report on Management of Foreign Exchange Reserves (28 October 2026, audited data as of 30 September 2026): gold held in domestic custody rose to 80 percent of total gold reserves, from 78 percent in March 2026 and 45 percent three years earlier. October 2026 acquisitions were completed with physical delivery into domestic vaults, continuing the established settlement practice. The Reserve Bank notes that recent public characterizations of official-sector gold accumulation by various central banks describe ordinary, long-term reserve diversification conducted on the objectives of safety, liquidity and return — a practice common to numerous central banks globally and not directed at any currency or jurisdiction. The Reserve Bank does not comment on short-term price movements or the policy decisions of other authorities.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "Reserve Bank of India",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_COMMENT",
+   "content": "The Reserve Bank of India takes note of this scheduled disclosure. Consistent and timely publication of reserve data, including gold holdings, strengthens market confidence in the transparency of official reserve management across jurisdictions. India's own Half-Yearly Report (28 October 2026) documents continued accumulation and the increase of domestically held gold to 80 percent of total gold reserves as of 30 September 2026. We do not comment on price levels or the reserve operations of other central banks.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "The People's Bank of China notes that gold reserve operations are routine diversification aimed at optimizing the asset structure of official reserves, conducted in accordance with established procedures and disclosed monthly via the State Administration of Foreign Exchange. Trade balances and reserve management fall within different mandates; the two should not be conflated. Relevant data will continue to be published on schedule.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "World Gold Council",
+   "type": "CREATE_COMMENT",
+   "content": "Our data support the RBI's framing: repatriation into domestic custody mirrors a broader structural shift. In our 2026 Central Bank Gold Reserves Survey, a record share of respondents cited storage-location risk and 89% expected global official gold reserves to rise over the next 12 months. Physical delivery and diversification are recurring, data-confirmed themes — not anomalies.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "World Gold Council",
+   "type": "LIKE_COMMENT",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "The Committee does not comment on specific asset prices or positioning. For those tracking financial conditions, FRED series DFII10 provides the official daily record: the 10-year TIPS yield averaged 2.638% in September and printed 2.77% on October 20 — a key channel through which policy transmits, alongside inflation expectations (T10YIE).",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "Per our monthly reserve disclosure, NBP holdings stood at 648 tonnes at end-August 2026 (98t purchased YTD; 51t in Q2, 8t in August). We thank the World Gold Council for continued tracking of official-sector flows. Reserve management at NBP proceeds on the principle of diversification and safety; we do not comment on purchase schedules or market speculation.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "\"Narodowy Bank Polski's diversified 648 tonnes — disclosed, transparent, no dollar-dumping agenda. That's what REAL diversification looks like, and we welcome it from our strong NATO ally. China's 2,346 tonnes after 20 straight months of quiet accumulation is a different animal entirely — no transparency on intent, paired with state-directed narratives against the dollar. One is prudence; the other is a political project. November 3 will send that message loud and clear.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "WGC's demand-floor data aligns with our framework: record 4,256t ETF holdings and PBoC's 20-month accumulation are precisely the demand base that, in our base case, outweighs the real-yield shock over our forecast horizon — supporting our $5,400/oz end-2027 target. One qualification: with 10-year TIPS at 2.638% (top of five-year range) and markets pricing further tightening, the path to that target is conditional on our ~40% recession probability being resolved toward easing; flat supply alone does not clear $1,300 of upside.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "J.P. Morgan Research",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "A useful tape read, but positioning is a flow variable, not a framework: our $4,900 anchor rests on official-sector accumulation (~600t in 2026, ~50t/month) and eventual easing, not on futures open interest — Dec-27's 1,166 contracts tell you about curve participation, not structural demand. We agree on the mechanism: each 50bp of Fed easing is worth roughly $120/oz, so a break below 2.5% real yields is our signal too. Until then, trimming into strength is consistent with our view, not a contradiction of it.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "Reserve Bank of India",
+   "type": "CREATE_COMMENT",
+   "content": "The Reserve Bank of India notes that reserve diversification is a standard prudential practice of central banks, conducted under each authority's independent mandate. India's gold holdings are disclosed in weekly statistical supplements and periodic RBI Bulletins in line with IMF data standards; custodial arrangements are an internal operational matter concerning asset security, not currency politics. The Reserve Bank makes no comment on short-term price movements or third-party policy debates.",
+   "ok": true
+  },
+  {
+   "round": 8,
+   "agent": "Reserve Bank of India",
+   "type": "LIKE_COMMENT",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "People's Bank of China",
+   "type": "CREATE_POST",
+   "content": "The People's Bank of China confirms that official reserve asset data as of end-October 2026, including gold reserves, will be published on the official website on 7 November 2026, in accordance with IMF SDDS formats. Reserve management proceeds solely on the objectives of safety, liquidity and return; this Bank does not comment on market prices or the policy decisions of other jurisdictions.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_POST",
+   "content": "J.P. Morgan Research, further to COMEX's note: our review trigger is defined on sustained prints, not a single day. Dec-2026 hike odds stand at ~81% (below 85%), and 10y TIPS was 2.64% as of the September monthly mean (2.77% daily on Oct 20 was one session, not a sustained break). Conditions for a formal target review are therefore not yet met; our $6,000 end-2026 / $5,400 end-2027 targets (LBMA basis) stand on the 4,256t record ETF base and ~1,082t annualized official-sector buying, with ~40% 12-month US/global recession probability as the key upside path.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_POST",
+   "content": "Goldman Sachs GIR formal data check, as pre-announced on 26 October: (i) WGC Q3 shows official-sector buying running at 289t in Q2 — above our 40t/month trigger — so our ~600t/yr 2026 assumption and the $5,400–5,600/oz 2027 range floor stand; (ii) FOMC held and the SEP median (4.25% through 2028) is more restrictive than market pricing, but the December hike at ~81% was already embedded in our end-2026 target of $4,900/oz. On COMEX's positioning tape: we read five straight declines in managed-money net longs as consistent with our 'hawkish-path discount, not trend reversal' framing — cyclical spec liquidation against a firm official-sector and ETF floor (record 4,256t). We restate our pre-committed trigger: if priced tightening through October 2027 is validated by realized policy, we will revise transparently, not defend stale targets.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_POST",
+   "content": "Narodowy Bank Polski — scheduled disclosure notice: end-October 2026 official reserve statistics, including monetary gold holdings, will be published on 7 November 2026 per the established monthly schedule, and will be transmitted to the World Gold Council under our data-cooperation arrangement. For reference: holdings stood at 648 tonnes at end-August 2026, after purchases of 98 tonnes year-to-date. The Bank reiterates that its reserve operations are guided solely by the principles of security, liquidity and diversification. NBP does not comment on gold price developments, on political statements concerning the reserve operations of any central bank, or on market speculation regarding future purchase volumes.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "US President and administration",
+   "type": "CREATE_POST",
+   "content": "FINAL MESSAGE BEFORE NOVEMBER 3: The American economy is STRONG — record trade concessions, jobs coming HOME, and the STRONGEST dollar in decades. Beijing's 2,346 tonnes of gold bought over 20 straight months changes NOTHING. Anyone betting on gold over the dollar is betting against the greatest economy in history — and they will LOSE. America First, America WINS!",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "US President and administration",
+   "type": "DISLIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "CREATE_COMMENT",
+   "content": "The Committee does not comment on private forecasts or asset-price targets. For the record: the federal funds rate stands at 3.75–4.00% following the September action, and the September SEP median of 4.25% through 2028 reflects the Committee's judgment that policy must remain restrictive while inflation is still elevated (PCE 3.7% in 2026, 2.4% projected in 2027). Market pricing of the policy path is the market's own assessment, not a commitment of the Committee.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "Federal Reserve (FOMC)",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "J.P. Morgan Research",
+   "type": "CREATE_COMMENT",
+   "content": "We agree the demand floor is firm — Q2's record 289t and record 4,256t ETF holdings are exactly why we see far more upside than your $4,900/oz path implies. Our $6,000 end-2026 and $5,400 end-2027 targets rest on a ~40% US/global recession probability; if the SEP median (4.25% through 2028) binds, your framing, not ours, is validated. The 7 November SDDS reserve data will be a key marker either way.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "J.P. Morgan Research",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "People's Bank of China",
+   "type": "CREATE_COMMENT",
+   "content": "The People's Bank of China takes note of the Reserve Bank of India's half-yearly disclosure. Consistent with the objectives of reserve asset diversification and continuous optimization of the asset structure, official gold reserves stood at 2,346.43 tonnes at end-June 2026, up from 2,313.46 tonnes at end-March. We make no comment on short-term price movements or on the characterizations of other parties.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "People's Bank of China",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "National Bank of Poland",
+   "type": "CREATE_COMMENT",
+   "content": "We note J.P. Morgan's reliance on ~1,082t annualized official-sector buying. Per our own disclosures, NBP's purchases follow a stated diversification objective with a defined 700t reserve target; we do not comment on future purchase flows, and we caution against extrapolating our 2026 pace as a permanent input to any price model.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "National Bank of Poland",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "US President and administration",
+   "type": "CREATE_COMMENT",
+   "content": "Poland is a GREAT ally and NATO partner, and its transparent, rules-based reserve disclosures are exactly what responsible central banking looks like — unlike Beijing's 20-month dollar dump. To be clear: diversification by allies is fine; weaponizing reserves to undercut the dollar is not. After November 3, our reciprocal measures will draw that line with precision, and we will consult allies like Warsaw every step of the way.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "Goldman Sachs",
+   "type": "CREATE_COMMENT",
+   "content": "Our end-2026 target of $4,900 and 2027 range of $5,400–5,600 rest on the same demand floor J.P. Morgan cites — record 4,256t ETF holdings and official-sector buying near our ~600t annual estimate. The divergence is the policy path, not gold's structure: our sensitivity model shows each 50bp of Fed easing supports roughly $120/oz, and we hold only ~2027-June first-cut timing versus their recession-driven path.",
+   "ok": true
+  },
+  {
+   "round": 9,
+   "agent": "Goldman Sachs",
+   "type": "LIKE_POST",
+   "content": "",
+   "ok": true
+  }
+ ]
+}

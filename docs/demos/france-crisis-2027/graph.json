@@ -1,0 +1,753 @@
+{
+ "nodes": [
+  {
+   "id": "fb70b268-a449-420f-8817-ed0fcac21bac",
+   "name": "scrutin n°7979 - 17e législature",
+   "labels": [
+    "FiscalInstrument"
+   ],
+   "summary": "The Assemblée nationale published the analysis of vote (scrutin) n°7979 of the 17th legislature on its official website"
+  },
+  {
+   "id": "f79abc28-825a-491c-b72a-d1a3ba6356af",
+   "name": "EU Excessive Deficit Procedure",
+   "labels": [
+    "FiscalInstrument"
+   ],
+   "summary": "The European Commission's 2026 Autumn Package lists France among nine member states still under the EU Excessive Deficit Procedure."
+  },
+  {
+   "id": "f57a8552-5d05-491c-aa61-8c794a7aa9ea",
+   "name": "2024 snap election",
+   "labels": [],
+   "summary": "Since the 2024 snap election, French budgets have passed only through Article 49.3, producing a minority-government structure."
+  },
+  {
+   "id": "f4fb39dd-b49d-4d34-a28a-310bf73310db",
+   "name": "Conseil constitutionnel",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Arbiter of election rules and emergency-measure legality."
+  },
+  {
+   "id": "edb7037c-fd2f-4ae8-a59b-9de38ac233df",
+   "name": "Commission's 2026 Autumn Package",
+   "labels": [
+    "FiscalInstrument"
+   ],
+   "summary": "The Commission's 2026 Autumn Package lists France among nine member states still under the EU Excessive Deficit Procedure. The Commission's Autumn forecast, normally due in November, was not yet published as of 21 October 2026. It serves as a leading indicator alongside deficit revisions from INSEE, the Cour des comptes, and rating-agency actions on the French sovereign and banks.\nThe European Commission published the 2026 European Semester Autumn Package, which lists France among member states under the Excessive Deficit Procedure (source S36)."
+  },
+  {
+   "id": "ebf655f9-6c27-40ea-8638-6437db0914cf",
+   "name": "Ministère de l'Intérieur / French police",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Curfews, emergency measures and arrest data."
+  },
+  {
+   "id": "e85dac11-8700-48ce-ba0c-39d1859a4908",
+   "name": "Gabriel Attal",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Three prime ministers — Attal, Bayrou, Lecornu — cycled through office in 2024–26."
+  },
+  {
+   "id": "d119f53e-071f-4160-ad36-1da2fd480560",
+   "name": "Legiwatch",
+   "labels": [
+    "InformationSource"
+   ],
+   "summary": "Legiwatch reported on the PLF 2027 and its rejection in the finance commission"
+  },
+  {
+   "id": "ce1d2180-c21f-44d0-9bb6-cc1ba98e8c74",
+   "name": "David Amiel",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Budget Minister David Amiel warned that Assembly-approved amendments to the PLF 2027 would worsen the deficit by €10 billion."
+  },
+  {
+   "id": "cd783b78-27d5-41ac-bf20-82a4ce8d54d5",
+   "name": "IMF",
+   "labels": [
+    "InformationSource"
+   ],
+   "summary": "The IMF projects France's net general government borrowing at -5.352% of GDP for 2026.\nThe IMF World Economic Outlook (2026 vintage) projects France's general government deficit at −5.352% of GDP for 2026 and −5.224% for 2027, comparable to the PLF 2027's 5.4% and 5.0% figures."
+  },
+  {
+   "id": "cabe7f39-5fcd-427f-8e1a-5aad2bef9110",
+   "name": "Banque de France",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Market functioning, sovereign spread commentary and growth forecasts."
+  },
+  {
+   "id": "c311b719-b54e-41f8-bac6-e1eb7c69f08f",
+   "name": "Rassemblement National",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Front-runner bloc whose security framing the riots amplify.\nDeficit revisions from the Commission (alongside INSEE and the Cour des comptes) against the 5.4 percent forecast are a leading indicator for the electoral trajectory including RN.\nThe RN group held 122 members at the 6 July 2026 vote; censure requires 289 of 577 deputies, so a blocking minority is established while a pro-budget majority is not."
+  },
+  {
+   "id": "c262294f-017c-4bb3-8084-134094dbd04a",
+   "name": "François Bayrou",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Sébastien Lecornu succeeded François Bayrou as prime minister, part of a 2024–26 cycle of three prime ministers."
+  },
+  {
+   "id": "b6877be3-9cb5-455f-b853-3593d9a82eef",
+   "name": "October 2026 riots",
+   "labels": [
+    "PublicOrderEvent"
+   ],
+   "summary": "France enters the final six months before the April 2027 presidential election amid the aftermath of the October 2026 riots."
+  },
+  {
+   "id": "aecf64cd-2405-4ae6-921f-feefa2b13c30",
+   "name": "President Emmanuel Macron",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Can dissolve, appoint a technocrat, or invoke emergency powers."
+  },
+  {
+   "id": "ad708955-e046-41a9-9408-954eaf4fe0a8",
+   "name": "Touteleurope.eu",
+   "labels": [
+    "InformationSource"
+   ],
+   "summary": "Touteleurope.eu summarised the measures announced by the gouvernement Lecornu for budget 2027\nTouteleurope.eu reported on the rejection of two new censure motions after the government's recourse to Article 49.3 on the spending part of the budget 2026"
+  },
+  {
+   "id": "abb2cf4e-279d-404e-bca3-70501cfbdc1d",
+   "name": "Le Club des Juristes",
+   "labels": [
+    "InformationSource"
+   ],
+   "summary": "Le Club des Juristes reported that the PLF 2027 arrived at the Assemblée nationale on Tuesday 13 October"
+  },
+  {
+   "id": "a8fa7d58-4f32-4d38-b46e-4029913a953f",
+   "name": "LCP",
+   "labels": [
+    "InformationSource"
+   ],
+   "summary": "LCP expects the first-part vote to 'more than probably' end in rejection, sending the text to the Senate, and reports that Lecornu 'could' resort to 49.3 with no formal engagement as of 21 October 2026.\nLCP - Assemblée nationale reported that, after largely unravelling the government's project, the Assembly pressed pause on the state budget"
+  },
+  {
+   "id": "9c8a0079-793f-4960-9b54-083ff8221510",
+   "name": "French insurers and reinsurers (FFA, CCR, Scor)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Quantify riot insured losses and catastrophe declarations."
+  },
+  {
+   "id": "9bebf5d0-37f8-4f1a-b20d-16945ba5e61b",
+   "name": "Cour des comptes",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Authoritative independent audit of deficit projections.\nThe Cour des comptes provides deficit revisions monitored as a leading indicator against the 5.4 percent forecast relevant to the PLF 2027.\nThe Cour des comptes noted in February 2026 that the 5.4% deficit target for 2026 had already been replaced by 5.0% in the PLF 2027.\nThe Cour des comptes published a February 2026 synthesis on the state of public finances at the start of 2026"
+  },
+  {
+   "id": "9a96a37f-1370-4823-9c94-c618a44a6ac3",
+   "name": "French National Assembly",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Censure motions and budget votes decide government survival.\nThe Assemblée nationale published the analysis of vote (scrutin) n°7979 of the 17th legislature on its official website\nThe Assemblée nationale publishes the composition page for the parliamentary group Ensemble pour la République on its official site"
+  },
+  {
+   "id": "99f15f8b-67c1-4747-910b-67181bb93632",
+   "name": "Article 49.3",
+   "labels": [
+    "FiscalInstrument"
+   ],
+   "summary": "Since the 2024 snap election, French budgets (including the PLF 2027) have only passed through Article 49.3, and censure after a 49.3 voids the bill.\nSince the 2024 snap election, successive governments have passed budgets only by engaging Article 49.3; the 2026 loi de finances was adopted on 2 February 2026.\nCensure after a 49.3 engagement voids the bill, constraining the PLF 2027's passage; as of 21 October 2026 LCP reports only that Lecornu 'could' resort to 49.3 with no formal engagement."
+  },
+  {
+   "id": "972dbb4a-9d50-4dcd-98ec-63b901ea26fa",
+   "name": "Les Républicains / centre-right",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Pivotal votes for budget passage without 49.3.\nNo documented Les Républicains line on the PLF 2027 exists in the record, though a composition page dated 19 October 2026 was published; a pro-budget majority is not established."
+  },
+  {
+   "id": "95500826-5210-46bd-9377-6550949e27fe",
+   "name": "Prime Minister of France",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Owns the 2027 budget, 49.3 decisions and riot response.\nPrime Minister Sébastien Lecornu presented the PLF 2027 (draft budget bill) to the National Assembly on 1 October 2026.\nSébastien Lecornu has been Prime Minister of France, in office since 8 September 2025, heading a minority government.\nThree prime ministers — Attal, Bayrou, Lecornu — cycled through office in 2024–26.\nSébastien Lecornu succeeded François Bayrou as prime minister, part of a 2024–26 cycle of three prime ministers.\nPrime Minister Sébastien Lecornu's minority government presented the PLF 2027 to the Conseil des ministres on "
+  },
+  {
+   "id": "91f28e80-1050-479f-a399-89d1b10f61fa",
+   "name": "Spring 2026 Economic Forecast",
+   "labels": [
+    "FiscalInstrument"
+   ],
+   "summary": "The European Commission published the Spring 2026 Economic Forecast, projecting a slowdown in growth driven by an energy shock (source S37)."
+  },
+  {
+   "id": "8265aa5e-408c-4399-9565-213d63d1712c",
+   "name": "Person",
+   "labels": [
+    "Person"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "7725abff-20b2-49b3-8835-dcff1ffbbf04",
+   "name": "Organization",
+   "labels": [
+    "Organization"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "76ed0230-cbec-4995-8188-e53684df5a61",
+   "name": "Le Monde",
+   "labels": [
+    "InformationSource"
+   ],
+   "summary": "Le Monde reported the solemn first-part vote of the PLF 2027 was postponed, with no guarantee of adoption absent a majority."
+  },
+  {
+   "id": "6849e934-48e9-4227-8c8d-1ee2eebc2f85",
+   "name": "France",
+   "labels": [],
+   "summary": "The European Commission's Spring 2026 forecast projects France's deficit at 5.1% of GDP for 2026, edging up to 5.7% in 2027.\nThe IMF projects France's net general government borrowing at -5.352% of GDP for 2026.\nFrance enters the final six months before the April 2027 presidential election amid the aftermath of the October 2026 riots.\nSébastien Lecornu has been Prime Minister of France, in office since 8 September 2025, heading a minority government.\nSince the 2024 snap election, French budgets have passed only through Article 49.3, producing a minority-government structure."
+  },
+  {
+   "id": "67c99d87-6ec6-4493-9101-5c588339bf7c",
+   "name": "2027 French presidential election",
+   "labels": [],
+   "summary": "Rassemblement National is forecast to qualify first in the first round of the 2027 French presidential election scheduled for 18 April 2027."
+  },
+  {
+   "id": "639091d1-203a-47f9-b135-978c259c0acc",
+   "name": "French 10-year government bond yield",
+   "labels": [
+    "MarketAsset"
+   ],
+   "summary": "French 10-year yields trade above Italy's and Greece's, the widest premium since the early-2010s crisis, though short of the aggregator's all-time high of 225.1 bps on 17 November 2011.\nFrench 10-year yields trade above Greek yields as well as Italy's, reflecting market pricing of French fiscal fragility.\nPLF 2027 carries interest charges rising to €91.2 billion in 2027 from €79.2 billion, contributing to fiscal fragility priced by markets in French 10-year yields."
+  },
+  {
+   "id": "4a66a190-1ff7-48b8-9030-dbacdb81e340",
+   "name": "Lecornu",
+   "labels": [
+    "Person"
+   ],
+   "summary": "French minister who credited \"targeted curfews\" with restoring calm after riots in which around 3,000 shops were looted.\nPolitico EU reported that French PM Sébastien Lecornu would propose a €54 billion budget squeeze for 2027"
+  },
+  {
+   "id": "477c228a-328d-4fe4-954c-f0a84494aec9",
+   "name": "French Senate",
+   "labels": [
+    "Government"
+   ],
+   "summary": "The RN group held 122 members at the 6 July 2026 vote; censure requires 289 of 577 deputies, so a blocking minority is established while a pro-budget majority is not.\nIf the first-part vote ends in rejection, the PLF 2027 text would be sent to the Senate in that state, with the whole-budget vote fixed for 17 November."
+  },
+  {
+   "id": "427d99e0-3d7f-4cbc-864a-cf663ea5c278",
+   "name": "Conseil des ministres",
+   "labels": [
+    "Government"
+   ],
+   "summary": "The PLF 2027 was presented to the Conseil des ministres on 1 October 2026."
+  },
+  {
+   "id": "4244cd25-c764-46d9-b2ec-5e261b083ffd",
+   "name": "European Commission",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Runs the EDP timeline and sanctions risk for France's deficit path.\nThe European Commission's Spring 2026 forecast projects France's deficit at 5.1% of GDP for 2026, edging up to 5.7% in 2027.\nThe PLF 2027 (presented 1 October 2026) revised France's 2026 deficit forecast to 5.4% of GDP and set a 5.0% target for 2027.\nThe European Commission's 2026 Autumn Package lists France among nine member states still under the EU Excessive Deficit Procedure.\nThe European Commission's Spring 2026 forecast puts France's deficit at 5.1% of GDP for 2026 and 5.7% for 2027, below which the PLF 2027's figures (5"
+  },
+  {
+   "id": "40d6b1da-7949-4cf5-88ac-f6fbb5b5ca45",
+   "name": "Government",
+   "labels": [
+    "Organization"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "35d59b65-29c7-4af8-8f7f-112291cef2aa",
+   "name": "INSEE",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Publishes the deficit and GDP figures that resolve the fiscal questions.\nINSEE deficit revisions are a leading indicator monitored against the PLF 2027 budget process and the 5.4 percent deficit forecast.\nINSEE's first full-year 2026 estimate, due in spring 2027, will resolve whether the deficit exceeds the 5.5% threshold against the PLF 2027's 5.4% forecast.\nInsee's public finances dashboard reports fiscal data including the 2025 deficit of 5.1% of GDP after 5.8% in 2024"
+  },
+  {
+   "id": "2c402d92-57df-43bf-b0b6-bd8445863fd6",
+   "name": "Ensemble pour la République",
+   "labels": [
+    "PoliticalParty"
+   ],
+   "summary": "The presidential bloc renamed Ensemble pour la République publishes a composition page dated 19 October 2026 with no verified seat count, and no documented Les Républicains line on the PLF 2027 exists in the record.\nThe Assemblée nationale publishes the composition page for the parliamentary group Ensemble pour la République on its official site"
+  },
+  {
+   "id": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "name": "PLF 2027",
+   "labels": [
+    "FiscalInstrument"
+   ],
+   "summary": "Prime Minister Sébastien Lecornu presented the PLF 2027 (draft budget bill) to the National Assembly on 1 October 2026.\nSince the 2024 snap election, French budgets (including the PLF 2027) have only passed through Article 49.3, and censure after a 49.3 voids the bill.\nPLF 2027 carries interest charges rising to €91.2 billion in 2027 from €79.2 billion, contributing to fiscal fragility priced by markets in French 10-year yields.\nLegiwatch reported on the PLF 2027 and its rejection in the finance commission\nLe Club des Juristes reported that the PLF 2027 arrived at the Assemblée nationale on Tu"
+  },
+  {
+   "id": "1d0d5c58-b473-466b-b338-45377c14a018",
+   "name": "Reuters",
+   "labels": [
+    "InformationSource"
+   ],
+   "summary": "Reuters outlines an emergency 'special law' rolling over the 2026 budget, or the never-used ordinance 'nuclear option', which legal experts expect would trigger censure if nothing passes."
+  },
+  {
+   "id": "1c065ccd-8bf2-405b-8bbb-13d6d1fcfd03",
+   "name": "NosParlementaires.fr",
+   "labels": [
+    "InformationSource"
+   ],
+   "summary": "NosParlementaires.fr reported on the PLF 2027 vote date of Tuesday 20 October with an incomplete text"
+  },
+  {
+   "id": "0b3163ba-ce41-42f2-b8cb-0c919148790d",
+   "name": "Nouveau Front Populaire / left coalition",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Leading censure actor and runoff contender."
+  },
+  {
+   "id": "04b71581-98d0-4054-a527-a0589775950b",
+   "name": "2026 loi de finances",
+   "labels": [
+    "FiscalInstrument"
+   ],
+   "summary": "Since the 2024 snap election, successive governments have passed budgets only by engaging Article 49.3; the 2026 loi de finances was adopted on 2 February 2026.\nReuters outlines an emergency 'special law' rolling over the 2026 budget, or the never-used ordinance 'nuclear option', which legal experts expect would trigger censure if nothing passes.\nTouteleurope.eu reported on the rejection of two new censure motions after the government's recourse to Article 49.3 on the spending part of the budget 2026\nInsee's public finances dashboard reports fiscal data including the 2025 deficit of 5.1% of GD"
+  },
+  {
+   "id": "04b16d10-83d8-4204-9a28-f648f0c422c2",
+   "name": "Politico EU",
+   "labels": [
+    "InformationSource"
+   ],
+   "summary": "Politico EU reported that French PM Sébastien Lecornu would propose a €54 billion budget squeeze for 2027"
+  },
+  {
+   "id": "01ca64d5-4fca-4a3b-a3a7-2ee974b56fe0",
+   "name": "Roland Lescure",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Economy and Finance Minister Roland Lescure carried the PLF 2027 presented to the Conseil des ministres on 1 October 2026."
+  },
+  {
+   "id": "0118bea9-c865-437d-aa02-55f4662f1289",
+   "name": "Rating agencies (S&P, Fitch, Moody's)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "French sovereign and bank downgrade risk on fiscal slippage."
+  }
+ ],
+ "links": [
+  {
+   "source": "9bebf5d0-37f8-4f1a-b20d-16945ba5e61b",
+   "target": "7725abff-20b2-49b3-8835-dcff1ffbbf04",
+   "name": "IS_A",
+   "fact": "Authoritative independent audit of deficit projections.；- 角色定位: Authoritative independent audit of deficit projections."
+  },
+  {
+   "source": "95500826-5210-46bd-9377-6550949e27fe",
+   "target": "c262294f-017c-4bb3-8084-134094dbd04a",
+   "name": "SUCCEEDED",
+   "fact": "Sébastien Lecornu succeeded François Bayrou as prime minister, part of a 2024–26 cycle of three prime ministers."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "9bebf5d0-37f8-4f1a-b20d-16945ba5e61b",
+   "name": "REPORTS_ON",
+   "fact": "The Cour des comptes noted in February 2026 that the 5.4% deficit target for 2026 had already been replaced by 5.0% in the PLF 2027."
+  },
+  {
+   "source": "95500826-5210-46bd-9377-6550949e27fe",
+   "target": "e85dac11-8700-48ce-ba0c-39d1859a4908",
+   "name": "SUCCEEDED",
+   "fact": "Three prime ministers — Attal, Bayrou, Lecornu — cycled through office in 2024–26."
+  },
+  {
+   "source": "9a96a37f-1370-4823-9c94-c618a44a6ac3",
+   "target": "40d6b1da-7949-4cf5-88ac-f6fbb5b5ca45",
+   "name": "IS_A",
+   "fact": "Censure motions and budget votes decide government survival.；- 角色定位: Censure motions and budget votes decide government survival."
+  },
+  {
+   "source": "4244cd25-c764-46d9-b2ec-5e261b083ffd",
+   "target": "f79abc28-825a-491c-b72a-d1a3ba6356af",
+   "name": "REGULATES",
+   "fact": "The European Commission's 2026 Autumn Package lists France among nine member states still under the EU Excessive Deficit Procedure."
+  },
+  {
+   "source": "4244cd25-c764-46d9-b2ec-5e261b083ffd",
+   "target": "edb7037c-fd2f-4ae8-a59b-9de38ac233df",
+   "name": "REGULATES",
+   "fact": "The European Commission published the 2026 European Semester Autumn Package, which lists France among member states under the Excessive Deficit Procedure (source S36)."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "ce1d2180-c21f-44d0-9bb6-cc1ba98e8c74",
+   "name": "INFLUENCES",
+   "fact": "Budget Minister David Amiel warned that Assembly-approved amendments to the PLF 2027 would worsen the deficit by €10 billion."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "99f15f8b-67c1-4747-910b-67181bb93632",
+   "name": "CONSTRAINS",
+   "fact": "Censure after a 49.3 engagement voids the bill, constraining the PLF 2027's passage; as of 21 October 2026 LCP reports only that Lecornu 'could' resort to 49.3 with no formal engagement."
+  },
+  {
+   "source": "4244cd25-c764-46d9-b2ec-5e261b083ffd",
+   "target": "6849e934-48e9-4227-8c8d-1ee2eebc2f85",
+   "name": "REGULATES",
+   "fact": "The European Commission's Spring 2026 forecast projects France's deficit at 5.1% of GDP for 2026, edging up to 5.7% in 2027."
+  },
+  {
+   "source": "95500826-5210-46bd-9377-6550949e27fe",
+   "target": "8265aa5e-408c-4399-9565-213d63d1712c",
+   "name": "IS_A",
+   "fact": "Owns the 2027 budget, 49.3 decisions and riot response.；- 角色定位: Owns the 2027 budget, 49.3 decisions and riot response."
+  },
+  {
+   "source": "f57a8552-5d05-491c-aa61-8c794a7aa9ea",
+   "target": "6849e934-48e9-4227-8c8d-1ee2eebc2f85",
+   "name": "CAUSES",
+   "fact": "Since the 2024 snap election, French budgets have passed only through Article 49.3, producing a minority-government structure."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "95500826-5210-46bd-9377-6550949e27fe",
+   "name": "CAUSES",
+   "fact": "Prime Minister Sébastien Lecornu's minority government presented the PLF 2027 to the Conseil des ministres on 1 October 2026, carried by Economy and Finance Minister Roland Lescure."
+  },
+  {
+   "source": "aecf64cd-2405-4ae6-921f-feefa2b13c30",
+   "target": "8265aa5e-408c-4399-9565-213d63d1712c",
+   "name": "IS_A",
+   "fact": "Can dissolve, appoint a technocrat, or invoke emergency powers.；- 角色定位: Can dissolve, appoint a technocrat, or invoke emergency powers."
+  },
+  {
+   "source": "76ed0230-cbec-4995-8188-e53684df5a61",
+   "target": "4a66a190-1ff7-48b8-9030-dbacdb81e340",
+   "name": "REPORTS_ON",
+   "fact": "Le Monde published a video on 1 October 2026 summarising the government's PLF 2027 budget text, presented under Sébastien Lecornu's government (source S35)."
+  },
+  {
+   "source": "95500826-5210-46bd-9377-6550949e27fe",
+   "target": "6849e934-48e9-4227-8c8d-1ee2eebc2f85",
+   "name": "LEADS",
+   "fact": "Sébastien Lecornu has been Prime Minister of France, in office since 8 September 2025, heading a minority government."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "4244cd25-c764-46d9-b2ec-5e261b083ffd",
+   "name": "REPORTS_ON",
+   "fact": "The European Commission issues deficit revisions monitored against the 5.4 percent forecast as a leading indicator on the PLF 2027 budget."
+  },
+  {
+   "source": "9a96a37f-1370-4823-9c94-c618a44a6ac3",
+   "target": "2c402d92-57df-43bf-b0b6-bd8445863fd6",
+   "name": "REGULATES",
+   "fact": "The Assemblée nationale publishes the composition page for the parliamentary group Ensemble pour la République on its official site"
+  },
+  {
+   "source": "d119f53e-071f-4160-ad36-1da2fd480560",
+   "target": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "name": "REPORTS_ON",
+   "fact": "Legiwatch reported on the PLF 2027 and its rejection in the finance commission"
+  },
+  {
+   "source": "0118bea9-c865-437d-aa02-55f4662f1289",
+   "target": "7725abff-20b2-49b3-8835-dcff1ffbbf04",
+   "name": "IS_A",
+   "fact": "French sovereign and bank downgrade risk on fiscal slippage.；- 角色定位: French sovereign and bank downgrade risk on fiscal slippage."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "01ca64d5-4fca-4a3b-a3a7-2ee974b56fe0",
+   "name": "CAUSES",
+   "fact": "Economy and Finance Minister Roland Lescure carried the PLF 2027 presented to the Conseil des ministres on 1 October 2026."
+  },
+  {
+   "source": "04b16d10-83d8-4204-9a28-f648f0c422c2",
+   "target": "4a66a190-1ff7-48b8-9030-dbacdb81e340",
+   "name": "REPORTS_ON",
+   "fact": "Politico EU reported that French PM Sébastien Lecornu would propose a €54 billion budget squeeze for 2027"
+  },
+  {
+   "source": "abb2cf4e-279d-404e-bca3-70501cfbdc1d",
+   "target": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "name": "REPORTS_ON",
+   "fact": "Le Club des Juristes reported that the PLF 2027 arrived at the Assemblée nationale on Tuesday 13 October"
+  },
+  {
+   "source": "99f15f8b-67c1-4747-910b-67181bb93632",
+   "target": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "name": "CONSTRAINS",
+   "fact": "Since the 2024 snap election, French budgets (including the PLF 2027) have only passed through Article 49.3, and censure after a 49.3 voids the bill."
+  },
+  {
+   "source": "0b3163ba-ce41-42f2-b8cb-0c919148790d",
+   "target": "7725abff-20b2-49b3-8835-dcff1ffbbf04",
+   "name": "IS_A",
+   "fact": "Leading censure actor and runoff contender.；- 角色定位: Leading censure actor and runoff contender."
+  },
+  {
+   "source": "9a96a37f-1370-4823-9c94-c618a44a6ac3",
+   "target": "4a66a190-1ff7-48b8-9030-dbacdb81e340",
+   "name": "CONSTRAINS",
+   "fact": "The Assemblée nationale's record of censure motions since 1958 (sources S39, S42) and the January 2026 censure motions faced by Sébastien Lecornu over Budget 2026, which were rejected, illustrate the Assembly's procedural constraint over his government's survival (sources S40, S41)."
+  },
+  {
+   "source": "4244cd25-c764-46d9-b2ec-5e261b083ffd",
+   "target": "c311b719-b54e-41f8-bac6-e1eb7c69f08f",
+   "name": "REPORTS_ON",
+   "fact": "Deficit revisions from the Commission (alongside INSEE and the Cour des comptes) against the 5.4 percent forecast are a leading indicator for the electoral trajectory including RN."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "639091d1-203a-47f9-b135-978c259c0acc",
+   "name": "CAUSES",
+   "fact": "PLF 2027 carries interest charges rising to €91.2 billion in 2027 from €79.2 billion, contributing to fiscal fragility priced by markets in French 10-year yields."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "cd783b78-27d5-41ac-bf20-82a4ce8d54d5",
+   "name": "REPORTS_ON",
+   "fact": "The IMF World Economic Outlook (2026 vintage) projects France's general government deficit at −5.352% of GDP for 2026 and −5.224% for 2027, comparable to the PLF 2027's 5.4% and 5.0% figures."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "a8fa7d58-4f32-4d38-b46e-4029913a953f",
+   "name": "REPORTS_ON",
+   "fact": "LCP expects the first-part vote to 'more than probably' end in rejection, sending the text to the Senate, and reports that Lecornu 'could' resort to 49.3 with no formal engagement as of 21 October 2026."
+  },
+  {
+   "source": "9bebf5d0-37f8-4f1a-b20d-16945ba5e61b",
+   "target": "04b71581-98d0-4054-a527-a0589775950b",
+   "name": "REGULATES",
+   "fact": "The Cour des comptes published a February 2026 synthesis on the state of public finances at the start of 2026"
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "35d59b65-29c7-4af8-8f7f-112291cef2aa",
+   "name": "REPORTS_ON",
+   "fact": "INSEE's first full-year 2026 estimate, due in spring 2027, will resolve whether the deficit exceeds the 5.5% threshold against the PLF 2027's 5.4% forecast."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "427d99e0-3d7f-4cbc-864a-cf663ea5c278",
+   "name": "REGULATES",
+   "fact": "The PLF 2027 was presented to the Conseil des ministres on 1 October 2026."
+  },
+  {
+   "source": "4244cd25-c764-46d9-b2ec-5e261b083ffd",
+   "target": "91f28e80-1050-479f-a399-89d1b10f61fa",
+   "name": "REGULATES",
+   "fact": "The European Commission published the Spring 2026 Economic Forecast, projecting a slowdown in growth driven by an energy shock (source S37)."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "477c228a-328d-4fe4-954c-f0a84494aec9",
+   "name": "REGULATES",
+   "fact": "If the first-part vote ends in rejection, the PLF 2027 text would be sent to the Senate in that state, with the whole-budget vote fixed for 17 November."
+  },
+  {
+   "source": "cd783b78-27d5-41ac-bf20-82a4ce8d54d5",
+   "target": "6849e934-48e9-4227-8c8d-1ee2eebc2f85",
+   "name": "REPORTS_ON",
+   "fact": "The IMF projects France's net general government borrowing at -5.352% of GDP for 2026."
+  },
+  {
+   "source": "ebf655f9-6c27-40ea-8638-6437db0914cf",
+   "target": "40d6b1da-7949-4cf5-88ac-f6fbb5b5ca45",
+   "name": "IS_A",
+   "fact": "Curfews, emergency measures and arrest data.；- 角色定位: Curfews, emergency measures and arrest data."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "9bebf5d0-37f8-4f1a-b20d-16945ba5e61b",
+   "name": "REPORTS_ON",
+   "fact": "The Cour des comptes provides deficit revisions monitored as a leading indicator against the 5.4 percent forecast relevant to the PLF 2027."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "76ed0230-cbec-4995-8188-e53684df5a61",
+   "name": "REPORTS_ON",
+   "fact": "Le Monde reported the solemn first-part vote of the PLF 2027 was postponed, with no guarantee of adoption absent a majority."
+  },
+  {
+   "source": "b6877be3-9cb5-455f-b853-3593d9a82eef",
+   "target": "6849e934-48e9-4227-8c8d-1ee2eebc2f85",
+   "name": "TRIGGERS",
+   "fact": "France enters the final six months before the April 2027 presidential election amid the aftermath of the October 2026 riots."
+  },
+  {
+   "source": "76ed0230-cbec-4995-8188-e53684df5a61",
+   "target": "4a66a190-1ff7-48b8-9030-dbacdb81e340",
+   "name": "REPORTS_ON",
+   "fact": "Le Monde reported on 6 July 2026 that the ecologists' censure motion against the Lecornu government over 'climate inaction' was rejected by the deputies (source S43)."
+  },
+  {
+   "source": "c311b719-b54e-41f8-bac6-e1eb7c69f08f",
+   "target": "7725abff-20b2-49b3-8835-dcff1ffbbf04",
+   "name": "IS_A",
+   "fact": "Front-runner bloc whose security framing the riots amplify.；- 角色定位: Front-runner bloc whose security framing the riots amplify."
+  },
+  {
+   "source": "ad708955-e046-41a9-9408-954eaf4fe0a8",
+   "target": "04b71581-98d0-4054-a527-a0589775950b",
+   "name": "REPORTS_ON",
+   "fact": "Touteleurope.eu reported on the rejection of two new censure motions after the government's recourse to Article 49.3 on the spending part of the budget 2026"
+  },
+  {
+   "source": "c311b719-b54e-41f8-bac6-e1eb7c69f08f",
+   "target": "477c228a-328d-4fe4-954c-f0a84494aec9",
+   "name": "OPPOSES",
+   "fact": "The RN group held 122 members at the 6 July 2026 vote; censure requires 289 of 577 deputies, so a blocking minority is established while a pro-budget majority is not."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "35d59b65-29c7-4af8-8f7f-112291cef2aa",
+   "name": "REPORTS_ON",
+   "fact": "INSEE deficit revisions are a leading indicator monitored against the PLF 2027 budget process and the 5.4 percent deficit forecast."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "972dbb4a-9d50-4dcd-98ec-63b901ea26fa",
+   "name": "DEPENDS_ON",
+   "fact": "No documented Les Républicains line on the PLF 2027 exists in the record, though a composition page dated 19 October 2026 was published; a pro-budget majority is not established."
+  },
+  {
+   "source": "c311b719-b54e-41f8-bac6-e1eb7c69f08f",
+   "target": "67c99d87-6ec6-4493-9101-5c588339bf7c",
+   "name": "COMPETES_WITH",
+   "fact": "Rassemblement National is forecast to qualify first in the first round of the 2027 French presidential election scheduled for 18 April 2027."
+  },
+  {
+   "source": "cabe7f39-5fcd-427f-8e1a-5aad2bef9110",
+   "target": "7725abff-20b2-49b3-8835-dcff1ffbbf04",
+   "name": "IS_A",
+   "fact": "Market functioning, sovereign spread commentary and growth forecasts.；- 角色定位: Market functioning, sovereign spread commentary and growth forecasts."
+  },
+  {
+   "source": "35d59b65-29c7-4af8-8f7f-112291cef2aa",
+   "target": "7725abff-20b2-49b3-8835-dcff1ffbbf04",
+   "name": "IS_A",
+   "fact": "Publishes the deficit and GDP figures that resolve the fiscal questions.；- 角色定位: Publishes the deficit and GDP figures that resolve the fiscal questions."
+  },
+  {
+   "source": "95500826-5210-46bd-9377-6550949e27fe",
+   "target": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "name": "CAUSES",
+   "fact": "Prime Minister Sébastien Lecornu presented the PLF 2027 (draft budget bill) to the National Assembly on 1 October 2026."
+  },
+  {
+   "source": "1c065ccd-8bf2-405b-8bbb-13d6d1fcfd03",
+   "target": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "name": "REPORTS_ON",
+   "fact": "NosParlementaires.fr reported on the PLF 2027 vote date of Tuesday 20 October with an incomplete text"
+  },
+  {
+   "source": "35d59b65-29c7-4af8-8f7f-112291cef2aa",
+   "target": "04b71581-98d0-4054-a527-a0589775950b",
+   "name": "REPORTS_ON",
+   "fact": "Insee's public finances dashboard reports fiscal data including the 2025 deficit of 5.1% of GDP after 5.8% in 2024"
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "4244cd25-c764-46d9-b2ec-5e261b083ffd",
+   "name": "REPORTS_ON",
+   "fact": "The PLF 2027 (presented 1 October 2026) revised France's 2026 deficit forecast to 5.4% of GDP and set a 5.0% target for 2027."
+  },
+  {
+   "source": "f4fb39dd-b49d-4d34-a28a-310bf73310db",
+   "target": "40d6b1da-7949-4cf5-88ac-f6fbb5b5ca45",
+   "name": "IS_A",
+   "fact": "Arbiter of election rules and emergency-measure legality.；- 角色定位: Arbiter of election rules and emergency-measure legality."
+  },
+  {
+   "source": "1d0d5c58-b473-466b-b338-45377c14a018",
+   "target": "04b71581-98d0-4054-a527-a0589775950b",
+   "name": "REPORTS_ON",
+   "fact": "Reuters outlines an emergency 'special law' rolling over the 2026 budget, or the never-used ordinance 'nuclear option', which legal experts expect would trigger censure if nothing passes."
+  },
+  {
+   "source": "972dbb4a-9d50-4dcd-98ec-63b901ea26fa",
+   "target": "7725abff-20b2-49b3-8835-dcff1ffbbf04",
+   "name": "IS_A",
+   "fact": "Pivotal votes for budget passage without 49.3.；- 角色定位: Pivotal votes for budget passage without 49.3."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "4244cd25-c764-46d9-b2ec-5e261b083ffd",
+   "name": "REPORTS_ON",
+   "fact": "The European Commission's Spring 2026 forecast puts France's deficit at 5.1% of GDP for 2026 and 5.7% for 2027, below which the PLF 2027's figures (5.4% for 2026, 5.0% target for 2027) are compared."
+  },
+  {
+   "source": "9c8a0079-793f-4960-9b54-083ff8221510",
+   "target": "7725abff-20b2-49b3-8835-dcff1ffbbf04",
+   "name": "IS_A",
+   "fact": "Quantify riot insured losses and catastrophe declarations.；- 角色定位: Quantify riot insured losses and catastrophe declarations."
+  },
+  {
+   "source": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "target": "76ed0230-cbec-4995-8188-e53684df5a61",
+   "name": "REPORTS_ON",
+   "fact": "A Le Monde summary cited a 5.6% deficit for 2026, which is unconfirmed against the PLF 2027's official 5.4% revised forecast."
+  },
+  {
+   "source": "9a96a37f-1370-4823-9c94-c618a44a6ac3",
+   "target": "fb70b268-a449-420f-8817-ed0fcac21bac",
+   "name": "REGULATES",
+   "fact": "The Assemblée nationale published the analysis of vote (scrutin) n°7979 of the 17th legislature on its official website"
+  },
+  {
+   "source": "2c402d92-57df-43bf-b0b6-bd8445863fd6",
+   "target": "972dbb4a-9d50-4dcd-98ec-63b901ea26fa",
+   "name": "COMPETES_WITH",
+   "fact": "The presidential bloc renamed Ensemble pour la République publishes a composition page dated 19 October 2026 with no verified seat count, and no documented Les Républicains line on the PLF 2027 exists in the record."
+  },
+  {
+   "source": "a8fa7d58-4f32-4d38-b46e-4029913a953f",
+   "target": "1ecfac41-b45c-470d-9dc8-208237f003f2",
+   "name": "REPORTS_ON",
+   "fact": "LCP - Assemblée nationale reported that, after largely unravelling the government's project, the Assembly pressed pause on the state budget"
+  },
+  {
+   "source": "99f15f8b-67c1-4747-910b-67181bb93632",
+   "target": "04b71581-98d0-4054-a527-a0589775950b",
+   "name": "DEPENDS_ON",
+   "fact": "Since the 2024 snap election, successive governments have passed budgets only by engaging Article 49.3; the 2026 loi de finances was adopted on 2 February 2026."
+  },
+  {
+   "source": "4244cd25-c764-46d9-b2ec-5e261b083ffd",
+   "target": "40d6b1da-7949-4cf5-88ac-f6fbb5b5ca45",
+   "name": "IS_A",
+   "fact": "Runs the EDP timeline and sanctions risk for France's deficit path.；- 角色定位: Runs the EDP timeline and sanctions risk for France's deficit path."
+  }
+ ],
+ "graph_id": "mirofish_1e7be59c73784d3b"
+}

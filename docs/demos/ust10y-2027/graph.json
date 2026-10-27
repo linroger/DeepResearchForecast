@@ -1,0 +1,1451 @@
+{
+ "nodes": [
+  {
+   "id": "fffcabbd-4e3d-40d7-b7e9-2c707a6991b8",
+   "name": "Cleveland Fed yield-curve model",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The Cleveland Fed yield-curve model put the probability of recession one year ahead at 11.4 percent for September 2026 (down from 12.3 percent in August), currently arguing against the historical near-5% recession exceedance path for FRED DGS10.\nThe Cleveland Fed produces the yield-curve model that estimates the one-year-ahead recession probability (11.4 percent for September 2026).\nThe Cleveland Fed recession probability staying near its 11.4 percent September 2026 reading corroborates the flat Sahm indicator in falsifying the 'Recession flight to quality' scenario."
+  },
+  {
+   "id": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "name": "Federal Reserve / FOMC",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "On 16 September 2026 the FOMC raised the funds-rate target range by 1/4 point to 3-3/4–4 percent in a 12–0 vote, stating \"Inflation remains elevated\" and that the action supports a timelier return to the 2% goal; BIS end-September 2026 midpoint is 3.875%, net -25bp YoY. September 2026 SEP medians: funds 4.25% at end-2026 and end-2027, 3.75% in 2029, 3.0% longer run; core PCE 3.4% (2026) → 2.5% (2027); unemployment 4.1% (2026–29); GDP growth 2.3/2.4/2.2/2.1%. QT ran 1 June 2022–31 Oct 2025 (-$2.2tn); reserve-management purchases of short-term Treasuries announced 10 Dec 2025; total assets $6.75"
+  },
+  {
+   "id": "fb1063b5-19af-4ca3-8142-64353633c1b8",
+   "name": "CME FedWatch market participants",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "CME 30-day fed funds futures closed 2026-10-23 at 95.82 (Feb 2027), 95.53 (Jun 2027), 95.455 (Sep 2027), 95.44 (Nov 2027); FedWatch aggregates these into meeting probabilities.\nFed funds futures market-implied readings (closes 23 Oct 2026) are based on CME ZQ contracts, implying an effective funds rate of approximately 4.56% for November 2027 (derived, unconfirmed); the December 2027 price was not captured.\nFed funds futures market-implied readings (closes 23 Oct 2026) are based on CME ZQ contracts, implying an effective funds rate of approximately 4.56% for November 2027 (derived, unconfirmed"
+  },
+  {
+   "id": "fa6490d6-54ec-480c-a454-a6d6536a08d8",
+   "name": "US Congress",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Its 2025 reconciliation act, higher tariffs (scored -$3.0 trillion) and immigration actions (+$0.5 trillion) drive the CBO deterioration to 101% debt/GDP in 2026 rising to 120% by 2036."
+  },
+  {
+   "id": "f9ad8ef2-61c0-4e72-834a-5a923f480a0a",
+   "name": "Macrotrends",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "Macrotrends' aggregation of the DGS10 series shows a 52-week range of 3.97% (2025-10-22) to 5.31% (2026-10-05), with 5.29% on 2026-09-30.\nMacrotrends publishes the 10 Year Treasury Yield (1962-2026) chart data, cited as a tier-3 fetched source."
+  },
+  {
+   "id": "f5f4b11f-6782-41ac-b0b8-49bae35220f8",
+   "name": "Treasury H.15 curve",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "DGS10 is published daily by FRED from the Treasury H.15 curve (percent, not seasonally adjusted, United States).\nFRED DGS10 (Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, investment basis, percent, NSA, United States) is published by the Federal Reserve Bank of St. Louis from the U.S. Treasury H.15 daily curve, with one fixing per U.S. business day compiled from end-of-day quotes on a 3:30 p.m. Eastern time basis; settlement is the daily level on the last trading day of December 2027 (2027-12-31), anchored at 5.13% on 2026-10-21."
+  },
+  {
+   "id": "f195fdf7-42ee-48b6-977d-d639959ae3c2",
+   "name": "New York Fed Markets Desk",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Sized reserve-management purchases of shorter-term Treasury securities to trend liability growth plus seasonal fluctuations; publishes the monthly yield-curve recession probit (prob_rec) within the fi\nThe New York Fed publishes its Treasury-spread recession probability monthly, within the first two weeks of each month; the current reading was unconfirmed in fetched pages as of 2026-10-23."
+  },
+  {
+   "id": "e851c66b-1ed6-4c56-b49d-56164312bbac",
+   "name": "Fitted Yield on a 10 Year Zero Coupon Bond — United States",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "FRED publishes the Fitted Yield on a 10 Year Zero Coupon Bond — United States, latest value 5.003% for 2026-09, up +0.827 pp year-over-year.\nThe fitted 10-year zero-coupon yield of 5.003% (2026-09) less the 0.96% term premium leaves roughly 4 pp as the expected-rate component, so the ~1% term premium arithmetically constrains the 10-year near its current 5.13% level.\nCBO's baseline assumes the 10-year rate rises gradually through 2027 and remains relatively stable in later years, constraining the outlook for the 10-year zero-coupon yield (5.107% fitted level).\nFRED publishes the Fitted Yield o"
+  },
+  {
+   "id": "dddc9b62-4f86-4f56-a925-60bbf7d35113",
+   "name": "CNBC",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Undated CNBC intraday quotes near 4.95–5.00% illustrate DGS10 volatility around the 5% mark but are not the fixing."
+  },
+  {
+   "id": "d72d1bc1-fa40-4259-a648-829a81698d97",
+   "name": "FOMC statement",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The Federal Reserve Board publishes the FOMC statement at federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm (tier 1, fetched)"
+  },
+  {
+   "id": "d67c6191-1d40-4417-b0b6-d8f8409448ec",
+   "name": "SOMA portfolio",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "Treasury's August 2026 refunding statement said current auction sizes leave it well positioned to address potential changes to the fiscal outlook and to the size and composition of the SOMA portfolio, bounding SOMA composition changes."
+  },
+  {
+   "id": "d2320839-a949-4de0-98b6-4ee44e663885",
+   "name": "Japan Ministry of Finance",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Largest foreign official holder per the brief; holdings levels and trends are unknown in this run, a flagged evidence gap."
+  },
+  {
+   "id": "d098ccb4-a61b-4633-a652-251e49166626",
+   "name": "10-year Treasury note",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "CBO's February 2026 baseline economic assumptions embed a 10-year Treasury note rate that rises gradually through 2027 and remains relatively stable in later years.\nThe Ten-Year Breakeven Inflation Rate's 2.11% five-year low (2024-08) marks the flight-to-quality floor for the 10-year Treasury in the Recession flight to quality scenario."
+  },
+  {
+   "id": "cf380460-3fdc-4872-9642-bc87b5fcbf81",
+   "name": "2s10s spread",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The 2s10s Treasury spread was 0.338% as of 2026-09, showing a positively sloped yield curve. This slope, alongside DGS10 at 5.13% on 2026-10-21 and a 10-year minus 3-month spread of 0.896%, anchors a high-yield baseline for the 2027 DGS10 forecast.\nFRED publishes the official Ten-Year Treasury Constant Maturity Minus Two-Year Treasury Constant Maturity series, whose latest observation is down from a year earlier\nThe 2s10s spread stood at 0.31% on 2026-10-23, and along with the steeply positive 10Y–3M spread it points away from recession signals in curve-based models like the New York Fed probi"
+  },
+  {
+   "id": "ba3a84b5-3212-4d53-8de0-dcdeecbc329a",
+   "name": "Bank of Japan",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Identified actor whose normalization path affects foreign official demand for Treasuries; the report holds no data on its stance."
+  },
+  {
+   "id": "b98815c0-faea-451d-a3fe-ca0972d8967b",
+   "name": "Jerome Powell (or successor Chair)",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Chair of the Federal Reserve; the September 16, 2026 FOMC action and statement carry the Chair's framing that the hike supports a timelier return to 2% inflation."
+  },
+  {
+   "id": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "name": "FRED",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "FRED publishes series DGS10, the Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis (percent, NSA, US), daily from the Treasury H.15 curve, with stored monthly data beginning 2006-11. Latest stored daily value 5.13% on 2026-10-21; September 2026 monthly mean 4.989% (+0.869 pp YoY from 4.12% in September 2025); partial-month October 2026 mean 5.202%. Five-year monthly range 1.37% (2021-09) to 4.989% (2026-09). 2024 monthly range 3.72%-4.54%, closing 4.391% in December; 2025 range 4.062%-4.629%, closing 4.143%; 2026 climbed from 4.213% (Jan) thro"
+  },
+  {
+   "id": "b4a5843d-fe37-422c-b997-6ec6acac9435",
+   "name": "Schwab",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Schwab reports the Fed target range at 3.50%–3.75% with futures pricing a 78.2% probability of no rate change through December 2026, in tension with the BIS end-September 2026 midpoint of 3.875%; the evidence does not resolve the difference.\nAn undated Schwab commentary reports CME fed funds futures pricing a 78.2% probability of no rate change through December 2026, though its quoted 3.50–3.75% target range predates the September 2026 hike."
+  },
+  {
+   "id": "a90334e1-739b-454f-823c-a34bb72e47ce",
+   "name": "US 10-year Treasury yield",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "DGS10 (FRED, 10-year constant maturity, investment basis) printed 5.13% on 2026-10-21 vs a September 2026 monthly mean of 4.989% (up +0.869 pp from 4.12% in September 2025); partial October 2026 mean 5.202%. The spot sits at the top of the five-year monthly range of 1.37% (2021-09) to 4.989% (2026-09). 2024 monthly means: 3.72%–4.54%; 2025: 4.062%–4.629%; 2026 rose from 4.213% (January) to 4.989% (September). Curve: 2s10s 0.338%, 10y–3m 0.896% (2026-09). The central thesis: compensation, not inflation expectations, keeps the yield near 5% — 10-year breakeven 2.351%, 5y5y forward 2.34%, term pr"
+  },
+  {
+   "id": "a802fa7a-2885-4fb9-8766-5559b86dd105",
+   "name": "NY Fed recession probit",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "A rising NY Fed recession probit would trigger the Recession flight to quality scenario for DGS10.\nThe New York Fed publishes its Treasury-spread recession probability monthly, within the first two weeks of each month; the current reading was unconfirmed in fetched pages as of 2026-10-23.\nThe New York Fed's monthly probit model keys off the 10Y–3M spread with a twelve-months-ahead window; the spread averaged 0.896% in September 2026 (latest daily 0.78% on 2026-10-23), a +0.841 pp year-over-year steepening\nThe New York Fed publishes a monthly probit recession-probability model on the 10Y–3M spr"
+  },
+  {
+   "id": "a4a73d64-3a4a-443a-8c63-e312acaaaf15",
+   "name": "2025 reconciliation act",
+   "labels": [
+    "Government"
+   ],
+   "summary": "CBO attributes deficit deterioration since January 2025 partly to the 2025 reconciliation act, which raises deficits by an estimated $4.7 trillion over 2026–2035."
+  },
+  {
+   "id": "a4188fb1-193a-49e0-ac1e-6735a147caa0",
+   "name": "fiscal-year 2026 deficit",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "CBO's baseline projects a $1.9 trillion fiscal-year 2026 deficit (5.8 percent of GDP), averaging $2.4 trillion a year over 2027-2036, pressuring the term premium.\nDeficit and issuance pressure of the $1.9 trillion fiscal-year 2026 deficit could push the term premium above 1.5% in the bond bear steepening scenario."
+  },
+  {
+   "id": "917da42f-620d-4ab2-9d4c-204cf710b5ff",
+   "name": "FOMC dots",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "FOMC dots and QT guidance, quarterly refunding coupon sizes, and Japan and China TIC holdings will discriminate the DGS10 plateau scenario from the rest."
+  },
+  {
+   "id": "9158d55e-817d-4552-a46c-0578838024f3",
+   "name": "term premium",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "Kim-Wright 10-year zero-coupon term premium (FRED THREEFYTP10): 0.96% monthly mean for 2026-09 (+0.499pp YoY vs 0.462% a year earlier), at the top of its five-year range and a cycle high; daily prints up to 1.0589% (2026-10-13). It supplied roughly 0.5pp of the 0.827pp yearly rise in the fitted 10-year zero-coupon yield (5.003%, 2026-09), leaving an expected-rate component of ≈4pp; compensation, not inflation expectations, is the central thesis keeping DGS10 near 5% (anchor 5.13%, 2026-10-21) through 2027. A sustained premium above 1.5% would push DGS10 above 5.50% (Bond bear steepening, 20%) "
+  },
+  {
+   "id": "86f656c2-848a-455d-9817-ad1ecbfa387f",
+   "name": "Quarterly refunding statement",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "US Treasury quarterly refunding statement expected 4 Nov 2026 (date unconfirmed) with no published implied move yet. Its coupon-size guidance discriminates between the 'Bond bear steepening' and 'Higher-for-longer plateau' scenarios for the 10-year Treasury yield outlook.\nIncreased coupon sizes in quarterly refunding statements through November 2027 would move the 10-year fixing toward bond bear steepening\nBrian Smith, Deputy Assistant Secretary for Federal Finance, issued the Quarterly Refunding Statement representing Treasury's financing communication."
+  },
+  {
+   "id": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "DGS10",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "FRED DGS10: Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, investment basis, percent NSA, published daily from Treasury H.15 (one end-of-day fixing per business day, 3:30 p.m. ET). Anchor: 5.13% on 2026-10-21; September 2026 monthly mean 4.989% (+0.869 pp y/y); partial October 2026 mean 5.202%; five-year monthly range 1.37% (2021-09) to 4.989% (2026-09). Macrotrends 52-week range 3.97% (2025-10-22) to 5.31% (2026-10-05). Settlement: last trading day's close of 31 December 2027, not the December mean; fallback to prior business day if 2027-12-31 is not a Treasury busines"
+  },
+  {
+   "id": "7d33de63-2465-4b9f-9f91-09c882b1586e",
+   "name": "Japan and China TIC holdings",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "Japan and China TIC holdings will discriminate the DGS10 plateau scenario from the rest of the distribution."
+  },
+  {
+   "id": "791998e8-c96b-4e33-a632-371ea2b94d9c",
+   "name": "10-year breakeven",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "Market inflation pricing near target — 10-year breakeven at 2.351% (2026-09) and 5y5y forward at 2.34% (2026-09) — implies compensation rather than inflation expectations keeps the 10-year near 5% through 2027.\nFRED publishes the 10-Year Breakeven Inflation Rate — United States, latest value 2.351% for 2026-09, down -0.02 pp year-over-year.\nThe 10-year breakeven of 2.351% (2026-09 monthly mean), together with the 10-year TIPS yield, sums to the DGS10 monthly mean of 4.989%, bounding DGS10 via inflation compensation of about 2.35pp.\nThe Ten-Year Breakeven Inflation Rate's 2.11% five-year low (2"
+  },
+  {
+   "id": "7387f4cd-a888-46a9-8abe-ec7af74e3e9b",
+   "name": "FedWatch",
+   "labels": [
+    "Platform"
+   ],
+   "summary": "FedWatch's live board shows risk-neutral probabilities of 0.0%, 90.6% and 9.4% for an upcoming Federal Reserve meeting whose date is not identified in the data."
+  },
+  {
+   "id": "72c6aef6-8fbc-475b-a0f8-272b334b43af",
+   "name": "CBO February 2026 baseline",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The CBO February 2026 baseline projects that the 10-year note rate (DGS10) rises gradually through 2027 and remains relatively stable thereafter, bounding the end-2027 outcome.\nThe Congressional Budget Office publishes The Budget and Economic Outlook: 2026 to 2036 at cbo.gov/publication/62105 (tier 1, fetched)"
+  },
+  {
+   "id": "6880127a-8821-4a9f-a2f1-d349f56d4445",
+   "name": "People's Bank of China / SAFE",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Named actor whose allocation decisions feed the foreign-demand channel; unquantified in this run."
+  },
+  {
+   "id": "67f35862-bd46-4ed7-bed8-e3621fa666bc",
+   "name": "federal funds rate",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The Federal Reserve's 12-0 hike on September 16, 2026 set the policy rate at 3.875% per year as of end-September 2026, holding the funds rate near 4% in the higher-for-longer scenario.\nWith the funds rate at 3.875% and futures implying an average effective rate near 4.2% in February 2027 rising to about 4.56% by November 2027, the expected-rate component keeps DGS10 roughly flat around 5.13% (2026-10-21) versus the September 2026 monthly mean of 4.989%.\nFRED publishes the Central bank policy rates - United States - Monthly - End of period series, latest value 3.875% per year for 2026-09, down "
+  },
+  {
+   "id": "61303cb9-4583-4d47-89cc-5e39f1bdc24e",
+   "name": "FRED DGS10",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "The term premium moving above 1.5% triggers the bond bear steepening scenario pushing DGS10 above 5.50%; a recession-triggered rapid Fed cuts path drives DGS10 below 4.00%.\nFRED DGS10 (Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, investment basis, percent, NSA, United States) is published by the Federal Reserve Bank of St. Louis from the U.S. Treasury H.15 daily curve, with one fixing per U.S. business day compiled from end-of-day quotes on a 3:30 p.m. Eastern time basis; settlement is the daily level on the last trading day of December 2027 (2027-12-31), anchored at "
+  },
+  {
+   "id": "5eb80373-9a83-404e-bdb8-3da2e0495b4a",
+   "name": "Primary dealers and Treasury market hedge funds",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Named actors whose intermediation capacity determines how much issuance pressure translates into term premium; the report notes no retrieved estimate of basis points per $100 billion of coupon supply,"
+  },
+  {
+   "id": "5a547b79-0346-45dc-beaa-1bc994c0b8bb",
+   "name": "Monthly Treasury Statement: Surplus (+) or Deficit (-) — United States",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "FRED publishes the Monthly Treasury Statement: Surplus (+) or Deficit (-) — United States series; the current-month value for 2026-09 is about -26.9 billion U.S. dollars, a change of -224,849,977,464.18 (-113.589%) year-over-year.\nThe Monthly Treasury Statement shows a September 2026 current-month deficit of -26,900,347,102.02 U.S. dollars, versus a 197,949,630,362.16 U.S. dollar surplus in September 2025; the stored five-year series' largest monthly deficit is -432,307,874,621.48 U.S. dollars in July 2026."
+  },
+  {
+   "id": "533bc7ea-00b7-4949-9344-0ccf6bc58a2f",
+   "name": "consumer one-year inflation expectations",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "Consumer one-year inflation expectations at 4.6% (2026-09) reflect sticky inflation supporting a higher-for-longer plateau where DGS10 settles between 4.75% and 5.50%.\nThe University of Michigan's Inflation Expectation survey printed 4.6% in 2026-09, down -0.1 pp from a year earlier.\nSticky household inflation expectations of 4.6% in the Michigan survey (September 2026) falsify the Disinflation glide path that requires core PCE returning toward 2.5%\nHousehold surveys diverge from market pricing: Michigan's 1-year median expectation at 4.6% (2026-09, five-year range 2.6%–6.6%) versus the 10-yea"
+  },
+  {
+   "id": "52337c30-9d11-4f6c-9ee8-753efe2e9e50",
+   "name": "5y5y forward",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The 5y5y forward inflation expectation stood at 2.34% as of 2026-09, indicating market long-run inflation pricing is near the Fed's 2% target. This supports the forecast thesis that compensation (term premium), not inflation expectations, is what keeps the 10-year Treasury yield near 5% through 2027.\nFRED publishes the 5-Year, 5-Year Forward Inflation Expectation Rate — United States, latest value 2.34% for 2026-09, up +0.022 pp year-over-year."
+  },
+  {
+   "id": "4be01ad0-7918-4d79-8a5d-2ce0af16885b",
+   "name": "BIS",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "BIS data records the US central bank policy rate at 3.875% per year at end-September 2026 (monthly, end of period), down 0.25 pp year-over-year, following the 12–0 hike of September 16, 2026.\nThe BIS publishes the official central bank policy rates series (monthly, end of period) that tracks the Federal Reserve's US policy rate, supporting analysis of the Fed's stance.\nThe Bank for International Settlements publishes the Central bank policy rates - United States, Monthly, End of period series (BIS CBPOL) (tier 1, fetched)"
+  },
+  {
+   "id": "403f9306-09f3-40ab-9a84-d40bde20fc89",
+   "name": "Federal Reserve Bank of St. Louis",
+   "labels": [
+    "CentralBank"
+   ],
+   "summary": "Federal Reserve Bank of St. Louis publishes FRED series DGS10 (Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, investment basis, percent, NSA, United States), sourced from the U.S. Treasury H.15 daily curve. One level per U.S. business day, compiled from end-of-day quotes (3:30 p.m. Eastern time basis). Its latest stored daily value was 5.13% on 2026-10-21; September 2026 monthly mean 4.989% (up +0.869 pp from 4.12% in September 2025); partial-month October 2026 mean 5.202%. Also publishes T10Y2Y (2s10s spread, 0.338% in 2026-09)."
+  },
+  {
+   "id": "3dbe2dd8-d943-413a-a404-ef9f541ef813",
+   "name": "Monthly Statement of the Public Debt",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "Per the Monthly Statement of the Public Debt through 2027, a bills share of marketable debt sustained above the 22–25 percent band supports the Bond bear steepening scenario for the 10-year Treasury yield.\nThe U.S. Department of the Treasury publishes the Monthly Statement of the Public Debt (MSPD) dataset via Treasury Fiscal Data."
+  },
+  {
+   "id": "3961e8e2-d599-47ed-a7b1-a05e5ffb3743",
+   "name": "US Department of the Treasury",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Announced $628 billion of privately-held net marketable borrowing for October-December 2026 with an $850 billion end-of-December cash balance assumption; marketable debt on 2026-09-30 comprised $7,117\nOn 10 December 2025 the FOMC judged reserves ample and announced reserve-management purchases of shorter-term Treasury securities, sized to trend liability growth plus seasonal fluctuations.\nTreasury's August 2026 refunding statement said current auction sizes leave it well positioned to address potential changes to the fiscal outlook and to the size and composition of the SOMA portfolio, boundin"
+  },
+  {
+   "id": "3749aaa0-3ed1-4b6e-8380-31f60e4bd1c9",
+   "name": "Congressional Budget Office",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Its February 2026 baseline attributes deterioration to the 2025 reconciliation act (+$4.7 trillion over 2026-2035), tariffs (-$3.0 trillion) and immigration actions (+$0.5 trillion), and assumes the 1\nCBO's baseline projects a $1.9 trillion fiscal-year 2026 deficit (5.8 percent of GDP), averaging $2.4 trillion a year over 2027-2036, pressuring the term premium.\nThe Congressional Budget Office publishes The Budget and Economic Outlook: 2026 to 2036 at cbo.gov/publication/62105 (tier 1, fetched)"
+  },
+  {
+   "id": "30290e7d-15ca-45ae-ba39-a280b1eb814f",
+   "name": "Summary of Economic Projections (SEP)",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "A new Summary of Economic Projections is expected at the December 2026 FOMC meeting (the September meeting was 15–16 Sep), serving as a discriminator between the Disinflation glide and Higher-for-longer plateau scenarios\nThe Disinflation glide scenario (25%) requires the expected-rate component to fall as core PCE reaches the 2.5% 2027 SEP median.\nQ4 2027 unemployment above the SEP median of 4.1% would shift weight from the Higher-for-longer plateau toward easing outcomes for DGS10.\nCME 30-day fed funds futures closed 23 October 2026 at 95.82 (February 2027) and 95.44 (November 2027), implying"
+  },
+  {
+   "id": "2fa39200-7d3f-4bcd-9552-0dc75ae99e4b",
+   "name": "CME Group",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "CME 30-Day Federal Funds futures closed 23 October 2026 at 95.82 (February 2027, ZQG7), 95.53 (June 2027), 95.455 (September 2027) and 95.44 (November 2027, ZQX7); derived as 100 − price, these imply an average effective funds rate near 4.18% in February 2027, troughing around 4.2% in February–March and rising to about 4.56% by November 2027 (derived, unconfirmed). The December 2027 contract (ZQZ7) is listed but its price was not captured.\nCME Group publishes 30 Day Federal Funds Futures Quotes (tier 3, fetched) at cmegroup.com"
+  },
+  {
+   "id": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "name": "Sahm indicator",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "Real-time Sahm Rule Recession Indicator — United States, published by FRED. Latest value: 0 percentage points for 2026-09, down -0.23 pp (-100%) year-over-year, having declined for ten consecutive months from a 0.43 pp peak in November 2025 (five-year range −0.07 to 0.43 pp). A reading of 0.50 pp is the trigger threshold for the Recession flight to quality scenario, in which a 2027 recession drives DGS10 below 4.00%; the current 0.00 pp reading argues against that scenario (15% probability path), with its falsifier being further labor-market improvement from an already non-triggering level. Co"
+  },
+  {
+   "id": "2aa6cad5-e85f-4a6a-b6b3-f1c59344b5bf",
+   "name": "Brian Smith",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Brian Smith serves as Deputy Assistant Secretary for Federal Finance at the U.S. Department of the Treasury, issuing the Quarterly Refunding Statement."
+  },
+  {
+   "id": "2a70a4e5-247e-4a73-b7c5-bc4c4d26550b",
+   "name": "QT",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "FOMC's QT ran from 1 June 2022 to 31 October 2025 and reduced securities holdings by $2.2 trillion."
+  },
+  {
+   "id": "278b7790-81b1-4ceb-93d0-4cca878b6a06",
+   "name": "New York Fed",
+   "labels": [
+    "CentralBank"
+   ],
+   "summary": "The New York Fed publishes its Treasury-spread recession probability monthly, within the first two weeks of each month; the current reading was unconfirmed in fetched pages as of October 2026. A rising NY Fed recession probit is designated as a trigger for the 'Recession flight to quality' scenario (DGS10 below 4.00%).\nThe New York Fed publishes a monthly probit recession-probability model on the 10Y–3M spread, updated within the first two weeks of each month, cautioning that estimates are not official forecasts; its year-average table put the twelve-months-ahead US recession probability at 0."
+  },
+  {
+   "id": "26cc874f-4b20-45e4-916b-bbed3623029b",
+   "name": "J.P. Morgan Asset Management",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "J.P. Morgan Asset Management published commentary on the FOMC Statement and Summary of Economic Projections of September 2026, cited as a tier-3 source."
+  },
+  {
+   "id": "2685aa53-6785-4fe9-a6ad-d1ef797e05a9",
+   "name": "Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis, Inflation-Indexed",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "FRED publishes the Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis, Inflation-Indexed (10-Year TIPS yield), latest value 2.638% for 2026-09.\nThe 2026-09 monthly means of the 10-year TIPS yield (2.638%) and the 10-year breakeven (2.351%) sum to 4.989%, the DGS10 monthly mean, showing DGS10 decomposes into about 2.6pp real compensation over 2.35pp inflation compensation.\nThe DFII10 TIPS real yield climbed from its five-year low of 1.825% (2026-02) to 2.638% (2026-09) while the breakeven edged down, meaning the 2026 rise in the DGS10 nominal yi"
+  },
+  {
+   "id": "24aa7636-fadd-4f9e-b8e1-9604578e5ba3",
+   "name": "federal budget deficit",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "CBO's February 2026 baseline projects a federal budget deficit of $1.9 trillion in fiscal year 2026 (5.8 percent of GDP), rising to $3.1 trillion (6.7 percent of GDP) by 2036, with deficits averaging $2.4 trillion per year over 2027–2036 (6.1 percent of GDP on average vs a 50-year average of 3.8 percent).\nCBO attributes deficit deterioration since January 2025 partly to the 2025 reconciliation act, which raises deficits by an estimated $4.7 trillion over 2026–2035.\nThe Monthly Treasury Statement shows a September 2026 current-month deficit of -26,900,347,102.02 U.S. dollars, versus a 197,949,6"
+  },
+  {
+   "id": "1d407872-0ac2-471e-92fa-1a5d1d925d9f",
+   "name": "core PCE",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The Disinflation glide scenario (10-year rate settling between 4.00% and 4.75%) requires core PCE moving toward the SEP's 2.5% 2027 median\nSticky household inflation expectations of 4.6% in the Michigan survey (September 2026) falsify the Disinflation glide path that requires core PCE returning toward 2.5%\nThe September 2026 SEP median core PCE inflation path of 3.4% (2026) and 2.5% (2027), central tendency 2.3–2.6% for 2027, implies one further 25bp FOMC step if core PCE tracks the 3.4% 2026 median.\nThe Fed's reaction function is constrained by inflation (core PCE at 3.4% for 2026, 1.4pp abov"
+  },
+  {
+   "id": "177d5257-86c8-457b-9944-0361ed9a6919",
+   "name": "Cleveland Fed",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Its model diverges from the NY Fed probit because it adds other factors beyond the single 10Y-3M spread; monitored as a signpost for the Recession flight to quality scenario.\nThe Cleveland Fed's yield-curve model put the probability of a recession one year ahead at 11.4 percent for September 2026, down from 12.3 percent in August and 13.6 percent in July; the gap versus the New York Fed model reflects construction, as the Cleveland Fed model adds other factors\nThe Cleveland Fed's yield-curve model put the probability of a recession one year ahead at 11.4 percent for September 2026, down from 1"
+  },
+  {
+   "id": "1282798f-c651-423e-8661-3fa99a4bf2a1",
+   "name": "CME 30-Day Federal Funds futures",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "CME 30-Day Federal Funds futures closing 23 October 2026 (95.82 for February 2027 ZQG7, 95.53 June 2027, 95.455 September 2027, 95.44 November 2027 ZQX7) imply an average effective funds rate near 4.18% in February 2027 rising to about 4.56% by November 2027, constraining the expected Federal Reserve policy path.\nAn undated Schwab commentary reports CME fed funds futures pricing a 78.2% probability of no rate change through December 2026, though its quoted 3.50–3.75% target range predates the September 2026 hike.\nFed funds futures price only the short-rate path and no publisher posts a probabi"
+  },
+  {
+   "id": "11479019-6374-4cfc-abe5-69192e321ea6",
+   "name": "10-year minus 3-month spread",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The 10-year minus 3-month Treasury spread was 0.896% as of 2026-09, indicating a positively sloped curve. Together with the 2s10s spread of 0.338% and DGS10 at 5.13% on 2026-10-21, it reflects an elevated, steep yield environment underpinning the 2027 10-year yield forecast.\nFRED publishes the official 10-Year minus 3-Month Treasury Constant Maturity spread series for the United States, latest value 0.896% for 2026-09, up +0.841 pp year-over-year.\nThe New York Fed's monthly probit model keys off the 10Y–3M spread with a twelve-months-ahead window; the spread averaged 0.896% in September 2026 ("
+  },
+  {
+   "id": "0d9fbaaa-31a4-4c75-bfd6-feb45383917b",
+   "name": "ACM term premium",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "ACM term premium sustained above 1.5% would confirm the Bond bear steepening scenario (DGS10 above 5.50%).\nAt the ACM term premium of ~0.7%, a ~5% ten-year yield embeds ~4.3pp of expected rates, implying markets price the Fed above its dots — a decision-relevant wedge versus the Kim-Wright ~1% reading.\nFRED reports that the ACMTP10 series does not exist, so the NY Fed's ACM term premium figure is unconfirmed on FRED.\nA MacroMicro mirror of the NY Fed ACM series shows the term premium at 0.72–0.73% on 2026-10-21, while a secondary site cites 0.82%.\nAt the ACM term premium of ~0.7%, a ~5% ten-ye"
+  }
+ ],
+ "links": [
+  {
+   "source": "403f9306-09f3-40ab-9a84-d40bde20fc89",
+   "target": "9158d55e-817d-4552-a46c-0578838024f3",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the Term Premium on a 10 Year Zero Coupon Bond (THREEFYTP10) series (tier 1, fetched)"
+  },
+  {
+   "source": "86f656c2-848a-455d-9817-ad1ecbfa387f",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "Increased coupon sizes in quarterly refunding statements through November 2027 would move the 10-year fixing toward bond bear steepening"
+  },
+  {
+   "source": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "target": "533bc7ea-00b7-4949-9344-0ccf6bc58a2f",
+   "name": "PUBLISHES",
+   "fact": "The University of Michigan: Inflation Expectation figure cited in the report is an official series published on FRED, with the latest observation marked down from a year earlier."
+  },
+  {
+   "source": "177d5257-86c8-457b-9944-0361ed9a6919",
+   "target": "177d5257-86c8-457b-9944-0361ed9a6919",
+   "name": "SUPPORTS",
+   "fact": "The Cleveland Fed's yield-curve model put the probability of a recession one year ahead at 11.4 percent for September 2026, down from 12.3 percent in August and 13.6 percent in July; the gap versus the New York Fed model reflects construction, as the Cleveland Fed model adds other factors"
+  },
+  {
+   "source": "f9ad8ef2-61c0-4e72-834a-5a923f480a0a",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "SUPPLIES",
+   "fact": "Macrotrends' aggregation of the DGS10 series shows a 52-week range of 3.97% (2025-10-22) to 5.31% (2026-10-05), with 5.29% on 2026-09-30."
+  },
+  {
+   "source": "fb1063b5-19af-4ca3-8142-64353633c1b8",
+   "target": "fb1063b5-19af-4ca3-8142-64353633c1b8",
+   "name": "BASED_ON",
+   "fact": "Fed funds futures market-implied readings (closes 23 Oct 2026) are based on CME ZQ contracts, implying an effective funds rate of approximately 4.56% for November 2027 (derived, unconfirmed); the December 2027 price was not captured."
+  },
+  {
+   "source": "1d407872-0ac2-471e-92fa-1a5d1d925d9f",
+   "target": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "name": "CONSTRAINS",
+   "fact": "The Fed's reaction function is constrained by inflation (core PCE at 3.4% for 2026, 1.4pp above goal) rather than labour, as unemployment (4.1%) sits just under its 4.2% longer-run median, per the September 2026 SEP."
+  },
+  {
+   "source": "9158d55e-817d-4552-a46c-0578838024f3",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "At the Kim-Wright term premium of about 1%, compensation is at the top of the post-GFC distribution (negative for most of 2016–2021, trough about -0.614% in July 2020, last sustained above 1% around 2009–2010), meaning a ~5% ten-year embeds about 4pp of expected rates."
+  },
+  {
+   "source": "6880127a-8821-4a9f-a2f1-d349f56d4445",
+   "target": "6880127a-8821-4a9f-a2f1-d349f56d4445",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "People's Bank of China / SAFE 亦称 SAFE"
+  },
+  {
+   "source": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "target": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Federal Reserve / FOMC 亦称 FOMC"
+  },
+  {
+   "source": "61303cb9-4583-4d47-89cc-5e39f1bdc24e",
+   "target": "1282798f-c651-423e-8661-3fa99a4bf2a1",
+   "name": "CONSTRAINS",
+   "fact": "End-state counting of FRED DGS10 monthly means over 14-month windows shows that no near-5% start (4.5–5.5% band: 2006-11, 2023-10, 2024-04, 2025-01) produced an upward move beyond 1.0 pp, with monthly means smoothing daily extremes — context that frames what fed funds futures cannot capture for the DGS10 settlement."
+  },
+  {
+   "source": "0d9fbaaa-31a4-4c75-bfd6-feb45383917b",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "At the ACM term premium of ~0.7%, a ~5% ten-year yield embeds ~4.3pp of expected rates, implying markets price the Fed above its dots — a decision-relevant wedge versus the Kim-Wright ~1% reading."
+  },
+  {
+   "source": "2aa6cad5-e85f-4a6a-b6b3-f1c59344b5bf",
+   "target": "3961e8e2-d599-47ed-a7b1-a05e5ffb3743",
+   "name": "PARTNERS_WITH",
+   "fact": "Brian Smith serves as Deputy Assistant Secretary for Federal Finance at the U.S. Department of the Treasury, issuing the Quarterly Refunding Statement."
+  },
+  {
+   "source": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "target": "791998e8-c96b-4e33-a632-371ea2b94d9c",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the 10-Year Breakeven Inflation Rate — United States, latest value 2.351% for 2026-09, down -0.02 pp year-over-year."
+  },
+  {
+   "source": "f9ad8ef2-61c0-4e72-834a-5a923f480a0a",
+   "target": "a90334e1-739b-454f-823c-a34bb72e47ce",
+   "name": "PUBLISHES",
+   "fact": "Macrotrends publishes the 10 Year Treasury Yield (1962-2026) chart data, cited as a tier-3 fetched source."
+  },
+  {
+   "source": "3dbe2dd8-d943-413a-a404-ef9f541ef813",
+   "target": "a90334e1-739b-454f-823c-a34bb72e47ce",
+   "name": "TRIGGERS",
+   "fact": "Per the Monthly Statement of the Public Debt through 2027, a bills share of marketable debt sustained above the 22–25 percent band supports the Bond bear steepening scenario for the 10-year Treasury yield."
+  },
+  {
+   "source": "f195fdf7-42ee-48b6-977d-d639959ae3c2",
+   "target": "a802fa7a-2885-4fb9-8766-5559b86dd105",
+   "name": "PUBLISHES",
+   "fact": "The New York Fed publishes its Treasury-spread recession probability monthly, within the first two weeks of each month; the current reading was unconfirmed in fetched pages as of 2026-10-23."
+  },
+  {
+   "source": "2aa6cad5-e85f-4a6a-b6b3-f1c59344b5bf",
+   "target": "86f656c2-848a-455d-9817-ad1ecbfa387f",
+   "name": "PARTNERS_WITH",
+   "fact": "Brian Smith, Deputy Assistant Secretary for Federal Finance, issued the Quarterly Refunding Statement representing Treasury's financing communication."
+  },
+  {
+   "source": "1d407872-0ac2-471e-92fa-1a5d1d925d9f",
+   "target": "30290e7d-15ca-45ae-ba39-a280b1eb814f",
+   "name": "TRACKS",
+   "fact": "The Disinflation glide scenario (25%) requires the expected-rate component to fall as core PCE reaches the 2.5% 2027 SEP median."
+  },
+  {
+   "source": "2685aa53-6785-4fe9-a6ad-d1ef797e05a9",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "TRIGGERS",
+   "fact": "The DFII10 TIPS real yield climbed from its five-year low of 1.825% (2026-02) to 2.638% (2026-09) while the breakeven edged down, meaning the 2026 rise in the DGS10 nominal yield is real compensation, not inflationary."
+  },
+  {
+   "source": "9158d55e-817d-4552-a46c-0578838024f3",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "The Kim-Wright 10-year term premium averaged 0.96% in September 2026 versus 0.462% a year earlier, at a cycle high, which could keep the term premium sticky and mute any flight-to-quality rally that would drive DGS10 below 4.00%."
+  },
+  {
+   "source": "30290e7d-15ca-45ae-ba39-a280b1eb814f",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "TRIGGERS",
+   "fact": "Q4 2027 unemployment above the SEP median of 4.1% would shift weight from the Higher-for-longer plateau toward easing outcomes for DGS10."
+  },
+  {
+   "source": "a802fa7a-2885-4fb9-8766-5559b86dd105",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "TRIGGERS",
+   "fact": "A rising NY Fed recession probit would trigger the Recession flight to quality scenario for DGS10."
+  },
+  {
+   "source": "1d407872-0ac2-471e-92fa-1a5d1d925d9f",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "TRIGGERS",
+   "fact": "An SEP core PCE median at or below 2.0% for 2027 (SEPs December 2026–December 2027) moves the disinflation glide scenario up and the plateau down for the 10-year fixing"
+  },
+  {
+   "source": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "target": "e851c66b-1ed6-4c56-b49d-56164312bbac",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the Fitted Yield on a 10 Year Zero Coupon Bond — United States, latest value 5.003% for 2026-09, up +0.827 pp year-over-year."
+  },
+  {
+   "source": "1282798f-c651-423e-8661-3fa99a4bf2a1",
+   "target": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "name": "CONSTRAINS",
+   "fact": "CME 30-Day Federal Funds futures closing 23 October 2026 (95.82 for February 2027 ZQG7, 95.53 June 2027, 95.455 September 2027, 95.44 November 2027 ZQX7) imply an average effective funds rate near 4.18% in February 2027 rising to about 4.56% by November 2027, constraining the expected Federal Reserve policy path."
+  },
+  {
+   "source": "2685aa53-6785-4fe9-a6ad-d1ef797e05a9",
+   "target": "403f9306-09f3-40ab-9a84-d40bde20fc89",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity (DGS10) series, sourced at fred.stlouisfed.org/series/DGS10 (tier 1, fetched)"
+  },
+  {
+   "source": "1d407872-0ac2-471e-92fa-1a5d1d925d9f",
+   "target": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "name": "CONSTRAINS",
+   "fact": "The September 2026 SEP median core PCE inflation path of 3.4% (2026) and 2.5% (2027), central tendency 2.3–2.6% for 2027, implies one further 25bp FOMC step if core PCE tracks the 3.4% 2026 median."
+  },
+  {
+   "source": "9158d55e-817d-4552-a46c-0578838024f3",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "TRIGGERS",
+   "fact": "In the Bond bear steepening scenario (20%), deficit and issuance pressure plus soft foreign demand push the term premium above 1.5%, which drives DGS10 above 5.50% at end-2027."
+  },
+  {
+   "source": "3749aaa0-3ed1-4b6e-8380-31f60e4bd1c9",
+   "target": "a90334e1-739b-454f-823c-a34bb72e47ce",
+   "name": "PROJECTS",
+   "fact": "CBO's February 2026 baseline projects the 10-year note rate \"rises gradually through 2027\" and remains relatively stable thereafter"
+  },
+  {
+   "source": "9158d55e-817d-4552-a46c-0578838024f3",
+   "target": "e851c66b-1ed6-4c56-b49d-56164312bbac",
+   "name": "CONSTRAINS",
+   "fact": "The fitted 10-year zero-coupon yield of 5.003% (2026-09) less the 0.96% term premium leaves roughly 4 pp as the expected-rate component, so the ~1% term premium arithmetically constrains the 10-year near its current 5.13% level."
+  },
+  {
+   "source": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "target": "61303cb9-4583-4d47-89cc-5e39f1bdc24e",
+   "name": "CONSTRAINS",
+   "fact": "The real-time Sahm rule indicator at 0 percentage points in September 2026, having declined for ten consecutive months from a 0.43-percentage-point peak in November 2025 (five-year range −0.07 to 0.43 pp), argues against the recession path that would drive FRED DGS10 below 4.00%."
+  },
+  {
+   "source": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "target": "9158d55e-817d-4552-a46c-0578838024f3",
+   "name": "INFLUENCES",
+   "fact": "In the Higher-for-longer plateau scenario (40%), sticky inflation keeps the Fed funds rate near 4% and the term premium near 1%, holding DGS10 at end-2027 between 4.75% and 5.50%."
+  },
+  {
+   "source": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "target": "30290e7d-15ca-45ae-ba39-a280b1eb814f",
+   "name": "SUPPORTS",
+   "fact": "The Federal Reserve published the FOMC Projections materials accessible version for the September 16, 2026 meeting on federalreserve.gov."
+  },
+  {
+   "source": "177d5257-86c8-457b-9944-0361ed9a6919",
+   "target": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "name": "SUPPORTS",
+   "fact": "The Federal Reserve Bank of Cleveland's Yield Curve and Predicted GDP Growth indicator provides recession-probability analysis analogous to recession indicators such as the Sahm Rule, cited as a tier-3 source."
+  },
+  {
+   "source": "cf380460-3fdc-4872-9642-bc87b5fcbf81",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "Rapid Fed cuts in a recession scenario would bull-flatten the 0.31% 2s10s spread, consistent with the 10-year fixing falling below 4.00%"
+  },
+  {
+   "source": "f195fdf7-42ee-48b6-977d-d639959ae3c2",
+   "target": "f195fdf7-42ee-48b6-977d-d639959ae3c2",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "New York Fed Markets Desk 亦称 NY Fed Markets Desk"
+  },
+  {
+   "source": "fb1063b5-19af-4ca3-8142-64353633c1b8",
+   "target": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "name": "INFLUENCES",
+   "fact": "FedWatch probabilities and the futures strip are monitored signposts against the SEP dots（sign=+，strength=0.4，valence=directional，polarity=0.20）"
+  },
+  {
+   "source": "3749aaa0-3ed1-4b6e-8380-31f60e4bd1c9",
+   "target": "a4188fb1-193a-49e0-ac1e-6735a147caa0",
+   "name": "CAUSES",
+   "fact": "CBO's baseline projects a $1.9 trillion fiscal-year 2026 deficit (5.8 percent of GDP), averaging $2.4 trillion a year over 2027-2036, pressuring the term premium."
+  },
+  {
+   "source": "533bc7ea-00b7-4949-9344-0ccf6bc58a2f",
+   "target": "791998e8-c96b-4e33-a632-371ea2b94d9c",
+   "name": "DIVERGES_FROM",
+   "fact": "Household surveys diverge from market pricing: Michigan's 1-year median expectation at 4.6% (2026-09, five-year range 2.6%–6.6%) versus the 10-year breakeven at 2.351% (2026-09) — a definitional gap, not a data conflict."
+  },
+  {
+   "source": "3961e8e2-d599-47ed-a7b1-a05e5ffb3743",
+   "target": "3961e8e2-d599-47ed-a7b1-a05e5ffb3743",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "US Department of the Treasury 亦称 US Treasury"
+  },
+  {
+   "source": "9158d55e-817d-4552-a46c-0578838024f3",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "TRIGGERS",
+   "fact": "A December 2027 THREEFYTP10 mean above 1.5% resolves yes only in Bond bear steepening, the scenario in which DGS10 settles above 5.50% at end-2027 (term premium above 1.5% drives it)."
+  },
+  {
+   "source": "1d407872-0ac2-471e-92fa-1a5d1d925d9f",
+   "target": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "name": "INFLUENCES",
+   "fact": "Core inflation returning toward 2% would lead the Fed to cut the funds rate toward its long-run dot (Disinflation glide scenario, 25% probability)."
+  },
+  {
+   "source": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "target": "52337c30-9d11-4f6c-9ee8-753efe2e9e50",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the 5-Year, 5-Year Forward Inflation Expectation Rate — United States, latest value 2.34% for 2026-09, up +0.022 pp year-over-year."
+  },
+  {
+   "source": "1282798f-c651-423e-8661-3fa99a4bf2a1",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "Implied rates derived from quoted 2027 fed funds futures are unconfirmed arithmetic on quoted prices, and a matching market would have to settle on the H.15 10-year constant-maturity fixing for 31 December 2027"
+  },
+  {
+   "source": "ba3a84b5-3212-4d53-8de0-dcdeecbc329a",
+   "target": "d2320839-a949-4de0-98b6-4ee44e663885",
+   "name": "PARTNERS_WITH",
+   "fact": "Both named actors in Japan's Treasury-demand channel; specifics unquantified in the evidence（sign=+，strength=0.5，valence=allied，polarity=0.50）"
+  },
+  {
+   "source": "3749aaa0-3ed1-4b6e-8380-31f60e4bd1c9",
+   "target": "72c6aef6-8fbc-475b-a0f8-272b334b43af",
+   "name": "PUBLISHES",
+   "fact": "The Congressional Budget Office publishes The Budget and Economic Outlook: 2026 to 2036 at cbo.gov/publication/62105 (tier 1, fetched)"
+  },
+  {
+   "source": "533bc7ea-00b7-4949-9344-0ccf6bc58a2f",
+   "target": "1d407872-0ac2-471e-92fa-1a5d1d925d9f",
+   "name": "FALSIFIES",
+   "fact": "Sticky household inflation expectations of 4.6% in the Michigan survey (September 2026) falsify the Disinflation glide path that requires core PCE returning toward 2.5%"
+  },
+  {
+   "source": "f5f4b11f-6782-41ac-b0b8-49bae35220f8",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "SUPPLIES",
+   "fact": "DGS10 is published daily by FRED from the Treasury H.15 curve (percent, not seasonally adjusted, United States)."
+  },
+  {
+   "source": "2fa39200-7d3f-4bcd-9552-0dc75ae99e4b",
+   "target": "1282798f-c651-423e-8661-3fa99a4bf2a1",
+   "name": "PUBLISHES",
+   "fact": "CME Group publishes 30 Day Federal Funds Futures Quotes (tier 3, fetched) at cmegroup.com"
+  },
+  {
+   "source": "3749aaa0-3ed1-4b6e-8380-31f60e4bd1c9",
+   "target": "24aa7636-fadd-4f9e-b8e1-9604578e5ba3",
+   "name": "CAUSES",
+   "fact": "CBO's February 2026 baseline projects a federal budget deficit of $1.9 trillion in fiscal year 2026 (5.8 percent of GDP), rising to $3.1 trillion (6.7 percent of GDP) by 2036, with deficits averaging $2.4 trillion per year over 2027–2036 (6.1 percent of GDP on average vs a 50-year average of 3.8 percent)."
+  },
+  {
+   "source": "3749aaa0-3ed1-4b6e-8380-31f60e4bd1c9",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "CBO projects deficits averaging 6.1% of GDP over 2027–2036, which could keep the term premium sticky and mute any flight-to-quality rally in DGS10 (the offset to the Recession flight to quality scenario that would drive DGS10 below 4.00%)."
+  },
+  {
+   "source": "403f9306-09f3-40ab-9a84-d40bde20fc89",
+   "target": "11479019-6374-4cfc-abe5-69192e321ea6",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the 10-Year Treasury Constant Maturity Minus 3-Month Treasury Constant Maturity (T10Y3M) series (tier 1, fetched)"
+  },
+  {
+   "source": "3961e8e2-d599-47ed-a7b1-a05e5ffb3743",
+   "target": "3dbe2dd8-d943-413a-a404-ef9f541ef813",
+   "name": "SUPPORTS",
+   "fact": "The U.S. Department of the Treasury publishes the Monthly Statement of the Public Debt (MSPD) dataset via Treasury Fiscal Data."
+  },
+  {
+   "source": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "target": "3961e8e2-d599-47ed-a7b1-a05e5ffb3743",
+   "name": "PARTNERS_WITH",
+   "fact": "On 10 December 2025 the FOMC judged reserves ample and announced reserve-management purchases of shorter-term Treasury securities, sized to trend liability growth plus seasonal fluctuations."
+  },
+  {
+   "source": "3961e8e2-d599-47ed-a7b1-a05e5ffb3743",
+   "target": "d67c6191-1d40-4417-b0b6-d8f8409448ec",
+   "name": "CONSTRAINS",
+   "fact": "Treasury's August 2026 refunding statement said current auction sizes leave it well positioned to address potential changes to the fiscal outlook and to the size and composition of the SOMA portfolio, bounding SOMA composition changes."
+  },
+  {
+   "source": "11479019-6374-4cfc-abe5-69192e321ea6",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "TRIGGERS",
+   "fact": "An inversion of T10Y3M below 0, from its 0.78% level on 2026-10-23, would support Recession flight to quality for DGS10 and argue against Bond bear steepening."
+  },
+  {
+   "source": "2685aa53-6785-4fe9-a6ad-d1ef797e05a9",
+   "target": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the official DGS10 series (Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity), latest historical value 4.989% for 2026-09, up +0.869 pp year-over-year."
+  },
+  {
+   "source": "2685aa53-6785-4fe9-a6ad-d1ef797e05a9",
+   "target": "9158d55e-817d-4552-a46c-0578838024f3",
+   "name": "CONSTRAINS",
+   "fact": "The term premium is cited as a driver of the 10-year Treasury yield's break above 5% from the 2024–2025 3.7–4.6% band, rather than breakevens"
+  },
+  {
+   "source": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "SUPPLIES",
+   "fact": "FRED publishes series DGS10, the Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis, with latest stored daily value 5.13% on 2026-10-21 and September 2026 monthly mean 4.989%."
+  },
+  {
+   "source": "fa6490d6-54ec-480c-a454-a6d6536a08d8",
+   "target": "3961e8e2-d599-47ed-a7b1-a05e5ffb3743",
+   "name": "INFLUENCES",
+   "fact": "CBO baseline of $1.9 trillion FY2026 deficit drives Treasury's $628 billion Q4 2026 borrowing estimate（sign=+，strength=0.8，valence=directional，polarity=0.40）"
+  },
+  {
+   "source": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "target": "9158d55e-817d-4552-a46c-0578838024f3",
+   "name": "CONSTRAINS",
+   "fact": "The real-time Sahm indicator at 0 percentage points for 2026-09 currently blocks the Recession flight to quality scenario (15%), which would otherwise imply rapid Fed cuts from the 3.875% midpoint and a term-premium/yield collapse."
+  },
+  {
+   "source": "1282798f-c651-423e-8661-3fa99a4bf2a1",
+   "target": "30290e7d-15ca-45ae-ba39-a280b1eb814f",
+   "name": "DIVERGES_FROM",
+   "fact": "CME 30-day fed funds futures closed 23 October 2026 at 95.82 (February 2027) and 95.44 (November 2027), implying an upward-sloping funds path through 2027, while the September SEP median funds-rate midpoint holds 4.25% at end-2026 and end-2027 before declining only in 2029 to 3.75% from 4.25% at end-2028."
+  },
+  {
+   "source": "3961e8e2-d599-47ed-a7b1-a05e5ffb3743",
+   "target": "9158d55e-817d-4552-a46c-0578838024f3",
+   "name": "CAUSES",
+   "fact": "Treasury coupon issuance is linked to the term premium via timing and Treasury's own spare-capacity framing, though no elasticity estimate (basis points per $100 billion of coupon supply) was retrieved."
+  },
+  {
+   "source": "1d407872-0ac2-471e-92fa-1a5d1d925d9f",
+   "target": "9158d55e-817d-4552-a46c-0578838024f3",
+   "name": "CAUSES",
+   "fact": "Core PCE prints near 2% pulling the FOMC dots down would falsify the Higher-for-longer plateau scenario (40%) of funds near 4% and term premium near 1%."
+  },
+  {
+   "source": "177d5257-86c8-457b-9944-0361ed9a6919",
+   "target": "fffcabbd-4e3d-40d7-b7e9-2c707a6991b8",
+   "name": "SUPPORTS",
+   "fact": "The Cleveland Fed produces the yield-curve model that estimates the one-year-ahead recession probability (11.4 percent for September 2026)."
+  },
+  {
+   "source": "7d33de63-2465-4b9f-9f91-09c882b1586e",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "Japan and China TIC holdings will discriminate the DGS10 plateau scenario from the rest of the distribution."
+  },
+  {
+   "source": "278b7790-81b1-4ceb-93d0-4cca878b6a06",
+   "target": "a802fa7a-2885-4fb9-8766-5559b86dd105",
+   "name": "SUPPORTS",
+   "fact": "The New York Fed publishes a monthly probit recession-probability model on the 10Y–3M spread, updated within the first two weeks of each month, cautioning that estimates are not official forecasts; its year-average table put the twelve-months-ahead US recession probability at 0.28 percent for 2026"
+  },
+  {
+   "source": "3961e8e2-d599-47ed-a7b1-a05e5ffb3743",
+   "target": "9158d55e-817d-4552-a46c-0578838024f3",
+   "name": "CONSTRAINS",
+   "fact": "U.S. Treasury bill issuance growth, as covered by Reuters on 2026-07-23, heightens long-term risk, constraining the 10-Year Treasury Term Premium outlook."
+  },
+  {
+   "source": "3749aaa0-3ed1-4b6e-8380-31f60e4bd1c9",
+   "target": "3749aaa0-3ed1-4b6e-8380-31f60e4bd1c9",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Congressional Budget Office 亦称 CBO"
+  },
+  {
+   "source": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "The real-time Sahm indicator at 0 percentage points for 2026-09 currently blocks the recession flight-to-quality trigger that would drive DGS10 below 4.00%, constraining DGS10's downside."
+  },
+  {
+   "source": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "target": "9158d55e-817d-4552-a46c-0578838024f3",
+   "name": "SUPPORTS",
+   "fact": "FRED publishes the Term Premium on a 10 Year Zero Coupon Bond series (THREEFYTP10)."
+  },
+  {
+   "source": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "target": "67f35862-bd46-4ed7-bed8-e3621fa666bc",
+   "name": "CAUSES",
+   "fact": "The Federal Reserve's 12-0 hike on September 16, 2026 set the policy rate at 3.875% per year as of end-September 2026, holding the funds rate near 4% in the higher-for-longer scenario."
+  },
+  {
+   "source": "26cc874f-4b20-45e4-916b-bbed3623029b",
+   "target": "30290e7d-15ca-45ae-ba39-a280b1eb814f",
+   "name": "SUPPORTS",
+   "fact": "J.P. Morgan Asset Management published commentary on the FOMC Statement and Summary of Economic Projections of September 2026, cited as a tier-3 source."
+  },
+  {
+   "source": "177d5257-86c8-457b-9944-0361ed9a6919",
+   "target": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "name": "SUPPORTS",
+   "fact": "Publishes recession probabilities that inform the policy-risk backdrop（sign=+，strength=0.3，valence=neutral，polarity=0.10）"
+  },
+  {
+   "source": "ba3a84b5-3212-4d53-8de0-dcdeecbc329a",
+   "target": "ba3a84b5-3212-4d53-8de0-dcdeecbc329a",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Bank of Japan 亦称 BoJ"
+  },
+  {
+   "source": "2685aa53-6785-4fe9-a6ad-d1ef797e05a9",
+   "target": "9158d55e-817d-4552-a46c-0578838024f3",
+   "name": "CONSTRAINS",
+   "fact": "The term premium on a 10-year zero-coupon bond (0.96% in 2026-09, at the top of its five-year range) is a key component constraining the DGS10 10-year yield, which printed a monthly mean of 4.989% in 2026-09 against a fitted 10-year zero-coupon yield of 5.003%."
+  },
+  {
+   "source": "3961e8e2-d599-47ed-a7b1-a05e5ffb3743",
+   "target": "a90334e1-739b-454f-823c-a34bb72e47ce",
+   "name": "CONSTRAINS",
+   "fact": "A maintained Treasury coupon-size freeze (no increases announced at any quarterly refunding through 2027, with the next statement expected early November 2026) is consistent with the Higher-for-longer plateau for the 10-year Treasury yield, while a first announced increase in nominal coupon/FRN auction sizes would support Bond bear steepening."
+  },
+  {
+   "source": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "target": "2685aa53-6785-4fe9-a6ad-d1ef797e05a9",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis, Inflation-Indexed (10-Year TIPS yield), latest value 2.638% for 2026-09."
+  },
+  {
+   "source": "1d407872-0ac2-471e-92fa-1a5d1d925d9f",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "In the Disinflation glide scenario (25%), core inflation returning toward 2% leads the Fed to cut toward its long-run dot, settling DGS10 between 4.00% and 4.75%."
+  },
+  {
+   "source": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "target": "fb1063b5-19af-4ca3-8142-64353633c1b8",
+   "name": "INFLUENCES",
+   "fact": "SEP medians of 4.25% at end-2026/2027 vs futures-implied path of ~4.2% to ~4.56% (derived, unconfirmed); the wedge is unresolved（sign=+，strength=0.7，valence=directional，polarity=0.30）"
+  },
+  {
+   "source": "0d9fbaaa-31a4-4c75-bfd6-feb45383917b",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "TRIGGERS",
+   "fact": "A THREEFYTP10 monthly mean above 1.5% by December 2027 confirms the bond bear steepening scenario for the H.15 10-year fixing"
+  },
+  {
+   "source": "6880127a-8821-4a9f-a2f1-d349f56d4445",
+   "target": "6880127a-8821-4a9f-a2f1-d349f56d4445",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "People's Bank of China / SAFE 亦称 PBoC"
+  },
+  {
+   "source": "fa6490d6-54ec-480c-a454-a6d6536a08d8",
+   "target": "fa6490d6-54ec-480c-a454-a6d6536a08d8",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "US Congress 亦称 Congress"
+  },
+  {
+   "source": "403f9306-09f3-40ab-9a84-d40bde20fc89",
+   "target": "e851c66b-1ed6-4c56-b49d-56164312bbac",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the Fitted Yield on a 10 Year Zero Coupon Bond (THREEFY10) series (tier 1, fetched)"
+  },
+  {
+   "source": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "target": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the Real-time Sahm Rule Recession Indicator — United States, latest value 0 percentage points for 2026-09, down -0.23 (-100%) year-over-year."
+  },
+  {
+   "source": "2685aa53-6785-4fe9-a6ad-d1ef797e05a9",
+   "target": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "name": "SUPPLIES",
+   "fact": "FRED publishes the official Market Yield on U.S. Treasury Securities at Ten-Year Constant Maturity series, whose latest observation is up from a year earlier and near the top of the charted range"
+  },
+  {
+   "source": "9158d55e-817d-4552-a46c-0578838024f3",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "The Kim-Wright term premium (0.96% for 2026-09, latest daily 0.986% on 2026-10-16, partial October mean 1.059%, at the top of its five-year range of −0.193% to 0.96%) constrains DGS10, as roughly 0.5pp of the year's 0.827pp rise in the fitted 10-year zero-coupon yield was compensation working through the term premium."
+  },
+  {
+   "source": "dddc9b62-4f86-4f56-a925-60bbf7d35113",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "SUPPORTS",
+   "fact": "Undated CNBC intraday quotes near 4.95–5.00% illustrate DGS10 volatility around the 5% mark but are not the fixing."
+  },
+  {
+   "source": "4be01ad0-7918-4d79-8a5d-2ce0af16885b",
+   "target": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "name": "SUPPORTS",
+   "fact": "The BIS publishes the official central bank policy rates series (monthly, end of period) that tracks the Federal Reserve's US policy rate, supporting analysis of the Fed's stance."
+  },
+  {
+   "source": "403f9306-09f3-40ab-9a84-d40bde20fc89",
+   "target": "791998e8-c96b-4e33-a632-371ea2b94d9c",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the 10-Year Breakeven Inflation Rate (T10YIE) series (tier 1, fetched)"
+  },
+  {
+   "source": "a4a73d64-3a4a-443a-8c63-e312acaaaf15",
+   "target": "24aa7636-fadd-4f9e-b8e1-9604578e5ba3",
+   "name": "CAUSES",
+   "fact": "CBO attributes deficit deterioration since January 2025 partly to the 2025 reconciliation act, which raises deficits by an estimated $4.7 trillion over 2026–2035."
+  },
+  {
+   "source": "177d5257-86c8-457b-9944-0361ed9a6919",
+   "target": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "name": "SUPPORTS",
+   "fact": "The Cleveland Fed publishes a probability of recession in one year of 11.4 percent for September 2026, providing recession-probability evidence alongside the Sahm rule readings for the Recession flight to quality scenario."
+  },
+  {
+   "source": "9158d55e-817d-4552-a46c-0578838024f3",
+   "target": "a90334e1-739b-454f-823c-a34bb72e47ce",
+   "name": "TRIGGERS",
+   "fact": "A THREEFYTP10 monthly mean above 1.5% in any month through December 2027 confirms the Bond bear steepening scenario for the 10-year Treasury yield."
+  },
+  {
+   "source": "0d9fbaaa-31a4-4c75-bfd6-feb45383917b",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "TRIGGERS",
+   "fact": "ACM term premium sustained above 1.5% would confirm the Bond bear steepening scenario (DGS10 above 5.50%)."
+  },
+  {
+   "source": "403f9306-09f3-40ab-9a84-d40bde20fc89",
+   "target": "533bc7ea-00b7-4949-9344-0ccf6bc58a2f",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the University of Michigan Inflation Expectation (MICH) series (tier 1, fetched)"
+  },
+  {
+   "source": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "target": "fb1063b5-19af-4ca3-8142-64353633c1b8",
+   "name": "CONSTRAINS",
+   "fact": "DGS10 monthly non-overlapping 14-month windows (2006-11 to 2026-09, h=14m, n=16) show |Δ|>0.5 pp in 13 of 16 (~81%) and >1.0 pp in 3 of 16 (~19%); starts in the 4.5%–5.5% band (n=4: 2006-11, 2023-10, 2024-04, 2025-01) show >0.5 pp in 1 of 4 (−0.86 pp fall from 2006-11) and >1.0 pp in 0 of 4, bounding end-2027 moves."
+  },
+  {
+   "source": "cf380460-3fdc-4872-9642-bc87b5fcbf81",
+   "target": "a802fa7a-2885-4fb9-8766-5559b86dd105",
+   "name": "CONSTRAINS",
+   "fact": "The 2s10s spread stood at 0.31% on 2026-10-23, and along with the steeply positive 10Y–3M spread it points away from recession signals in curve-based models like the New York Fed probit"
+  },
+  {
+   "source": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "target": "5a547b79-0346-45dc-beaa-1bc994c0b8bb",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the Monthly Treasury Statement: Surplus (+) or Deficit (-) — United States series; the current-month value for 2026-09 is about -26.9 billion U.S. dollars, a change of -224,849,977,464.18 (-113.589%) year-over-year."
+  },
+  {
+   "source": "11479019-6374-4cfc-abe5-69192e321ea6",
+   "target": "a802fa7a-2885-4fb9-8766-5559b86dd105",
+   "name": "SUPPORTS",
+   "fact": "The New York Fed's monthly probit model keys off the 10Y–3M spread with a twelve-months-ahead window; the spread averaged 0.896% in September 2026 (latest daily 0.78% on 2026-10-23), a +0.841 pp year-over-year steepening"
+  },
+  {
+   "source": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "target": "3961e8e2-d599-47ed-a7b1-a05e5ffb3743",
+   "name": "INFLUENCES",
+   "fact": "Treasury's August 2026 refunding cites readiness for 'the size and composition of the SOMA portfolio'; Fed reserve-management purchases affect the mix Treasury must supply（sign=+，strength=0.5，valence=transactional，polarity=0.20）"
+  },
+  {
+   "source": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "target": "9158d55e-817d-4552-a46c-0578838024f3",
+   "name": "INFLUENCES",
+   "fact": "The Bond bear steepening scenario (20%) needs no change in the Fed funds path; it works through the term premium rising with the Fed on hold."
+  },
+  {
+   "source": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "target": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "name": "CONSTRAINS",
+   "fact": "The real-time Sahm indicator at 0.00 percentage points in September 2026 argues against the Recession flight to quality scenario, with its falsifier being further labor-market improvement from an already non-triggering level"
+  },
+  {
+   "source": "3961e8e2-d599-47ed-a7b1-a05e5ffb3743",
+   "target": "5eb80373-9a83-404e-bdb8-3da2e0495b4a",
+   "name": "CUSTOMER_OF",
+   "fact": "Treasury's auction-size decisions depend on intermediary absorption capacity（strength=0.7，valence=transactional，polarity=0.00）"
+  },
+  {
+   "source": "72c6aef6-8fbc-475b-a0f8-272b334b43af",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "The CBO February 2026 baseline projects that the 10-year note rate (DGS10) rises gradually through 2027 and remains relatively stable thereafter, bounding the end-2027 outcome."
+  },
+  {
+   "source": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "target": "67f35862-bd46-4ed7-bed8-e3621fa666bc",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the Central bank policy rates - United States - Monthly - End of period series, latest value 3.875% per year for 2026-09, down -0.25 pp year-over-year."
+  },
+  {
+   "source": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "Empirical frequencies from the stored FRED DGS10 monthly series (window beginning 2006-11, non-overlapping 14-month windows) constrain the settlement move: starts in the 4.5–5.5% band show |Δ|>0.5 pp in 1 of 4 cases and |Δ|>1.0 pp in 0 of 4, with unconditional 2006-11 to 2026-09 counts of 13 of 16 (~81%) and 3 of 16 (~19%)."
+  },
+  {
+   "source": "7387f4cd-a888-46a9-8abe-ec7af74e3e9b",
+   "target": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "name": "SUPPORTS",
+   "fact": "FedWatch's live board shows risk-neutral probabilities of 0.0%, 90.6% and 9.4% for an upcoming Federal Reserve meeting whose date is not identified in the data."
+  },
+  {
+   "source": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "target": "1d407872-0ac2-471e-92fa-1a5d1d925d9f",
+   "name": "CONSTRAINS",
+   "fact": "A flat Sahm indicator, together with core PCE tracking the 2.3% lower bound of the central tendency, is cited as falsifying the 'Recession flight to quality' and 'Disinflation glide' scenario branches respectively."
+  },
+  {
+   "source": "5a547b79-0346-45dc-beaa-1bc994c0b8bb",
+   "target": "24aa7636-fadd-4f9e-b8e1-9604578e5ba3",
+   "name": "MEASURES",
+   "fact": "The Monthly Treasury Statement shows a September 2026 current-month deficit of -26,900,347,102.02 U.S. dollars, versus a 197,949,630,362.16 U.S. dollar surplus in September 2025; the stored five-year series' largest monthly deficit is -432,307,874,621.48 U.S. dollars in July 2026."
+  },
+  {
+   "source": "1d407872-0ac2-471e-92fa-1a5d1d925d9f",
+   "target": "9158d55e-817d-4552-a46c-0578838024f3",
+   "name": "TRIGGERS",
+   "fact": "The Disinflation glide scenario (25%) requires the 2.5% 2027 core PCE median to materialise, opening Fed cuts toward the 3.0% longer run, consistent with term premium near 1%."
+  },
+  {
+   "source": "177d5257-86c8-457b-9944-0361ed9a6919",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "TRIGGERS",
+   "fact": "A monthly rise in the Cleveland Fed recession probability above 11.4 percent would support the Recession flight to quality scenario for DGS10."
+  },
+  {
+   "source": "1282798f-c651-423e-8661-3fa99a4bf2a1",
+   "target": "61303cb9-4583-4d47-89cc-5e39f1bdc24e",
+   "name": "CONSTRAINS",
+   "fact": "Fed funds futures price only the short-rate path and no publisher posts a probability for the FRED DGS10 settlement quantity itself, so the end-2027 DGS10 distribution cannot be directly priced from futures."
+  },
+  {
+   "source": "1d407872-0ac2-471e-92fa-1a5d1d925d9f",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "Core PCE above 3% kills the Disinflation glide scenario (DGS10 settling between 4.00% and 4.75%), while core PCE near 2% during 2027 kills the Higher-for-longer plateau in which DGS10 settles between 4.75% and 5.50%."
+  },
+  {
+   "source": "2685aa53-6785-4fe9-a6ad-d1ef797e05a9",
+   "target": "f9ad8ef2-61c0-4e72-834a-5a923f480a0a",
+   "name": "PUBLISHES",
+   "fact": "Macrotrends publishes a 10 Year Treasury Yield (1962-2026) aggregation of the 10-year Treasury yield series"
+  },
+  {
+   "source": "3749aaa0-3ed1-4b6e-8380-31f60e4bd1c9",
+   "target": "d098ccb4-a61b-4633-a652-251e49166626",
+   "name": "INFLUENCES",
+   "fact": "CBO's February 2026 baseline economic assumptions embed a 10-year Treasury note rate that rises gradually through 2027 and remains relatively stable in later years."
+  },
+  {
+   "source": "fffcabbd-4e3d-40d7-b7e9-2c707a6991b8",
+   "target": "61303cb9-4583-4d47-89cc-5e39f1bdc24e",
+   "name": "CONSTRAINS",
+   "fact": "The Cleveland Fed yield-curve model put the probability of recession one year ahead at 11.4 percent for September 2026 (down from 12.3 percent in August), currently arguing against the historical near-5% recession exceedance path for FRED DGS10."
+  },
+  {
+   "source": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "target": "2a70a4e5-247e-4a73-b7c5-bc4c4d26550b",
+   "name": "CAUSES",
+   "fact": "FOMC's QT ran from 1 June 2022 to 31 October 2025 and reduced securities holdings by $2.2 trillion."
+  },
+  {
+   "source": "917da42f-620d-4ab2-9d4c-204cf710b5ff",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "FOMC dots and QT guidance, quarterly refunding coupon sizes, and Japan and China TIC holdings will discriminate the DGS10 plateau scenario from the rest."
+  },
+  {
+   "source": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "target": "11479019-6374-4cfc-abe5-69192e321ea6",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the official 10-Year minus 3-Month Treasury Constant Maturity spread series for the United States, latest value 0.896% for 2026-09, up +0.841 pp year-over-year."
+  },
+  {
+   "source": "791998e8-c96b-4e33-a632-371ea2b94d9c",
+   "target": "d098ccb4-a61b-4633-a652-251e49166626",
+   "name": "CONSTRAINS",
+   "fact": "The Ten-Year Breakeven Inflation Rate's 2.11% five-year low (2024-08) marks the flight-to-quality floor for the 10-year Treasury in the Recession flight to quality scenario."
+  },
+  {
+   "source": "9158d55e-817d-4552-a46c-0578838024f3",
+   "target": "61303cb9-4583-4d47-89cc-5e39f1bdc24e",
+   "name": "TRIGGERS",
+   "fact": "The term premium moving above 1.5% triggers the bond bear steepening scenario pushing DGS10 above 5.50%; a recession-triggered rapid Fed cuts path drives DGS10 below 4.00%."
+  },
+  {
+   "source": "3749aaa0-3ed1-4b6e-8380-31f60e4bd1c9",
+   "target": "e851c66b-1ed6-4c56-b49d-56164312bbac",
+   "name": "CONSTRAINS",
+   "fact": "CBO's baseline assumes the 10-year rate rises gradually through 2027 and remains relatively stable in later years, constraining the outlook for the 10-year zero-coupon yield (5.107% fitted level)."
+  },
+  {
+   "source": "f5f4b11f-6782-41ac-b0b8-49bae35220f8",
+   "target": "61303cb9-4583-4d47-89cc-5e39f1bdc24e",
+   "name": "SUPPORTS",
+   "fact": "FRED DGS10 (Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, investment basis, percent, NSA, United States) is published by the Federal Reserve Bank of St. Louis from the U.S. Treasury H.15 daily curve, with one fixing per U.S. business day compiled from end-of-day quotes on a 3:30 p.m. Eastern time basis; settlement is the daily level on the last trading day of December 2027"
+  },
+  {
+   "source": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "target": "9158d55e-817d-4552-a46c-0578838024f3",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the Term Premium on a 10 Year Zero Coupon Bond — United States (ACM), latest value 0.96% for 2026-09, up +0.499 pp year-over-year."
+  },
+  {
+   "source": "403f9306-09f3-40ab-9a84-d40bde20fc89",
+   "target": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "name": "PUBLISHES",
+   "fact": "FRED publishes the Real-time Sahm Rule Recession Indicator (SAHMREALTIME) series (tier 1, fetched)"
+  },
+  {
+   "source": "3749aaa0-3ed1-4b6e-8380-31f60e4bd1c9",
+   "target": "fa6490d6-54ec-480c-a454-a6d6536a08d8",
+   "name": "INFLUENCES",
+   "fact": "CBO scored the 2025 reconciliation act at +$4.7 trillion over 2026-2035（strength=0.6，valence=neutral，polarity=0.00）"
+  },
+  {
+   "source": "d2320839-a949-4de0-98b6-4ee44e663885",
+   "target": "d2320839-a949-4de0-98b6-4ee44e663885",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Japan Ministry of Finance 亦称 Japan MoF"
+  },
+  {
+   "source": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "TRIGGERS",
+   "fact": "A sustained rise in SAHMREALTIME above the November 2025 peak of 0.43 percentage points, tracked monthly through 2027, would support the Recession flight to quality scenario, moving DGS10 below 4.00%."
+  },
+  {
+   "source": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "target": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "name": "PUBLISHES",
+   "fact": "FRED (Federal Reserve Bank of St. Louis) publishes the real-time Sahm Rule Recession Indicator series (SAHMREALTIME), a tier-1 fetched source."
+  },
+  {
+   "source": "791998e8-c96b-4e33-a632-371ea2b94d9c",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "The 10-year breakeven of 2.351% (2026-09 monthly mean), together with the 10-year TIPS yield, sums to the DGS10 monthly mean of 4.989%, bounding DGS10 via inflation compensation of about 2.35pp."
+  },
+  {
+   "source": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "target": "d72d1bc1-fa40-4259-a648-829a81698d97",
+   "name": "PUBLISHES",
+   "fact": "The Federal Reserve Board publishes the FOMC statement at federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm (tier 1, fetched)"
+  },
+  {
+   "source": "4be01ad0-7918-4d79-8a5d-2ce0af16885b",
+   "target": "67f35862-bd46-4ed7-bed8-e3621fa666bc",
+   "name": "PUBLISHES",
+   "fact": "The Bank for International Settlements publishes the Central bank policy rates - United States, Monthly, End of period series (BIS CBPOL) (tier 1, fetched)"
+  },
+  {
+   "source": "fffcabbd-4e3d-40d7-b7e9-2c707a6991b8",
+   "target": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "name": "CORROBORATES",
+   "fact": "The Cleveland Fed recession probability staying near its 11.4 percent September 2026 reading corroborates the flat Sahm indicator in falsifying the 'Recession flight to quality' scenario."
+  },
+  {
+   "source": "533bc7ea-00b7-4949-9344-0ccf6bc58a2f",
+   "target": "a90334e1-739b-454f-823c-a34bb72e47ce",
+   "name": "CONSTRAINS",
+   "fact": "Consumer one-year inflation expectations at 4.6% (2026-09) reflect sticky inflation supporting a higher-for-longer plateau where DGS10 settles between 4.75% and 5.50%."
+  },
+  {
+   "source": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "target": "0d9fbaaa-31a4-4c75-bfd6-feb45383917b",
+   "name": "DOES_NOT_PUBLISH",
+   "fact": "FRED reports that the ACMTP10 series does not exist, so the NY Fed's ACM term premium figure is unconfirmed on FRED."
+  },
+  {
+   "source": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "TRIGGERS",
+   "fact": "A Sahm reading of 0.50 percentage points would trigger the Recession flight to quality scenario for DGS10; the real-time Sahm indicator reads 0 percentage points as of 2026-09, leaving the recession tail dormant."
+  },
+  {
+   "source": "30290e7d-15ca-45ae-ba39-a280b1eb814f",
+   "target": "1d407872-0ac2-471e-92fa-1a5d1d925d9f",
+   "name": "CAUSES",
+   "fact": "The September SEP projects the core PCE median gliding from 3.4% (2026) to 2.5% (2027), which underpins the expected funds-rate plateau."
+  },
+  {
+   "source": "d2320839-a949-4de0-98b6-4ee44e663885",
+   "target": "3961e8e2-d599-47ed-a7b1-a05e5ffb3743",
+   "name": "INVESTS_IN",
+   "fact": "Named largest foreign official holder in the brief; holdings data absent from this run（sign=+，strength=0.6，valence=transactional，polarity=0.40）"
+  },
+  {
+   "source": "b98815c0-faea-451d-a3fe-ca0972d8967b",
+   "target": "b98815c0-faea-451d-a3fe-ca0972d8967b",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Jerome Powell (or successor Chair) 亦称 Fed Chair"
+  },
+  {
+   "source": "52337c30-9d11-4f6c-9ee8-753efe2e9e50",
+   "target": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "name": "TRIGGERS",
+   "fact": "The market prices the Fed above its dots; the Disinflation glide scenario is falsified if the 5y5y forward rises through its 2.46% five-year high."
+  },
+  {
+   "source": "9158d55e-817d-4552-a46c-0578838024f3",
+   "target": "a90334e1-739b-454f-823c-a34bb72e47ce",
+   "name": "CONSTRAINS",
+   "fact": "The compensation (term premium) component of the 10-year yield is the domestic price signature that weak foreign official demand in US Treasury securities would leave, bounding the 10-year Treasury yield's path."
+  },
+  {
+   "source": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "target": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Federal Reserve / FOMC 亦称 the Fed"
+  },
+  {
+   "source": "b98815c0-faea-451d-a3fe-ca0972d8967b",
+   "target": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "name": "PARTNERS_WITH",
+   "fact": "Chair's signaling frames FOMC decisions such as the 12-0 September 2026 hike（sign=+，strength=0.9，valence=allied，polarity=0.70）"
+  },
+  {
+   "source": "3961e8e2-d599-47ed-a7b1-a05e5ffb3743",
+   "target": "5eb80373-9a83-404e-bdb8-3da2e0495b4a",
+   "name": "SUPPLIES",
+   "fact": "Dealers' balance-sheet capacity sets term-premium sensitivity to Treasury's issuance mix（strength=0.8，valence=transactional，polarity=0.00）"
+  },
+  {
+   "source": "2685aa53-6785-4fe9-a6ad-d1ef797e05a9",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "The 2026-09 monthly means of the 10-year TIPS yield (2.638%) and the 10-year breakeven (2.351%) sum to 4.989%, the DGS10 monthly mean, showing DGS10 decomposes into about 2.6pp real compensation over 2.35pp inflation compensation."
+  },
+  {
+   "source": "1282798f-c651-423e-8661-3fa99a4bf2a1",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "Fed funds futures price only the short-rate path; no publisher examined posts a probability for the DGS10 settlement quantity itself (the end-2027 fixing), so no exchange-settled distribution constrains the DGS10 outcome."
+  },
+  {
+   "source": "67f35862-bd46-4ed7-bed8-e3621fa666bc",
+   "target": "a90334e1-739b-454f-823c-a34bb72e47ce",
+   "name": "CONSTRAINS",
+   "fact": "With the funds rate at 3.875% and futures implying an average effective rate near 4.2% in February 2027 rising to about 4.56% by November 2027, the expected-rate component keeps DGS10 roughly flat around 5.13% (2026-10-21) versus the September 2026 monthly mean of 4.989%."
+  },
+  {
+   "source": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "target": "30290e7d-15ca-45ae-ba39-a280b1eb814f",
+   "name": "PUBLISHES",
+   "fact": "FRED published a blog post summarizing the FOMC Summary of Economic Projections, September 2026, cited as a tier-3 source."
+  },
+  {
+   "source": "9158d55e-817d-4552-a46c-0578838024f3",
+   "target": "a90334e1-739b-454f-823c-a34bb72e47ce",
+   "name": "CONSTRAINS",
+   "fact": "The term premium on a 10-year zero-coupon bond was 0.96% (2026-09), at the top of its five-year range, and is the swing factor keeping DGS10 near 5% through 2027."
+  },
+  {
+   "source": "1d407872-0ac2-471e-92fa-1a5d1d925d9f",
+   "target": "a90334e1-739b-454f-823c-a34bb72e47ce",
+   "name": "CONSTRAINS",
+   "fact": "The Disinflation glide scenario (10-year rate settling between 4.00% and 4.75%) requires core PCE moving toward the SEP's 2.5% 2027 median"
+  },
+  {
+   "source": "791998e8-c96b-4e33-a632-371ea2b94d9c",
+   "target": "a90334e1-739b-454f-823c-a34bb72e47ce",
+   "name": "CONSTRAINS",
+   "fact": "Market inflation pricing near target — 10-year breakeven at 2.351% (2026-09) and 5y5y forward at 2.34% (2026-09) — implies compensation rather than inflation expectations keeps the 10-year near 5% through 2027."
+  },
+  {
+   "source": "b5764111-7599-45d5-9a71-247f2706cbae",
+   "target": "cf380460-3fdc-4872-9642-bc87b5fcbf81",
+   "name": "SUPPLIES",
+   "fact": "FRED publishes the official Ten-Year Treasury Constant Maturity Minus Two-Year Treasury Constant Maturity series, whose latest observation is down from a year earlier"
+  },
+  {
+   "source": "a4188fb1-193a-49e0-ac1e-6735a147caa0",
+   "target": "9158d55e-817d-4552-a46c-0578838024f3",
+   "name": "CONSTRAINS",
+   "fact": "Deficit and issuance pressure of the $1.9 trillion fiscal-year 2026 deficit could push the term premium above 1.5% in the bond bear steepening scenario."
+  },
+  {
+   "source": "52337c30-9d11-4f6c-9ee8-753efe2e9e50",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "TRIGGERS",
+   "fact": "A 5y5y forward sliding toward 2.0% would signal the Disinflation glide scenario for DGS10."
+  },
+  {
+   "source": "6880127a-8821-4a9f-a2f1-d349f56d4445",
+   "target": "3961e8e2-d599-47ed-a7b1-a05e5ffb3743",
+   "name": "INVESTS_IN",
+   "fact": "Named second-largest foreign holder in the brief; allocation data absent from this run（sign=+，strength=0.5，valence=transactional，polarity=0.30）"
+  },
+  {
+   "source": "f195fdf7-42ee-48b6-977d-d639959ae3c2",
+   "target": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "name": "DEPENDS_ON",
+   "fact": "Desk executes reserve-management purchases announced by the FOMC on 2025-12-10（sign=+，strength=0.8，valence=allied，polarity=0.60）"
+  },
+  {
+   "source": "30290e7d-15ca-45ae-ba39-a280b1eb814f",
+   "target": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "name": "SUPPORTS",
+   "fact": "A new Summary of Economic Projections is expected at the December 2026 FOMC meeting (the September meeting was 15–16 Sep), serving as a discriminator between the Disinflation glide and Higher-for-longer plateau scenarios"
+  },
+  {
+   "source": "b4a5843d-fe37-422c-b997-6ec6acac9435",
+   "target": "1282798f-c651-423e-8661-3fa99a4bf2a1",
+   "name": "INFLUENCES",
+   "fact": "An undated Schwab commentary reports CME fed funds futures pricing a 78.2% probability of no rate change through December 2026, though its quoted 3.50–3.75% target range predates the September 2026 hike."
+  },
+  {
+   "source": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "target": "a90334e1-739b-454f-823c-a34bb72e47ce",
+   "name": "CONSTRAINS",
+   "fact": "The real-time Sahm indicator reading of 0.00 percentage points (September 2026) argues against the Recession flight to quality scenario in which the 10-year rate settles below 4.00%"
+  },
+  {
+   "source": "9158d55e-817d-4552-a46c-0578838024f3",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "Historical base rates constrain DGS10 moves: from near-5% starts, only 1 of 4 prior 14-month windows moved beyond ±0.5 pp and 0 of 4 beyond ±1.0 pp, with no upward >1.0 pp precedent, tempering the Bond bear steepening scenario."
+  },
+  {
+   "source": "9158d55e-817d-4552-a46c-0578838024f3",
+   "target": "a90334e1-739b-454f-823c-a34bb72e47ce",
+   "name": "CONSTRAINS",
+   "fact": "A term premium sustained above ~1.5% would falsify the Higher-for-longer plateau (settling between 4.75% and 5.50%) and push the 10-year rate above 5.50%; daily term premium prints reached up to 1.0589% on 2026-10-13"
+  },
+  {
+   "source": "ff202546-5abd-4ecb-b357-d2b711c1c0c5",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CAUSES",
+   "fact": "On September 16, 2026 the FOMC raised the target range to 3-3/4 to 4 percent by a 12–0 vote, stating \"Inflation remains elevated\", affecting the rate environment around DGS10; SEP medians hold the funds rate at 4.25% at end-2026, end-2027 and end-2028 before 3.75% in 2029."
+  },
+  {
+   "source": "2b0cf27a-5d84-48be-b167-3db230cf4214",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "The real-time Sahm rule recession indicator at 0 percentage points in September 2026 argues against the Recession flight to quality scenario (DGS10 below 4.00%); after peaking at 0.43 pp in November 2025 it declined for ten consecutive months through September 2026"
+  },
+  {
+   "source": "fb1063b5-19af-4ca3-8142-64353633c1b8",
+   "target": "fb1063b5-19af-4ca3-8142-64353633c1b8",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "CME FedWatch market participants 亦称 CME FedWatch"
+  },
+  {
+   "source": "cf380460-3fdc-4872-9642-bc87b5fcbf81",
+   "target": "817a037a-315a-4882-ac6c-5146a27f182d",
+   "name": "CONSTRAINS",
+   "fact": "The curve is positively sloped around the DGS10 anchor of 5.13% (daily, 2026-10-21; monthly mean 4.989% for 2026-09), with the 2s10s spread at 0.31% and 3M10Y at 0.78% (daily, 2026-10-23)."
+  }
+ ],
+ "graph_id": "mirofish_671de882349e4cc7"
+}

@@ -78,6 +78,22 @@ RUNS = {
     # added 2026-10-23 — 25-topic battery runs #3/#4 (standard depth, GLM-5.3)
     "copper-2027": "pipe_6b4e7fb7f9dc",
     "bitcoin-2027": "pipe_685795301752",
+    # added 2026-10-27 — October wave (GLM-5.3): battery #5/#6, deep RU/Iran/US-10Y,
+    # custom copper & semiconductor-supply-chain re-runs, plus the Oct 20-22
+    # gold / France / EU-China EV tariff / AI capex / RU-war-state runs
+    "ai-capex-2027": "pipe_39914a6cd39c",
+    "ev-tariffs-2027": "pipe_0ac0f3608d4a",
+    "france-crisis-2027": "pipe_d129e1956e73",
+    "gold-2027": "pipe_78903d599684",
+    "russia-ukraine-2027": "pipe_9f5353ac9955",
+    "ru-war-impact-2027": "pipe_bd813ff2b818",
+    "iran-standoff-2027": "pipe_d2d4b0467b89",
+    "ust10y-2027": "pipe_b4a359aae81b",
+    "sp500-2027": "pipe_93634335798e",
+    "copper-2027-r2": "pipe_4ca4c33e759b",
+    "semichain-2027": "pipe_a7a6b75468b2",
+    "ust10y-deep-2027": "pipe_11402e5d4825",
+    "cybersecurity-2027": "pipe_9d9b84efcd3d",
 }
 LANGUAGES = ("en", "zh")
 

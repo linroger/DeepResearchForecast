@@ -1,0 +1,558 @@
+{
+ "entity_types": [
+  {
+   "name": "Organization",
+   "archetype": "actor",
+   "simulation_tier": 2,
+   "role_class": "stakeholder",
+   "selection_rule": "能决策或发声的非政府机构，如央行部门、市场中介、交易平台、研究机构",
+   "anti_examples": [
+    "FRED数据库",
+    "Reuters报道",
+    "CBO报告文件"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "调整做市与库存容量",
+    "发布模型与数据",
+    "调整交易与清算规则"
+   ],
+   "description": "Non-governmental institutions: Fed desks, dealers, platforms, research bodies",
+   "attributes": [
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence on the forecast outcome"
+    },
+    {
+     "name": "sector",
+     "type": "text",
+     "description": "e.g. markets-desk, dealer, exchange, research"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "US / JP / CN etc."
+    }
+   ],
+   "examples": [
+    "New York Fed Markets Desk",
+    "CME FedWatch market participants",
+    "Cleveland Fed",
+    "Primary dealers and Treasury market hedge funds"
+   ]
+  },
+  {
+   "name": "Government",
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "拥有主权政策杠杆的政府机构/部门：财政部、国会、外国官方机构",
+   "anti_examples": [
+    "智库评论员",
+    "被引用的新闻媒体"
+   ],
+   "agency_class": "sovereign_government",
+   "levers": [
+    "调整季度再融资券种规模",
+    "立法改变税收与支出",
+    "买卖外汇储备/美债持仓",
+    "干预汇率"
+   ],
+   "description": "Sovereign fiscal/monetary authorities: Treasury, Congress, foreign officials",
+   "attributes": [
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "policy_stance",
+     "type": "text",
+     "description": "e.g. coupon-freeze, deficit-expansion, reserve-allocation"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "US / JP / CN"
+    }
+   ],
+   "examples": [
+    "US Department of the Treasury",
+    "US Congress",
+    "Japan Ministry of Finance",
+    "People's Bank of China / SAFE"
+   ]
+  },
+  {
+   "name": "CentralBank",
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "arbiter",
+   "selection_rule": "负责设定政策利率与资产负债表规则的货币当局",
+   "anti_examples": [
+    "财政部",
+    "商业银行"
+   ],
+   "agency_class": "central_bank",
+   "levers": [
+    "加息/降息25bp",
+    "调整储备管理购买规模与期限",
+    "更新SEP点阵与QT指引"
+   ],
+   "description": "Monetary policy authorities setting rates and balance-sheet rules",
+   "attributes": [
+    {
+     "name": "policy_rate",
+     "type": "text",
+     "description": "current target midpoint"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "hawkish/neutral/dovish"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "examples": [
+    "Federal Reserve / FOMC",
+    "Bank of Japan"
+   ]
+  },
+  {
+   "name": "Person",
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "以个人身份行动且其信号影响市场定价的领导者",
+   "anti_examples": [
+    "被引用的分析师评论",
+    "已退休无关人物"
+   ],
+   "agency_class": "individual_leader",
+   "levers": [
+    "国会证词与讲话指引预期",
+    "主持FOMC投票",
+    "前瞻性政策信号"
+   ],
+   "description": "Individual leaders whose signaling moves rate expectations",
+   "attributes": [
+    {
+     "name": "role_title",
+     "type": "text",
+     "description": "e.g. Fed Chair"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "hawkish/neutral/dovish"
+    }
+   ],
+   "examples": [
+    "Jerome Powell (or successor Chair)"
+   ]
+  },
+  {
+   "name": "Platform",
+   "archetype": "actor",
+   "simulation_tier": 2,
+   "role_class": "intermediary",
+   "selection_rule": "聚集市场定价并被各方引用的交易/数据平台",
+   "anti_examples": [
+    "纯新闻网站",
+    "学术数据库"
+   ],
+   "agency_class": "financial_institution",
+   "levers": [
+    "报价与隐含概率展示",
+    "合约上市与流动性"
+   ],
+   "description": "Market-pricing aggregation platforms feeding the expected-rate component",
+   "attributes": [
+    {
+     "name": "market_segment",
+     "type": "text",
+     "description": "e.g. fed funds futures"
+    },
+    {
+     "name": "implied_path",
+     "type": "text",
+     "description": "implied funds path reading"
+    }
+   ],
+   "examples": [
+    "CME FedWatch market participants"
+   ]
+  },
+  {
+   "name": "TreasuryInstrument",
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "被预测或被交易的具名证券/标的（DGS10、券种组合）",
+   "anti_examples": [
+    "抽象的'收益率曲线'概念",
+    "'风险偏好'"
+   ],
+   "description": "The forecast target and related Treasury securities/issuance mix",
+   "attributes": [
+    {
+     "name": "current_level",
+     "type": "text",
+     "description": "latest yield/size"
+    },
+    {
+     "name": "maturity_bucket",
+     "type": "text",
+     "description": "bill/note/bond/10y"
+    },
+    {
+     "name": "series_id",
+     "type": "text",
+     "description": "e.g. DGS10"
+    }
+   ],
+   "examples": [
+    "10-Year Treasury Constant Maturity (DGS10)",
+    "Nominal coupon and FRN auction complex"
+   ]
+  },
+  {
+   "name": "MacroIndicator",
+   "archetype": "signal",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "可追踪的具体指标序列（期限溢价、Sahm、盈亏平衡通胀等）",
+   "anti_examples": [
+    "抽象的'市场情绪'",
+    "'宏观趋势'话题"
+   ],
+   "description": "Trackable signal series: term premium, breakevens, Sahm, deficit",
+   "attributes": [
+    {
+     "name": "latest_value",
+     "type": "text",
+     "description": "latest reading with date"
+    },
+    {
+     "name": "threshold",
+     "type": "text",
+     "description": "scenario-confirming threshold"
+    },
+    {
+     "name": "publisher",
+     "type": "text",
+     "description": "e.g. FRED, Cleveland Fed"
+    }
+   ],
+   "examples": [
+    "Kim-Wright 10Y term premium (THREEFYTP10)",
+    "Real-time Sahm indicator",
+    "CBO deficit baseline",
+    "Michigan 1-year inflation expectations"
+   ]
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "INFLUENCES",
+   "family": "influence",
+   "valence": "directional",
+   "direction_semantics": "source 对 target 施加政策或定价影响（如Fed影响财政部发行决策、期货定价影响Fed沟通）",
+   "description": "Policy or pricing influence of one actor over another",
+   "source_targets": [
+    {
+     "source": "CentralBank",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Platform"
+    },
+    {
+     "source": "Platform",
+     "target": "CentralBank"
+    },
+    {
+     "source": "Organization",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/negative/neutral"
+    },
+    {
+     "name": "channel",
+     "type": "text",
+     "description": "e.g. policy-path, issuance, expectations"
+    }
+   ]
+  },
+  {
+   "name": "SUPPLIES",
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "source 向 target 供应/发行证券（财政部向一级交易商供应新券）",
+   "description": "Treasury supplies new issues to dealers/intermediaries",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "instrument_mix",
+     "type": "text",
+     "description": "bill-heavy / coupon-frozen"
+    }
+   ]
+  },
+  {
+   "name": "PARTNERS_WITH",
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "source 与 target 协同（Fed主席与FOMC、BoJ与日本财务省）",
+   "description": "Coordination or alignment between actors",
+   "source_targets": [
+    {
+     "source": "Person",
+     "target": "CentralBank"
+    },
+    {
+     "source": "CentralBank",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/negative/neutral"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ]
+  },
+  {
+   "name": "DEPENDS_ON",
+   "family": "dependency",
+   "valence": "directional",
+   "direction_semantics": "source 的操作依赖于 target 的政策框架（纽约联储市场台依赖FOMC决策）",
+   "description": "Operational dependency of one body on another's mandate",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "CentralBank"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ]
+  },
+  {
+   "name": "INVESTS_IN",
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "source 持有/投资 target 的证券（日本财务省、PBoC持有美债）",
+   "description": "Foreign official holdings of Treasury securities",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "TreasuryInstrument"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/negative/neutral"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "holdings relationship start if known"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "holding scale high/medium/low"
+    }
+   ]
+  },
+  {
+   "name": "CUSTOMER_OF",
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "source 是 target 的客户（财政部通过一级交易商分销新券）",
+   "description": "Treasury as distribution client of dealer intermediaries",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ]
+  },
+  {
+   "name": "SUPPORTS",
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "source 提供分析/数据支持 target 的决策（克利夫兰联储的衰退概率模型支撑FOMC决策输入）",
+   "description": "Analytical or data support feeding a decision body",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "CentralBank"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/negative/neutral"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ]
+  },
+  {
+   "name": "CAUSES",
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source 引起 target 的变动（政策路径/发行量驱动指标变动）",
+   "description": "Causal transmission from actor action to indicator/instrument move",
+   "source_targets": [
+    {
+     "source": "CentralBank",
+     "target": "MacroIndicator"
+    },
+    {
+     "source": "Government",
+     "target": "MacroIndicator"
+    },
+    {
+     "source": "MacroIndicator",
+     "target": "TreasuryInstrument"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "up/down pressure"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "e.g. days/quarters"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ]
+  },
+  {
+   "name": "CONSTRAINS",
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source 约束 target 的变动空间（历史基率、冻结券种规模限制收益率突破幅度）",
+   "description": "Factors bounding the outcome's move (base rates, issuance freezes)",
+   "source_targets": [
+    {
+     "source": "MacroIndicator",
+     "target": "TreasuryInstrument"
+    },
+    {
+     "source": "Government",
+     "target": "TreasuryInstrument"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "direction of constraint"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ]
+  },
+  {
+   "name": "TRIGGERS",
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source 越过阈值后触发 target 对应情景（Sahm≥0.50触发衰退情景）",
+   "description": "Threshold crossings that activate a scenario branch",
+   "source_targets": [
+    {
+     "source": "MacroIndicator",
+     "target": "TreasuryInstrument"
+    },
+    {
+     "source": "Person",
+     "target": "MacroIndicator"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "threshold",
+     "type": "text",
+     "description": "triggering threshold"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "time to impact"
+    }
+   ]
+  }
+ ],
+ "analysis_summary": "该预测问题是纯市场/宏观客体问题：以FRED DGS10在2027-12-31的定盘为标的，核心传导机制为（1）Fed政策路径与资产负债表规则锁定预期利率成分，（2）财政部发行结构与CBO赤字基线通过期限溢价施压，（3）日本/中国官方需求影响边际买盘，（4）衰退概率决定尾部。本体保留actor阵容种子类型（Organization/Government/Person/Platform）并新增CentralBank以突出货币政策当局的裁决地位；客体与信号侧新增TreasuryInstrument（DGS10标的）与MacroIndicator（期限溢价、Sahm、盈亏平衡等可追踪信号）。关系在实证边（INFLUENCES/SUPPLIES/PARTNERS_WITH/DEPENDS_ON/INVESTS_IN/CUSTOMER_OF/SUPPORTS）之上增加CAUSES/CONSTRAINS/TRIGGERS因果边，携带sign/lag/strength/threshold属性，把图谱从主体索引升级为冲击传导模型，直接服务于四情景（高原40%/熊陡20%/通缩25%/衰退15%）的概率推演。"
+}

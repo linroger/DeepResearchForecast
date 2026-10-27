@@ -1,0 +1,72 @@
+{
+ "pipeline_id": "pipe_9f5353ac9955",
+ "report_id": "report_553a2cc08357",
+ "simulation_id": "sim_e0fd51c9e193",
+ "graph_id": "mirofish_bd4737bf53074608",
+ "status": "completed",
+ "prompt": "Forecast the state of the Russia-Ukraine war as of December 31, 2027, and its implications for the global economy, geopolitics, international relations, and financial markets.\n\nEstablish the baseline first: as of late October 2026, the current state of the conflict - territory controlled by each side, front-line dynamics over the prior 12 months, casualties and attrition rates, manpower and mobilization status on both sides, the state of any negotiations or diplomatic contacts, and the current sanctions and military-aid regimes.\n\nDefine \"state of the war\" on an explicit continuum and forecast where it sits at end-2027: (a) full-scale active war at current or higher intensity; (b) grinding attritional conflict at reduced intensity; (c) frozen conflict or de facto ceasefire without a formal agreement; (d) formal armistice or ceasefire agreement; (e) comprehensive peace settlement. For the end-2027 state, also estimate territory held by each side and the tempo of strikes.\n\nResearch and weigh the principal drivers:\n1. Military balance: manpower, artillery, missile and drone production and stockpiles, defense-industrial capacity of Russia versus Ukraine plus Western military aid, and attrition trends.\n2. Politics: US policy toward Ukraine and Russia through 2027, EU and UK commitments and European rearmament, Ukrainian domestic politics, Russian political stability and war-economy sustainability, and China's material support for Russia.\n3. Economics: the Russian fiscal position under sanctions, oil price cap and shadow-fleet enforcement, Ukrainian GDP and reconstruction financing, and each side's capacity to sustain the war effort through 2027.\n4. Diplomacy: ceasefire negotiation attempts to date, territorial-compensation proposals, security-guarantee architectures (NATO membership, bilateral or multilateral guarantees, none), and sanctions-relief sequencing debates.\n\nThen forecast the implications with probabilities:\n- Global economy: energy prices (TTF gas, Brent crude), grain and food prices, European defense spending, and reconstruction funding needs.\n- Geopolitics: NATO posture and possible enlargement, the US-China-Russia triangle, nuclear signaling and proliferation incentives, and European strategic autonomy.\n- International relations: sanctions-regime evolution, Global South positioning, and the strength or erosion of territorial-integrity norms.\n- Financial markets: defense and energy equities, European sovereign bonds, Central and Eastern European currencies and Ukrainian assets, and safe havens including gold and the US dollar.\n\nDeliverables: 3-5 mutually exclusive scenarios for the end-2027 state of the war with probabilities, a most-likely trajectory, and at least 10 binary forecasts with probabilities and resolution criteria on verifiable outcomes (for example: a formal Russia-Ukraine ceasefire agreement enters into force before July 1, 2027; the EU lifts a majority of sanctions on Russian oil exports before 2028).",
+ "created_at": "2026-10-22T13:21:17.872800+00:00",
+ "mode": "full",
+ "rounds": 9,
+ "personas": 13,
+ "has_actors": true,
+ "research_log": {
+  "line_count": 413,
+  "source_count": 1,
+  "complete": true,
+  "event_fidelity": "summarized_progress_events"
+ },
+ "dossier_assets": [
+  "research-charts/data_imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.png",
+  "research-charts/data_fred_dtwexbgs_08f046aea85a90af.png",
+  "research-charts/data_fred_pngaseuusdm_d0cf124085ed5cfc.png",
+  "research-charts/timeline.png",
+  "research-charts/timeline.html"
+ ],
+ "report_assets": [
+  "charts/binary_forecast_dotplot.png",
+  "charts/official_indicators.png",
+  "charts/official_series_ksfkoqaeaspatkaf.png",
+  "charts/scenario_probabilities.png",
+  "charts/regional_comparison.png",
+  "charts/timeline_lanes.png",
+  "charts/worldstate_trajectory.png"
+ ],
+ "dossier_languages": {
+  "en": "dossier.md"
+ },
+ "report_languages": {
+  "en": "report.md"
+ },
+ "artifact_sha256": {
+  "research_log.txt": "635ddb7f2e86a7c5e4127c90bf7292fe2155f7a4960de778e4633a7d343cb84d",
+  "dossier.md": "c69d310d5c76e3c3a50276cf6aa914b1d7595811bb69a75175119d32b953d00b",
+  "actors.json": "0488ccfa1a4deb228ec0c66fb04bfb11366779f4b4d1b5f01c586a28e00530a9",
+  "sources.json": "f3b2064973c3ea001a7a68419a949d3ade697f340ba936db2cf36032627ac38d",
+  "ontology.json": "767333d74d04ccf924fae57f735f496f986a74192054435912b7e9908bf7d47d",
+  "graph.json": "23a3d4b66c3fd1645eab5309b82173e8baca06170115fceaa43afc3a6ccfd8ca",
+  "forum.json": "fcadc5ed542f188e6eaed551246401f0289b008f0054b4248cb7b75aa711eb55",
+  "report.md": "3df37a6bed1954ce7bba17f81841f799ca978915a565490fa98baf2405ef7d92",
+  "research-charts/data_imf_pcps_g001_poilbre_usd_m_4eabc054317d4c26.png": "fb67da9113011d605f8841e9751a40cacd117adf1d20d478114ce6e056fea334",
+  "research-charts/data_fred_dtwexbgs_08f046aea85a90af.png": "03659346749829c399e84e8a597c7708ded769e2e027a16c00ab873c935ad8c7",
+  "research-charts/data_fred_pngaseuusdm_d0cf124085ed5cfc.png": "cafd1cee25363759bc9d192b4a14293c6b28dd222f8298150fd3622d2b648613",
+  "research-charts/timeline.png": "40d78a36d55fecb4db28f9e759812e05d02be3996b53e614c0caf9e22adfcf8c",
+  "research-charts/timeline.html": "b4fca532f3348a5fd730c44df3f1a22fbb17f89af956cd3c8ab4b05306b51f68",
+  "charts/binary_forecast_dotplot.png": "c66f9787914ae02e2c7e7010e80181128a70d52b7e530ffa7d97bd427fc4477c",
+  "charts/official_indicators.png": "ed63aa8be9679988cd6165246863fc51e1cd85ff1c88a993ddebdff1351e8807",
+  "charts/official_series_ksfkoqaeaspatkaf.png": "45333c71456317d6a48081f23197263adc1bab0493e26c54645be99c24c53949",
+  "charts/scenario_probabilities.png": "8b6f300c548fa97604309665242039854252fc08a4a5e53288372b0aa0471f56",
+  "charts/regional_comparison.png": "d86a709ba4ecd0373fb65fe190d2d96b4590683293c8a5e0be5b085cd1af10fe",
+  "charts/timeline_lanes.png": "438ec296f0fc85eac4557539c3c67e7e53b9f11a0f2195ab5a5859b5ca546a23",
+  "charts/worldstate_trajectory.png": "af70929b3f40d1f1d45031ba4cf822ee11549f260b0c511ae93f7f717f0f3587"
+ },
+ "publication": {
+  "hard_passed": true,
+  "publish_passed": true,
+  "scenario_contract_valid": true,
+  "citation_coverage": 0.891,
+  "semantic_citations_passed": true,
+  "markdown_sha256": "06bc6f24ed0676b26a5f667b23c912782fb2bb04cd6dcbbdbca0e03bf7fa5b50",
+  "forecast_sha256": "96f40551d99a75658161746d131be0d1bf1ccea263ecf6c6f71e4560a875e0b2"
+ }
+}

@@ -1,0 +1,635 @@
+{
+ "entity_types": [
+  {
+   "name": "NationState",
+   "description": "Sovereign state whose decisions causally shape the war trajectory and outcomes",
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Any sovereign government (e.g., Russia, Ukraine, US, China) acting as a decision-maker in the conflict or its economic aftermath",
+   "anti_examples": [
+    "NATO as an alliance (use Coalition)",
+    "abstract 'the West'",
+    "cited news outlets"
+   ],
+   "agency_class": "sovereign_government",
+   "levers": [
+    "impose or lift sanctions",
+    "adjust military aid packages",
+    "mediate or refuse negotiations",
+    "realign energy trade policy"
+   ],
+   "attributes": [
+    {
+     "name": "state_name",
+     "type": "text",
+     "description": "Official country name"
+    },
+    {
+     "name": "war_role",
+     "type": "text",
+     "description": "Belligerent / key supporter / mediator / third party"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "High / medium / low influence on end-2027 war state"
+    }
+   ],
+   "examples": [
+    "Russia",
+    "Ukraine",
+    "United States",
+    "China",
+    "France",
+    "Turkey"
+   ]
+  },
+  {
+   "name": "InternationalOrganization",
+   "description": "Multilateral institution with collective decision leverage (EU, NATO, UN, IMF)",
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "stakeholder",
+   "selection_rule": "Multilateral bodies whose collective decisions (aid, sanctions, enlargement, financing) affect the war outcome",
+   "anti_examples": [
+    "single member states",
+    "think tanks producing reports"
+   ],
+   "agency_class": "international_org",
+   "levers": [
+    "approve or renew sanctions packages",
+    "commit enlargement decisions",
+    "authorize reconstruction financing",
+    "coordinate defense-industrial procurement"
+   ],
+   "attributes": [
+    {
+     "name": "org_scope",
+     "type": "text",
+     "description": "Security / economic / financial mandate"
+    },
+    {
+     "name": "decision_rule",
+     "type": "text",
+     "description": "Unanimity / qualified majority etc."
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "High / medium / low"
+    }
+   ],
+   "examples": [
+    "European Union",
+    "NATO",
+    "International Monetary Fund"
+   ]
+  },
+  {
+   "name": "GovernmentBody",
+   "description": "Executive agency, ministry or regulator within a state (central banks, defense ministries, energy...",
+   "archetype": "actor",
+   "simulation_tier": 2,
+   "role_class": "stakeholder",
+   "selection_rule": "Sub-state institutions with concrete policy levers (sanctions enforcement, oil-price-cap enforcement, monetary policy, arms procurement)",
+   "anti_examples": [
+    "whole states (use NationState)",
+    "advisory councils without authority"
+   ],
+   "agency_class": "regulator_agency",
+   "levers": [
+    "enforce oil price cap and shadow-fleet sanctions",
+    "set interest rates and capital controls",
+    "sign defense procurement contracts",
+    "administer mobilization policy"
+   ],
+   "attributes": [
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "Country / bloc it operates in"
+    },
+    {
+     "name": "functional_domain",
+     "type": "text",
+     "description": "Defense / finance / energy / foreign affairs"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "High / medium / low"
+    }
+   ],
+   "examples": [
+    "US Department of the Treasury (OFAC)",
+    "National Bank of Ukraine",
+    "German Federal Ministry of Defence",
+    "EU sanctions enforcement authority"
+   ]
+  },
+  {
+   "name": "PoliticalLeader",
+   "description": "Individual decision-maker (presidents, prime ministers, senior negotiators) whose choices move th...",
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Named individuals holding executive or negotiating authority over war, aid or sanctions decisions",
+   "anti_examples": [
+    "journalists and columnists",
+    "cited academic analysts",
+    "deceased historical figures"
+   ],
+   "agency_class": "individual_leader",
+   "levers": [
+    "approve or veto ceasefire terms",
+    "shift military aid levels",
+    "launch or freeze negotiation tracks",
+    "reshape domestic war mobilization politics"
+   ],
+   "attributes": [
+    {
+     "name": "full_name",
+     "type": "text",
+     "description": "Person's full name"
+    },
+    {
+     "name": "office_held",
+     "type": "text",
+     "description": "Position / office (refer by office where sensitive)"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "Pro-war-continuation / pro-negotiation / pro-escalation / aid-skeptic"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "High / medium / low"
+    }
+   ],
+   "examples": [
+    "President of Ukraine",
+    "President of the United States",
+    "President of Russia",
+    "EU High Representative for Foreign Affairs"
+   ]
+  },
+  {
+   "name": "MilitaryActor",
+   "description": "Armed forces or defense-industrial entities that determine battlefield attrition and strike tempo",
+   "archetype": "actor",
+   "simulation_tier": 2,
+   "role_class": "stakeholder",
+   "selection_rule": "Armed services, defense ministries' combat arms, and major arms producers shaping military balance",
+   "anti_examples": [
+    "abstract 'military balance'",
+    "cited military-analysis publications"
+   ],
+   "agency_class": "state_owned_enterprise",
+   "levers": [
+    "adjust offensive/defensive operations tempo",
+    "expand drone and shell production",
+    "conduct long-range strike campaigns",
+    "rotate or expand mobilized manpower"
+   ],
+   "attributes": [
+    {
+     "name": "belligerent_side",
+     "type": "text",
+     "description": "Russia / Ukraine / supporting partner"
+    },
+    {
+     "name": "capability_focus",
+     "type": "text",
+     "description": "Artillery / drones / missiles / air defense / manpower"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "High / medium / low"
+    }
+   ],
+   "examples": [
+    "Armed Forces of Ukraine",
+    "Russian Armed Forces (General Staff)",
+    "Ukrainian drone manufacturing sector",
+    "Russian defense-industrial enterprises"
+   ]
+  },
+  {
+   "name": "MarketAsset",
+   "description": "Trackable asset or price object the forecast's market implications attach to",
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "intermediary",
+   "selection_rule": "Specific tradeable assets or price benchmarks (Brent, TTF, gold, defense equity indices, CEE currencies, Ukrainian sovereign debt)",
+   "anti_examples": [
+    "abstract 'market sentiment'",
+    "war-state continuum scenarios (use Scenario)"
+   ],
+   "attributes": [
+    {
+     "name": "asset_class",
+     "type": "text",
+     "description": "Commodity / equity / FX / sovereign debt / safe haven"
+    },
+    {
+     "name": "ticker_or_benchmark",
+     "type": "text",
+     "description": "Benchmark identifier"
+    },
+    {
+     "name": "war_sensitivity",
+     "type": "text",
+     "description": "High / medium / low sensitivity to war-state shifts"
+    }
+   ],
+   "examples": [
+    "Brent crude",
+    "Dutch TTF natural gas",
+    "Gold (USD/oz)",
+    "European defense equities index",
+    "Ukrainian sovereign Eurobonds",
+    "Polish zloty (PLN)"
+   ]
+  },
+  {
+   "name": "Territory",
+   "description": "Contested or controlled geographic object whose possession defines forecast territory-held outcomes",
+   "archetype": "place_jurisdiction",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Specific regions, oblasts or front-line sectors whose control status is tracked",
+   "anti_examples": [
+    "abstract 'territorial integrity norm'",
+    "whole countries (use NationState)"
+   ],
+   "attributes": [
+    {
+     "name": "current_control",
+     "type": "text",
+     "description": "Russia-held / Ukraine-held / contested"
+    },
+    {
+     "name": "strategic_value",
+     "type": "text",
+     "description": "High / medium / low (logistics, resources, symbolism)"
+    }
+   ],
+   "examples": [
+    "Donetsk oblast front",
+    "Zaporizhzhia oblast",
+    "Kharkiv front sector",
+    "Crimea"
+   ]
+  },
+  {
+   "name": "SanctionsRegime",
+   "description": "Concrete sanctions or export-control regime treated as an institutional object that evolves over ...",
+   "archetype": "institution_rule",
+   "simulation_tier": 3,
+   "role_class": "arbiter",
+   "selection_rule": "Named sanctions packages, price caps, and export controls whose imposition/lifting is a verifiable outcome",
+   "anti_examples": [
+    "general 'economic pressure' concepts",
+    "opinion pieces about sanctions"
+   ],
+   "attributes": [
+    {
+     "name": "regime_scope",
+     "type": "text",
+     "description": "Oil / finance / technology / individuals"
+    },
+    {
+     "name": "enforcement_status",
+     "type": "text",
+     "description": "Strict / partial / eroding"
+    },
+    {
+     "name": "imposed_date",
+     "type": "text",
+     "description": "Date first imposed"
+    }
+   ],
+   "examples": [
+    "G7/EU Russian oil price cap",
+    "EU sanctions packages on Russia",
+    "US export controls on advanced semiconductors to Russia"
+   ]
+  },
+  {
+   "name": "Person",
+   "description": "Any individual person not fitting other specific person types.",
+   "attributes": [
+    {
+     "name": "full_name",
+     "type": "text",
+     "description": "Full name of the person"
+    },
+    {
+     "name": "role",
+     "type": "text",
+     "description": "Role or occupation"
+    }
+   ],
+   "examples": [
+    "ordinary citizen",
+    "anonymous netizen"
+   ]
+  },
+  {
+   "name": "Organization",
+   "description": "Any organization not fitting other specific organization types.",
+   "attributes": [
+    {
+     "name": "org_name",
+     "type": "text",
+     "description": "Name of the organization"
+    },
+    {
+     "name": "org_type",
+     "type": "text",
+     "description": "Type of organization"
+    }
+   ],
+   "examples": [
+    "small business",
+    "community group"
+   ]
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "PROVIDES_MILITARY_AID_TO",
+   "description": "State or organization supplies weapons, funding or intelligence to a belligerent",
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "Source supplies military aid to target belligerent",
+   "source_targets": [
+    {
+     "source": "NationState",
+     "target": "NationState"
+    },
+    {
+     "source": "InternationalOrganization",
+     "target": "NationState"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "aid_scale",
+     "type": "text",
+     "description": "High / medium / low volume"
+    },
+    {
+     "name": "trend",
+     "type": "text",
+     "description": "Rising / stable / declining"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Aid relationship start"
+    }
+   ]
+  },
+  {
+   "name": "IMPOSES_SANCTIONS_ON",
+   "description": "Actor imposes or enforces sanctions regime against a target state",
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "Source imposes sanctions regime on target",
+   "source_targets": [
+    {
+     "source": "NationState",
+     "target": "SanctionsRegime"
+    },
+    {
+     "source": "InternationalOrganization",
+     "target": "SanctionsRegime"
+    },
+    {
+     "source": "GovernmentBody",
+     "target": "SanctionsRegime"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "enforcement_strength",
+     "type": "text",
+     "description": "High / medium / low"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Imposition date"
+    }
+   ]
+  },
+  {
+   "name": "TARGETS",
+   "description": "Sanctions regime legally targets a state or its sectors",
+   "family": "governance",
+   "valence": "directional",
+   "direction_semantics": "Sanctions regime targets the named state economy",
+   "source_targets": [
+    {
+     "source": "SanctionsRegime",
+     "target": "NationState"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "economic_impact",
+     "type": "text",
+     "description": "High / medium / low"
+    }
+   ]
+  },
+  {
+   "name": "MEDIATES",
+   "description": "Third party mediates or guarantees a negotiation track",
+   "family": "influence",
+   "valence": "neutral",
+   "direction_semantics": "Source mediates the target negotiation track",
+   "source_targets": [],
+   "attributes": [
+    {
+     "name": "leverage_level",
+     "type": "text",
+     "description": "High / medium / low coercive leverage"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/negative disposition toward settlement"
+    }
+   ]
+  },
+  {
+   "name": "PARTICIPATES_IN",
+   "description": "Belligerent or party participates in a negotiation track",
+   "family": "alignment",
+   "valence": "transactional",
+   "direction_semantics": "Source party is a participant in the target negotiation track",
+   "source_targets": [],
+   "attributes": [
+    {
+     "name": "commitment_level",
+     "type": "text",
+     "description": "High / medium / low"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "Ceasefire-accepting / maximalist"
+    }
+   ]
+  },
+  {
+   "name": "CONTROLS",
+   "description": "Belligerent currently controls a territory object",
+   "family": "governance",
+   "valence": "directional",
+   "direction_semantics": "Source belligerent controls target territory",
+   "source_targets": [
+    {
+     "source": "NationState",
+     "target": "Territory"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "control_degree",
+     "type": "text",
+     "description": "Full / partial / contested"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Date control established"
+    }
+   ]
+  },
+  {
+   "name": "ALLIED_WITH",
+   "description": "Alignment or partnership between states and blocs",
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "Source is allied with target (symmetric alignment)",
+   "source_targets": [
+    {
+     "source": "NationState",
+     "target": "NationState"
+    },
+    {
+     "source": "InternationalOrganization",
+     "target": "NationState"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "High / medium / low"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/negative/neutral"
+    }
+   ]
+  },
+  {
+   "name": "OPPOSES",
+   "description": "Adversarial posture or proxy opposition between actors",
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "Source opposes target actor's war aims",
+   "source_targets": [
+    {
+     "source": "NationState",
+     "target": "NationState"
+    },
+    {
+     "source": "PoliticalLeader",
+     "target": "NationState"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "intensity",
+     "type": "text",
+     "description": "High / medium / low"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "negative"
+    }
+   ]
+  },
+  {
+   "name": "SUPPLIES_TO",
+   "description": "Material or dual-goods supply relationship sustaining a belligerent's war economy",
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "Source supplies materials/components to target state",
+   "source_targets": [
+    {
+     "source": "NationState",
+     "target": "NationState"
+    },
+    {
+     "source": "GovernmentBody",
+     "target": "NationState"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "supply_type",
+     "type": "text",
+     "description": "Dual-use components / energy / machine tools"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "High / medium / low volume"
+    }
+   ]
+  },
+  {
+   "name": "CAUSES_PRICE_MOVE_IN",
+   "description": "Causal edge: war-state or regime shifts transmit into asset price moves",
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "Source (war state, regime, scenario) causally drives target asset's price direction",
+   "source_targets": [
+    {
+     "source": "SanctionsRegime",
+     "target": "MarketAsset"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "positive/negative price direction"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Immediate / weeks / months"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "High / medium / low magnitude"
+    }
+   ]
+  }
+ ],
+ "analysis_summary": "该预测问题是一个地缘政治—宏观经济混合领域：核心是2027年末俄乌战争在五级连续谱上的状态定位，并外推能源价格、国防开支、制裁演化与金融市场反应。主体阵容以国家（俄、乌、美、中、欧盟核心国）、政府机构（财政部/央行/国防部）、国际组织（EU、NATO、IMF）、政治领导人及国防工业/军队为主，均为对战争结局有因果杠杆的能动主体；媒体与智库按 source 处理而不设能动类型。客体层包括可追踪市场资产（Brent、TTF、黄金、欧洲国防股、CEE货币、乌克兰主权债）、争议领土、制裁制度、谈判轨道与情景对象。关系覆盖军事援助、制裁（对抗性 + 因果约束 CAUSES/CONSTRAINS）、谈判参与/调解、领土控制、结盟/对抗、战争状态向资产价格的因果传导，全部携带 sign/lag/strength/sentiment 等可过滤属性，服务于多情景概率推演与二元预测。"
+}

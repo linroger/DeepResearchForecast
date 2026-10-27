@@ -1,0 +1,1627 @@
+{
+ "nodes": [
+  {
+   "id": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "Meta Platforms",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Meta is one of the four hyperscalers (with Amazon, Microsoft, Alphabet): 2025 capex guidance narrowed to $70–72bn (Oct 2025), 2026 guidance $130–145bn (including finance-lease principal payments), and MarketScreener's August 2026 consensus puts 2027 calendar-year capex at $185.6bn. Issued $30 billion of debt in September 2026 via SPV financing to fund the Louisiana \"Hyperion\" data center (Financial Times); I/O Fund notes whether the $185.6bn consensus fully reflects off-balance-sheet vehicles such as the Hyperion JV is unknown, so reported capex could undershoot economic buildout. Reported nuc"
+  },
+  {
+   "id": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "name": "GE Vernova",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Power equipment maker; gas turbine contracts reached 116 GW against a company target of at least 125 GW by end-2026, with slot reservations rising from 43 to 56 GW. Total backlog $176B; Q2 2026 data-center electrification orders exceeded $5B year-to-date, after Q1 2026 data center customers ordered $2.4B of electrification equipment — more than in all of 2025. CEO Scott Strazik put directional lead times on new heavy-duty turbine orders at about three years, while arguing turbines are often not a project's binding constraint. Markets containerized fast-start gas units advertised as powering a "
+  },
+  {
+   "id": "ee3e04a0-e93a-4db5-9876-7e2caa7d5ad7",
+   "name": "Financial Times",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Financial Times reported (excerpt) that Meta issued $30 billion of debt in September 2026 via SPV financing to fund the Louisiana Hyperion data center\nThe Financial Times reported on prices of bonds issued to fund prominent data centres, including Meta's debt financing."
+  },
+  {
+   "id": "ec1ff8b8-2c09-4919-ac88-70d076bf56b2",
+   "name": "Mark Mahaney",
+   "labels": [],
+   "summary": "Mark Mahaney is an analyst at Evercore ISI.\nAfter Alphabet raised its 2026 outlook in July 2026, Mark Mahaney of Evercore ISI judged it more likely that Amazon would follow with a capex guidance raise.\nAfter Alphabet raised its 2026 outlook in July 2026, Mark Mahaney of Evercore ISI judged it more likely that Microsoft would follow with a capex guidance raise.\nMark Mahaney is an analyst at Evercore ISI who judged that Amazon and Microsoft would likely follow Alphabet's July 2026 capex guidance raise, even as Amazon, Meta and Microsoft shares fell under capex scrutiny."
+  },
+  {
+   "id": "eabb1042-d3c7-46d5-877e-549f98382d7c",
+   "name": "Statista",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Per Statista, analyst estimates run as high as about $760 billion for the four hyperscalers' (including Amazon's) combined 2026 capex.\nStatista charted Big Tech's AI capital expenditure, including Meta, Alphabet, Amazon and Microsoft, reaching $760 billion in 2026."
+  },
+  {
+   "id": "e8bed785-93a5-421c-9ab4-53cd6d2c9a6f",
+   "name": "PJM Expedited Interconnection Track",
+   "labels": [
+    "GridOperator"
+   ],
+   "summary": "PJM opened the Expedited Interconnection Track on 31 Jul 2026, allowing up to 10 projects/yr (≥250 MW) in 2026–27 with GIAs in ~10 months.\nGuidance-contagion after Alphabet's capex hike, alongside PJM's Expedited Interconnection Track, pushes toward a continued datacenter buildout surge."
+  },
+  {
+   "id": "e7d9c1bc-29f5-4439-9b6a-5aee28eeb43f",
+   "name": "SemiAnalysis",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "SemiAnalysis, a research firm, argues that \"half cancelled\" framings of US datacenter pipeline risk overstate the danger because they sample the most cancellation-prone slice of the interconnection pipeline [S37].\nSemiAnalysis countered BNEF-style cancellation-risk framings, arguing that 'half cancelled' framings overstate risk by sampling the most cancellation-prone pipeline slice."
+  },
+  {
+   "id": "dd6d8be5-0176-4616-bd52-56ed00acba6d",
+   "name": "Alphabet $25 billion bond sale",
+   "labels": [
+    "MacroeconomicIndicator"
+   ],
+   "summary": "Alphabet's $25 billion bond sale had order-book coverage above 4x against a book exceeding $115 billion, per the report's threshold table"
+  },
+  {
+   "id": "da961a75-6475-4bed-802f-7204447e5928",
+   "name": "Goldman Sachs",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Research (on Aterio facility-level data) forecasts 13.6 GW US datacenter additions for 2026 and 36.3 GW for 2027, with ~60% one-year and ~50% two-year on-time rates; separately cited (with JP Morgan) \nIn August 2026, Goldman Sachs forecast big-tech AI capex of at least $1.0tn for 2027, covering Microsoft.\nGoldman Sachs capex revision data cited is based on FactSet data.\nGoldman Sachs Research used Aterio's facility-level data to forecast US datacenter additions of 13.6 GW scheduled for 2026 and 36.3 GW for 2027, versus realized 6.4 GW (2024) and 8.5 GW (2025).\nGoldman Sachs forecasts big-tech "
+  },
+  {
+   "id": "d5459f68-360f-46ae-b925-cc40801ddac7",
+   "name": "Aterio",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Goldman Sachs Research used Aterio's facility-level data to forecast US datacenter additions of 13.6 GW scheduled for 2026 and 36.3 GW for 2027, versus realized 6.4 GW (2024) and 8.5 GW (2025)."
+  },
+  {
+   "id": "d485d6d2-1395-4966-a7f1-1593244b30bd",
+   "name": "FactSet",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Goldman Sachs capex revision data cited is based on FactSet data."
+  },
+  {
+   "id": "d423d261-3145-489e-b786-720b9a54a825",
+   "name": "I/O Fund",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "I/O Fund in August 2026 characterized forecasts of AI capex of $1 trillion or more in 2027 for the big-tech group including Microsoft.\nI/O Fund in August 2026 characterized forecasts of AI capex of $1 trillion or more in 2027 for the big-tech group including Amazon.\nOn I/O Fund's derived arithmetic (August 2026), guided 2026 capex of $732.5 billion across the hyperscalers including Alphabet needs only +36.5% year over year (+$267.5 billion) to reach $1 trillion in 2027.\nI/O Fund noted that whether Meta's $185.6 billion consensus 2027 capex fully reflects off-balance-sheet vehicles such as the "
+  },
+  {
+   "id": "d3648a4c-6759-4193-84f0-ae675320bb34",
+   "name": "CNBC",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "CNBC reported that Amazon shares fell amid rising capex scrutiny after Alphabet raised its 2026 outlook in July 2026.\nCNBC reported that Meta shares fell amid rising capex scrutiny after Alphabet raised its 2026 outlook in July 2026.\nCNBC reported that Microsoft shares fell amid rising capex scrutiny after Alphabet raised its 2026 outlook in July 2026.\nCNBC reported on how much Google, Meta, Amazon and Microsoft are spending on AI (October 2025 article).\nCNBC reported in July 2026 that hyperscalers face higher capex scrutiny after Alphabet's report was panned."
+  },
+  {
+   "id": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "Microsoft",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "One of four hyperscalers (with Amazon, Alphabet, Meta) driving AI capex buildout. FY2025 capex rose 45% to $64.55 billion excluding finance leases not yet commenced; CFO Amy Hood said FY2026 growth would accelerate, implying a minimum of ~$94 billion. Calendar-2026 guidance is roughly $175 billion on an accounting-adjusted basis (counts finance leases when they commence). MarketScreener's August 2026 consensus puts 2027 capex at $207.6 billion within a $934.5 billion four-company total; JP Morgan, Goldman Sachs, Evercore, and Bank of America imply combined 2027 big-tech AI capex at or above $1"
+  },
+  {
+   "id": "cc6f14ca-a64f-4779-b92e-bb42a88acfe3",
+   "name": "Quinn Emanuel",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Quinn Emanuel published a client alert on emerging litigation risks in AI data centers, covering financing structures such as those used by Meta."
+  },
+  {
+   "id": "c770627c-c602-4b96-a521-612667e8aeb3",
+   "name": "BNEF",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "BNEF analysis of the Texas governor's 3 Aug 2026 ERCOT connection pause estimated it could delay 49.8 GW of the 253-GW US pipeline, framing the risk of the pause.\nSemiAnalysis countered BNEF-style cancellation-risk framings, arguing that 'half cancelled' framings overstate risk by sampling the most cancellation-prone pipeline slice.\nBNEF says the ERCOT pause ordered on August 3, 2026 could delay 49.8 GW and forecasts only 1.2 GW of ERCOT additions from 2Q 2026 through 1Q 2027.\nBNEF expects the ERCOT pause to last 'months'; an extension beyond that would delay beyond the 1.2 GW additions window"
+  },
+  {
+   "id": "c65141df-96e0-4cd4-aa86-644e9febbe1f",
+   "name": "Virginia load pocket",
+   "labels": [
+    "DatacenterAsset"
+   ],
+   "summary": "GE Vernova's gas turbine contracts reaching 116 GW against a target of at least 125 GW by end-2026 represent a physical bottleneck constraining datacenter capacity buildout in large load pockets such as Virginia, where load rose 9.788% year-over-year in December 2025.\nPJM wholesale prices rose 41 percent in 2026, with the gap between datacenter power demand and deployable supply in the Virginia load pocket clearing through price and delay, gating capex-to-capacity conversion."
+  },
+  {
+   "id": "c3f17144-8b84-4700-b88a-3f1f1a715735",
+   "name": "U.S. Energy Information Administration",
+   "labels": [
+    "Government"
+   ],
+   "summary": "The U.S. Energy Information Administration publishes Retail Sales of Electricity for the U.S. total commercial sector, latest value 150578.728 million kWh in 2026-07, up 6215.5814 (+4.3%) year-over-year.\nThe U.S. Energy Information Administration publishes Virginia commercial-sector retail electricity year-over-year growth, latest 9.788% in 2025-12 (+5.311 pp, within a 5-year range of -6.782% to 27.222%).\nThe U.S. Energy Information Administration publishes the year-over-year percentage change in U.S. total commercial-sector retail electricity sales, latest 4.306% in 2026-07 (+0.857 pp, within"
+  },
+  {
+   "id": "c3353e16-abf2-4ba5-be98-7be33cfea253",
+   "name": "IEA Electricity 2026 forecast",
+   "labels": [
+    "MacroeconomicIndicator"
+   ],
+   "summary": "The IEA's Electricity 2026 forecast (US electricity use adding more than 420 TWh over 2026–2030, with data centres about half of that growth) is cross-referenced against EIA's commercial-sector proxy and generation projections of 4,545 billion kWh in 2026 and 4,613 billion kWh in 2027.\nThe IEA published the \"Electricity 2026\" outlook forecasting that US electricity use adds more than 420 TWh over 2026–2030, with data centres about half of that growth."
+  },
+  {
+   "id": "bb18a2cd-3103-4cb3-9d1c-7113b157b286",
+   "name": "Berkeley Lab",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Berkeley Lab's interconnection dataset, showing over 2,060 GW of generation and storage actively seeking US transmission interconnection at end-2025 and median request-to-commercial-operation times exceeding five years for projects built in 2025, informs market and regulatory pressure on grid operators like PJM.\nLBNL's 2016 report put US datacenter growth near 3%/yr over 2010–2014, consistent with the steady US commercial retail sales series\nBerkeley Lab 'Queued Up' observed dataset documents US interconnection queues (over 2,060 GW seeking transmission interconnection at end-2025, median 5+ y"
+  },
+  {
+   "id": "bafd7199-0781-46a1-b9b9-c374c3c12d6f",
+   "name": "Evercore",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "After the Q1 2026 earnings calls, Evercore modeled combined 2027 hyperscaler capex (Alphabet, Amazon, Microsoft, Meta) above $1 trillion."
+  },
+  {
+   "id": "b4f1d90c-dc74-47a9-9e7c-d916dc8a05ac",
+   "name": "EIA Retail Sales of Electricity: U.S. total, commercial sector (year-over-year % change)",
+   "labels": [
+    "MacroeconomicIndicator"
+   ],
+   "summary": "The U.S. Energy Information Administration publishes the year-over-year percentage change in U.S. total commercial-sector retail electricity sales, latest 4.306% in 2026-07 (+0.857 pp, within a 5-year range of -2.122% to 8.715%)."
+  },
+  {
+   "id": "b20f5fb1-a660-4aa6-bbcc-e3c9ad9af2c6",
+   "name": "Reuters",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Reuters frames the October 2026 EIA Short-Term Energy Outlook as forecasting record US electricity consumption in both 2026 and 2027.\nReuters reports grid supply-chain strain relevant to GE Vernova's equipment markets, including GSU transformer lead times above 160 weeks in Q1 2026 versus a 143-week 2024 average, with utilities buying equipment five years ahead and seeking customer pre-payment."
+  },
+  {
+   "id": "ac829948-e1b9-4c1a-a348-482a751ebb5b",
+   "name": "Amy Hood",
+   "labels": [],
+   "summary": "Amy Hood is CFO of Microsoft, stating that fiscal 2026 capex growth would accelerate, implying a minimum of about $94 billion."
+  },
+  {
+   "id": "a9c2e38e-7f34-42d4-9b06-3bde195934c6",
+   "name": "Elementl Power deal",
+   "labels": [],
+   "summary": "Google has a reported 1,800 MW Elementl Power deal supporting the 2027 capex pipeline."
+  },
+  {
+   "id": "a48c716c-f28f-4294-9834-a453a0ba76dc",
+   "name": "Oklo",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "In 2026 Meta pursued nuclear firm-power deals totaling 6.6 GW with Vistra and Oklo."
+  },
+  {
+   "id": "a15a447e-af21-4af6-993d-0483b647f78a",
+   "name": "Meta up-to-6.6 GW nuclear deal by 2035",
+   "labels": [
+    "DatacenterAsset"
+   ],
+   "summary": "Meta's reported deal for up to 6.6 GW of nuclear power by 2035 supports late-decade datacenter growth, though not the 2027 increment"
+  },
+  {
+   "id": "9e34ae8b-4fd6-40bb-8baa-f05b4857f4db",
+   "name": "OpenAI",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Anchors AI demand; its compute commitments (e.g., Stargate with Oracle) underwrite external demand for the buildout.\nOpenAI-anchored commitments together with Oracle's $18 billion October 2026 Stargate debt issuance illustrate external AI demand underwriting the datacenter buildout"
+  },
+  {
+   "id": "9c01c32f-1c6a-4504-9a7e-7d496fdb977c",
+   "name": "Utility Dive",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Utility Dive reported that GE Vernova expected to end 2025 with an ~80 GW turbine backlog stretching into 2029, with slot reservations sold out through 2030 by end-2026."
+  },
+  {
+   "id": "9bc734cd-5341-49e1-8bae-37f8d5221067",
+   "name": "Constellation Energy",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Counterparty to Meta's 20-year, 1.1 GW PPA and Microsoft's Three Mile Island arrangement (~835 MW reported). Nuclear deals support late-decade growth, adding little 2027 electricity.\nConstellation Energy supplies the Illinois nuclear power plant whose entire output Meta contracted via a 20-year PPA.\nIn 2026 Microsoft and Constellation Energy inked a nuclear power pact for 835 MW to serve an AI data center."
+  },
+  {
+   "id": "993463ed-05ea-4bc9-95d3-98c71b4e7f25",
+   "name": "PJM IRAS large-load rules",
+   "labels": [
+    "GridOperator"
+   ],
+   "summary": "PJM's IRAS large-load rules effective 1 Jun 2027 require new ≥50 MW loads to bring new capacity, buy a backstop, or face curtailment.\nUnder PJM's reformed Cycle 1 (2026–2028), 201.5 GW qualified of 220 GW proposed, with 51 GW of signed GIAs held, many stalled."
+  },
+  {
+   "id": "963c66f1-d273-4145-9d1c-554e788a41a4",
+   "name": "Masanet et al., Science 2020 study",
+   "labels": [],
+   "summary": "Masanet et al. (Science 2020) estimated global data centre energy use rose modestly from 194 TWh in 2010 to 205 TWh in 2018 (~1% of world electricity), an input to the stitched record alongside IEA estimates"
+  },
+  {
+   "id": "904c6e22-9f26-4c66-b482-4ef224829b9e",
+   "name": "Vistra",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "In 2026 Meta pursued nuclear firm-power deals totaling 6.6 GW with Vistra and Oklo."
+  },
+  {
+   "id": "8a44d5aa-0a96-441c-bc32-b3310897146f",
+   "name": "Orrick's datacenter guide",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Orrick's datacenter guide cites datacenter power-interconnection delays of 5+ years, consistent with Berkeley Lab 'Queued Up' finding that median time from request to commercial operation exceeded five years for projects built in 2025.\nOrrick's November 2025 guide putting US datacenter power interconnection delays at 5+ years, against US datacenter demand growing 23% annually, is consistent with the IEA's 2025 outlook warning that around 20% of planned datacentre projects could be at risk of delay, citing transformer and cable wait times that have doubled in three years and gas turbine lead ti"
+  },
+  {
+   "id": "8984de53-c583-4e4d-8b52-cad4d6ccea1a",
+   "name": "Illinois nuclear power plant",
+   "labels": [
+    "DatacenterAsset"
+   ],
+   "summary": "Meta's 20-year PPA with Constellation covers the entire output of the Illinois nuclear power plant.\nConstellation Energy supplies the Illinois nuclear power plant whose entire output Meta contracted via a 20-year PPA."
+  },
+  {
+   "id": "860115ff-90a4-4298-b78b-02821b932281",
+   "name": "Dominion Energy",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Reported ~53.8 GW of contracted datacenter capacity in July 2026, up ~5.3 GW from December 2025; 40,000 MW of datacenter-related capacity requests as of December 2024; expects ~5.4%/yr load growth; Q3\nBerkeley Lab 'Queued Up' observed dataset documents US interconnection queues (over 2,060 GW seeking transmission interconnection at end-2025, median 5+ years request-to-operation), the generation-side constraints that frame Dominion's reported 40,000 MW of datacenter-related capacity requests as of December 2024.\nZacks summaries report Dominion's contracted pipeline of roughly 53.8 GW, with a si"
+  },
+  {
+   "id": "85194aea-6aa9-4eb2-a7fa-e4137d7195e9",
+   "name": "Evercore ISI",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Mark Mahaney is an analyst at Evercore ISI.\nMark Mahaney is an analyst at Evercore ISI who judged that Amazon and Microsoft would likely follow Alphabet's July 2026 capex guidance raise, even as Amazon, Meta and Microsoft shares fell under capex scrutiny.\nEvercore ISI (and Bank of America) model combined 2027 hyperscaler capex above $1 trillion, and its analyst Mark Mahaney judged Amazon likely to follow Alphabet's July 2026 capex raise.\nEvercore ISI models combined 2027 hyperscaler capex above $1 trillion, and its analyst Mark Mahaney judged Microsoft likely to follow Alphabet's July 2026 cap"
+  },
+  {
+   "id": "82779ea6-0485-4007-9ec7-7b91165d4530",
+   "name": "NVIDIA",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Named actor whose GPU supply shapes capex timing; not directly quantified in the report evidence."
+  },
+  {
+   "id": "7a21e25c-c98e-40f5-a54f-e33b43338e87",
+   "name": "Global datacenter electricity demand",
+   "labels": [
+    "MacroeconomicIndicator"
+   ],
+   "summary": "IEA's central projection has global datacenter electricity at 485 TWh in 2025 (+17%) roughly doubling to about 950 TWh by 2030, implying ~14% per year interpolated growth for 2027.\nGE Vernova's gas contracts reached 116 GW against a target of at least 125 GW by end-2026, making turbine/equipment supply a binding constraint on datacenter electricity growth.\nPJM wholesale prices rose 41% in 2026, with the demand-supply gap clearing through price and delay as a constraint on datacenter buildout.\nUp to 49.8 GW of capacity is ERCOT-exposed, with the ERCOT pause length a decisive driver of how much "
+  },
+  {
+   "id": "68d87434-77d2-49f6-b68f-5b4c27cde729",
+   "name": "ERCOT",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Texas governor's order of 3 Aug 2026 paused new ERCOT datacenter connections; BNEF estimates it could delay 49.8 GW of the 253-GW US pipeline and forecasts only 1.2 GW of ERCOT additions 2Q26-1Q27; pa\nFERC issued an order on large-load interconnection protocols on 18 Jun 2026 that applies to RTOs including ERCOT, with responses due 16 Nov 2026.\nThe ERCOT connection pause, ordered by the Texas governor on 3 Aug 2026, could delay 49.8 GW of the 253-GW US pipeline per BNEF, with only 1.2 GW of ERCOT additions forecast 2Q26–1Q27.\nBNEF says the ERCOT pause ordered on August 3, 2026 could delay 49.8"
+  },
+  {
+   "id": "68d52648-ba8e-4a0a-9f06-282b37fd6bf2",
+   "name": "Koomey et al., 2018 estimates",
+   "labels": [],
+   "summary": "Koomey et al. (2018) estimated US datacentres held roughly steady near 70 billion kWh per year in the mid-2010s"
+  },
+  {
+   "id": "5e889e1d-dc71-4666-a2e7-ffa9ae002170",
+   "name": "MarketScreener",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "MarketScreener's consensus (table dated August 2026, as compiled by I/O Fund) puts calendar-2027 capex for Alphabet at $284.8 billion.\nMarketScreener's consensus (table dated August 2026, as compiled by I/O Fund) puts calendar-2027 capex for Amazon at $256.5 billion.\nMarketScreener's consensus (table dated August 2026, as compiled by I/O Fund) puts calendar-2027 capex for Microsoft at $207.6 billion.\nMarketScreener's consensus (table dated August 2026, as compiled by I/O Fund) puts calendar-2027 capex for Meta at $185.6 billion, bringing the combined four-company total to $934.5 billion."
+  },
+  {
+   "id": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "name": "PJM Interconnection",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "PJM wholesale prices rose 41% in 2026 (EIA October 2026 STEO: US average $52/MWh, +11%, easing to $49/MWh in 2027), with the datacenter demand-supply gap in the Virginia load pocket clearing through price and delay. PJM cut its summer-2027 peak forecast ~4 GW (2028 by 4.4 GW) in January 2026 on stricter datacenter vetting; Dominion reported 40,000 MW of datacenter-related capacity requests as of December 2024. Opened the Expedited Interconnection Track on 31 Jul 2026 (up to 10 projects/yr ≥250 MW, GIAs in ~10 months); under reformed Cycle 1 (2026–2028), 201.5 GW of 220 GW proposed qualified wi"
+  },
+  {
+   "id": "5213eef5-8aa3-4fbe-a287-baba75ec1e34",
+   "name": "Louisiana Hyperion data center",
+   "labels": [
+    "DatacenterAsset"
+   ],
+   "summary": "Meta issued $30 billion of debt in September 2026 to fund the Louisiana \"Hyperion\" data center via SPV financing, per a Financial Times excerpt"
+  },
+  {
+   "id": "517d2499-25b5-461f-9ee0-6fe07534acb8",
+   "name": "Bank of America",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "After the Q1 2026 earnings calls, Bank of America modeled combined 2027 hyperscaler capex (Alphabet, Amazon, Microsoft, Meta) above $1 trillion.\nBank of America (with Evercore ISI) models combined 2027 hyperscaler capex for Amazon, Microsoft, Alphabet and Meta above $1 trillion, which would support the Continued buildout surge scenario.\nBank of America (with Evercore ISI) models combined 2027 hyperscaler capex for Amazon, Microsoft, Alphabet and Meta above $1 trillion, which would support the Continued buildout surge scenario."
+  },
+  {
+   "id": "49c91716-518e-4205-92eb-3b3100652a6c",
+   "name": "Wood Mackenzie",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Wood Mackenzie projects (external projection) that gas turbine prices will reach $600/kW by end-2027, nearly triple 2019 levels, amid H1 2026 GE Vernova orders tracking 10–20 points higher per kilowatt than Q4 2025 orders."
+  },
+  {
+   "id": "495bb47b-1a44-4fe3-86ca-8c827315aadd",
+   "name": "Scott Strazik",
+   "labels": [],
+   "summary": "Scott Strazik is CEO of GE Vernova, where as of Q1 2026 he put directional lead times on new heavy-duty turbine orders at about three years — an order placed in 2026 delivers after 2027 — while cautioning the turbine is often not a project's binding constraint."
+  },
+  {
+   "id": "4807257e-e52e-4cb6-a9b8-e06a37f2bc48",
+   "name": "Elementl Power",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Google reportedly signed a 1,800 MW deal with Elementl Power for nuclear power capacity."
+  },
+  {
+   "id": "3ebb0ef0-be14-4f86-80a3-26f3c8d7d66b",
+   "name": "Short-Term Energy Outlook",
+   "labels": [
+    "MacroeconomicIndicator"
+   ],
+   "summary": "EIA publishes the Short-Term Energy Outlook, which contains no standalone datacenter series; commercial-sector retail sales are the stated proxy for datacenter electricity demand.\nThe EIA Short-Term Energy Outlook publishes no standalone datacenter series; US commercial-sector retail electricity sales, which include data centers and also capture weather effects, serve as the dilute proxy.\nReuters frames the October 2026 EIA Short-Term Energy Outlook as forecasting record US electricity consumption in both 2026 and 2027.\nThe EIA published the Short-Term Energy Outlook (edition of October 6, 202"
+  },
+  {
+   "id": "3b9bcb16-039d-4f57-863d-5e901a236969",
+   "name": "ERCOT connection pause",
+   "labels": [],
+   "summary": "The ERCOT connection pause, ordered by the Texas governor on 3 Aug 2026, could delay 49.8 GW of the 253-GW US pipeline per BNEF, with only 1.2 GW of ERCOT additions forecast 2Q26–1Q27.\nBNEF analysis of the Texas governor's 3 Aug 2026 ERCOT connection pause estimated it could delay 49.8 GW of the 253-GW US pipeline, framing the risk of the pause.\nThe ERCOT connection pause (3 Aug 2026) could delay 49.8 GW of the 253-GW US pipeline, compounding grid interconnection constraints alongside PJM queue issues."
+  },
+  {
+   "id": "2fda3ccc-b987-4004-a9fa-803a77b4dae8",
+   "name": "Dominion contracted data-center pipeline",
+   "labels": [
+    "DatacenterAsset"
+   ],
+   "summary": "Dominion's contracted data-center pipeline was reported at ~53.8 GW for July 2026 (per Zacks summary), with growth monitored on each earnings call through 2027\nDominion's contracted data-center pipeline is a watch indicator: growth below ~2 GW per half-year from the ~53.8 GW reported for July 2026 would signal constraint on datacenter capacity additions\nGE Vernova's 2026 full-year total relative to 2025's full-year total is a leading indicator monitored alongside Dominion's contracted data-center pipeline growth through Q1 2027 results"
+  },
+  {
+   "id": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "name": "IEA",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "IEA 'Key Questions on Energy and AI' (2026) central projection: global datacentre electricity 485 TWh in 2025 (+17% growth, in line with projections), roughly doubling to ~950 TWh by 2030 (~3% of global electricity); AI-focused datacentre consumption grew ~50% in 2025 and triples 2025–2030. Warns value-chain bottlenecks are 'reducing the likelihood of more aggressive near-term scenarios'; rack power density rose 11x from 2020 to 2025 with a further fourfold increase set by 2027, stressing power-electronics and transformer supply chains. Prior edition 'Energy and AI' (2025, Base Case): 2024 at "
+  },
+  {
+   "id": "2d06b673-da6b-4fe0-ba69-db4055e8d26d",
+   "name": "Zacks",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Zacks summaries report Dominion's contracted pipeline of roughly 53.8 GW, with a signpost of Dominion adding ≥5 GW per half-year."
+  },
+  {
+   "id": "293ed8d3-fd5d-4ea1-9dd4-366a40e72283",
+   "name": "Dominion Energy $65B 5-year spending plan",
+   "labels": [
+    "MacroeconomicIndicator"
+   ],
+   "summary": "Dominion Energy detailed its $65B, 5-year spending plan to expand capacity for data center load growth."
+  },
+  {
+   "id": "20cfe2b2-8c57-4517-a109-7ebacf58cb63",
+   "name": "Oracle $18 billion October 2026 Stargate issuance",
+   "labels": [
+    "DatacenterAsset"
+   ],
+   "summary": "Oracle issued $18 billion in October 2026 to fund Stargate data centers, underwriting external demand for the datacenter buildout"
+  },
+  {
+   "id": "1be67da5-1857-49ea-892d-f1c62fead803",
+   "name": "Oracle",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Issued $18 billion in October 2026 for Stargate data centers; excluded from the four-company capex metric but adds to power demand and debt-market strain.\nOracle issued $18 billion in debt in October 2026 to fund Stargate data centers\nThe widely cited ~$1.65 trillion Nikkei Asia figure includes Oracle among five companies, combining uncommenced leases, commitments, guarantees and JV exposures rather than a four-company capex total\nOpenAI-anchored commitments together with Oracle's $18 billion October 2026 Stargate debt issuance illustrate external AI demand underwriting the datacenter buildout"
+  },
+  {
+   "id": "1b0c0b2e-11e4-4ad2-a1f1-8396e7c3fcc0",
+   "name": "FERC",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Issued order on large-load interconnection protocols 18 Jun 2026; RTO show-cause responses due 16 Nov 2026; relief expected after mid-2027.\nFERC protocol milestones are a signpost for PJM interconnection timing, indicating regulatory authority over PJM's interconnection processes.\nPJM's interconnection timing and GIA signings depend on FERC protocol milestones.\nFERC issued an order on large-load interconnection protocols on 18 Jun 2026 that applies to RTOs including ERCOT, with responses due 16 Nov 2026.\nFERC's June 18, 2026 order for faster large-load connection protocols pushes grid operator"
+  },
+  {
+   "id": "1ac91304-fe0f-47e3-b877-75180c336eed",
+   "name": "Nikkei Asia",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The widely cited ~$1.65 trillion Nikkei Asia figure covers five companies including Oracle and Microsoft, combining uncommenced leases, commitments, guarantees and JV exposures, and is not a four-company capex total\nThe widely cited ~$1.65 trillion Nikkei Asia figure includes Oracle among five companies, combining uncommenced leases, commitments, guarantees and JV exposures rather than a four-company capex total"
+  },
+  {
+   "id": "1a0fe741-d239-4145-bcad-4b646a6dc9e9",
+   "name": "Energy and AI",
+   "labels": [
+    "OutlookAgency"
+   ],
+   "summary": "The IEA's prior edition 'Energy and AI' (2025, Base Case) put 2024 global data centre electricity at ~415 TWh (~1.5% of global electricity) rising to ~945 TWh by 2030 (~15% per year), adding ~240 TWh in the US and ~175 TWh in China by 2030.\nThe International Energy Agency publishes the Energy and AI report (executive summary cited as a tier-1 source)."
+  },
+  {
+   "id": "16361991-8c50-4a65-9191-a6cca62a59d7",
+   "name": "Three Mile Island",
+   "labels": [
+    "DatacenterAsset"
+   ],
+   "summary": "Microsoft's Constellation/Three Mile Island arrangement supports the 2027 capex pipeline but adds little 2027 electricity."
+  },
+  {
+   "id": "16205814-b807-4e07-b9fe-4fbef91ad302",
+   "name": "Virginia",
+   "labels": [
+    "MacroeconomicIndicator"
+   ],
+   "summary": "EIA commercial-sector electricity sales for Virginia, the largest load pocket, rose 9.788% year-over-year in 2025-12 and are a key leading indicator monitored monthly.\nVirginia, the largest US datacenter load pocket, printed 9.788% year-over-year growth in commercial electricity sales in December 2025, up from 4.477% in December 2024.\nVirginia commercial retail sales exceeded 20% YoY growth in 7 of 240 months (2006-01 to 2025-12, ~2.9%), while US commercial retail sales never exceeded 20% YoY in 240 months (window max 11.042% in 2021-05)\nThe U.S. Energy Information Administration publishes the"
+  },
+  {
+   "id": "15838ea5-01fa-4e47-8349-a81621061653",
+   "name": "Chevron",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Chevron and GE Vernova have teamed up to deliver 4 GW of fast-deploy power capacity by 2027 (vendor-reported)."
+  },
+  {
+   "id": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "name": "Alphabet (Google)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Hyperscaler; 2025 capex guided at $91–93B (raised from $75–85B), 2026 guidance $195–205B, and MarketScreener's August 2026 consensus put 2027 capex at $284.8B. Its July 2026 capex guidance raise triggered 'guidance contagion': Evercore ISI's Mark Mahaney judged Amazon and Microsoft likely to follow, even as Amazon, Meta and Microsoft shares fell amid rising capex scrutiny per CNBC. Raised $25B in a 2026 bond sale against an AI-linked order book above $115B. JPMorgan and Goldman Sachs each forecast big-tech AI capex of $1 trillion or more in 2027 for a group including Alphabet. Google has a rep"
+  },
+  {
+   "id": "111ebba8-8d7a-4d8d-8122-9255c25916ca",
+   "name": "Hyperion JV",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Meta uses the Hyperion JV, an off-balance-sheet vehicle, so its reported capex could undershoot economic buildout relative to the $185.6 billion consensus."
+  },
+  {
+   "id": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "Amazon (AWS)",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Largest of the four hyperscalers by capex. Guided 2025 capex of roughly $125 billion (raised from $118 billion); 2026 guidance about $220 billion on a cash-capex basis. Four-company 2025 actual was ~$410 billion against 2026 plans of ~$725 billion, up 77%. MarketScreener's August 2026 consensus puts 2027 capex at $256.5 billion within a $934.5 billion combined total; JP Morgan and Goldman Sachs forecast ≥$1 trillion big-tech AI capex in 2027, and Evercore/Bank of America modeled combined 2027 hyperscaler capex above $1 trillion after Q1 2026 calls. After Alphabet's July 2026 raise, Evercore IS"
+  },
+  {
+   "id": "0724b619-531f-47a4-afbc-dfd35f55f68e",
+   "name": "JP Morgan",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "In August 2026, JP Morgan forecast big-tech AI capex of at least $1.0tn for 2027, covering Microsoft."
+  },
+  {
+   "id": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "name": "EIA",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "EIA publishes the Short-Term Energy Outlook (latest Oct 6, 2026), which contains no standalone datacenter series; commercial-sector retail sales, 'which includes data centers,' are the stated proxy. October 2026 STEO forecasts US commercial-sector electricity demand +2.8% YoY in 2027 (industrial +2.7%, residential roughly flat); total US generation 4,545 billion kWh in 2026 and 4,613 billion kWh in 2027 vs 4,430 in 2025; wholesale prices averaging $52/MWh in 2026 (+11%) easing to $49/MWh in 2027. 3Q26 US electricity consumption rose 4% YoY, commercial +5%, residential +6%, driven partly by a h"
+  }
+ ],
+ "links": [
+  {
+   "source": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "target": "993463ed-05ea-4bc9-95d3-98c71b4e7f25",
+   "name": "INFLUENCES",
+   "fact": "PJM's IRAS large-load rules effective 1 Jun 2027 require new ≥50 MW loads to bring new capacity, buy a backstop, or face curtailment."
+  },
+  {
+   "source": "c3f17144-8b84-4700-b88a-3f1f1a715735",
+   "target": "b4f1d90c-dc74-47a9-9e7c-d916dc8a05ac",
+   "name": "PUBLISHES",
+   "fact": "The U.S. Energy Information Administration publishes the year-over-year percentage change in U.S. total commercial-sector retail electricity sales, latest 4.306% in 2026-07 (+0.857 pp, within a 5-year range of -2.122% to 8.715%)."
+  },
+  {
+   "source": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "target": "1b0c0b2e-11e4-4ad2-a1f1-8396e7c3fcc0",
+   "name": "DEPENDS_ON",
+   "fact": "PJM's interconnection timing and GIA signings depend on FERC protocol milestones."
+  },
+  {
+   "source": "15838ea5-01fa-4e47-8349-a81621061653",
+   "target": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "name": "PARTNERS_WITH",
+   "fact": "Chevron and GE Vernova (GEV) have a 4 GW behind-the-meter fast gas partnership targeted for 2027, advertised with a '2 weeks' start."
+  },
+  {
+   "source": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "target": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Alphabet (Google) 亦称 Google"
+  },
+  {
+   "source": "da961a75-6475-4bed-802f-7204447e5928",
+   "target": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "name": "INFLUENCES",
+   "fact": "Bank forecasts >=$1T 2027 AI capex influence market expectations（sign=+，strength=0.5，valence=directional，polarity=0.40）"
+  },
+  {
+   "source": "b4f1d90c-dc74-47a9-9e7c-d916dc8a05ac",
+   "target": "68d52648-ba8e-4a0a-9f06-282b37fd6bf2",
+   "name": "CITES",
+   "fact": "Koomey et al. (2018) estimated US datacentres held roughly steady near 70 billion kWh per year in the mid-2010s"
+  },
+  {
+   "source": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "COMPETES_WITH",
+   "fact": "Amazon and Microsoft, two of the four hyperscalers, compete in AI capex buildout; 2026 guidance is about $220 billion for Amazon versus roughly $175 billion for Microsoft on an accounting-adjusted basis."
+  },
+  {
+   "source": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "target": "5213eef5-8aa3-4fbe-a287-baba75ec1e34",
+   "name": "ACCELERATES",
+   "fact": "Meta issued $30 billion of debt in September 2026 to fund the Louisiana \"Hyperion\" data center via SPV financing, per a Financial Times excerpt"
+  },
+  {
+   "source": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "target": "1a0fe741-d239-4145-bcad-4b646a6dc9e9",
+   "name": "PUBLISHES",
+   "fact": "The International Energy Agency publishes the Energy and AI report (executive summary cited as a tier-1 source)."
+  },
+  {
+   "source": "5e889e1d-dc71-4666-a2e7-ffa9ae002170",
+   "target": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "name": "FORECASTS_CAP_OF",
+   "fact": "MarketScreener's August 2026 analyst consensus table put 2027 combined hyperscaler capex at $934.5bn, with Alphabet at $284.8bn."
+  },
+  {
+   "source": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "target": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "name": "ACCELERATES",
+   "fact": "Guidance contagion after Alphabet's capex guidance hike, together with PJM's Expedited Interconnection Track, pushes toward the Continued buildout surge scenario (45%)"
+  },
+  {
+   "source": "b4f1d90c-dc74-47a9-9e7c-d916dc8a05ac",
+   "target": "16205814-b807-4e07-b9fe-4fbef91ad302",
+   "name": "MEASURED_IN",
+   "fact": "Virginia, the largest US datacenter load pocket, printed 9.788% year-over-year growth in commercial electricity sales in December 2025, up from 4.477% in December 2024."
+  },
+  {
+   "source": "1b0c0b2e-11e4-4ad2-a1f1-8396e7c3fcc0",
+   "target": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "name": "REGULATES",
+   "fact": "FERC protocol milestones are a signpost for PJM interconnection timing, indicating regulatory authority over PJM's interconnection processes."
+  },
+  {
+   "source": "b20f5fb1-a660-4aa6-bbcc-e3c9ad9af2c6",
+   "target": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "name": "INFLUENCES",
+   "fact": "Reuters reports grid supply-chain strain relevant to GE Vernova's equipment markets, including GSU transformer lead times above 160 weeks in Q1 2026 versus a 143-week 2024 average, with utilities buying equipment five years ahead and seeking customer pre-payment."
+  },
+  {
+   "source": "b4f1d90c-dc74-47a9-9e7c-d916dc8a05ac",
+   "target": "bb18a2cd-3103-4cb3-9d1c-7113b157b286",
+   "name": "CITES",
+   "fact": "LBNL's 2016 report put US datacenter growth near 3%/yr over 2010–2014, consistent with the steady US commercial retail sales series"
+  },
+  {
+   "source": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "target": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "COMPETES_WITH",
+   "fact": "Amazon and Meta, two of the four hyperscalers, compete in AI capex buildout; 2026 guidance is about $220 billion for Amazon versus $130–145 billion for Meta."
+  },
+  {
+   "source": "eabb1042-d3c7-46d5-877e-549f98382d7c",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "PUBLISHES_ESTIMATE_ABOUT",
+   "fact": "Per Statista, analyst estimates run as high as about $760 billion for the four hyperscalers' (including Amazon's) combined 2026 capex."
+  },
+  {
+   "source": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "target": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "name": "PARALLEL_AGENCY_DEMAND_OUTLOOKS",
+   "fact": "Both outlooks cluster below 20% datacenter growth for 2027（sign=+，strength=0.4，valence=neutral，polarity=0.30）"
+  },
+  {
+   "source": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "INFLUENCES",
+   "fact": "Alphabet's July 2026 capex guidance increase was judged by Evercore ISI's Mark Mahaney as likely to pull Microsoft's capex guidance up with it"
+  },
+  {
+   "source": "1ac91304-fe0f-47e3-b877-75180c336eed",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "INFLUENCES",
+   "fact": "The widely cited ~$1.65 trillion Nikkei Asia figure covers five companies including Oracle and Microsoft, combining uncommenced leases, commitments, guarantees and JV exposures, and is not a four-company capex total"
+  },
+  {
+   "source": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "target": "7a21e25c-c98e-40f5-a54f-e33b43338e87",
+   "name": "FORECASTS",
+   "fact": "IEA's central projection has global datacenter electricity at 485 TWh in 2025 (+17%) roughly doubling to about 950 TWh by 2030, implying ~14% per year interpolated growth for 2027."
+  },
+  {
+   "source": "ec1ff8b8-2c09-4919-ac88-70d076bf56b2",
+   "target": "85194aea-6aa9-4eb2-a7fa-e4137d7195e9",
+   "name": "WORKS_AT",
+   "fact": "Mark Mahaney is an analyst at Evercore ISI."
+  },
+  {
+   "source": "da961a75-6475-4bed-802f-7204447e5928",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "FORECASTS_CAP_OF",
+   "fact": "In August 2026, Goldman Sachs forecast big-tech AI capex of at least $1.0tn for 2027, covering Microsoft."
+  },
+  {
+   "source": "b4f1d90c-dc74-47a9-9e7c-d916dc8a05ac",
+   "target": "3ebb0ef0-be14-4f86-80a3-26f3c8d7d66b",
+   "name": "COVERS",
+   "fact": "The EIA Short-Term Energy Outlook publishes no standalone datacenter series; US commercial-sector retail electricity sales, which include data centers and also capture weather effects, serve as the dilute proxy."
+  },
+  {
+   "source": "9bc734cd-5341-49e1-8bae-37f8d5221067",
+   "target": "8984de53-c583-4e4d-8b52-cad4d6ccea1a",
+   "name": "SUPPLIES",
+   "fact": "Constellation Energy supplies the Illinois nuclear power plant whose entire output Meta contracted via a 20-year PPA."
+  },
+  {
+   "source": "da961a75-6475-4bed-802f-7204447e5928",
+   "target": "d485d6d2-1395-4966-a7f1-1593244b30bd",
+   "name": "USES_DATA_FROM",
+   "fact": "Goldman Sachs capex revision data cited is based on FactSet data."
+  },
+  {
+   "source": "9bc734cd-5341-49e1-8bae-37f8d5221067",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "SUPPLIES",
+   "fact": "Constellation supplies Microsoft with nuclear power under the Constellation/Three Mile Island arrangement."
+  },
+  {
+   "source": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "target": "e8bed785-93a5-421c-9ab4-53cd6d2c9a6f",
+   "name": "INFLUENCES",
+   "fact": "Guidance-contagion after Alphabet's capex hike, alongside PJM's Expedited Interconnection Track, pushes toward a continued datacenter buildout surge."
+  },
+  {
+   "source": "1b0c0b2e-11e4-4ad2-a1f1-8396e7c3fcc0",
+   "target": "860115ff-90a4-4298-b78b-02821b932281",
+   "name": "REGULATES",
+   "fact": "FERC forced six grid operators (including Dominion's interconnection processes) to comply under a 60-day clock ruling."
+  },
+  {
+   "source": "3b9bcb16-039d-4f57-863d-5e901a236969",
+   "target": "68d87434-77d2-49f6-b68f-5b4c27cde729",
+   "name": "CONSTRAINS",
+   "fact": "The ERCOT connection pause, ordered by the Texas governor on 3 Aug 2026, could delay 49.8 GW of the 253-GW US pipeline per BNEF, with only 1.2 GW of ERCOT additions forecast 2Q26–1Q27."
+  },
+  {
+   "source": "2d06b673-da6b-4fe0-ba69-db4055e8d26d",
+   "target": "860115ff-90a4-4298-b78b-02821b932281",
+   "name": "REPORTS_ON",
+   "fact": "Zacks summaries report Dominion's contracted pipeline of roughly 53.8 GW, with a signpost of Dominion adding ≥5 GW per half-year."
+  },
+  {
+   "source": "1b0c0b2e-11e4-4ad2-a1f1-8396e7c3fcc0",
+   "target": "1b0c0b2e-11e4-4ad2-a1f1-8396e7c3fcc0",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "FERC 亦称 US Federal Energy Regulatory Commission"
+  },
+  {
+   "source": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Amazon (AWS) 亦称 AWS"
+  },
+  {
+   "source": "16361991-8c50-4a65-9191-a6cca62a59d7",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "PARTNERS_WITH",
+   "fact": "Microsoft has a reported Three Mile Island nuclear PPA of ~835 MW"
+  },
+  {
+   "source": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "target": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "GE Vernova 亦称 GEV"
+  },
+  {
+   "source": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "target": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "COMPETES_WITH",
+   "fact": "Both among top capex spenders escalating 2027 plans（sign=-，strength=0.6，valence=adversarial，polarity=-0.30）"
+  },
+  {
+   "source": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "target": "9e34ae8b-4fd6-40bb-8baa-f05b4857f4db",
+   "name": "CUSTOMER_OF",
+   "fact": "Microsoft AI capacity commitments tied to OpenAI-anchored demand（sign=+，strength=0.8，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "5e889e1d-dc71-4666-a2e7-ffa9ae002170",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "FORECASTS_CAPEX_OF",
+   "fact": "MarketScreener's consensus (table dated August 2026, as compiled by I/O Fund) puts calendar-2027 capex for Amazon at $256.5 billion."
+  },
+  {
+   "source": "1b0c0b2e-11e4-4ad2-a1f1-8396e7c3fcc0",
+   "target": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "name": "REGULATES",
+   "fact": "FERC's 2026 interconnection queue reform governs the reformed interconnection process under which over 800 new generation projects seek to connect to PJM."
+  },
+  {
+   "source": "5e889e1d-dc71-4666-a2e7-ffa9ae002170",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "FORECASTS_CAPEX_OF",
+   "fact": "MarketScreener's consensus (table dated August 2026, as compiled by I/O Fund) puts calendar-2027 capex for Microsoft at $207.6 billion."
+  },
+  {
+   "source": "d3648a4c-6759-4193-84f0-ae675320bb34",
+   "target": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "REPORTS_ON",
+   "fact": "CNBC reported that Meta shares fell amid rising capex scrutiny after Alphabet raised its 2026 outlook in July 2026."
+  },
+  {
+   "source": "d3648a4c-6759-4193-84f0-ae675320bb34",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "REPORTS_ON",
+   "fact": "CNBC reported on how much Google, Meta, Amazon and Microsoft are spending on AI (October 2025 article)."
+  },
+  {
+   "source": "1b0c0b2e-11e4-4ad2-a1f1-8396e7c3fcc0",
+   "target": "68d87434-77d2-49f6-b68f-5b4c27cde729",
+   "name": "REGULATES",
+   "fact": "FERC issued an order on large-load interconnection protocols on 18 Jun 2026 that applies to RTOs including ERCOT, with responses due 16 Nov 2026."
+  },
+  {
+   "source": "d423d261-3145-489e-b786-720b9a54a825",
+   "target": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "INFLUENCES",
+   "fact": "I/O Fund noted that whether Meta's $185.6 billion consensus 2027 capex fully reflects off-balance-sheet vehicles such as the Hyperion JV is unknown, so reported capex could undershoot economic buildout"
+  },
+  {
+   "source": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "target": "c3353e16-abf2-4ba5-be98-7be33cfea253",
+   "name": "PUBLISHES",
+   "fact": "The IEA published the \"Electricity 2026\" outlook forecasting that US electricity use adds more than 420 TWh over 2026–2030, with data centres about half of that growth."
+  },
+  {
+   "source": "d423d261-3145-489e-b786-720b9a54a825",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "FORECASTS_CAP_OF",
+   "fact": "I/O Fund in August 2026 characterized forecasts of AI capex of $1 trillion or more in 2027 for the big-tech group including Amazon."
+  },
+  {
+   "source": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "target": "16361991-8c50-4a65-9191-a6cca62a59d7",
+   "name": "PARTNERS_WITH",
+   "fact": "Microsoft's Constellation/Three Mile Island arrangement supports the 2027 capex pipeline but adds little 2027 electricity."
+  },
+  {
+   "source": "0724b619-531f-47a4-afbc-dfd35f55f68e",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "FORECASTS_CAPEX_OF",
+   "fact": "JP Morgan forecasts AI capex of $1 trillion or more in 2027 for the big-tech group, as characterized by I/O Fund in August 2026."
+  },
+  {
+   "source": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "DEPENDS_ON",
+   "fact": "Microsoft's datacenter buildout depends on turbine supply; GE Vernova argues turbines are not 'gating' buildouts, with reservations reported sold out through 2030"
+  },
+  {
+   "source": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "target": "7a21e25c-c98e-40f5-a54f-e33b43338e87",
+   "name": "INFLUENCES",
+   "fact": "IEA's 2026 update warns that value-chain bottlenecks reduce the likelihood of aggressive near-term scenarios, capping global datacenter electricity growth in 2027 under 15% to over 20%."
+  },
+  {
+   "source": "b4f1d90c-dc74-47a9-9e7c-d916dc8a05ac",
+   "target": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "name": "REPORTS",
+   "fact": "EIA reported US retail electricity sales to the commercial sector of 150578.728 million kWh in July 2026 versus 144363.1467 million kWh in July 2025, with year-over-year growth of 4.306% in July 2026 and 3.448% in July 2025, within a five-year range of -2.122% to 8.715%."
+  },
+  {
+   "source": "82779ea6-0485-4007-9ec7-7b91165d4530",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "SUPPLIES",
+   "fact": "GPU supply shapes hyperscaler capex conversion to capacity（sign=+，strength=0.8，valence=transactional，polarity=0.70）"
+  },
+  {
+   "source": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "target": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "name": "PARALLEL_AGENCY_DEMAND_OUTLOOKS",
+   "fact": "The global base rate for datacentre electricity demand is stitched from IEA, LBNL and Koomey estimates, cross-referenced against EIA's US commercial retail sales series as the US proxy"
+  },
+  {
+   "source": "5e889e1d-dc71-4666-a2e7-ffa9ae002170",
+   "target": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "FORECASTS_CAP_OF",
+   "fact": "MarketScreener's August 2026 analyst consensus table put 2027 combined hyperscaler capex at $934.5bn, with Meta at $185.6bn."
+  },
+  {
+   "source": "5e889e1d-dc71-4666-a2e7-ffa9ae002170",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "FORECASTS_CAP_OF",
+   "fact": "MarketScreener's August 2026 analyst consensus table put 2027 combined hyperscaler capex at $934.5bn, with Amazon at $256.5bn."
+  },
+  {
+   "source": "0724b619-531f-47a4-afbc-dfd35f55f68e",
+   "target": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "name": "HAS_FORECAST_FOR",
+   "fact": "JPMorgan forecasts big-tech AI capex of $1 trillion or more in 2027 (a group that includes Alphabet), as characterized by I/O Fund in August 2026."
+  },
+  {
+   "source": "da961a75-6475-4bed-802f-7204447e5928",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "FORECASTS_CAPEX_OF",
+   "fact": "Goldman Sachs forecasts AI capex of $1 trillion or more in 2027 for the big-tech group, as characterized by I/O Fund in August 2026."
+  },
+  {
+   "source": "1b0c0b2e-11e4-4ad2-a1f1-8396e7c3fcc0",
+   "target": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "name": "REGULATES",
+   "fact": "FERC order 18 Jun 2026; RTO responses due 16 Nov 2026（sign=+，strength=0.8，valence=neutral，polarity=0.30）"
+  },
+  {
+   "source": "bb18a2cd-3103-4cb3-9d1c-7113b157b286",
+   "target": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "name": "INFLUENCES",
+   "fact": "Berkeley Lab's interconnection dataset, showing over 2,060 GW of generation and storage actively seeking US transmission interconnection at end-2025 and median request-to-commercial-operation times exceeding five years for projects built in 2025, informs market and regulatory pressure on grid operators like PJM."
+  },
+  {
+   "source": "c770627c-c602-4b96-a521-612667e8aeb3",
+   "target": "68d87434-77d2-49f6-b68f-5b4c27cde729",
+   "name": "INFLUENCES",
+   "fact": "BNEF expects the ERCOT pause to last 'months'; an extension beyond that would delay beyond the 1.2 GW additions window by Q1 2027"
+  },
+  {
+   "source": "b4f1d90c-dc74-47a9-9e7c-d916dc8a05ac",
+   "target": "16205814-b807-4e07-b9fe-4fbef91ad302",
+   "name": "EXCEEDS_BASE_RATE_OF",
+   "fact": "Virginia commercial retail sales exceeded 20% YoY growth in 7 of 240 months (2006-01 to 2025-12, ~2.9%), while US commercial retail sales never exceeded 20% YoY in 240 months (window max 11.042% in 2021-05)"
+  },
+  {
+   "source": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "COMPETES_WITH",
+   "fact": "Both escalate capex for AI compute; guidance moves in contagion（sign=-，strength=0.7，valence=adversarial，polarity=-0.30）"
+  },
+  {
+   "source": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "target": "860115ff-90a4-4298-b78b-02821b932281",
+   "name": "INFLUENCES",
+   "fact": "PJM cut its summer-2027 peak forecast by roughly 4 GW in January 2026 on stricter datacenter vetting, affecting datacenter load requests reported by Dominion (40,000 MW of datacenter-related capacity requests as of December 2024)."
+  },
+  {
+   "source": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "target": "1a0fe741-d239-4145-bcad-4b646a6dc9e9",
+   "name": "PUBLISHES",
+   "fact": "The IEA's prior edition 'Energy and AI' (2025, Base Case) put 2024 global data centre electricity at ~415 TWh (~1.5% of global electricity) rising to ~945 TWh by 2030 (~15% per year), adding ~240 TWh in the US and ~175 TWh in China by 2030."
+  },
+  {
+   "source": "9e34ae8b-4fd6-40bb-8baa-f05b4857f4db",
+   "target": "1be67da5-1857-49ea-892d-f1c62fead803",
+   "name": "PARTNERS_WITH",
+   "fact": "OpenAI-anchored commitments together with Oracle's $18 billion October 2026 Stargate debt issuance illustrate external AI demand underwriting the datacenter buildout"
+  },
+  {
+   "source": "5e889e1d-dc71-4666-a2e7-ffa9ae002170",
+   "target": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "name": "FORECASTS_CAPEX_OF",
+   "fact": "MarketScreener's consensus (table dated August 2026, as compiled by I/O Fund) puts calendar-2027 capex for Alphabet at $284.8 billion."
+  },
+  {
+   "source": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "target": "c65141df-96e0-4cd4-aa86-644e9febbe1f",
+   "name": "CONSTRAINS",
+   "fact": "GE Vernova's gas turbine contracts reaching 116 GW against a target of at least 125 GW by end-2026 represent a physical bottleneck constraining datacenter capacity buildout in large load pockets such as Virginia, where load rose 9.788% year-over-year in December 2025."
+  },
+  {
+   "source": "ec1ff8b8-2c09-4919-ac88-70d076bf56b2",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "PREDICTS_GUIDANCE_BY",
+   "fact": "After Alphabet raised its 2026 outlook in July 2026, Mark Mahaney of Evercore ISI judged it more likely that Microsoft would follow with a capex guidance raise."
+  },
+  {
+   "source": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "target": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "EIA 亦称 US Energy Information Administration"
+  },
+  {
+   "source": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "target": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "name": "PARALLEL_AGENCY_DEMAND_OUTLOOKS",
+   "fact": "IEA and EIA maintain parallel datacenter electricity demand outlooks: IEA projects global data centre consumption of ~415 TWh in 2024 and 485 TWh in 2025 rising to ~950 TWh by 2030, while EIA uses US commercial-sector retail sales as its datacenter proxy in the Short-Term Energy Outlook."
+  },
+  {
+   "source": "860115ff-90a4-4298-b78b-02821b932281",
+   "target": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "name": "DEPENDS_ON",
+   "fact": "PJM rules and forecasts govern Dominion's datacenter load pocket（sign=+，strength=0.7，valence=directional，polarity=0.30）"
+  },
+  {
+   "source": "9e34ae8b-4fd6-40bb-8baa-f05b4857f4db",
+   "target": "1be67da5-1857-49ea-892d-f1c62fead803",
+   "name": "ACCELERATES",
+   "fact": "Oracle issued $18 billion in debt in October 2026 to fund Stargate data centers"
+  },
+  {
+   "source": "ac829948-e1b9-4c1a-a348-482a751ebb5b",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "WORKS_AT",
+   "fact": "Amy Hood is CFO of Microsoft, stating that fiscal 2026 capex growth would accelerate, implying a minimum of about $94 billion."
+  },
+  {
+   "source": "860115ff-90a4-4298-b78b-02821b932281",
+   "target": "2fda3ccc-b987-4004-a9fa-803a77b4dae8",
+   "name": "CONSTRAINS",
+   "fact": "Dominion's contracted data-center pipeline is a watch indicator: growth below ~2 GW per half-year from the ~53.8 GW reported for July 2026 would signal constraint on datacenter capacity additions"
+  },
+  {
+   "source": "517d2499-25b5-461f-9ee0-6fe07534acb8",
+   "target": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "FORECASTS_CAPEX_OF",
+   "fact": "After the Q1 2026 earnings calls, Bank of America modeled combined 2027 hyperscaler capex (Alphabet, Amazon, Microsoft, Meta) above $1 trillion."
+  },
+  {
+   "source": "1be67da5-1857-49ea-892d-f1c62fead803",
+   "target": "9e34ae8b-4fd6-40bb-8baa-f05b4857f4db",
+   "name": "PARTNERS_WITH",
+   "fact": "Oracle's $18B Oct 2026 issuance funds Stargate data centers（sign=+，strength=0.8，valence=allied，polarity=0.80）"
+  },
+  {
+   "source": "b20f5fb1-a660-4aa6-bbcc-e3c9ad9af2c6",
+   "target": "3ebb0ef0-be14-4f86-80a3-26f3c8d7d66b",
+   "name": "REPORTS_ON",
+   "fact": "Reuters frames the October 2026 EIA Short-Term Energy Outlook as forecasting record US electricity consumption in both 2026 and 2027."
+  },
+  {
+   "source": "da961a75-6475-4bed-802f-7204447e5928",
+   "target": "d5459f68-360f-46ae-b925-cc40801ddac7",
+   "name": "PARTNERS_WITH",
+   "fact": "Goldman Sachs Research used Aterio's facility-level data to forecast US datacenter additions of 13.6 GW scheduled for 2026 and 36.3 GW for 2027, versus realized 6.4 GW (2024) and 8.5 GW (2025)."
+  },
+  {
+   "source": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "target": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "SUPPLIES",
+   "fact": "GE Vernova supplies gas power technology for data centers, including to hyperscalers like Meta, and says natural gas turbines aren't gating data center buildouts."
+  },
+  {
+   "source": "d3648a4c-6759-4193-84f0-ae675320bb34",
+   "target": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "name": "REPORTS_ON",
+   "fact": "CNBC reported in July 2026 that hyperscalers face higher capex scrutiny after Alphabet's report was panned."
+  },
+  {
+   "source": "5e889e1d-dc71-4666-a2e7-ffa9ae002170",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "INFLUENCES",
+   "fact": "MarketScreener's August 2026 consensus table forecasts calendar-2027 hyperscaler capex at a combined $934.5 billion including Amazon, a consensus that has drifted persistently upward (2026 estimates climbing from roughly $284 billion to more than $525 billion across revisions)."
+  },
+  {
+   "source": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "target": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "name": "INFLUENCES",
+   "fact": "The IEA's warning that without grid action about 20% of planned data centre projects could face delays — with transformer and cable wait times having doubled in three years — adds pressure on grid operators such as PJM, which cut its summer 2027 peak forecast by about 4 GW on stricter data center vetting."
+  },
+  {
+   "source": "ec1ff8b8-2c09-4919-ac88-70d076bf56b2",
+   "target": "85194aea-6aa9-4eb2-a7fa-e4137d7195e9",
+   "name": "WORKS_AT",
+   "fact": "Mark Mahaney is an analyst at Evercore ISI who judged that Amazon and Microsoft would likely follow Alphabet's July 2026 capex guidance raise, even as Amazon, Meta and Microsoft shares fell under capex scrutiny."
+  },
+  {
+   "source": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "target": "68d87434-77d2-49f6-b68f-5b4c27cde729",
+   "name": "CONSTRAINS",
+   "fact": "Grid and equipment bottlenecks, including GE Vernova heavy-duty gas turbine orders carrying roughly three-year lead times per its CEO, compound with Texas's audit-driven pause on new ERCOT data center connections that could alone delay 49.8 GW of demand, constraining datacenter buildout."
+  },
+  {
+   "source": "5e889e1d-dc71-4666-a2e7-ffa9ae002170",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "FORECASTS_CAP_OF",
+   "fact": "MarketScreener's August 2026 analyst consensus table put 2027 combined hyperscaler capex at $934.5bn, with Microsoft at $207.6bn."
+  },
+  {
+   "source": "c3f17144-8b84-4700-b88a-3f1f1a715735",
+   "target": "16205814-b807-4e07-b9fe-4fbef91ad302",
+   "name": "PUBLISHES",
+   "fact": "The U.S. Energy Information Administration publishes Virginia commercial-sector retail electricity year-over-year growth, latest 9.788% in 2025-12 (+5.311 pp, within a 5-year range of -6.782% to 27.222%)."
+  },
+  {
+   "source": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "SUPPLIES",
+   "fact": "GE Vernova supplies gas turbines and electrification equipment supporting hyperscaler datacenter buildout, with datacenter electrification orders above $5 billion year-to-date as of July 22, 2026 and gas backlog plus slot reservations of 116 GW in Q2 2026, targeting at least 125 GW under contract by end-2026."
+  },
+  {
+   "source": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "target": "16205814-b807-4e07-b9fe-4fbef91ad302",
+   "name": "MEASURED_IN",
+   "fact": "EIA commercial-sector electricity sales for Virginia, the largest load pocket, rose 9.788% year-over-year in 2025-12 and are a key leading indicator monitored monthly."
+  },
+  {
+   "source": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "target": "4807257e-e52e-4cb6-a9b8-e06a37f2bc48",
+   "name": "PARTNERS_WITH",
+   "fact": "Google reportedly signed a 1,800 MW deal with Elementl Power for nuclear power capacity."
+  },
+  {
+   "source": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "target": "e8bed785-93a5-421c-9ab4-53cd6d2c9a6f",
+   "name": "ACCELERATES",
+   "fact": "PJM opened the Expedited Interconnection Track on 31 Jul 2026, allowing up to 10 projects/yr (≥250 MW) in 2026–27 with GIAs in ~10 months."
+  },
+  {
+   "source": "1b0c0b2e-11e4-4ad2-a1f1-8396e7c3fcc0",
+   "target": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "name": "REGULATES",
+   "fact": "FERC's November 16, 2026 responses will determine the direction of PJM's IRAS curtailment regime, which starts June 1, 2027 and turns queue friction into slipped datacenter capacity."
+  },
+  {
+   "source": "d3648a4c-6759-4193-84f0-ae675320bb34",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "REPORTS_ON",
+   "fact": "CNBC reported that Microsoft shares fell amid rising capex scrutiny after Alphabet raised its 2026 outlook in July 2026."
+  },
+  {
+   "source": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "target": "a15a447e-af21-4af6-993d-0483b647f78a",
+   "name": "PARTNERS_WITH",
+   "fact": "Meta's reported deal for up to 6.6 GW of nuclear power by 2035 supports late-decade datacenter growth, though not the 2027 increment"
+  },
+  {
+   "source": "c3353e16-abf2-4ba5-be98-7be33cfea253",
+   "target": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "name": "PARALLEL_AGENCY_DEMAND_OUTLOOKS",
+   "fact": "The IEA's Electricity 2026 forecast (US electricity use adding more than 420 TWh over 2026–2030, with data centres about half of that growth) is cross-referenced against EIA's commercial-sector proxy and generation projections of 4,545 billion kWh in 2026 and 4,613 billion kWh in 2027."
+  },
+  {
+   "source": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "target": "16205814-b807-4e07-b9fe-4fbef91ad302",
+   "name": "PUBLISHES",
+   "fact": "The U.S. Energy Information Administration publishes the official series 'EIA: Retail Sales of Electricity: Virginia, commercial sector (year-over-year % change)', whose latest observation was up from a year earlier."
+  },
+  {
+   "source": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "target": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Meta Platforms 亦称 Meta"
+  },
+  {
+   "source": "b4f1d90c-dc74-47a9-9e7c-d916dc8a05ac",
+   "target": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "name": "INFLUENCES",
+   "fact": "The IEA's central projection ('Key Questions on Energy and AI', 2026) of 485 TWh in 2025 roughly doubling to about 950 TWh by 2030 shapes government and market expectations of demand growth, against observed EIA commercial-sector sales growth of 4.306% year-over-year in July 2026."
+  },
+  {
+   "source": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "target": "3ebb0ef0-be14-4f86-80a3-26f3c8d7d66b",
+   "name": "PUBLISHES",
+   "fact": "The EIA published the Short-Term Energy Outlook (edition of October 6, 2026) forecasting US commercial-sector demand up 2.8% year-over-year in 2027."
+  },
+  {
+   "source": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "target": "9bc734cd-5341-49e1-8bae-37f8d5221067",
+   "name": "PARTNERS_WITH",
+   "fact": "In 2026 Microsoft and Constellation Energy inked a nuclear power pact for 835 MW to serve an AI data center."
+  },
+  {
+   "source": "bb18a2cd-3103-4cb3-9d1c-7113b157b286",
+   "target": "860115ff-90a4-4298-b78b-02821b932281",
+   "name": "INFLUENCES",
+   "fact": "Berkeley Lab 'Queued Up' observed dataset documents US interconnection queues (over 2,060 GW seeking transmission interconnection at end-2025, median 5+ years request-to-operation), the generation-side constraints that frame Dominion's reported 40,000 MW of datacenter-related capacity requests as of December 2024."
+  },
+  {
+   "source": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "target": "904c6e22-9f26-4c66-b482-4ef224829b9e",
+   "name": "PARTNERS_WITH",
+   "fact": "In 2026 Meta pursued nuclear firm-power deals totaling 6.6 GW with Vistra and Oklo."
+  },
+  {
+   "source": "5e889e1d-dc71-4666-a2e7-ffa9ae002170",
+   "target": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "FORECASTS_CAPEX_OF",
+   "fact": "MarketScreener's consensus (table dated August 2026, as compiled by I/O Fund) puts calendar-2027 capex for Meta at $185.6 billion, bringing the combined four-company total to $934.5 billion."
+  },
+  {
+   "source": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "COMPETES_WITH",
+   "fact": "Alphabet and Microsoft, two of the four hyperscalers, compete in AI capex buildout; 2026 guidance is $195–205 billion for Alphabet versus roughly $175 billion for Microsoft."
+  },
+  {
+   "source": "49c91716-518e-4205-92eb-3b3100652a6c",
+   "target": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "name": "FORECASTS_PRICES_FOR",
+   "fact": "Wood Mackenzie projects (external projection) that gas turbine prices will reach $600/kW by end-2027, nearly triple 2019 levels, amid H1 2026 GE Vernova orders tracking 10–20 points higher per kilowatt than Q4 2025 orders."
+  },
+  {
+   "source": "9e34ae8b-4fd6-40bb-8baa-f05b4857f4db",
+   "target": "1be67da5-1857-49ea-892d-f1c62fead803",
+   "name": "DEPENDS_ON",
+   "fact": "OpenAI anchors Stargate demand underwriting Oracle's buildout（sign=+，strength=0.8，valence=directional，polarity=0.70）"
+  },
+  {
+   "source": "16361991-8c50-4a65-9191-a6cca62a59d7",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "CUSTOMER_OF",
+   "fact": "Microsoft has an arrangement with Constellation tied to the Three Mile Island nuclear plant for power supply."
+  },
+  {
+   "source": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "PUBLISHES_ESTIMATE_ABOUT",
+   "fact": "The IEA states that combined capex of the largest tech companies (including Microsoft) exceeded USD 400 billion in 2025 and is expected to jump by another 75% in 2026."
+  },
+  {
+   "source": "bafd7199-0781-46a1-b9b9-c374c3c12d6f",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "MODELS_CAP_OF",
+   "fact": "After the Q1 2026 earnings calls, Evercore and Bank of America modeled combined 2027 hyperscaler capex above $1 trillion, covering Amazon."
+  },
+  {
+   "source": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "target": "993463ed-05ea-4bc9-95d3-98c71b4e7f25",
+   "name": "REGULATES",
+   "fact": "Under PJM's reformed Cycle 1 (2026–2028), 201.5 GW qualified of 220 GW proposed, with 51 GW of signed GIAs held, many stalled."
+  },
+  {
+   "source": "82779ea6-0485-4007-9ec7-7b91165d4530",
+   "target": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "name": "SUPPLIES",
+   "fact": "Alphabet's TPU-driven buildout complements GPU sourcing（sign=+，strength=0.5，valence=transactional，polarity=0.50）"
+  },
+  {
+   "source": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "COMPETES_WITH",
+   "fact": "Meta and Microsoft, two of the four hyperscalers, compete in AI capex buildout; 2026 guidance is $130–145 billion for Meta versus roughly $175 billion for Microsoft."
+  },
+  {
+   "source": "d423d261-3145-489e-b786-720b9a54a825",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "FORECASTS_CAP_OF",
+   "fact": "I/O Fund in August 2026 characterized forecasts of AI capex of $1 trillion or more in 2027 for the big-tech group including Microsoft."
+  },
+  {
+   "source": "ee3e04a0-e93a-4db5-9876-7e2caa7d5ad7",
+   "target": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "INFLUENCES",
+   "fact": "Financial Times reported (excerpt) that Meta issued $30 billion of debt in September 2026 via SPV financing to fund the Louisiana Hyperion data center"
+  },
+  {
+   "source": "1b0c0b2e-11e4-4ad2-a1f1-8396e7c3fcc0",
+   "target": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "name": "REGULATES",
+   "fact": "FERC's June 18, 2026 order for faster large-load connection protocols pushes grid operators like PJM toward expedited interconnection, complementing PJM's Expedited Interconnection Track with agreements expected in roughly 10 months."
+  },
+  {
+   "source": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "SUPPLIES",
+   "fact": "GE Vernova supplies grid and power equipment to the datacenter buildout, with datacenter electrification orders above $5 billion year-to-date as of its July 22, 2026 release (more than double the 2025 total), total backlog of $176 billion, and gas backlog plus slot reservations growing from 100 GW to 116 GW in Q2 2026 with at least 125 GW expected under contract by end-2026."
+  },
+  {
+   "source": "da961a75-6475-4bed-802f-7204447e5928",
+   "target": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "name": "HAS_FORECAST_FOR",
+   "fact": "Goldman Sachs forecasts big-tech AI capex of $1 trillion or more in 2027 (a group that includes Alphabet), as characterized by I/O Fund in August 2026."
+  },
+  {
+   "source": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "INFLUENCES",
+   "fact": "Alphabet's July 2026 raise of its 2026 capex outlook influenced Amazon, with Evercore ISI's Mark Mahaney judging Amazon likely to follow with a similar raise."
+  },
+  {
+   "source": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "target": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "COMPETES_WITH",
+   "fact": "Alphabet and Meta, two of the four hyperscalers, compete in AI capex buildout; 2026 guidance is $195–205 billion for Alphabet versus $130–145 billion for Meta."
+  },
+  {
+   "source": "85194aea-6aa9-4eb2-a7fa-e4137d7195e9",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "INFLUENCES",
+   "fact": "Evercore ISI models combined 2027 hyperscaler capex above $1 trillion, and its analyst Mark Mahaney judged Microsoft likely to follow Alphabet's July 2026 capex raise."
+  },
+  {
+   "source": "eabb1042-d3c7-46d5-877e-549f98382d7c",
+   "target": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "REPORTS_ON",
+   "fact": "Statista charted Big Tech's AI capital expenditure, including Meta, Alphabet, Amazon and Microsoft, reaching $760 billion in 2026."
+  },
+  {
+   "source": "68d87434-77d2-49f6-b68f-5b4c27cde729",
+   "target": "7a21e25c-c98e-40f5-a54f-e33b43338e87",
+   "name": "CONSTRAINS",
+   "fact": "Up to 49.8 GW of capacity is ERCOT-exposed, with the ERCOT pause length a decisive driver of how much US datacenter capacity is delayed into 2028."
+  },
+  {
+   "source": "517d2499-25b5-461f-9ee0-6fe07534acb8",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "INFLUENCES",
+   "fact": "Bank of America (with Evercore ISI) models combined 2027 hyperscaler capex for Amazon, Microsoft, Alphabet and Meta above $1 trillion, which would support the Continued buildout surge scenario."
+  },
+  {
+   "source": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "target": "860115ff-90a4-4298-b78b-02821b932281",
+   "name": "SUPPLIES",
+   "fact": "GE Vernova slot reservations stalling near 56 GW or data-center electrification orders below 2025's full-year total by Q1 2027 results would shift the outlook"
+  },
+  {
+   "source": "ec1ff8b8-2c09-4919-ac88-70d076bf56b2",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "PREDICTS_GUIDANCE_BY",
+   "fact": "After Alphabet raised its 2026 outlook in July 2026, Mark Mahaney of Evercore ISI judged it more likely that Amazon would follow with a capex guidance raise."
+  },
+  {
+   "source": "b4f1d90c-dc74-47a9-9e7c-d916dc8a05ac",
+   "target": "3ebb0ef0-be14-4f86-80a3-26f3c8d7d66b",
+   "name": "FORECASTS",
+   "fact": "The October 2026 EIA Short-Term Energy Outlook forecasts 2.8% US commercial-sector electricity sales growth for 2027."
+  },
+  {
+   "source": "cc6f14ca-a64f-4779-b92e-bb42a88acfe3",
+   "target": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "REPORTS_ON",
+   "fact": "Quinn Emanuel published a client alert on emerging litigation risks in AI data centers, covering financing structures such as those used by Meta."
+  },
+  {
+   "source": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "target": "9bc734cd-5341-49e1-8bae-37f8d5221067",
+   "name": "PARTNERS_WITH",
+   "fact": "Reported Constellation/Three Mile Island arrangement（sign=+，strength=0.6，valence=transactional，polarity=0.70）"
+  },
+  {
+   "source": "517d2499-25b5-461f-9ee0-6fe07534acb8",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "INFLUENCES",
+   "fact": "Bank of America (with Evercore ISI) models combined 2027 hyperscaler capex for Amazon, Microsoft, Alphabet and Meta above $1 trillion, which would support the Continued buildout surge scenario."
+  },
+  {
+   "source": "517d2499-25b5-461f-9ee0-6fe07534acb8",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "MODELS_CAP_OF",
+   "fact": "After the Q1 2026 earnings calls, Evercore and Bank of America modeled combined 2027 hyperscaler capex above $1 trillion, covering Amazon."
+  },
+  {
+   "source": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "target": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "name": "PARALLEL_AGENCY_DEMAND_OUTLOOKS",
+   "fact": "The IEA's warning that bottlenecks reduce the likelihood of aggressive near-term scenarios is set alongside EIA's commercial proxy growth of 2.8% in 2027 and July 2026 US commercial sales of 150,578.728 million kWh (+4.306% YoY) in the Measured growth plateau scenario."
+  },
+  {
+   "source": "2d06b673-da6b-4fe0-ba69-db4055e8d26d",
+   "target": "860115ff-90a4-4298-b78b-02821b932281",
+   "name": "REPORTS_ON",
+   "fact": "Zacks summaries report Dominion's contracted pipeline of roughly 53.8 GW, supporting the continued-buildout path for datacenter load growth."
+  },
+  {
+   "source": "c770627c-c602-4b96-a521-612667e8aeb3",
+   "target": "3b9bcb16-039d-4f57-863d-5e901a236969",
+   "name": "INFLUENCES",
+   "fact": "BNEF analysis of the Texas governor's 3 Aug 2026 ERCOT connection pause estimated it could delay 49.8 GW of the 253-GW US pipeline, framing the risk of the pause."
+  },
+  {
+   "source": "8a44d5aa-0a96-441c-bc32-b3310897146f",
+   "target": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "name": "CORROBORATES",
+   "fact": "Orrick's November 2025 guide putting US datacenter power interconnection delays at 5+ years, against US datacenter demand growing 23% annually, is consistent with the IEA's 2025 outlook warning that around 20% of planned datacentre projects could be at risk of delay, citing transformer and cable wait times that have doubled in three years and gas turbine lead times of several years."
+  },
+  {
+   "source": "963c66f1-d273-4145-9d1c-554e788a41a4",
+   "target": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "name": "PRECEDS",
+   "fact": "Masanet et al. (Science 2020) estimated global data centre energy use rose modestly from 194 TWh in 2010 to 205 TWh in 2018 (~1% of world electricity), an input to the stitched record alongside IEA estimates"
+  },
+  {
+   "source": "c770627c-c602-4b96-a521-612667e8aeb3",
+   "target": "68d87434-77d2-49f6-b68f-5b4c27cde729",
+   "name": "FORECASTS",
+   "fact": "BNEF says the ERCOT pause ordered on August 3, 2026 could delay 49.8 GW and forecasts only 1.2 GW of ERCOT additions from 2Q 2026 through 1Q 2027."
+  },
+  {
+   "source": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "target": "3ebb0ef0-be14-4f86-80a3-26f3c8d7d66b",
+   "name": "PUBLISHES",
+   "fact": "EIA publishes the Short-Term Energy Outlook, which contains no standalone datacenter series; commercial-sector retail sales are the stated proxy for datacenter electricity demand."
+  },
+  {
+   "source": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "target": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "SUPPLIES",
+   "fact": "GE Vernova markets aeroderivative and containerized units advertised as powering a data center site in 2 weeks, a fast-deploy option for buyers like hyperscalers such as Meta."
+  },
+  {
+   "source": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "target": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "name": "SUPPLIES",
+   "fact": "GE Vernova's power equipment orders surged to record levels as data center demand tightens turbine slots through 2030, supplying generation for grid operators like PJM's queue."
+  },
+  {
+   "source": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "target": "a9c2e38e-7f34-42d4-9b06-3bde195934c6",
+   "name": "PARTNERS_WITH",
+   "fact": "Google has a reported 1,800 MW Elementl Power deal supporting the 2027 capex pipeline."
+  },
+  {
+   "source": "dd6d8be5-0176-4616-bd52-56ed00acba6d",
+   "target": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "name": "HAS_ATTRIBUTE",
+   "fact": "Alphabet's $25 billion bond sale had order-book coverage above 4x against a book exceeding $115 billion, per the report's threshold table"
+  },
+  {
+   "source": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "target": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "name": "COMPETES_WITH",
+   "fact": "Amazon and Alphabet, two of the four hyperscalers, compete in AI capacity capex buildout; Amazon guided 2025 capex of roughly $125 billion (raised from $118 billion) versus Alphabet's $91–93 billion (raised from $75–85 billion), and 2026 guidance of about $220 billion versus Alphabet's $195–205 billion."
+  },
+  {
+   "source": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "target": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "name": "PARALLEL_AGENCY_DEMAND_OUTLOOKS",
+   "fact": "The IEA and EIA publish parallel demand outlooks: the IEA projects global datacentre consumption reaching ~950 TWh by 2030 while the EIA STEO forecasts US commercial-sector electricity demand (a datacenter-inclusive proxy) growing 2.8% in 2027, with the IEA's Electricity 2026 implying US datacentre additions averaging over 40 TWh per year through 2030."
+  },
+  {
+   "source": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "target": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "PJM Interconnection 亦称 PJM"
+  },
+  {
+   "source": "3b9bcb16-039d-4f57-863d-5e901a236969",
+   "target": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "name": "CONSTRAINS",
+   "fact": "The ERCOT connection pause (3 Aug 2026) could delay 49.8 GW of the 253-GW US pipeline, compounding grid interconnection constraints alongside PJM queue issues."
+  },
+  {
+   "source": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "target": "9bc734cd-5341-49e1-8bae-37f8d5221067",
+   "name": "CUSTOMER_OF",
+   "fact": "Reported Meta-Constellation PPA（sign=+，strength=0.6，valence=transactional，polarity=0.70）"
+  },
+  {
+   "source": "85194aea-6aa9-4eb2-a7fa-e4137d7195e9",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "INFLUENCES",
+   "fact": "Evercore ISI (and Bank of America) model combined 2027 hyperscaler capex above $1 trillion, and its analyst Mark Mahaney judged Amazon likely to follow Alphabet's July 2026 capex raise."
+  },
+  {
+   "source": "1be67da5-1857-49ea-892d-f1c62fead803",
+   "target": "20cfe2b2-8c57-4517-a109-7ebacf58cb63",
+   "name": "ACCELERATES",
+   "fact": "Oracle issued $18 billion in October 2026 to fund Stargate data centers, underwriting external demand for the datacenter buildout"
+  },
+  {
+   "source": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "COMPETES_WITH",
+   "fact": "Parallel aggressive capex escalation（sign=-，strength=0.6，valence=adversarial，polarity=-0.30）"
+  },
+  {
+   "source": "860115ff-90a4-4298-b78b-02821b932281",
+   "target": "293ed8d3-fd5d-4ea1-9dd4-366a40e72283",
+   "name": "ACCELERATES",
+   "fact": "Dominion Energy detailed its $65B, 5-year spending plan to expand capacity for data center load growth."
+  },
+  {
+   "source": "b4f1d90c-dc74-47a9-9e7c-d916dc8a05ac",
+   "target": "c3f17144-8b84-4700-b88a-3f1f1a715735",
+   "name": "PUBLISHES",
+   "fact": "The U.S. Energy Information Administration publishes Retail Sales of Electricity for the U.S. total commercial sector, latest value 150578.728 million kWh in 2026-07, up 6215.5814 (+4.3%) year-over-year."
+  },
+  {
+   "source": "bafd7199-0781-46a1-b9b9-c374c3c12d6f",
+   "target": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "name": "FORECASTS_CAPEX_OF",
+   "fact": "After the Q1 2026 earnings calls, Evercore modeled combined 2027 hyperscaler capex (Alphabet, Amazon, Microsoft, Meta) above $1 trillion."
+  },
+  {
+   "source": "8a44d5aa-0a96-441c-bc32-b3310897146f",
+   "target": "bb18a2cd-3103-4cb3-9d1c-7113b157b286",
+   "name": "CITES",
+   "fact": "Orrick's datacenter guide cites datacenter power-interconnection delays of 5+ years, consistent with Berkeley Lab 'Queued Up' finding that median time from request to commercial operation exceeded five years for projects built in 2025."
+  },
+  {
+   "source": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "target": "a48c716c-f28f-4294-9834-a453a0ba76dc",
+   "name": "PARTNERS_WITH",
+   "fact": "In 2026 Meta pursued nuclear firm-power deals totaling 6.6 GW with Vistra and Oklo."
+  },
+  {
+   "source": "b4f1d90c-dc74-47a9-9e7c-d916dc8a05ac",
+   "target": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "name": "PUBLISHES",
+   "fact": "The U.S. Energy Information Administration publishes the series EIA: Retail Sales of Electricity: U.S. total, commercial sector."
+  },
+  {
+   "source": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "target": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "name": "DEPENDS_ON",
+   "fact": "Turbine slots effectively closed for 2027 delivery; hyperscalers depend on backlog conversion（sign=+，strength=0.7，valence=directional，polarity=0.50）"
+  },
+  {
+   "source": "15838ea5-01fa-4e47-8349-a81621061653",
+   "target": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "name": "PARTNERS_WITH",
+   "fact": "Chevron and GE Vernova have teamed up to deliver 4 GW of fast-deploy power capacity by 2027 (vendor-reported)."
+  },
+  {
+   "source": "b4f1d90c-dc74-47a9-9e7c-d916dc8a05ac",
+   "target": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "name": "PUBLISHES",
+   "fact": "The U.S. Energy Information Administration publishes the series EIA: Retail Sales of Electricity: U.S. total, commercial sector (year-over-year % change)."
+  },
+  {
+   "source": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "target": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "IEA 亦称 International Energy Agency"
+  },
+  {
+   "source": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "target": "111ebba8-8d7a-4d8d-8122-9255c25916ca",
+   "name": "PARTNERS_WITH",
+   "fact": "Meta uses the Hyperion JV, an off-balance-sheet vehicle, so its reported capex could undershoot economic buildout relative to the $185.6 billion consensus."
+  },
+  {
+   "source": "1a0fe741-d239-4145-bcad-4b646a6dc9e9",
+   "target": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "name": "PUBLISHES",
+   "fact": "The IEA's most recent outlook 'Key Questions on Energy and AI' (2026) states global data centre electricity consumption was 485 TWh in 2025, roughly doubling to about 950 TWh in 2030 (~3% of global electricity demand), with 2025 demand growth of 17% and AI-focused data centre consumption tripling between 2025 and 2030."
+  },
+  {
+   "source": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "target": "8984de53-c583-4e4d-8b52-cad4d6ccea1a",
+   "name": "CUSTOMER_OF",
+   "fact": "Meta's 20-year PPA with Constellation covers the entire output of the Illinois nuclear power plant."
+  },
+  {
+   "source": "d3648a4c-6759-4193-84f0-ae675320bb34",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "REPORTS_ON",
+   "fact": "CNBC reported that Amazon shares fell amid rising capex scrutiny after Alphabet raised its 2026 outlook in July 2026."
+  },
+  {
+   "source": "e7d9c1bc-29f5-4439-9b6a-5aee28eeb43f",
+   "target": "c770627c-c602-4b96-a521-612667e8aeb3",
+   "name": "INFLUENCES",
+   "fact": "SemiAnalysis countered BNEF-style cancellation-risk framings, arguing that 'half cancelled' framings overstate risk by sampling the most cancellation-prone pipeline slice."
+  },
+  {
+   "source": "b4f1d90c-dc74-47a9-9e7c-d916dc8a05ac",
+   "target": "2e011cbd-5abe-40d1-bbcf-8630ef345373",
+   "name": "PARALLEL_AGENCY_DEMAND_OUTLOOKS",
+   "fact": "The IEA's central projection of 485 TWh datacenter electricity consumption in 2025 growing to about 950 TWh by 2030 is cross-referenced against observed EIA retail sales data, which showed US total commercial sector electricity sales up 4.306% year-over-year in July 2026, indicating strain rather than surge."
+  },
+  {
+   "source": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "Amazon (AWS) 亦称 Amazon"
+  },
+  {
+   "source": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "target": "2fda3ccc-b987-4004-a9fa-803a77b4dae8",
+   "name": "ACCELERATES",
+   "fact": "GE Vernova's 2026 full-year total relative to 2025's full-year total is a leading indicator monitored alongside Dominion's contracted data-center pipeline growth through Q1 2027 results"
+  },
+  {
+   "source": "1ac91304-fe0f-47e3-b877-75180c336eed",
+   "target": "1be67da5-1857-49ea-892d-f1c62fead803",
+   "name": "INFLUENCES",
+   "fact": "The widely cited ~$1.65 trillion Nikkei Asia figure includes Oracle among five companies, combining uncommenced leases, commitments, guarantees and JV exposures rather than a four-company capex total"
+  },
+  {
+   "source": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "target": "c65141df-96e0-4cd4-aa86-644e9febbe1f",
+   "name": "CONSTRAINS",
+   "fact": "PJM wholesale prices rose 41 percent in 2026, with the gap between datacenter power demand and deployable supply in the Virginia load pocket clearing through price and delay, gating capex-to-capacity conversion."
+  },
+  {
+   "source": "9c01c32f-1c6a-4504-9a7e-7d496fdb977c",
+   "target": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "name": "REPORTS_ON",
+   "fact": "Utility Dive reported that GE Vernova expected to end 2025 with an ~80 GW turbine backlog stretching into 2029, with slot reservations sold out through 2030 by end-2026."
+  },
+  {
+   "source": "b4f1d90c-dc74-47a9-9e7c-d916dc8a05ac",
+   "target": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "name": "FORECASTS",
+   "fact": "The EIA Short-Term Energy Outlook of October 6, 2026 forecasts US commercial-sector electricity demand (which includes data centers) to grow 2.8% year-over-year in 2027."
+  },
+  {
+   "source": "15838ea5-01fa-4e47-8349-a81621061653",
+   "target": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "name": "PARTNERS_WITH",
+   "fact": "GE Vernova's marketing claims a partnership with Chevron to deliver 4 GW of power by 2027, using containerized fast-start gas units advertised as powering a site in \"2 weeks\"."
+  },
+  {
+   "source": "495bb47b-1a44-4fe3-86ca-8c827315aadd",
+   "target": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "name": "EXECUTIVE_OF",
+   "fact": "Scott Strazik is CEO of GE Vernova, where as of Q1 2026 he put directional lead times on new heavy-duty turbine orders at about three years — an order placed in 2026 delivers after 2027 — while cautioning the turbine is often not a project's binding constraint."
+  },
+  {
+   "source": "0724b619-531f-47a4-afbc-dfd35f55f68e",
+   "target": "d177213a-7ae8-45a2-8b44-9b91361fa78b",
+   "name": "FORECASTS_CAP_OF",
+   "fact": "In August 2026, JP Morgan forecast big-tech AI capex of at least $1.0tn for 2027, covering Microsoft."
+  },
+  {
+   "source": "ee3e04a0-e93a-4db5-9876-7e2caa7d5ad7",
+   "target": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "REPORTS_ON",
+   "fact": "The Financial Times reported on prices of bonds issued to fund prominent data centres, including Meta's debt financing."
+  },
+  {
+   "source": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "target": "0b0d4fc9-80cd-4e25-93bb-10a42c3beefb",
+   "name": "COMPETES_WITH",
+   "fact": "Alphabet's July 2026 raise expected to pull Amazon and Microsoft up (Evercore ISI)（sign=-，strength=0.7，valence=adversarial，polarity=-0.30）"
+  },
+  {
+   "source": "04567bea-a50c-4df3-a8ff-d6fa24ca5280",
+   "target": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "name": "REPORTS_ON",
+   "fact": "The EIA October 2026 STEO reports wholesale prices averaging $52/MWh in 2026 (+11%), with PJM up 41%, easing to $49/MWh in 2027."
+  },
+  {
+   "source": "1b0c0b2e-11e4-4ad2-a1f1-8396e7c3fcc0",
+   "target": "68d87434-77d2-49f6-b68f-5b4c27cde729",
+   "name": "INFLUENCES",
+   "fact": "Both subject to federal large-load protocol agenda（sign=+，strength=0.4，valence=neutral，polarity=0.20）"
+  },
+  {
+   "source": "5714ad4d-5df1-42b0-a04b-53bb1df52ad0",
+   "target": "7a21e25c-c98e-40f5-a54f-e33b43338e87",
+   "name": "CONSTRAINS",
+   "fact": "PJM wholesale prices rose 41% in 2026, with the demand-supply gap clearing through price and delay as a constraint on datacenter buildout."
+  },
+  {
+   "source": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "target": "7a21e25c-c98e-40f5-a54f-e33b43338e87",
+   "name": "CONSTRAINS",
+   "fact": "GE Vernova's gas contracts reached 116 GW against a target of at least 125 GW by end-2026, making turbine/equipment supply a binding constraint on datacenter electricity growth."
+  },
+  {
+   "source": "f767b3bf-932f-4ed3-bb1b-47f7379458a7",
+   "target": "fe3911ad-bcf4-427a-8f19-bd7a14fbaf2d",
+   "name": "SUPPLIES",
+   "fact": "Datacenter customers generated $2.4B GEV electrification orders Q1 2026（sign=+，strength=0.6，valence=transactional，polarity=0.60）"
+  },
+  {
+   "source": "860115ff-90a4-4298-b78b-02821b932281",
+   "target": "2fda3ccc-b987-4004-a9fa-803a77b4dae8",
+   "name": "OWNS",
+   "fact": "Dominion's contracted data-center pipeline was reported at ~53.8 GW for July 2026 (per Zacks summary), with growth monitored on each earnings call through 2027"
+  },
+  {
+   "source": "d423d261-3145-489e-b786-720b9a54a825",
+   "target": "12f3464d-7307-4a38-a32a-7c70adf00d4f",
+   "name": "FORECASTS_CAP_OF",
+   "fact": "On I/O Fund's derived arithmetic (August 2026), guided 2026 capex of $732.5 billion across the hyperscalers including Alphabet needs only +36.5% year over year (+$267.5 billion) to reach $1 trillion in 2027."
+  }
+ ],
+ "graph_id": "mirofish_27f84f8acb854e87"
+}

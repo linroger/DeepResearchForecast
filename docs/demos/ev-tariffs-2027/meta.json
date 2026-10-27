@@ -1,0 +1,86 @@
+{
+ "pipeline_id": "pipe_0ac0f3608d4a",
+ "report_id": "report_c6555913731c",
+ "simulation_id": "sim_a2fa64927c52",
+ "graph_id": "mirofish_7f15bf93f61141fa",
+ "status": "completed",
+ "prompt": "Forecast the EU-China electric-vehicle tariff dispute as of 30 June 2027: whether the definitive EU countervailing duties on Chinese battery-electric vehicles remain in force unchanged, whether a negotiated price-undertaking or minimum-price agreement replaces them, and the probability of Chinese retaliatory measures against EU automotive exports before that date. Cover the WTO panel process, Commission review timelines, and positions of German vs French manufacturers.",
+ "created_at": "2026-10-20T18:02:23.337901+00:00",
+ "mode": "full",
+ "rounds": 17,
+ "personas": 10,
+ "has_actors": true,
+ "research_log": {
+  "line_count": 359,
+  "source_count": 1,
+  "complete": true,
+  "event_fidelity": "summarized_progress_events"
+ },
+ "dossier_assets": [
+  "research-charts/data_bis_ws_tc_q_cn_p_a_m_770_a_9ca95ea88a949d4e.png",
+  "research-charts/data_fred_impch_a73d084864aeae07.png",
+  "research-charts/data_wb_wb_wdi_ne_exp_gnfs_zs_chn_9a79dc4536360f82.png",
+  "research-charts/timeline.png",
+  "research-charts/timeline.html",
+  "research-charts/quant_metrics.png",
+  "research-charts/quant_metrics.html",
+  "research-charts/metric_trajectories.png",
+  "research-charts/metric_trajectories.html"
+ ],
+ "report_assets": [
+  "charts/binary_forecast_dotplot.png",
+  "charts/official_indicators.png",
+  "charts/scenario_probabilities.png",
+  "charts/worldstate_trajectory.png",
+  "charts/metric_trajectories.png",
+  "charts/regional_comparison.png",
+  "charts/quantitative_claims.png",
+  "charts/timeline_lanes.png"
+ ],
+ "dossier_languages": {
+  "en": "dossier.md",
+  "zh": "dossier.zh.md"
+ },
+ "report_languages": {
+  "en": "report.md",
+  "zh": "report.zh.md"
+ },
+ "artifact_sha256": {
+  "research_log.txt": "36f994e312d227dae26f8a2f23390d2f18b0fe399e158e61cc5eabe3f4a8317d",
+  "dossier.md": "c30746fed18a80a771aef119b49b0a162a61aa817a426836d07c2579afa79d16",
+  "dossier.zh.md": "8660da4e606ec2e162134fd4daf45379a7d92a44c58afaf73a06651faff0b74b",
+  "actors.json": "9ca6bdb218a7ce87bc7f5e8ed643b9dede086c0efdc42267080c2169b1ae1f46",
+  "sources.json": "2434cd0a8311cb815ab43f2ec17c3f804755ab98f4455e0cbcff49427591331b",
+  "ontology.json": "9bd6d6298a7cd888c65ea337f716a73bac6e29ea17cac8ae85c26d3cd94127b2",
+  "graph.json": "9d37849328eb5e6edb7af218a4859aee6b81a5a1214a7d66e1574c6f3083ac66",
+  "forum.json": "6ea90a2148fd847d8afe70e8c4cd93b5551634a0c82d5e7731ee4a381376596f",
+  "report.md": "eac245d329bc5637dd5206812d1083ccb3045f9a8f5bc39a928b755c5afa4749",
+  "report.zh.md": "ceca7a8b3c81f021f4c4f345a6f6e414f57ac70cf0063e32f6ec21645562b6e8",
+  "research-charts/data_bis_ws_tc_q_cn_p_a_m_770_a_9ca95ea88a949d4e.png": "5c0329e19666370370e742cacc3354f47968ce120babb2e6cafcd501195deec3",
+  "research-charts/data_fred_impch_a73d084864aeae07.png": "9ebb3b23057de5294d69f604cee119265c845ef011d3f3e6b09c12e29b54e9ce",
+  "research-charts/data_wb_wb_wdi_ne_exp_gnfs_zs_chn_9a79dc4536360f82.png": "8c985bd12164e5f9cbe44ba00d0af8379f03d9293b70a510a9e6112b44602319",
+  "research-charts/timeline.png": "39dcf2120499702c24d9dbd075d4083465553c7277054c7ca2a02a55699695fa",
+  "research-charts/timeline.html": "17573dce596cd79e44478baf4e3330d8ee58bd9998feaa650aa33cdfebda1294",
+  "research-charts/quant_metrics.png": "a8096855b70fd9b648d474b78bf787bbfd984bbb34bd599ef337f1b1594d3321",
+  "research-charts/quant_metrics.html": "17a78f26e695faf7b99042a96c9eb0849b7cb2f3d032b231d4b57e00a47c06db",
+  "research-charts/metric_trajectories.png": "a421a99098185943038ab151f81c5418eb00afbb9ddc739012d003ac969ecf4e",
+  "research-charts/metric_trajectories.html": "0d6265859e9dcbdd52f6ae445a49ad8fd43bc128ab5e85ac8f8ae9b87df55d6c",
+  "charts/binary_forecast_dotplot.png": "e147231d55e8742c67a852833429865e085498920a68962a3cb399b3aa91a1ae",
+  "charts/official_indicators.png": "5dfc41cb73b8413bbe9dee9a86e05a32455d1291e93ac9c35aef4881e77b3149",
+  "charts/scenario_probabilities.png": "2d3547154563cd486c225a55702d2fa97a4817d8e628b12e3bb5cfae5da1aa9e",
+  "charts/worldstate_trajectory.png": "5cdf936f027a26b421fbce41db80decc703d9b59dd6f1ac39ce1c975c2c45b83",
+  "charts/metric_trajectories.png": "606cf37aac70dc4665e4ec935c5911c8b1319f1c420f193e2f80e18dc840c764",
+  "charts/regional_comparison.png": "e46944bf1a25b21af0292d550abbb24d45a09f184985952d3d82c5aebd0b8b1e",
+  "charts/quantitative_claims.png": "3c6793c5726ccb2d73b4d67ce80131af109e1f2c9e1fcd758f458e65b190f799",
+  "charts/timeline_lanes.png": "689850cffee39714b9710edf6d649bc4ceb3645f36dbca6f0f72287fe63b0a33"
+ },
+ "publication": {
+  "hard_passed": true,
+  "publish_passed": true,
+  "scenario_contract_valid": true,
+  "citation_coverage": 0.054,
+  "semantic_citations_passed": true,
+  "markdown_sha256": "c41a8be19cd41dfe592d2b915fe0d67b7a77932c44818d77c4e5dc92597affb6",
+  "forecast_sha256": "acf89403d62d45de17b105842569e720fd077814c0dee85439217c150e78ba49"
+ }
+}

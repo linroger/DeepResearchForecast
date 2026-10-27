@@ -1,0 +1,676 @@
+{
+ "entity_types": [
+  {
+   "name": "Person",
+   "description": "Individual decision-makers: leaders, commanders, mediators driving the conflict outcome",
+   "attributes": [
+    {
+     "name": "full_name",
+     "type": "text",
+     "description": "Full official name"
+    },
+    {
+     "name": "role",
+     "type": "text",
+     "description": "Position held (e.g., US President, Israeli PM, Supreme Leader)"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "Hawkish/dovish orientation on Iran conflict"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low causal influence on the forecast outcome"
+    }
+   ],
+   "examples": [
+    "Donald Trump",
+    "Benjamin Netanyahu",
+    "Supreme Leader Mojtaba Khamenei"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Named individuals whose personal decisions causally gate escalation, strikes, sanctions relief or negotiation",
+   "anti_examples": [
+    "Analysts quoted in reports",
+    "Journalists",
+    "Poll respondents"
+   ],
+   "agency_class": "individual_leader",
+   "levers": [
+    "Order/cancel strikes",
+    "Impose or lift sanctions",
+    "Accept ceasefire sequencing",
+    "Set red lines publicly"
+   ]
+  },
+  {
+   "name": "Organization",
+   "description": "Institutions and armed groups: militaries, verification bodies, proxies, coalitions",
+   "attributes": [
+    {
+     "name": "org_class",
+     "type": "text",
+     "description": "military/intelligence/regulatory/proxy/cartel/coalition"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "Primary operating jurisdiction or allegiance"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low causal influence"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "Escalation vs restraint orientation"
+    }
+   ],
+   "examples": [
+    "IRGC",
+    "Israel Defense Forces",
+    "US Central Command",
+    "IAEA",
+    "Hezbollah",
+    "Houthi movement",
+    "Iranian diplomatic faction (Foreign Ministry)"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "stakeholder",
+   "selection_rule": "Organized actors with coercive, operational, verification or mediation capacity affecting the conflict path",
+   "anti_examples": [
+    "Think tanks cited as sources (CRS, ISIS, FRS)",
+    "News outlets",
+    "Data trackers (Kpler, Vortexa)"
+   ],
+   "agency_class": "industry_coalition",
+   "levers": [
+    "Execute or hold strikes",
+    "Enforce blockade ladder",
+    "Grant or deny inspections",
+    "Resume proxy attacks",
+    "Ramp or withhold output"
+   ]
+  },
+  {
+   "name": "Government",
+   "description": "National governments and state groupings with sovereign policy levers",
+   "attributes": [
+    {
+     "name": "country",
+     "type": "text",
+     "description": "Country or bloc represented"
+    },
+    {
+     "name": "policy_lever",
+     "type": "text",
+     "description": "Main lever: mediation, oil purchases, arms transfers, regional exposure"
+    },
+    {
+     "name": "alignment",
+     "type": "text",
+     "description": "Pro-US / pro-Iran / neutral"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "examples": [
+    "Government of China",
+    "Government of Russia",
+    "Gulf Cooperation Council states"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "stakeholder",
+   "selection_rule": "Sovereign states or groupings whose purchases, transfers or mediation causally shape the conflict and market outcome",
+   "anti_examples": [
+    "International statistical agencies",
+    "Unnamed 'Western governments'"
+   ],
+   "agency_class": "sovereign_government",
+   "levers": [
+    "Continue/halt crude purchases",
+    "Deliver military-technical aid",
+    "Launch mediation track",
+    "Adjust Gulf security posture"
+   ]
+  },
+  {
+   "name": "CentralBank",
+   "description": "Monetary authorities setting policy rates and accumulating gold reserves",
+   "attributes": [
+    {
+     "name": "mandate_jurisdiction",
+     "type": "text",
+     "description": "US, euro area, or global (gold buyers)"
+    },
+    {
+     "name": "policy_stance",
+     "type": "text",
+     "description": "Current stance and rate level"
+    },
+    {
+     "name": "gold_buyer_flag",
+     "type": "text",
+     "description": "Whether a structural official gold accumulator"
+    }
+   ],
+   "examples": [
+    "US Federal Reserve",
+    "European Central Bank",
+    "Central banks (gold buyers)"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "stakeholder",
+   "selection_rule": "Monetary institutions whose rate paths and reserve behavior price the macro and gold implications",
+   "anti_examples": [
+    "Commercial banks",
+    "Rating agencies"
+   ],
+   "agency_class": "central_bank",
+   "levers": [
+    "Raise/hold/cut policy rates",
+    "Coordinate emergency releases",
+    "Add to gold reserves"
+   ]
+  },
+  {
+   "name": "ProducerCartel",
+   "description": "Oil producer groups holding spare capacity and supply response options",
+   "attributes": [
+    {
+     "name": "lead_state",
+     "type": "text",
+     "description": "Dominant member state"
+    },
+    {
+     "name": "spare_capacity_status",
+     "type": "text",
+     "description": "Effective vs headline spare capacity"
+    },
+    {
+     "name": "output_level_mbd",
+     "type": "text",
+     "description": "Recent output and capacity in million b/d"
+    }
+   ],
+   "examples": [
+    "OPEC+ (Saudi Arabia-led)"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "stakeholder",
+   "selection_rule": "Producer coalitions whose output decisions buffer or amplify the Iranian supply shock",
+   "anti_examples": [
+    "Individual trading firms (Mercuria, Trafigura)",
+    "EIA/IEA as data publishers"
+   ],
+   "agency_class": "industry_coalition",
+   "levers": [
+    "Ramp or restrain production",
+    "Deploy remaining spare capacity",
+    "Coordinate inventory policy"
+   ]
+  },
+  {
+   "name": "NuclearProgram",
+   "description": "Iran's nuclear infrastructure and stockpile as a tracked object of strikes and verification",
+   "attributes": [
+    {
+     "name": "status",
+     "type": "text",
+     "description": "Damaged/operational/unknown per site"
+    },
+    {
+     "name": "heu_stock_kg",
+     "type": "text",
+     "description": "Estimated surviving 60% enriched uranium in kg"
+    },
+    {
+     "name": "iaea_access",
+     "type": "text",
+     "description": "Verification access status"
+    }
+   ],
+   "examples": [
+    "Fordow enrichment site",
+    "Natanz enrichment site",
+    "Isfahan tunnel complex",
+    "Pickaxe Mountain complex"
+   ],
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Named Iranian nuclear facilities or stockpiles whose reconstruction or verification status triggers scenarios",
+   "anti_examples": [
+    "'Nuclear risk' as abstract concept",
+    "Breakout time as a general topic"
+   ]
+  },
+  {
+   "name": "CommodityMarket",
+   "description": "Traded oil, gas, gold and shipping markets whose end-2027 prices are forecast",
+   "attributes": [
+    {
+     "name": "instrument",
+     "type": "text",
+     "description": "Brent, TTF, gold, tanker rates, CDS"
+    },
+    {
+     "name": "current_level",
+     "type": "text",
+     "description": "Latest baseline reading and as-of date"
+    },
+    {
+     "name": "war_premium_state",
+     "type": "text",
+     "description": "Embedded premium vs pre-war baseline"
+    }
+   ],
+   "examples": [
+    "Brent crude",
+    "EU natural gas (TTF)",
+    "Gold",
+    "Strait of Hormuz transit volumes",
+    "VLCC tanker rates"
+   ],
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Specific priced instruments or chokepoint flow metrics that are the forecast deliverables",
+   "anti_examples": [
+    "'Inflation' as an abstract topic",
+    "General 'market sentiment'"
+   ]
+  },
+  {
+   "name": "ConflictScenario",
+   "description": "Mutually exclusive end-2027 conflict states with probabilities and priced implications",
+   "attributes": [
+    {
+     "name": "state_label",
+     "type": "text",
+     "description": "low-intensity/strikes/ceasefire/framework/regime-crisis"
+    },
+    {
+     "name": "probability",
+     "type": "text",
+     "description": "Assigned probability"
+    },
+    {
+     "name": "brent_path",
+     "type": "text",
+     "description": "Implied Brent path under this state"
+    },
+    {
+     "name": "gold_path",
+     "type": "text",
+     "description": "Implied gold range under this state"
+    }
+   ],
+   "examples": [
+    "Low-intensity conflict (45%)",
+    "Renewed large-scale strikes (25%)",
+    "Durable ceasefire (15%)",
+    "Negotiated framework (10%)",
+    "Regime crisis (5%)"
+   ],
+   "archetype": "scenario",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "The five defined end-2027 outcome states used for scenario-weighted forecasts",
+   "anti_examples": [
+    "Individual battles or events",
+    "Base-rate reference classes as entities"
+   ]
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "OPPOSES",
+   "description": "Adversarial stance or armed confrontation between actors",
+   "source_targets": [
+    {
+     "source": "Person",
+     "target": "Person"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "negative"
+    },
+    {
+     "name": "intensity",
+     "type": "text",
+     "description": "active hostilities / doctrinal hostility / rhetorical"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Onset of adversarial posture"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "Source actively opposes or fights target"
+  },
+  {
+   "name": "SANCTIONS",
+   "description": "Imposition of economic sanctions or blockade by one actor on another",
+   "source_targets": [
+    {
+     "source": "Person",
+     "target": "Person"
+    },
+    {
+     "source": "Government",
+     "target": "Person"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "mechanism",
+     "type": "text",
+     "description": "naval blockade / OFAC designations / sectoral sanctions"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "Effectiveness level (exports halted vs leaking)"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Sanction or blockade start date"
+    }
+   ],
+   "family": "governance",
+   "valence": "adversarial",
+   "direction_semantics": "Source imposes sanctions/blockade on target"
+  },
+  {
+   "name": "COMPETES_WITH",
+   "description": "Rivalry between organizations or factions for power or strategic advantage",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Person",
+     "target": "Person"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "domain",
+     "type": "text",
+     "description": "military rivalry / internal factional contest"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "Source and target are symmetric rivals"
+  },
+  {
+   "name": "DEPENDS_ON",
+   "description": "Asymmetric reliance of one actor on another's support or decisions",
+   "source_targets": [
+    {
+     "source": "Person",
+     "target": "Person"
+    },
+    {
+     "source": "Organization",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "dependency_type",
+     "type": "text",
+     "description": "military backing / revenue / diplomatic cover"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "dependency",
+   "valence": "directional",
+   "direction_semantics": "Source relies on target's backing or approval"
+  },
+  {
+   "name": "SUPPORTS",
+   "description": "Material or political backing, e.g., patron to proxy resupply",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "support_type",
+     "type": "text",
+     "description": "arms/funding/intelligence/diplomatic"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Support onset"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "Source provides support to target"
+  },
+  {
+   "name": "BACKS",
+   "description": "Endorsement or enablement of a leader, faction or movement",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Person"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "backing_type",
+     "type": "text",
+     "description": "diplomatic cover / military-technical / economic"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "Source backs or endorses target's position"
+  },
+  {
+   "name": "CUSTOMER_OF",
+   "description": "Purchase relationship, e.g., Chinese buying of Iranian crude",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "volume_mbd",
+     "type": "text",
+     "description": "Recent purchase volume in million b/d"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "Share of target's exports"
+    },
+    {
+     "name": "trend",
+     "type": "text",
+     "description": "Rising/falling/collapsed"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "Source is a buyer of target's goods"
+  },
+  {
+   "name": "PARTNERS_WITH",
+   "description": "Cooperative or mediation-channel relationship between actors",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "partnership_type",
+     "type": "text",
+     "description": "mediation channel / negotiation track / economic"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "Source cooperates with target on negotiation or mediation"
+  },
+  {
+   "name": "INFLUENCES",
+   "description": "One actor's decisions shape another's choices or market outcomes",
+   "source_targets": [
+    {
+     "source": "CentralBank",
+     "target": "Person"
+    },
+    {
+     "source": "Organization",
+     "target": "Person"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "channel",
+     "type": "text",
+     "description": "monetary policy / market pressure / diplomatic"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "influence",
+   "valence": "directional",
+   "direction_semantics": "Source exerts influence over target's decisions"
+  },
+  {
+   "name": "SUPPLIES",
+   "description": "Supply of oil or goods to a consumer, e.g., OPEC+ to the US market",
+   "source_targets": [
+    {
+     "source": "ProducerCartel",
+     "target": "Person"
+    },
+    {
+     "source": "ProducerCartel",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "volume_mbd",
+     "type": "text",
+     "description": "Supply volume"
+    },
+    {
+     "name": "substitutability",
+     "type": "text",
+     "description": "Ease of substitution for displaced barrels"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "Source supplies oil/goods to target"
+  }
+ ],
+ "analysis_summary": "该预测问题以2026年10月的伊朗'消耗战'基线为起点，围绕五个互斥的2027年底冲突状态（低烈度冲突45%、大规模再打击25%、持久停火15%、谈判框架10%、政权危机5%）及其对布伦特、黄金、天然气、宏观政策与区域市场的定价影响展开。本体保留种子类型Person、Organization、Government（覆盖特朗普、内塔尼亚胡、穆杰塔巴·哈梅内伊三位决策者，IRGC、IDF、CENTCOM、IAEA、真主党、胡塞等组织，以及中俄和海合会政府），新增CentralBank（美联储、欧央行、购金央行）、ProducerCartel（OPEC+）、NuclearProgram（福尔多、纳坦兹、伊斯法罕、Pickaxe Mountain等被追踪核设施）、CommodityMarket（布伦特、TTF、黄金、霍尔木兹流量等定价客体）与ConflictScenario（五种情景）五个领域类型，共8个实体类型。关系保留全部种子边类型，并新增TRIGGERS与CONSTRAINS两条因果边，将核设施重建/核查、OPEC+剩余产能、库存缓冲、中期选举政治等传导机制与情景及价格结果连接，支撑多智能体推演中的有代价、有时滞行动与情景加权定价。"
+}

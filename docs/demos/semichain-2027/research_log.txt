@@ -1,0 +1,345 @@
+2026-10-24T17:52:11.961758+00:00 [stage] runtime skill bundle: outcome=verified source_manifest_hash=e579d583714c93017a829a9effea5d2a866b1a9be0a5df7d87afa4473e2e2034 deployed_manifest_hash=e579d583714c93017a829a9effea5d2a866b1a9be0a5df7d87afa4473e2e2034 deployed_path=/Users/rogerlin/Downloads/DeepResearchForecast/deer-flow/skills/public
+2026-10-24T17:52:11.961941+00:00 [stage] runtime skill lazy-resource hashes: skill=actor-ontology-research {"references/actor-intelligence-contract.md":"668e01eb87d1c491eca03483e3ff80b0257749d954cada4945fcfc247a8e23aa","references/scoring-rubric.md":"570d71951cb2d3e2122028bdb351a22bd9fe96464e2bfcb157fe552586c82f78"}
+2026-10-24T17:52:11.961961+00:00 [stage] runtime skill lazy-resource hashes: skill=competitive-landscape-forecasting {"references/leadership-metrics.md":"73b4a54678c5b9c7d22b9056d1f34df98c0dfb1a2411370c19b9dd3c0c9904ba","references/persistence-and-share-dynamics.md":"d06d416ad14d8ad47cc804979465ccbacfabc2bf708548882003cc059f951f87","references/tech-race-indicators.md":"c6074ec73b3be65eef186ea655484e5aba6a0c15c3b72a57664855a0ff4514c1"}
+2026-10-24T17:52:11.961978+00:00 [stage] runtime skill lazy-resource hashes: skill=data-sources {"references/catalog-bis.md":"7c5d32739635a95125d853772ff56c4081ae575ad06440dd6154b0c38235236b","references/catalog-bls.md":"385155e89481d84088f960089c82d6909410da66c52ce5277d7b9e83ddad4228","references/catalog-fred.md":"57bc58b69616beb5bf3e03e3aa6ca139f638cc83ce9b956feebde12a39e29206","references/catalog-imf.md":"d3a1a42b44cf79c22e0a45f97032757a3a0df39a280064d9ee86a9ceecba2bc9","references/catalog-usgov.md":"c15282354d3970dd47239d8248ac8d69137ae543556ef8e55362fb172b2beda5","references/catalog-wb.md":"871b0cb84bc59eaef876dedb901db9619b5d9813e35bff5f0aedcd4701d86560","references/series-catalog.md":"569c0ec45ab3f645766c08fc5675591e241122d52c6e962e62b400b224da65cd"}
+2026-10-24T17:52:11.961992+00:00 [stage] runtime skill lazy-resource hashes: skill=data-visuals {"references/chart-patterns.md":"667f9207fb4afaef8d7ab20aa45aca4fbdfefd0b9262e557b3e3c0ddced6859d","scripts/render_data.py":"06ca497078857e15b4f07d1ee8edfc769a2330b2f37f0f6925cf239008b562b2"}
+2026-10-24T17:52:11.962004+00:00 [stage] runtime skill lazy-resource hashes: skill=deep-research {"references/final-dossier-contract.md":"6f2be6ed603ac5a2db7c1a52b581c06d0bfc36cab0de0d3770c870aa6dc0b92e","references/news-market-context.md":"61f294d467bb255b54e076cd8dc074aee8b13bca030f79114650f643dcbd1dc4","references/source-tradecraft.md":"e66e5db7d688355dec6bc925ae1812f78e6d390ae3ade40ebdecab127ef48042"}
+2026-10-24T17:52:11.962015+00:00 [stage] runtime skill lazy-resource hashes: skill=election-forecasting {"references/fundamentals-and-polls.md":"278fa9c3523dab981d3fc1bbaa04851621d5b1ea9cc780c308be5e4c03e4b8cc","references/non-us-elections.md":"df7f0d44e753fbae11044a834d8d2073b85eaeb529b8d24d1175c658b52c0938","references/us-election-mechanics.md":"0f3a42fa70c634f8c13cd1c5231c9fd19c402b11fcd398c49398407c645354c9"}
+2026-10-24T17:52:11.962026+00:00 [stage] runtime skill lazy-resource hashes: skill=financial-markets-forecasting {"references/empirical-and-volatility-base-rates.md":"5fcf896beac88fb321a3fd3e4376e08fc1a5c363047e63547b128a6d15098863","references/implied-distributions.md":"146cbd95b28a4f2430fcd5115cc68cca1c23bb801de9381d0bd98c03dd1408bd","references/listings-and-ipos.md":"94311213ac900a88a5367cd1bf48249b5795e7a812351158351cf0c0b554fdc3"}
+2026-10-24T17:52:11.962036+00:00 [stage] runtime skill lazy-resource hashes: skill=forecast-visuals {"references/chart-patterns.md":"a48316244d5293830ae42a5cfe40285a2a38d13f1da52c8949bee9a007130a60","scripts/render.py":"25d81fc98786644a5c3d72a2bab9980c09f063e4c162a124bb481ee94cccdeba"}
+2026-10-24T17:52:11.962046+00:00 [stage] runtime skill lazy-resource hashes: skill=geopolitical-forecasting {"references/conflict-base-rates.md":"8103207f91012df6800884e78716c40778d498d76d453e635db9b2ab13968d10","references/escalation-and-negotiation.md":"89a56f1988b79dde0e3dbf7073cbdb9b13aab6c79b74f071508ee64e043d307a","references/evidence-under-information-war.md":"5e70295008c764a165e9544bce30dd53f6794ecfaeae7a11c7a2c122026bba81"}
+2026-10-24T17:52:11.962060+00:00 [stage] runtime skill lazy-resource hashes: skill=industry-forecasting {"references/forecasting-methods.md":"d046d2692d510b3f8cf9917a00038ffefe9f9fed059653746ac6b82bdc6b7eff","references/outlook-reconciliation.md":"cd50927fbdb74d1a459d652bbe99504ab7e93afc3bf6ac6643f437e12b9384dd","references/reference-classes-and-lead-times.md":"626f2c50f2eabd7145386a3c3a3b04abc29e52253674e814a6ea9666b1f9d5e3"}
+2026-10-24T17:52:11.962075+00:00 [stage] runtime skill lazy-resource hashes: skill=industry-research {"references/cycles-and-capacity.md":"afdab895c62eb5e13928400809b0ab7a1d8cf8d07049cafe0a6fce6c416a8d43","references/industry-sources.md":"f12dbd5c47617abb290e9aae4ca39ffaf51839021e41df57e8a8273a095d3116","references/sectors-economy.md":"d8554ac27fd06934c6ad99f136ef917dfdcbbc26d827b6cd6ee16fae82f3ed5a","references/sectors-technology.md":"a85911b8b2dd9af422ebcdef16d892f8aa88b07fa55ab01c0eaba3969bdc7380","references/value-chain-and-sizing.md":"037eb1cc3b26701856b42802b2f1d4c52117c957b55342cc4520df34728850f9"}
+2026-10-24T17:52:11.962085+00:00 [stage] runtime skill lazy-resource hashes: skill=macro-research {"references/central-bank-reaction-functions.md":"233563c25b7f65b86497aa988063ca0266cf3f1d40e3d91228460b00d556fd23","references/macro-base-rates.md":"5ca2bcfb6585e3ed1eee40b00d0d67282a1c8b68bf9733bf1befb3512ee5460d","references/nowcasting-and-releases.md":"53ce7929a5c36ae1c934602dd39ec92b1cba77d2c1ca16b85d069b3f21584ba0"}
+2026-10-24T17:52:11.962095+00:00 [stage] runtime skill lazy-resource hashes: skill=policy-and-trade-forecasting {"references/signals-and-credibility.md":"c15e3827b90d6ccbbc90e80a4f32a51b3edb0ebc69e14ccbbbd9c3a529c590bd","references/trade-instruments.md":"242e1290dc4146dff6e1a8cc1b5b262d4542d23c7262e7ca5d29c2495b774293","references/us-process-and-base-rates.md":"f75007c73a6bcf100542995a46ec102aebfc52517d1d4ef1a94d9ca6a5d87936"}
+2026-10-24T17:52:11.962102+00:00 [stage] runtime skill lazy-resource hashes: skill=prediction-markets {}
+2026-10-24T17:52:11.962112+00:00 [stage] runtime skill lazy-resource hashes: skill=reference-class-forecasting {"references/base-rate-recipes.md":"f101b214ef371659423bb1c3d4cf67ca7ab943c48a7bd4949e4934c1d01bf16e","references/prediction-market-anchoring.md":"cb416e7c77a30695fbd4bfdfcb61d4a90679e80b3faba021226947c1b6a0ae38","references/probability-toolkit.md":"73c70e0323c495b56b3937019c0a3fab422ef44e93f4e346c92dd86560e19bff"}
+2026-10-24T17:52:11.962125+00:00 [stage] research engine: v3 (linear_research)
+2026-10-24T17:52:13.123095+00:00 [warn] RESEARCH_LINEAR_MODE=salvage is a legacy knob: v3 resumes its own identity-bound phases and never adopts a research_report.md it did not produce
+2026-10-24T17:52:18.226542+00:00 [stage] research:v3:plan start
+2026-10-24T17:52:23.738919+00:00 [usage] tokens in=2060 out=329 total=2389 phase=plan:plan:scope cached=0 cache_write=0 reasoning=0
+2026-10-24T17:52:23.739167+00:00 [tool] web_search TSMC CoWoS capacity wafers per month 2026 2027
+2026-10-24T17:52:23.739353+00:00 [tool] web_search HBM4 SK Hynix Samsung Micron wafer allocation 2027
+2026-10-24T17:52:23.739537+00:00 [tool] web_search ASML High-NA EUV shipments 2026 2027
+2026-10-24T17:52:23.739664+00:00 [tool] web_search ABF substrate IBIDEN Unimicron capacity 2027
+2026-10-24T17:52:25.770718+00:00 [result] web_search → 5 results
+2026-10-24T17:52:25.770757+00:00 [result] web_search → 5 results
+2026-10-24T17:52:25.771597+00:00 [result] web_search → 5 results
+2026-10-24T17:52:25.771641+00:00 [tool] web_search SMIC UMC GlobalFoundries 28nm utilization lead times 2026
+2026-10-24T17:52:25.771679+00:00 [tool] web_search China gallium germanium export controls semiconductor impact 2026
+2026-10-24T17:52:25.774466+00:00 [result] web_search → 5 results
+2026-10-24T17:52:27.220766+00:00 [result] web_search → 5 results
+2026-10-24T17:52:27.246163+00:00 [result] web_search → 4 results
+2026-10-24T17:52:58.175981+00:00 [usage] tokens in=7635 out=2399 total=10034 phase=plan:plan:plan cached=1792 cache_write=0 reasoning=31
+2026-10-24T17:52:58.196539+00:00 [ok] v3: method skills industry-forecasting, policy-and-trade-forecasting, reference-class-forecasting (planner)
+2026-10-24T17:52:58.198482+00:00 [ok] research:v3:plan done (7 KIQs, 12 sections)
+2026-10-24T17:52:58.266473+00:00 [stage] research:v3:data start (3 series)
+2026-10-24T17:52:59.115329+00:00 [ok] research:v3:data done (stored=3, failed=0)
+2026-10-24T17:52:59.115707+00:00 [stage] research:v3:gather start (7 KIQs, workers=4)
+2026-10-24T17:52:59.115815+00:00 [tool] web_search TSMC N2 utilization lead time Q4 2026
+2026-10-24T17:52:59.115865+00:00 [tool] web_search CoWoS capacity wafers per month end 2026 lead time
+2026-10-24T17:52:59.115968+00:00 [tool] web_search NVIDIA Rubin HBM4 bits per GPU 2027
+2026-10-24T17:52:59.116025+00:00 [tool] web_search SK Hynix Samsung Micron HBM4 capacity 2027 wafer allocation
+2026-10-24T17:53:28.770307+00:00 [result] web_search → 5 results
+2026-10-24T17:53:28.770352+00:00 [tool] web_search ASML High-NA EXE:5200 shipment count 2026 2027
+2026-10-24T17:53:29.020311+00:00 [result] web_search → 5 results
+2026-10-24T17:53:29.020369+00:00 [tool] web_search IBIDEN Unimicron ABF substrate capacity expansion 2027
+2026-10-24T17:53:29.048908+00:00 [result] web_search → 5 results
+2026-10-24T17:53:29.048964+00:00 [tool] web_search China gallium germanium export controls 2026 impact semiconductors
+2026-10-24T17:53:29.663128+00:00 [result] web_search → 5 results
+2026-10-24T17:53:29.663184+00:00 [tool] web_search US entity list SMIC export rules 2026 mature node
+2026-10-24T17:54:00.645121+00:00 [result] web_search → 5 results
+2026-10-24T17:54:00.645171+00:00 [tool] web_search CoWoS shortage 2023 2024 resolution timeline capacity
+2026-10-24T17:54:00.731172+00:00 [result] web_search → 4 results
+2026-10-24T17:54:00.731436+00:00 [tool] web_search DRAM shortage 2017 2018 duration price cycle
+2026-10-24T17:54:00.857764+00:00 [result] web_search → 5 results
+2026-10-24T17:54:00.857880+00:00 [tool] web_search SEMI equipment billings 2026 monthly
+2026-10-24T17:54:00.863378+00:00 [result] web_search → 5 results
+2026-10-24T17:54:00.863433+00:00 [tool] web_search TSMC earnings call guidance 2027 capacity
+2026-10-24T17:55:00.725683+00:00 [result] web_search → 5 results
+2026-10-24T17:55:00.725776+00:00 [tool] web_search Taiwan earthquake semiconductor risk 2027 probability
+2026-10-24T17:55:00.883072+00:00 [result] web_search → 5 results
+2026-10-24T17:55:00.883164+00:00 [tool] web_search HBM price forecast 2027 oversupply TrendForce
+2026-10-24T17:55:00.904811+00:00 [result] web_search → 5 results
+2026-10-24T17:55:00.906778+00:00 [result] web_search → 5 results
+2026-10-24T17:55:33.651226+00:00 [result] web_search → 5 results
+2026-10-24T17:55:34.551209+00:00 [result] web_search → 5 results
+2026-10-24T17:55:40.173284+00:00 [usage] tokens in=4244 out=3 total=4247 phase=gather:gather:prime cached=0 cache_write=0 reasoning=0
+2026-10-24T17:55:46.550941+00:00 [usage] tokens in=7000 out=183 total=7183 phase=gather:K3:s1 cached=4224 cache_write=0 reasoning=66
+2026-10-24T17:55:46.551086+00:00 [tool] web_search IBIDEN Unimicron ABF substrate capacity expansion 2026 2027 CoWoS substrates
+2026-10-24T17:55:46.551161+00:00 [tool] web_search SUMCO 300mm silicon wafer capacity expansion 2026 capex
+2026-10-24T17:55:46.551276+00:00 [tool] web_search Shin-Etsu JSR EUV photoresist capacity expansion 2026 market share
+2026-10-24T17:55:46.852098+00:00 [usage] tokens in=7431 out=187 total=7618 phase=gather:K2:s1 cached=4224 cache_write=0 reasoning=55
+2026-10-24T17:55:46.852689+00:00 [tool] web_fetch https://developer.nvidia.com/blog/inside-nvidia-rubin-gpu-architecture-powering-the-era-of-agentic-ai/
+2026-10-24T17:55:46.852813+00:00 [tool] web_search TrendForce HBM4 capacity 2027 SK Hynix Samsung Micron wafers per month forecast
+2026-10-24T17:55:46.853212+00:00 [tool] web_search TSMC CoWoS capacity 2026 2027 wafers per month expansion TrendForce
+2026-10-24T17:55:47.726280+00:00 [usage] tokens in=7293 out=218 total=7511 phase=gather:K4:s1 cached=4224 cache_write=0 reasoning=111
+2026-10-24T17:55:47.726547+00:00 [tool] web_fetch https://www.congress.gov/crs-product/R48642
+2026-10-24T17:55:47.726617+00:00 [tool] web_search China gallium germanium rare earth export control semiconductor supply 2026 MOFCOM license
+2026-10-24T17:55:47.726836+00:00 [tool] web_search BIS entity list 2026 semiconductor equipment China restrictions mature node foundry SMIC
+2026-10-24T17:55:48.250601+00:00 [result] web_fetch → 2588/12096 chars [S34]
+2026-10-24T17:55:48.252607+00:00 [usage] tokens in=7378 out=276 total=7654 phase=gather:K1:s1 cached=4224 cache_write=0 reasoning=137
+2026-10-24T17:55:48.252899+00:00 [tool] web_fetch https://siliconanalysts.com/tools/allocation
+2026-10-24T17:55:48.253013+00:00 [tool] web_fetch https://siliconanalysts.com/analysis/foundry-allocation-status-q1-2026
+2026-10-24T17:55:48.253262+00:00 [tool] web_search TrendForce DRAM HBM contract price Q3 Q4 2026 increase percent
+2026-10-24T17:55:49.498640+00:00 [result] web_fetch → 2598/12050 chars [S2]
+2026-10-24T17:55:49.531196+00:00 [result] web_fetch → 2595/12095 chars [S58]
+2026-10-24T17:55:52.135077+00:00 [result] web_fetch → 2585/12082 chars [S39]
+2026-10-24T17:56:00.980511+00:00 [result] web_search → 4 results
+2026-10-24T17:56:01.070917+00:00 [result] web_search → 5 results
+2026-10-24T17:56:01.514694+00:00 [result] web_search → 4 results
+2026-10-24T17:56:01.683664+00:00 [result] web_search → 4 results
+2026-10-24T17:56:06.850558+00:00 [usage] tokens in=9146 out=100 total=9246 phase=gather:K4:s2 cached=7232 cache_write=0 reasoning=0
+2026-10-24T17:56:06.850856+00:00 [tool] web_fetch https://anderseninstitute.org/chinas-export-control-architecture-and-its-use-of-critical-minerals-as-strategic-pressure-points/
+2026-10-24T17:56:06.850941+00:00 [tool] web_search China export controls October 2026 rare earth semiconductor exemptions US-China truce expiration November 2026
+2026-10-24T17:56:10.723858+00:00 [result] web_fetch → 2595/12077 chars [S30]
+2026-10-24T17:56:33.720652+00:00 [result] web_search → 5 results
+2026-10-24T17:56:43.657228+00:00 [usage] tokens in=10433 out=146 total=10579 phase=gather:K4:s3 cached=9088 cache_write=0 reasoning=0
+2026-10-24T17:56:43.657618+00:00 [tool] web_fetch https://www.technology.org/2026/10/19/china-rare-earth-export-pause-november-10/
+2026-10-24T17:56:43.657844+00:00 [tool] web_fetch https://www.congress.gov/crs-product/R48642
+2026-10-24T17:56:43.673628+00:00 [result] web_fetch → 2595/12095 chars [S58] (stored copy)
+2026-10-24T17:56:44.846118+00:00 [result] web_fetch → 2587/12059 chars [S106]
+2026-10-24T17:56:58.590613+00:00 [usage] tokens in=12037 out=35 total=12072 phase=gather:K4:s4 cached=10432 cache_write=0 reasoning=0
+2026-10-24T17:56:58.590669+00:00 [tool] web_search 2026 US BIS rule semiconductor equipment China "affiliates rule" entity list EDA restrictions impact mature node packagi
+2026-10-24T17:57:00.878769+00:00 [result] web_search → 5 results
+2026-10-24T17:57:00.928416+00:00 [result] web_search → 5 results
+2026-10-24T17:57:01.003279+00:00 [result] web_search → 5 results
+2026-10-24T17:57:01.143639+00:00 [result] web_search → 4 results
+2026-10-24T17:57:01.727086+00:00 [result] web_search → 4 results
+2026-10-24T17:57:03.744860+00:00 [usage] tokens in=12576 out=77 total=12653 phase=gather:K4:s5 cached=12032 cache_write=0 reasoning=0
+2026-10-24T17:57:03.745274+00:00 [tool] web_fetch https://www.skadden.com/insights/publications/2025/11/bis-suspends-affiliates-rule-for-one-year-as-part-of-the-us-china-trade-deal
+2026-10-24T17:57:04.955305+00:00 [usage] tokens in=9431 out=152 total=9583 phase=gather:K2:s2 cached=7424 cache_write=0 reasoning=0
+2026-10-24T17:57:04.955634+00:00 [tool] web_fetch https://tech-insider.org/hbm4-memory-shortage-dram-inventory-2026/
+2026-10-24T17:57:04.955876+00:00 [tool] web_fetch https://www.trendforce.com/news/2026/06/15/news-tsmc-cowos-supply-demand-gap-reportedly-seen-narrowing-from-20-to-10-by-end-2026-as-capacity-expands/
+2026-10-24T17:57:06.384830+00:00 [usage] tokens in=9879 out=120 total=9999 phase=gather:K1:s2 cached=7360 cache_write=0 reasoning=0
+2026-10-24T17:57:06.385115+00:00 [tool] web_fetch https://www.trendforce.com/news/2026/10/20/news-dram-prices-seen-rising-20-qoq-in-4q26-despite-slower-gains-ai-demand-tight-supply-support-outlook/
+2026-10-24T17:57:06.385191+00:00 [tool] web_search SEMI equipment billings 2026 Q3 billion year-over-year ASML EUV shipments backlog
+2026-10-24T17:57:06.557276+00:00 [usage] tokens in=8654 out=156 total=8810 phase=gather:K3:s2 cached=6976 cache_write=0 reasoning=0
+2026-10-24T17:57:06.557693+00:00 [tool] web_search ASML High-NA EXE:5200 shipments 2026 Intel TSMC High-NA orders
+2026-10-24T17:57:06.557942+00:00 [tool] web_fetch https://www.datagravity.dev/p/the-abf-substrate-bottleneck
+2026-10-24T17:57:06.558260+00:00 [tool] web_fetch https://nvidianews.nvidia.com/news/nvidia-and-supply-chain-partners-expand-capacity-to-accelerate-ai-infrastructure-buildout
+2026-10-24T17:57:08.368402+00:00 [result] web_fetch → 2587/5298 chars [S125]
+2026-10-24T17:57:08.711814+00:00 [result] web_fetch → 2588/8897 chars [S116]
+2026-10-24T17:57:08.751361+00:00 [result] web_fetch → 2581/7804 chars [S6]
+2026-10-24T17:57:08.808384+00:00 [result] web_fetch → 2578/11173 chars [S50]
+2026-10-24T17:57:08.891420+00:00 [result] web_fetch → 2595/12049 chars [S13]
+2026-10-24T17:57:09.958499+00:00 [result] web_fetch → 2590/12053 chars [S1]
+2026-10-24T17:57:14.764400+00:00 [usage] tokens in=11131 out=130 total=11261 phase=gather:K2:s3 cached=9408 cache_write=0 reasoning=0
+2026-10-24T17:57:14.764685+00:00 [tool] web_fetch https://www.trendforce.com/news/2026/09/14/news-tsmc-reportedly-targets-22-2nm-16-3nm-capacity-boost-by-mid-2027-cowos-to-double-by-2028/
+2026-10-24T17:57:14.764938+00:00 [tool] web_search NVIDIA Rubin Ultra HBM4e 1024 GB HBM per GPU 2027 packaging quad-die
+2026-10-24T17:57:25.552296+00:00 [result] web_fetch → FETCH_FAILED(jina_primary_failed_timeouterror)
+2026-10-24T17:57:28.332711+00:00 [usage] tokens in=13394 out=1483 total=14877 phase=gather:K4:s6 cached=12544 cache_write=0 reasoning=9
+2026-10-24T17:57:28.364947+00:00 [ok] research:v3:gather K4 facts=13 verified=4 sources=10
+2026-10-24T17:57:34.857448+00:00 [usage] tokens in=7370 out=189 total=7559 phase=gather:K5:s1 cached=4224 cache_write=0 reasoning=94
+2026-10-24T17:57:34.857981+00:00 [tool] web_search TSMC CoWoS capacity doubling 2024 2025 shortage resolved wafers per month timeline
+2026-10-24T17:57:34.858075+00:00 [tool] web_search DRAM capex 2018 downturn supply glut 2019 capacity announced oversupply timeline TrendForce
+2026-10-24T17:58:01.472393+00:00 [result] web_search → 5 results
+2026-10-24T17:58:01.473136+00:00 [result] web_search → 5 results
+2026-10-24T17:58:01.473235+00:00 [result] web_search → 5 results
+2026-10-24T17:58:01.509466+00:00 [result] web_search → 5 results
+2026-10-24T17:58:01.513508+00:00 [result] web_search → 4 results
+2026-10-24T17:58:04.286402+00:00 [usage] tokens in=10732 out=137 total=10869 phase=gather:K3:s3 cached=8640 cache_write=0 reasoning=0
+2026-10-24T17:58:04.286727+00:00 [tool] web_fetch https://www.shinetsu.co.jp/en/news/news-release/shin-etsu-chemical-responds-to-the-growing-demand-and-advances-in-the-semiconductor-photoresists-market/
+2026-10-24T17:58:04.286974+00:00 [tool] web_fetch https://semiconalpha.substack.com/p/sumco-q1-fy2026-largely-as-expected
+2026-10-24T17:58:05.212948+00:00 [result] web_fetch → 2588/6914 chars [S98]
+2026-10-24T17:58:06.907558+00:00 [usage] tokens in=11789 out=136 total=11925 phase=gather:K2:s4 cached=11072 cache_write=0 reasoning=0
+2026-10-24T17:58:06.907920+00:00 [tool] web_fetch https://mlq.ai/news/nvidia-scraps-quad-die-rubin-ultra-gpu-design-cites-packaging-yield-issues/
+2026-10-24T17:58:06.908041+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-10-24T17:58:06.908137+00:00 [tool] web_fetch https://siliconanalysts.com/analysis/foundry-allocation-status-q1-2026
+2026-10-24T17:58:06.917373+00:00 [result] web_fetch → 2581/12050 chars [S2] (stored copy)
+2026-10-24T17:58:06.961102+00:00 [usage] tokens in=11347 out=115 total=11462 phase=gather:K1:s3 cached=9856 cache_write=0 reasoning=0
+2026-10-24T17:58:06.961365+00:00 [tool] web_fetch https://www.semi.org/en/semi-press-release/global-semiconductor-equipment-billings-increased-23-percent-year-over-year-in-q2-2026-semi-reports
+2026-10-24T17:58:06.961433+00:00 [tool] web_search SUMCO silicon wafer price 2026 300mm IBIDEN Unimicron ABF substrate capacity utilization 2026
+2026-10-24T17:58:08.029326+00:00 [result] web_fetch → 2575/8966 chars [S63]
+2026-10-24T17:58:13.086708+00:00 [usage] tokens in=10903 out=464 total=11367 phase=gather:K5:s2 cached=7360 cache_write=0 reasoning=304
+2026-10-24T17:58:13.087075+00:00 [tool] web_fetch https://www.fusionww.com/insights/inside-the-ai-bottleneck-cowos-hbm-and-2-3nm-capacity-constraints-through-2027
+2026-10-24T17:58:13.087318+00:00 [tool] web_fetch https://www.useluminix.com/reports/industry-analysis/dram-cycle-position-analysis-peak-timing-indicators
+2026-10-24T17:58:14.252028+00:00 [result] web_fetch → 2560/2560 chars [S68]
+2026-10-24T17:58:14.306232+00:00 [result] web_fetch → FETCH_FAILED(jina_primary_failed_timeouterror)
+2026-10-24T17:58:14.785768+00:00 [result] web_fetch → 2585/12057 chars [S120]
+2026-10-24T17:58:17.264684+00:00 [usage] tokens in=12608 out=80 total=12688 phase=gather:K5:s3 cached=10880 cache_write=0 reasoning=0
+2026-10-24T17:58:17.264927+00:00 [tool] web_fetch https://www.useluminix.com/reports/industry-analysis/dram-cycle-position-analysis-peak-timing-indicators
+2026-10-24T17:58:17.281445+00:00 [result] web_fetch → 2586/12057 chars [S120] (stored copy)
+2026-10-24T17:58:19.370298+00:00 [usage] tokens in=11624 out=95 total=11719 phase=gather:K3:s4 cached=10688 cache_write=0 reasoning=0
+2026-10-24T17:58:19.370492+00:00 [tool] web_fetch https://www.trendforce.com/news/2026/02/16/news-asmls-high-na-euv-for-2027-28-which-giants-are-betting-big-intel-samsung-sk-hynix-or-tsmc/
+2026-10-24T17:58:19.370576+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-10-24T17:58:21.580053+00:00 [usage] tokens in=13484 out=195 total=13679 phase=gather:K5:s4 cached=12544 cache_write=0 reasoning=63
+2026-10-24T17:58:21.580273+00:00 [tool] web_search ABF substrate shortage 2021 lead time 30 weeks oversupply 2023 capacity expansion resolved timeline
+2026-10-24T17:58:21.580430+00:00 [tool] web_fetch https://markets.financialcontent.com/wral/article/tokenring-2026-1-1-the-great-packaging-pivot-how-tsmc-is-doubling-cowos-capacity-to-break-the-ai-supply-bottle
+2026-10-24T17:58:23.627969+00:00 [result] web_fetch → 2543/7619 chars [S146]
+2026-10-24T17:58:32.352003+00:00 [usage] tokens in=12753 out=1840 total=14593 phase=gather:K2:s5 cached=11776 cache_write=0 reasoning=0
+2026-10-24T17:58:32.403196+00:00 [ok] research:v3:gather K2 facts=15 verified=12 sources=9
+2026-10-24T17:58:38.673000+00:00 [usage] tokens in=11743 out=1439 total=13182 phase=gather:K3:s5 cached=11584 cache_write=0 reasoning=0
+2026-10-24T17:58:38.686538+00:00 [ok] research:v3:gather K3 facts=13 verified=2 sources=11
+2026-10-24T17:58:39.851986+00:00 [result] web_search → 5 results
+2026-10-24T17:58:40.073990+00:00 [warn] research:v3:gather K7 deterministic notes (content_filter)
+2026-10-24T17:58:40.074010+00:00 [ok] research:v3:gather K7 facts=5 verified=1 sources=5 fallback=content_filter
+2026-10-24T17:58:41.538507+00:00 [usage] tokens in=7264 out=372 total=7636 phase=gather:K6:s1 cached=4224 cache_write=0 reasoning=142
+2026-10-24T17:58:41.539217+00:00 [tool] web_fetch https://www.semi.org/en/semi-press-release/global-semiconductor-equipment-billings-increased-23-percent-year-over-year-in-q2-2026-semi-reports
+2026-10-24T17:58:41.539362+00:00 [tool] web_fetch https://www.reuters.com/world/asia-pacific/tsmc-expected-report-sixth-straight-quarter-record-profit-thanks-ai-boom-2026-10-14/
+2026-10-24T17:58:41.539704+00:00 [tool] web_fetch https://www.semi.org/en/products-services/market-data/equipment
+2026-10-24T17:58:41.568296+00:00 [result] web_fetch → 2582/8966 chars [S63] (stored copy)
+2026-10-24T17:58:42.859425+00:00 [result] web_fetch → 2594/11809 chars [S78]
+2026-10-24T17:58:43.851581+00:00 [result] web_fetch → 2595/11111 chars [S66]
+2026-10-24T17:58:45.882131+00:00 [usage] tokens in=9839 out=56 total=9895 phase=gather:K6:s2 cached=7232 cache_write=0 reasoning=0
+2026-10-24T17:58:45.882422+00:00 [tool] web_search ASML Q3 2026 earnings bookings guidance 2027 EUV High-NA
+2026-10-24T17:59:01.005733+00:00 [result] web_search → 5 results
+2026-10-24T17:59:01.362712+00:00 [result] web_search → 4 results
+2026-10-24T17:59:08.756428+00:00 [usage] tokens in=12826 out=183 total=13009 phase=gather:K1:s4 cached=11328 cache_write=0 reasoning=0
+2026-10-24T17:59:08.756971+00:00 [tool] web_fetch https://www.semi.org/en/semi-press-release/semi-forecasts-11.8-percent-growth-in-silicon-wafer-shipments-in-2026-with-record-highs-expected-through-2029
+2026-10-24T17:59:08.757126+00:00 [tool] web_fetch https://www.tomshardware.com/tech-industry/semiconductors/the-state-of-abf-substrates-in-data-center-silicon-in-2026-solving-the-supply-crunch-and-material-wall
+2026-10-24T17:59:08.757269+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-10-24T17:59:08.757419+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-10-24T17:59:10.168791+00:00 [usage] tokens in=12753 out=108 total=12861 phase=gather:K6:s3 cached=9792 cache_write=0 reasoning=0
+2026-10-24T17:59:10.169085+00:00 [tool] web_fetch https://investor.asml.com/news-releases/news-release-details/asml-reports-eu11.7-billion-total-net-sales-and-eu5.0-billion-net-income-q3-2026
+2026-10-24T17:59:10.169276+00:00 [tool] web_search CoWoS capacity 2027 TSMC guidance wafers per month Q3 2026 earnings call
+2026-10-24T17:59:11.390844+00:00 [result] web_fetch → 2587/12111 chars [S156]
+2026-10-24T17:59:11.709329+00:00 [result] web_search → 5 results
+2026-10-24T17:59:13.753982+00:00 [usage] tokens in=14945 out=2160 total=17105 phase=gather:K5:s5 cached=13440 cache_write=0 reasoning=246
+2026-10-24T17:59:13.789718+00:00 [ok] research:v3:gather K5 facts=15 verified=2 sources=14
+2026-10-24T17:59:19.286401+00:00 [usage] tokens in=14107 out=99 total=14206 phase=gather:K6:s4 cached=12736 cache_write=0 reasoning=0
+2026-10-24T17:59:19.286630+00:00 [tool] web_fetch https://investor.tsmc.com/chinese/encrypt/files/encrypt_file/reports/2026-10/eba4fac72873bf546b669bd2b5d973df5c93215d/TSMC%203Q26%20Transcript.pdf
+2026-10-24T17:59:20.779825+00:00 [result] web_fetch → 2594/12124 chars [S163]
+2026-10-24T17:59:24.522631+00:00 [usage] tokens in=14832 out=101 total=14933 phase=gather:K6:s5 cached=14080 cache_write=0 reasoning=0
+2026-10-24T17:59:24.522884+00:00 [tool] web_fetch https://investor.tsmc.com/chinese/encrypt/files/encrypt_file/reports/2026-10/eba4fac72873bf546b669bd2b5d973df5c93215d/TSMC%203Q26%20Transcript.pdf
+2026-10-24T17:59:24.532610+00:00 [result] web_fetch → 2595/12124 chars [S163] (stored copy)
+2026-10-24T17:59:31.695775+00:00 [usage] tokens in=13055 out=1930 total=14985 phase=gather:K1:s5 cached=12800 cache_write=0 reasoning=10
+2026-10-24T17:59:31.710301+00:00 [ok] research:v3:gather K1 facts=20 verified=3 sources=13
+2026-10-24T17:59:48.181211+00:00 [usage] tokens in=15556 out=1566 total=17122 phase=gather:K6:s6 cached=14784 cache_write=0 reasoning=0
+2026-10-24T17:59:48.221981+00:00 [ok] research:v3:gather K6 facts=12 verified=8 sources=11
+2026-10-24T17:59:48.224335+00:00 [stage] research:v3:gap round 1
+2026-10-24T18:00:01.390771+00:00 [usage] tokens in=5719 out=844 total=6563 phase=gap:gap:r1 cached=1280 cache_write=0 reasoning=0
+2026-10-24T18:00:04.419618+00:00 [stage] v3: gap round 1: official data for follow-ups (stored=1, failed=0)
+2026-10-24T18:00:04.419648+00:00 [stage] research:v3:gather start (3 KIQs, workers=4)
+2026-10-24T18:00:04.419761+00:00 [tool] web_search Samsung 2nm Exynos SF2 qualification yield mass production October 2026
+2026-10-24T18:00:04.419843+00:00 [tool] web_search SMIC UMC GlobalFoundries mature node 28nm utilization average selling price Q3 2026
+2026-10-24T18:00:04.419985+00:00 [tool] web_search TSMC CoWoS capacity 2027 wafers per month guidance earnings call
+2026-10-24T18:00:04.420066+00:00 [tool] web_search IBIDEN capex 2026 2027 ABF substrate new plant Gama
+2026-10-24T18:00:06.255615+00:00 [result] web_search → 5 results
+2026-10-24T18:00:06.255670+00:00 [tool] web_search BIS Affiliates Rule suspension November 10 2026 Federal Register extension
+2026-10-24T18:00:39.224476+00:00 [result] web_search → 4 results
+2026-10-24T18:00:39.224526+00:00 [tool] web_search BIS entity list rule October November 2026 semiconductor China
+2026-10-24T18:00:39.808212+00:00 [result] web_search → 5 results
+2026-10-24T18:00:41.074232+00:00 [result] web_search → 5 results
+2026-10-24T18:01:05.990087+00:00 [result] web_search → 5 results
+2026-10-24T18:01:06.135262+00:00 [result] web_search → 5 results
+2026-10-24T18:01:07.991874+00:00 [usage] tokens in=4244 out=3 total=4247 phase=gap:gather:prime cached=4224 cache_write=0 reasoning=0
+2026-10-24T18:01:11.618240+00:00 [usage] tokens in=7069 out=174 total=7243 phase=gap:G1F2:s1 cached=4224 cache_write=0 reasoning=0
+2026-10-24T18:01:11.618556+00:00 [tool] web_fetch https://finance.biggo.com/news/adcec901-53b3-453f-bf00-8373ebb1bb97
+2026-10-24T18:01:11.618654+00:00 [tool] web_fetch https://www.ibiden.com/company/2026/02/notice-regarding-capital-investment-plan-for-high-performance-ic-package-substrates.html
+2026-10-24T18:01:11.618918+00:00 [tool] web_search Unimicron ABF substrate capex 2026 2027 new capacity expansion
+2026-10-24T18:01:11.774986+00:00 [usage] tokens in=7017 out=159 total=7176 phase=gap:G1F1:s1 cached=4224 cache_write=0 reasoning=56
+2026-10-24T18:01:11.775142+00:00 [tool] web_search SMIC UMC GlobalFoundries mature node utilization Q3 2026 pricing
+2026-10-24T18:01:11.775247+00:00 [tool] web_search ASE Amkor OSAT capacity utilization 2026 advanced packaging lead time
+2026-10-24T18:01:11.775381+00:00 [tool] web_search HBM4 wafer allocation 2027 SK Hynix Samsung Micron market share bit growth
+2026-10-24T18:01:12.657428+00:00 [result] web_fetch → 2559/3186 chars [S166]
+2026-10-24T18:01:13.393193+00:00 [result] web_search → 5 results
+2026-10-24T18:01:13.397117+00:00 [result] web_search → 5 results
+2026-10-24T18:01:15.208331+00:00 [usage] tokens in=7240 out=130 total=7370 phase=gap:G1F3:s1 cached=4224 cache_write=0 reasoning=0
+2026-10-24T18:01:15.208652+00:00 [tool] web_fetch https://www.federalregister.gov/documents/2025/11/12/2025-19846/one-year-suspension-of-expansion-of-end-user-controls-for-affiliates-of-certain-listed-entities
+2026-10-24T18:01:15.208855+00:00 [tool] web_search BIS Affiliates Rule November 10 2026 extension decision
+2026-10-24T18:01:15.208934+00:00 [tool] web_search China rare earth export license approval rate delay 2026 semiconductor
+2026-10-24T18:01:16.647022+00:00 [result] web_fetch → 2580/12133 chars [S171]
+2026-10-24T18:01:19.268296+00:00 [result] web_fetch → 2595/12128 chars [S48]
+2026-10-24T18:01:21.912208+00:00 [usage] tokens in=9267 out=114 total=9381 phase=gap:G1F2:s2 cached=7040 cache_write=0 reasoning=0
+2026-10-24T18:01:21.912783+00:00 [tool] web_fetch https://www.trendforce.com/news/2026/10/20/news-unimicron-warns-of-ic-substrate-crunch-up-to-30-month-equipment-lead-times-20-material-gap-in-2027/
+2026-10-24T18:01:21.912877+00:00 [tool] web_search ASML Q3 2026 earnings 2027 revenue guidance EUV High-NA backlog
+2026-10-24T18:01:25.512919+00:00 [result] web_fetch → 2578/5697 chars [S193]
+2026-10-24T18:01:39.323412+00:00 [result] web_search → 4 results
+2026-10-24T18:01:39.459161+00:00 [result] web_search → 4 results
+2026-10-24T18:01:39.517962+00:00 [result] web_search → 5 results
+2026-10-24T18:01:39.681039+00:00 [result] web_search → 5 results
+2026-10-24T18:01:39.968646+00:00 [result] web_search → 5 results
+2026-10-24T18:01:42.704044+00:00 [usage] tokens in=8909 out=132 total=9041 phase=gap:G1F1:s2 cached=6976 cache_write=0 reasoning=0
+2026-10-24T18:01:42.704294+00:00 [tool] web_search NAND flash contract price Q4 2026 TrendForce utilization forecast
+2026-10-24T18:01:42.704439+00:00 [tool] web_fetch https://siliconanalysts.com/analysis/hbm4-market-share-race-2026
+2026-10-24T18:01:42.704572+00:00 [tool] web_fetch https://counterpointresearch.com/en/insights/global-dram-and-hbm-market-share
+2026-10-24T18:01:43.690740+00:00 [result] web_fetch → 2551/3798 chars [S200]
+2026-10-24T18:01:43.993525+00:00 [result] web_fetch → 2589/12057 chars [S201]
+2026-10-24T18:01:44.918576+00:00 [usage] tokens in=10742 out=109 total=10851 phase=gap:G1F2:s3 cached=9216 cache_write=0 reasoning=0
+2026-10-24T18:01:44.919212+00:00 [tool] web_fetch https://investor.asml.com/news-releases/news-release-details/asml-reports-eu11.7-billion-total-net-sales-and-eu5.0-billion-net-income-q3-2026
+2026-10-24T18:01:44.919365+00:00 [tool] web_search SUMCO 300mm wafer expansion capacity 2027 capex GlobalWafers
+2026-10-24T18:01:44.934338+00:00 [result] web_fetch → 2578/12111 chars [S156] (stored copy)
+2026-10-24T18:01:46.088959+00:00 [usage] tokens in=9127 out=199 total=9326 phase=gap:G1F3:s2 cached=7232 cache_write=0 reasoning=0
+2026-10-24T18:01:46.089392+00:00 [tool] web_fetch https://www.millercanfield.com/resources-BIS-Affiliates-Rule-Suspension-Extended.html
+2026-10-24T18:01:46.089645+00:00 [tool] web_fetch https://www.csis.org/analysis/chinas-new-rare-earth-and-magnet-restrictions-threaten-us-defense-supply-chains
+2026-10-24T18:01:46.089996+00:00 [tool] web_fetch https://www.technology.org/2026/10/19/china-rare-earth-export-pause-november-10/
+2026-10-24T18:01:46.099172+00:00 [result] web_fetch → 2589/12059 chars [S106] (stored copy)
+2026-10-24T18:01:48.039158+00:00 [result] web_fetch → 2578/11114 chars [S172]
+2026-10-24T18:01:50.238161+00:00 [result] web_fetch → 2586/12086 chars [S204]
+2026-10-24T18:01:55.312339+00:00 [usage] tokens in=11321 out=143 total=11464 phase=gap:G1F3:s3 cached=9088 cache_write=0 reasoning=47
+2026-10-24T18:01:55.312693+00:00 [tool] web_fetch https://www.technology.org/2026/10/19/china-rare-earth-export-pause-november-10/
+2026-10-24T18:01:55.312867+00:00 [tool] web_search MOFCOM rare earth license approval rate percent general licence 2026 dysprosium terbium semiconductor
+2026-10-24T18:01:55.321867+00:00 [result] web_fetch → 2590/12059 chars [S106] (stored copy)
+2026-10-24T18:02:43.444743+00:00 [result] web_search → 5 results
+2026-10-24T18:02:43.471727+00:00 [result] web_search → 5 results
+2026-10-24T18:02:43.822237+00:00 [result] web_search → 5 results
+2026-10-24T18:02:46.506608+00:00 [usage] tokens in=11362 out=123 total=11485 phase=gap:G1F1:s3 cached=8896 cache_write=0 reasoning=0
+2026-10-24T18:02:46.506968+00:00 [tool] web_fetch https://www.trendforce.com/presscenter/news/20260930-13258.html
+2026-10-24T18:02:46.507075+00:00 [tool] web_fetch https://www.tomshardware.com/tech-industry/semiconductors/the-trailing-edge-foundry-roadmap-examined
+2026-10-24T18:02:46.621254+00:00 [usage] tokens in=11979 out=105 total=12084 phase=gap:G1F2:s4 cached=10688 cache_write=0 reasoning=0
+2026-10-24T18:02:46.621570+00:00 [tool] web_fetch https://investor.asml.com/news-releases/news-release-details/asml-reports-eu11.7-billion-total-net-sales-and-eu5.0-billion-net-income-q3-2026
+2026-10-24T18:02:46.621764+00:00 [tool] web_search SUMCO capex plan fiscal 2026 300mm wafer capacity expansion new plant
+2026-10-24T18:02:46.633288+00:00 [result] web_fetch → 2577/12111 chars [S156] (stored copy)
+2026-10-24T18:02:47.716257+00:00 [result] web_fetch → 2259/2728 chars [S25]
+2026-10-24T18:02:48.082520+00:00 [result] web_fetch → 2585/9805 chars [S208]
+2026-10-24T18:02:48.129776+00:00 [result] web_search → 5 results
+2026-10-24T18:02:51.584304+00:00 [usage] tokens in=12904 out=171 total=13075 phase=gap:G1F1:s4 cached=11328 cache_write=0 reasoning=41
+2026-10-24T18:02:51.585064+00:00 [tool] web_fetch https://www.trendforce.com/presscenter/news/20260929-13255.html
+2026-10-24T18:02:51.585252+00:00 [tool] web_fetch https://mlq.ai/news/samsung-shifts-sf14-foundry-target-to-2029-as-sf2-roadmap-expands/
+2026-10-24T18:02:51.585423+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-10-24T18:02:51.585582+00:00 [result] web_fetch → FETCH_BUDGET_EXHAUSTED
+2026-10-24T18:03:09.604346+00:00 [usage] tokens in=12612 out=1352 total=13964 phase=gap:G1F3:s4 cached=11264 cache_write=0 reasoning=53
+2026-10-24T18:03:09.632309+00:00 [ok] research:v3:gather G1F3 facts=10 verified=2 sources=6
+2026-10-24T18:03:10.661195+00:00 [usage] tokens in=13080 out=1412 total=14492 phase=gap:G1F1:s5 cached=12864 cache_write=0 reasoning=0
+2026-10-24T18:03:10.697651+00:00 [ok] research:v3:gather G1F1 facts=16 verified=6 sources=13
+2026-10-24T18:03:15.122951+00:00 [usage] tokens in=13261 out=1795 total=15056 phase=gap:G1F2:s5 cached=11968 cache_write=0 reasoning=42
+2026-10-24T18:03:15.132427+00:00 [ok] research:v3:gather G1F2 facts=15 verified=4 sources=15
+2026-10-24T18:03:15.137856+00:00 [warn] v3: evidence digest dropped 20 lower-priority lines to fit its caps
+2026-10-24T18:03:15.184798+00:00 [stage] research:v3:synthesize start (8 groups)
+2026-10-24T18:03:17.126656+00:00 [usage] tokens in=21507 out=3 total=21510 phase=synthesize:synth:prime cached=0 cache_write=0 reasoning=0
+2026-10-24T18:05:14.188597+00:00 [usage] tokens in=22848 out=10921 total=33769 phase=synthesize:synth:g2 cached=21440 cache_write=0 reasoning=9035
+2026-10-24T18:05:14.189520+00:00 [ok] research:v3:synthesize G2 written=2 fallback=0
+2026-10-24T18:05:42.092803+00:00 [usage] tokens in=22904 out=9930 total=32834 phase=synthesize:synth:g4 cached=21504 cache_write=0 reasoning=7857
+2026-10-24T18:05:42.093826+00:00 [ok] research:v3:synthesize G4 written=2 fallback=0
+2026-10-24T18:06:21.033031+00:00 [warn] v3: section group 1 failed (content_filter: primary: BadRequestError: Error code: 400 - {'contentFilter': [{'level': 1, 'role': 'assistant'}], 'error': {'code': '1301', 'message': '系统检测到输入或生成内容可能包含不安全或敏感内容，请您避免输入易产生敏感内容的提示语，感谢您的配合。'}})
+2026-10-24T18:07:17.577227+00:00 [usage] tokens in=22829 out=5159 total=27988 phase=synthesize:synth:s1 cached=21504 cache_write=0 reasoning=4028
+2026-10-24T18:07:33.975102+00:00 [usage] tokens in=22928 out=23542 total=46470 phase=synthesize:synth:g3 cached=21440 cache_write=0 reasoning=21265
+2026-10-24T18:07:33.976011+00:00 [ok] research:v3:synthesize G3 written=2 fallback=0
+2026-10-24T18:07:39.375910+00:00 [usage] tokens in=22831 out=12693 total=35524 phase=synthesize:synth:g5 cached=21440 cache_write=0 reasoning=11479
+2026-10-24T18:07:39.376575+00:00 [ok] research:v3:synthesize G5 written=1 fallback=0
+2026-10-24T18:08:45.474223+00:00 [usage] tokens in=22763 out=8009 total=30772 phase=synthesize:synth:s2 cached=21504 cache_write=0 reasoning=6976
+2026-10-24T18:08:45.474786+00:00 [ok] research:v3:synthesize G1 written=2 fallback=0
+2026-10-24T18:09:23.591346+00:00 [usage] tokens in=23242 out=18022 total=41264 phase=synthesize:synth:g6 cached=21504 cache_write=0 reasoning=16746
+2026-10-24T18:09:23.592091+00:00 [ok] research:v3:synthesize G6 written=1 fallback=0
+2026-10-24T18:10:00.404901+00:00 [usage] tokens in=22847 out=11571 total=34418 phase=synthesize:synth:g7 cached=21504 cache_write=0 reasoning=10228
+2026-10-24T18:10:00.405539+00:00 [ok] research:v3:synthesize G7 written=1 fallback=0
+2026-10-24T18:10:05.210288+00:00 [usage] tokens in=22803 out=12663 total=35466 phase=synthesize:synth:g8 cached=21504 cache_write=0 reasoning=11352
+2026-10-24T18:10:05.210710+00:00 [ok] research:v3:synthesize G8 written=1 fallback=0
+2026-10-24T18:11:45.986685+00:00 [usage] tokens in=6137 out=9115 total=15252 phase=synthesize:synth:exec cached=3200 cache_write=0 reasoning=8181
+2026-10-24T18:11:45.988804+00:00 [ok] research:v3:synthesize done
+2026-10-24T18:11:45.994044+00:00 [stage] research:v3:qa start
+2026-10-24T18:11:47.465510+00:00 [ok] research:v3:qa passed=False failures=1 repaired=0
+2026-10-24T18:11:47.472664+00:00 [stage] research:v3:finalize start
+2026-10-24T18:11:47.485843+00:00 [ok] wrote research_report.md (69874 chars)
+2026-10-24T18:11:47.485863+00:00 [ok] wrote sources.json (80 sources)
+2026-10-24T18:11:49.339889+00:00 [usage] tokens in=18705 out=3 total=18708 phase=finalize:extract:prime cached=3200 cache_write=0 reasoning=0
+2026-10-24T18:12:00.649934+00:00 [usage] tokens in=19341 out=969 total=20310 phase=finalize:extract:frame cached=18624 cache_write=0 reasoning=29
+2026-10-24T18:13:10.435648+00:00 [usage] tokens in=18999 out=9503 total=28502 phase=finalize:extract:facts cached=18624 cache_write=0 reasoning=13
+2026-10-24T18:14:01.794129+00:00 [usage] tokens in=19309 out=12554 total=31863 phase=finalize:extract:actors cached=18624 cache_write=0 reasoning=6
+2026-10-24T18:14:01.798227+00:00 [ok] actor-cast discipline: 21 extracted → 19 main actors kept (cap=20, media demoted=2, rank-cut=0, off-cast edges dropped=2)
+2026-10-24T18:14:01.810588+00:00 [ok] wrote actors.json (19 actors)
+2026-10-24T18:14:01.811137+00:00 [ok] wrote timeline.json (32 events)
+2026-10-24T18:14:01.811870+00:00 [ok] wrote quantitative.json (60 rows)
+2026-10-24T18:14:01.812275+00:00 [ok] wrote contested.json (11 claims)
+2026-10-24T18:14:01.812432+00:00 [warn] v3: research degraded (1 event(s)): 1 of 10 KIQ investigations ended in deterministic notes: K7 (content_filter)
+2026-10-24T18:14:01.812449+00:00 [ok] research_quality=0.635 (grounding=0.412)
+2026-10-24T18:14:05.854143+00:00 [usage] tokens in=1048 out=197 total=1245 phase=prediction-market-query-derivation cached=0 cache_write=0 reasoning=9
+2026-10-24T18:14:05.854307+00:00 [ok] prediction markets: LLM derived 16 market-title queries
+2026-10-24T18:14:20.865886+00:00 [warn] prediction markets: no relevant active markets (queries=['BIS Affiliates Rule expires November 2026', 'China rare earth export ban 2027', 'CoWoS capacity 200000 wpm 2027', 'SK Hynix HBM4 qualification 2027', 'TSMC N2 capacity 2027', 'Samsung SF2 2nm external qualification 2027', 'ASML High-NA shipments 2027 count', 'HBM ASP increase 121% 2027', 'ABF substrate shortage Unimicron 2027', '300mm wafer shortage 2027', 'TSMC 2027 capex record', 'NVIDIA Rubin Ultra 12-Hi HBM 2027', 'SMIC 28nm expansion 2027', 'DRAM shortage end-2027', 'OSAT capacity bottleneck 2027', 'China gallium export controls extended 2027'])
+2026-10-24T18:14:20.867238+00:00 [warn] wrote prediction_markets.json (no_relevant_markets marker; no report section appended)
+2026-10-24T18:14:20.867884+00:00 [stage] research charts: rendering via /Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python render.py (out=/Users/rogerlin/Downloads/DeepResearchForecast/backend/uploads/pipelines/pipe_a7a6b75468b2/handoff)
+2026-10-24T18:14:35.699297+00:00 [ok] research charts: embedded 7 chart(s) into research_report.md (Visual Annex)
+2026-10-24T18:14:35.699348+00:00 [ok] wrote charts.json (7 charts) + charts/ files
+2026-10-24T18:14:35.703209+00:00 [ok] wrote quantitative.json (62 rows, 4 from official data)
+2026-10-24T18:14:35.705357+00:00 [done] research complete (v3: 10 KIQs, 80 sources, 70572 chars)

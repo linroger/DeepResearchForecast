@@ -1,0 +1,2697 @@
+{
+  "central_question": "For calendar year 2027: combined capex of the four major hyperscalers (Amazon, Microsoft, Alphabet, Meta) with a 70% confidence interval; whether global datacenter electricity consumption grows more than 20% year-over-year; and the probability that grid interconnection constraints delay more than 5 GW of planned US datacenter capacity into 2028.",
+  "as_of_date": "2026-10-20",
+  "situation_brief": {
+    "current_situation": "Combined 2026 capex guidance for the four hyperscalers stands at $720-745 billion, up ~77% from a 2025 record of roughly $410 billion; none has issued formal 2027 guidance as of 20 October 2026, but analyst consensus puts 2027 at $934.5 billion, with bank models at or above $1 trillion. Global datacenter electricity was 485 TWh in 2025 (+17%); the IEA central path implies ~14%/yr to ~950 TWh by 2030.",
+    "context": "The AI buildout is funded by an accelerating shift from cash flow to debt (Meta $30B SPV, Oracle $18B, Alphabet $25B bond against >$115B book; lease commitments >$850B). Physical supply is the binding constraint: GE Vernova gas contracts at 116 GW targeting 125 GW by end-2026, new heavy-duty turbine lead times ~3 years, GSU transformer lead times >160 weeks, US interconnection queues >2,060 GW with median request-to-operation over five years, and 36.3 GW of US datacenter additions scheduled for 2027 against 8.5 GW energized in 2025.",
+    "dynamics": "Analyst consensus has persistently lagged outcomes (2026 forecasts rose from ~$284B to >$525B); guidance moves in contagion after Alphabet's July 2026 raise. Grid friction is rising: PJM cut its summer-2027 peak ~4 GW on stricter datacenter vetting, Texas's ERCOT pause could delay 49.8 GW, and PJM's IRAS bring-your-own-capacity rules start June 2027. Only ~50-60% of scheduled capacity arrives on time.",
+    "fault_lines": [
+      "Capex escalation vs rising investor scrutiny and AI monetization risk",
+      "Datacenter power demand vs turbine/transformer/interconnection lead times",
+      "On-balance-sheet capex vs off-balance-sheet SPV/JV financing (Meta Hyperion)",
+      "Debt-market appetite as a new gating factor for 2027 capacity",
+      "Grid reliability vs large-load accretion in PJM/Virginia and ERCOT/Texas"
+    ],
+    "catalysts": [
+      "Q3 2026 earnings calls, late October-November 2026: first formal 2027 guidance signals",
+      "FERC large-load protocol RTO responses due 16 Nov 2026",
+      "ERCOT pause resolution, expected within months of 3 Aug 2026",
+      "GE Vernova Q4 2026 results: >=125 GW gas capacity under contract by end-2026",
+      "PJM January 2027 peak forecast vintage",
+      "Dominion contracted datacenter pipeline updates (~53.8 GW July 2026)",
+      "Monthly EIA STEO/EIA-861M prints, especially Virginia commercial sales"
+    ]
+  },
+  "actors": [
+    {
+      "name": "Amazon (AWS)",
+      "type": "Organization",
+      "role": "Largest hyperscaler capex spender; sets the 2027 total's floor",
+      "stance": "Expanding aggressively; ~$220B 2026 capex plan; 2027 consensus $256.5B",
+      "description": "Largest of the four hyperscalers by capex; 2026 guidance about $220 billion on a cash-capex basis; MarketScreener consensus for 2027 is $256.5 billion. Shares fell amid capex scrutiny after Alphabet's July 2026 raise.",
+      "stated_vs_revealed": "Guidance emphasizes ~$220B 2026 spend; no formal 2027 guidance issued, while consensus implies continued escalation",
+      "memory": "Raised 2025 guidance from $118B to ~$125B; judged likely to follow Alphabet's July 2026 raise per Evercore ISI",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "Amazon",
+        "AWS"
+      ],
+      "goals": [
+        "Secure AI/cloud compute capacity for 2027",
+        "Maintain AWS competitive position against Microsoft, Google"
+      ],
+      "constraints": [
+        "Power procurement and interconnection lead times",
+        "Investor capex scrutiny and share-price pressure"
+      ],
+      "assets": [
+        "~$220B 2026 capex budget",
+        "Largest hyperscaler cash-flow base"
+      ],
+      "vulnerabilities": [
+        "AI monetization shortfall",
+        "Grid interconnection delays"
+      ],
+      "incentives": [
+        {
+          "driver": "AI/cloud market share",
+          "gains_if": "AI demand sustains and capacity arrives on time",
+          "loses_if": "overbuild forces cuts or monetization disappoints",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "capacity-led competition",
+          "customer demand first"
+        ],
+        "beliefs": [
+          "AI demand justifies record capex"
+        ],
+        "identity": "Largest capex spender anchoring the buildout",
+        "frame": "Race for AI compute scale"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "Largest single component of the forecast capex total"
+      }
+    },
+    {
+      "name": "Microsoft",
+      "type": "Organization",
+      "role": "Hyperscaler with AI capacity commitments and power procurement deals",
+      "stance": "Expanding; ~$175B 2026 (accounting-adjusted); 2027 consensus $207.6B",
+      "description": "FY2025 capex rose 45% to $64.55B ex-finance leases; FY2026 growth to accelerate. 2026 calendar guidance ~$175B; consensus 2027 $207.6B. Holds Constellation/Three Mile Island arrangement (~835 MW reported) and leads datacenter lease commitments with Meta (> $850B combined tracker).",
+      "stated_vs_revealed": "Fiscal-year framing and lease-inclusive accounting can mask calendar-year spend acceleration",
+      "memory": "CFO Amy Hood said FY2026 capex growth would accelerate",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "Deliver committed AI capacity incl. OpenAI commitments",
+        "Secure long-lead power via nuclear PPAs"
+      ],
+      "constraints": [
+        "Capex definition includes finance leases when commenced",
+        "Investor scrutiny after share falls"
+      ],
+      "assets": [
+        "~$175B 2026 budget",
+        "Nuclear PPA (Three Mile Island/Constellation)",
+        "Massive lease-commitment pipeline"
+      ],
+      "vulnerabilities": [
+        "AI monetization pace",
+        "Power availability"
+      ],
+      "incentives": [
+        {
+          "driver": "OpenAI-anchored compute commitments",
+          "gains_if": "capacity and revenue ramp together",
+          "loses_if": "monetization lags buildout",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "long-term AI platform bet"
+        ],
+        "beliefs": [
+          "Power deals lock advantage"
+        ],
+        "identity": "AI capacity committer",
+        "frame": "Compute as strategic moat"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.9,
+        "basis": "Second-largest spender; lease commitments shape the debt-market channel"
+      }
+    },
+    {
+      "name": "Alphabet (Google)",
+      "type": "Organization",
+      "role": "Hyperscaler whose July 2026 capex raise set guidance-contagion dynamics; TPU-driven buildout",
+      "stance": "Expanding fastest by consensus; 2026 $195-205B; 2027 consensus $284.8B",
+      "description": "Raised 2026 capex to $195-205B; its July 2026 raise triggered expectations Amazon and Microsoft would follow (Evercore ISI's Mark Mahaney). Raised $25B bond against >$115B AI-linked order book. 2027 consensus $284.8B, the largest of the four. Reported 1,800 MW Elementl Power nuclear deal.",
+      "stated_vs_revealed": "Publicly frames spend as demand-driven; debt raise reveals funding diversification",
+      "memory": "July 2026 raise prompted sector-wide escalation expectations",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "Google"
+      ],
+      "goals": [
+        "Build TPU-driven AI infrastructure",
+        "Fund buildout efficiently via debt markets"
+      ],
+      "constraints": [
+        "Share-price capex scrutiny",
+        "Grid/turbine lead times"
+      ],
+      "assets": [
+        "$25B bond capacity on >4x order-book coverage",
+        "TPU supply chain",
+        "$195-205B 2026 budget"
+      ],
+      "vulnerabilities": [
+        "High consensus bar for 2027 ($284.8B)"
+      ],
+      "incentives": [
+        {
+          "driver": "Vertical integration (TPUs) and AI leadership",
+          "gains_if": "demand sustains; guidance contagion continues",
+          "loses_if": "monetization disappoints after aggressive raises",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "infrastructure-led AI strategy"
+        ],
+        "beliefs": [
+          "TPU buildout justifies steepest growth"
+        ],
+        "identity": "Guidance pace-setter",
+        "frame": "AI compute race leader"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.92,
+        "basis": "Set the escalation dynamic shaping the 2027 consensus"
+      }
+    },
+    {
+      "name": "Meta Platforms",
+      "type": "Organization",
+      "role": "Hyperscaler with aggressive datacenter pipeline and SPV financing",
+      "stance": "Expanding via off-balance-sheet structures; 2026 $130-145B; 2027 consensus $185.6B",
+      "description": "Issued $30B of debt in September 2026 via SPV financing for the Louisiana Hyperion data center. Reported nuclear agreements up to 6.6 GW by 2035 and a 20-year 1.1 GW Constellation PPA. 2027 consensus $185.6B; whether it fully captures Hyperion JV economics is unknown.",
+      "stated_vs_revealed": "Guided $130-145B 2026; SPV moves spend off balance sheet, so economic buildout exceeds reported capex",
+      "memory": "Hyperion SPV and Constellation PPA anchor its 2027+ pipeline",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "Meta"
+      ],
+      "goals": [
+        "Fund Hyperion-scale campuses",
+        "Secure late-decade nuclear power"
+      ],
+      "constraints": [
+        "SPV structures obscure economic buildout vs reported capex",
+        "Investor scrutiny"
+      ],
+      "assets": [
+        "$30B SPV debt capacity",
+        "6.6 GW nuclear pipeline (to 2035)",
+        "Lead in lease commitments with Microsoft"
+      ],
+      "vulnerabilities": [
+        "Debt-market dependence",
+        "Reported capex may undershoot or overshoot consensus on JV accounting"
+      ],
+      "incentives": [
+        {
+          "driver": "AI compute for internal and licensed models",
+          "gains_if": "debt appetite holds and capacity energizes",
+          "loses_if": "monetization fails against heavy leverage",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "scale-first AI infrastructure"
+        ],
+        "beliefs": [
+          "structured finance extends capacity"
+        ],
+        "identity": "Most leveraged innovator in hyperscaler funding",
+        "frame": "Build now, monetize later"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.9,
+        "basis": "SPV financing model is a new gating channel for 2027 capacity"
+      }
+    },
+    {
+      "name": "GE Vernova",
+      "type": "Organization",
+      "role": "Gas turbine and grid-equipment supply bottleneck gatekeeper",
+      "stance": "Expanding; gas capacity under contract 116 GW targeting >=125 GW by end-2026; slots sold out toward 2029-2030",
+      "description": "Q2 2026: gas backlog plus slot reservations 100->116 GW; at least 125 GW under contract expected by end-2026; total backlog $176B; Q2 orders $24.2B (+88% organic); 2026 revenue guidance raised to $45.5-46.5B. CEO Scott Strazik puts new heavy-duty turbine lead times at ~3 years and argues turbines are often not the binding constraint. Datacenter electrification orders >$5B YTD July 2026, more than double 2025's total. Chevron partnership for 4 GW by 2027 (vendor-reported).",
+      "stated_vs_revealed": "Publicly argues turbines are not gating buildouts; sold-out reservation book and 3-year lead times reveal tightness",
+      "memory": "Reservations sold out through 2030; 2031 slots reportedly on sale",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "GEV"
+      ],
+      "goals": [
+        "Convert backlog at rising prices (Wood Mackenzie projects $600/kW by end-2027)",
+        "Expand electrification segment"
+      ],
+      "constraints": [
+        "~3-year heavy-duty turbine lead times",
+        "Manufacturing capacity"
+      ],
+      "assets": [
+        "116 GW gas contracts; $176B backlog",
+        "Electrification order surge",
+        "Aeroderivative/containerized fast-deploy units"
+      ],
+      "vulnerabilities": [
+        "Execution on backlog conversion",
+        "Demand shock if capex corrects"
+      ],
+      "incentives": [
+        {
+          "driver": "Scarcity pricing and backlog economics",
+          "gains_if": "buildout surge continues; prices rise 10-20 points/kW",
+          "loses_if": "hyperscaler capex cuts hit order book",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "order-book discipline"
+        ],
+        "beliefs": [
+          "gas plus electrification electrifies AI growth"
+        ],
+        "identity": "Supply-side gatekeeper",
+        "frame": "Physical capacity is the scarce asset"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.93,
+        "basis": "Turbine and transformer supply directly gates 2027 energization and the >5 GW delay question"
+      }
+    },
+    {
+      "name": "PJM Interconnection",
+      "type": "Organization",
+      "role": "Interconnection queue governance for key datacenter states",
+      "stance": "Tightening large-load rules while expediting some projects",
+      "description": "Cut summer-2027 peak forecast ~4 GW (2028 by 4.4 GW) in January 2026 on stricter datacenter vetting. Opened Expedited Interconnection Track 31 Jul 2026 (up to 10 projects/yr >=250 MW, GIAs in ~10 months). IRAS large-load rules from 1 Jun 2027: new >=50 MW loads must bring new capacity, buy a backstop, or face curtailment. Reformed Cycle 1 (2026-2028): 201.5 GW qualified of 220 GW proposed; 51 GW signed GIAs, many stalled. 2027/28 auction $16.4B with data centers $6.5B (reported). Wholesale prices +41% in 2026.",
+      "stated_vs_revealed": "Publicly procedural; January 2026 forecast cuts reveal active skepticism of datacenter vetting",
+      "memory": "PJM January forecast vintages are key signposts (next: Jan 2027)",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "arbiter",
+      "aliases": [
+        "PJM"
+      ],
+      "goals": [
+        "Maintain reliability under large-load growth",
+        "Reform queue processing"
+      ],
+      "constraints": [
+        "Five-year-plus median request-to-operation times",
+        "Regulatory oversight"
+      ],
+      "assets": [
+        "Queue governance power",
+        "Capacity market mechanisms"
+      ],
+      "vulnerabilities": [
+        "Political pressure over price spikes"
+      ],
+      "incentives": [
+        {
+          "driver": "Grid reliability",
+          "gains_if": "orderly large-load integration",
+          "loses_if": "reliability events or price blowouts",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "reliability first"
+        ],
+        "beliefs": [
+          "large loads must pay their way (IRAS)"
+        ],
+        "identity": "Arbiter of East Coast datacenter energization",
+        "frame": "Bring-your-own-capacity future"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 1,
+        "score": 0.9,
+        "basis": "Its rules and forecasts directly determine GW slipping into 2028"
+      }
+    },
+    {
+      "name": "Dominion Energy",
+      "type": "Organization",
+      "role": "Utility serving the largest US datacenter load pocket in Virginia",
+      "stance": "Accommodating rapid datacenter load growth",
+      "description": "Reported ~53.8 GW of contracted datacenter capacity in July 2026, up ~5.3 GW from December 2025; 40,000 MW of datacenter-related capacity requests as of December 2024; expects ~5.4%/yr load growth; Q3 2025 revenue $4.53B vs $3.94B.",
+      "stated_vs_revealed": "Reports robust demand; contracted-GW additions per half-year (>=5 GW surge, <2 GW constraint) are the cleaner signal",
+      "memory": "Virginia commercial sales +9.788% YoY Dec 2025",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Serve contracted datacenter load while managing rate base"
+      ],
+      "constraints": [
+        "Transmission and interconnection timing",
+        "Regulatory approval of capex"
+      ],
+      "assets": [
+        "Contracted pipeline ~53.8 GW",
+        "Rate-base growth incentive"
+      ],
+      "vulnerabilities": [
+        "Delays converting requests to energized capacity"
+      ],
+      "incentives": [
+        {
+          "driver": "Rate-base growth from datacenter capex",
+          "gains_if": "pipeline converts to served load",
+          "loses_if": "large customers self-supply or defect",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "regulated growth"
+        ],
+        "beliefs": [
+          "datacenter demand is a decade-long trend"
+        ],
+        "identity": "Virginia load-pocket utility",
+        "frame": "Growth utility"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.8,
+        "basis": "Leading indicator of US datacenter energization pace"
+      }
+    },
+    {
+      "name": "FERC",
+      "type": "Government",
+      "role": "Approves large-load interconnection arrangements",
+      "stance": "Accelerating large-load interconnection protocols",
+      "description": "Issued order on large-load interconnection protocols 18 Jun 2026; RTO show-cause responses due 16 Nov 2026; relief expected after mid-2027.",
+      "stated_vs_revealed": "Pro-reform order; actual effect on 2027 builds comes after mid-2027",
+      "memory": "June 2026 order is the reference point for queue reform",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "arbiter",
+      "aliases": [
+        "US Federal Energy Regulatory Commission"
+      ],
+      "goals": [
+        "Standardize and speed large-load connections while protecting reliability"
+      ],
+      "constraints": [
+        "Procedural timelines",
+        "State/RTO implementation"
+      ],
+      "assets": [
+        "Federal regulatory authority over interconnection"
+      ],
+      "vulnerabilities": [
+        "Implementation lag means 2027 impact limited"
+      ],
+      "incentives": [
+        {
+          "driver": "Orderly interconnection reform",
+          "gains_if": "protocols reduce delays",
+          "loses_if": "reliability incidents blamed on reform",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "reliability and fair allocation of grid costs"
+        ],
+        "beliefs": [
+          "process reform can unlock queues"
+        ],
+        "identity": "Federal grid arbiter",
+        "frame": "Rules-based interconnection"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 1,
+        "score": 0.75,
+        "basis": "Protocol outcomes shape delay risk at the margin"
+      }
+    },
+    {
+      "name": "EIA",
+      "type": "Government",
+      "role": "Publishes the settling STEO demand outlook",
+      "stance": "Forecasting moderate US demand growth",
+      "description": "October 6, 2026 STEO: US commercial-sector electricity demand (proxy that includes data centers) +2.8% YoY in 2027; total generation 4,613 billion kWh in 2027 vs 4,545 in 2026 and 4,430 in 2025; wholesale prices $52/MWh 2026 easing to $49/MWh 2027. Publishes no standalone datacenter series.",
+      "stated_vs_revealed": "Central 2.8% 2027 commercial growth sits well below datacenter-only growth, reflecting dilution",
+      "memory": "Feb 2026 vintage had total load +1.9% (2026) and +2.5% (2027)",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "US Energy Information Administration"
+      ],
+      "goals": [
+        "Authoritative short-term energy forecasts"
+      ],
+      "constraints": [
+        "Commercial-sector proxy dilutes datacenter signal"
+      ],
+      "assets": [
+        "STEO monthly release cadence",
+        "EIA-861M retail sales data"
+      ],
+      "vulnerabilities": [
+        "Weather-driven noise in the proxy series"
+      ],
+      "incentives": [
+        {
+          "driver": "Statistical accuracy",
+          "gains_if": "forecasts track outcomes",
+          "loses_if": "datacenter surge surprises the proxy",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "official statistics"
+        ],
+        "beliefs": [
+          "proxies suffice absent dedicated series"
+        ],
+        "identity": "US demand scorekeeper",
+        "frame": "Measured outlook"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.7,
+        "basis": "STEO revisions are a monthly signpost for the demand forecast"
+      }
+    },
+    {
+      "name": "IEA",
+      "type": "Organization",
+      "role": "Publishes the reference global datacenter demand outlook",
+      "stance": "Central projection of ~14-15%/yr growth with bottleneck caveats",
+      "description": "'Key Questions on Energy and AI' (2026): 485 TWh in 2025, +17% growth, roughly doubling to ~950 TWh by 2030 (~3% of global electricity); AI-focused datacentres grew ~50% in 2025. Warns value-chain bottlenecks 'reduce the likelihood of more aggressive near-term scenarios'. 'Electricity 2026': US adds >420 TWh over 2026-2030, datacentres ~half of growth. Also estimates big-tech capex >$400B in 2025, +75% expected in 2026.",
+      "stated_vs_revealed": "Central path implies ~14%/yr; explicit bottleneck warnings lean against near-term upside",
+      "memory": "2025 Base Case: ~415 TWh (2024) to ~945 TWh (2030), ~15%/yr",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "International Energy Agency"
+      ],
+      "goals": [
+        "Authoritative global energy-AI analysis"
+      ],
+      "constraints": [
+        "No 2026-27 point values published"
+      ],
+      "assets": [
+        "Reference global datacenter series",
+        "Bottleneck diagnostics (rack density 11x 2020-25, 4x more by 2027)"
+      ],
+      "vulnerabilities": [
+        "Interpolation needed for 2027"
+      ],
+      "incentives": [
+        {
+          "driver": "Analytical credibility",
+          "gains_if": "central path validated",
+          "loses_if": "outcomes run far above path",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "energy security, systems view"
+        ],
+        "beliefs": [
+          "bottlenecks cap near-term acceleration"
+        ],
+        "identity": "Global demand scorekeeper",
+        "frame": "Constrained acceleration"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.85,
+        "basis": "Its series defines the >20% growth resolution"
+      }
+    },
+    {
+      "name": "ERCOT",
+      "type": "Organization",
+      "role": "Texas grid operator whose connection pause could delay 49.8 GW",
+      "stance": "Pausing new datacenter connections under state order",
+      "description": "Texas governor's order of 3 Aug 2026 paused new ERCOT datacenter connections; BNEF estimates it could delay 49.8 GW of the 253-GW US pipeline and forecasts only 1.2 GW of ERCOT additions 2Q26-1Q27; pause expected to last months.",
+      "stated_vs_revealed": "Framed as a months-long audit; 49.8-GW exposure makes duration the key variable",
+      "memory": "Pause began 3 Aug 2026",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "arbiter",
+      "goals": [
+        "Audit and stabilize large-load connections"
+      ],
+      "constraints": [
+        "State political direction",
+        "Expected temporary duration"
+      ],
+      "assets": [
+        "Gatekeeping over Texas interconnection"
+      ],
+      "vulnerabilities": [
+        "Prolonged pause pushes mass toward Power-constrained slowdown"
+      ],
+      "incentives": [
+        {
+          "driver": "Grid stability and state oversight",
+          "gains_if": "orderly resumption restores pipeline",
+          "loses_if": "extension stalls demand",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "reliability-first, state-directed"
+        ],
+        "beliefs": [
+          "vetting before volume"
+        ],
+        "identity": "Texas large-load gatekeeper",
+        "frame": "Pause-and-audit"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.75,
+        "basis": "Single largest conditional GW-delay exposure in the forecast"
+      }
+    },
+    {
+      "name": "Constellation Energy",
+      "type": "Organization",
+      "role": "Nuclear PPAs for datacenters",
+      "stance": "Monetizing nuclear fleet via long-term AI contracts",
+      "description": "Counterparty to Meta's 20-year, 1.1 GW PPA and Microsoft's Three Mile Island arrangement (~835 MW reported). Nuclear deals support late-decade growth, adding little 2027 electricity.",
+      "stated_vs_revealed": "Deals span decades; 2027 relevance is marginal",
+      "memory": "Anchor deals signed 2024-2026",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "intermediary",
+      "goals": [
+        "Sign premium nuclear PPAs with hyperscalers"
+      ],
+      "constraints": [
+        "Nuclear timelines post-2027"
+      ],
+      "assets": [
+        "Operating nuclear fleet",
+        "PPA book with Microsoft and Meta"
+      ],
+      "vulnerabilities": [
+        "Limited near-term incremental capacity"
+      ],
+      "incentives": [
+        {
+          "driver": "Premium pricing on firm clean power",
+          "gains_if": "hyperscaler demand for firm power persists",
+          "loses_if": "AI demand corrects",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "firm clean baseload"
+        ],
+        "beliefs": [
+          "nuclear is the premium AI power product"
+        ],
+        "identity": "Nuclear PPA supplier",
+        "frame": "Long-horizon contracting"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "Affects late-decade supply more than 2027"
+      }
+    },
+    {
+      "name": "NVIDIA",
+      "type": "Organization",
+      "role": "GPU supply shapes capex timing",
+      "stance": "Supplying the AI compute that hyperscaler capex converts to capacity",
+      "description": "Named actor whose GPU supply shapes capex timing; not directly quantified in the report evidence.",
+      "stated_vs_revealed": "Unknown from report evidence",
+      "memory": "GPU availability governs whether 2027 capex converts to energized capacity",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "intermediary",
+      "goals": [
+        "Maximize AI accelerator shipments"
+      ],
+      "constraints": [
+        "Not detailed in report evidence"
+      ],
+      "assets": [
+        "Dominant GPU franchise"
+      ],
+      "vulnerabilities": [
+        "Demand concentration in a few hyperscalers"
+      ],
+      "incentives": [
+        {
+          "driver": "Accelerated-compute demand",
+          "gains_if": "hyperscaler capex surge continues",
+          "loses_if": "Overbuild correction cuts orders",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "compute scaling"
+        ],
+        "beliefs": [
+          "AI demand is durable"
+        ],
+        "identity": "GPU supply gatekeeper",
+        "frame": "Compute scarcity pricing"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.7,
+        "basis": "GPU delivery pace caps realized 2027 capacity"
+      }
+    },
+    {
+      "name": "OpenAI",
+      "type": "Organization",
+      "role": "Anchor AI demand and compute commitments",
+      "stance": "Underwriting hyperscaler and Oracle buildout via long-term compute commitments",
+      "description": "Anchors AI demand; its compute commitments (e.g., Stargate with Oracle) underwrite external demand for the buildout.",
+      "stated_vs_revealed": "Commitments signal demand strength; funding capacity less visible",
+      "memory": "Stargate financing (Oracle $18B Oct 2026) tied to its commitments",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Stargate"
+      ],
+      "goals": [
+        "Secure massive compute capacity"
+      ],
+      "constraints": [
+        "Monetization of AI products must eventually fund commitments"
+      ],
+      "assets": [
+        "Anchor demand contracts"
+      ],
+      "vulnerabilities": [
+        "Revenue-dependent ability to honor commitments"
+      ],
+      "incentives": [
+        {
+          "driver": "Compute access for frontier models",
+          "gains_if": "capacity arrives and AI revenue scales",
+          "loses_if": "monetization fails and commitments unwind",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "scale-first AGI development"
+        ],
+        "beliefs": [
+          "compute is the binding input"
+        ],
+        "identity": "Demand anchor",
+        "frame": "Compute race"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 2,
+        "score": 0.75,
+        "basis": "Its monetization fate is the mechanism for Overbuild correction"
+      }
+    },
+    {
+      "name": "Oracle",
+      "type": "Organization",
+      "role": "Fast-growing non-hyperscaler AI capacity spender",
+      "stance": "Rapidly expanding via debt-funded Stargate buildout",
+      "description": "Issued $18 billion in October 2026 for Stargate data centers; excluded from the four-company capex metric but adds to power demand and debt-market strain.",
+      "stated_vs_revealed": "Rapid debt issuance reveals aggressive expansion beyond headline guidance",
+      "memory": "October 2026 $18B Stargate bond",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Build Stargate AI capacity for OpenAI-anchored demand"
+      ],
+      "constraints": [
+        "Debt-market appetite",
+        "Not counted in the four-hyperscaler total"
+      ],
+      "assets": [
+        "$18B October 2026 issuance"
+      ],
+      "vulnerabilities": [
+        "Concentrated customer (OpenAI) exposure"
+      ],
+      "incentives": [
+        {
+          "driver": "Cloud AI revenue growth",
+          "gains_if": "OpenAI demand sustains",
+          "loses_if": "anchor customer falters",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "challenger cloud"
+        ],
+        "beliefs": [
+          "AI capacity wins enterprise share"
+        ],
+        "identity": "Fast-growing AI spender",
+        "frame": "Catch-up buildout"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "Adds to aggregate power demand and debt-market gating"
+      }
+    },
+    {
+      "name": "Goldman Sachs",
+      "type": "Organization",
+      "role": "Forecast source for US datacenter additions (with Aterio) and >=$1T 2027 AI capex call",
+      "stance": "Bullish on 2027 capex and scheduled additions",
+      "description": "Research (on Aterio facility-level data) forecasts 13.6 GW US datacenter additions for 2026 and 36.3 GW for 2027, with ~60% one-year and ~50% two-year on-time rates; separately cited (with JP Morgan) forecasting AI capex >=$1 trillion in 2027.",
+      "stated_vs_revealed": "Public forecasts lean bullish; also a beneficiary of issuance activity",
+      "memory": "36.3 GW 2027 schedule anchors the >5 GW delay arithmetic",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "amplifier",
+      "goals": [
+        "Influential research calls"
+      ],
+      "constraints": [
+        "Forecast accuracy risk"
+      ],
+      "assets": [
+        "Facility-level data via Aterio",
+        "Distribution influence"
+      ],
+      "vulnerabilities": [
+        "Consensus-lag dynamics have repeatedly beaten bank models upward"
+      ],
+      "incentives": [
+        {
+          "driver": "Research relevance and banking fees from capex/debt issuance",
+          "gains_if": "buildout continues",
+          "loses_if": "correction discredits calls",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "AI capex supercycle"
+        ],
+        "beliefs": [
+          "scheduled pipeline mostly converts with 40-50% slippage"
+        ],
+        "identity": "Bullish bank forecaster",
+        "frame": "Capex supercycle"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.6,
+        "basis": "Its GW schedule underpins the delay-threshold derivation"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source": "Amazon (AWS)",
+      "target": "Microsoft",
+      "type": "COMPETES_WITH",
+      "relation_label": "AI cloud capacity race",
+      "basis": "Both escalate capex for AI compute; guidance moves in contagion",
+      "valence": "adversarial",
+      "polarity": -0.3,
+      "strength": 0.7,
+      "sign": "-"
+    },
+    {
+      "source": "Alphabet (Google)",
+      "target": "Amazon (AWS)",
+      "type": "COMPETES_WITH",
+      "relation_label": "AI compute and cloud competition",
+      "basis": "Alphabet's July 2026 raise expected to pull Amazon and Microsoft up (Evercore ISI)",
+      "valence": "adversarial",
+      "polarity": -0.3,
+      "strength": 0.7,
+      "sign": "-"
+    },
+    {
+      "source": "Microsoft",
+      "target": "OpenAI",
+      "type": "CUSTOMER_OF",
+      "relation_label": "compute commitments anchored by OpenAI demand",
+      "basis": "Microsoft AI capacity commitments tied to OpenAI-anchored demand",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "Oracle",
+      "target": "OpenAI",
+      "type": "PARTNERS_WITH",
+      "relation_label": "Stargate buildout",
+      "basis": "Oracle's $18B Oct 2026 issuance funds Stargate data centers",
+      "valence": "allied",
+      "polarity": 0.8,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "Microsoft",
+      "target": "Constellation Energy",
+      "type": "PARTNERS_WITH",
+      "relation_label": "Three Mile Island nuclear arrangement (~835 MW reported)",
+      "basis": "Reported Constellation/Three Mile Island arrangement",
+      "valence": "transactional",
+      "polarity": 0.7,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "Meta Platforms",
+      "target": "Constellation Energy",
+      "type": "CUSTOMER_OF",
+      "relation_label": "20-year 1.1 GW nuclear PPA",
+      "basis": "Reported Meta-Constellation PPA",
+      "valence": "transactional",
+      "polarity": 0.7,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "GE Vernova",
+      "target": "Meta Platforms",
+      "type": "SUPPLIES",
+      "relation_label": "turbines and electrification equipment",
+      "basis": "Datacenter customers generated $2.4B GEV electrification orders Q1 2026",
+      "valence": "transactional",
+      "polarity": 0.6,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "Amazon (AWS)",
+      "target": "GE Vernova",
+      "type": "DEPENDS_ON",
+      "relation_label": "gas turbines and grid equipment for 2027 capacity",
+      "basis": "Turbine slots effectively closed for 2027 delivery; hyperscalers depend on backlog conversion",
+      "valence": "directional",
+      "polarity": 0.5,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "Dominion Energy",
+      "target": "PJM Interconnection",
+      "type": "DEPENDS_ON",
+      "relation_label": "interconnection queue governance in Virginia",
+      "basis": "PJM rules and forecasts govern Dominion's datacenter load pocket",
+      "valence": "directional",
+      "polarity": 0.3,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "FERC",
+      "target": "PJM Interconnection",
+      "type": "REGULATES",
+      "relation_label": "large-load interconnection protocols",
+      "since": "2026-06-18",
+      "basis": "FERC order 18 Jun 2026; RTO responses due 16 Nov 2026",
+      "valence": "neutral",
+      "polarity": 0.3,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "FERC",
+      "target": "ERCOT",
+      "type": "INFLUENCES",
+      "relation_label": "federal interconnection reform context",
+      "basis": "Both subject to federal large-load protocol agenda",
+      "valence": "neutral",
+      "polarity": 0.2,
+      "strength": 0.4,
+      "sign": "+"
+    },
+    {
+      "source": "NVIDIA",
+      "target": "Microsoft",
+      "type": "SUPPLIES",
+      "relation_label": "GPU supply shapes capex timing",
+      "basis": "GPU supply shapes hyperscaler capex conversion to capacity",
+      "valence": "transactional",
+      "polarity": 0.7,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "NVIDIA",
+      "target": "Alphabet (Google)",
+      "type": "SUPPLIES",
+      "relation_label": "GPU supply alongside TPUs",
+      "basis": "Alphabet's TPU-driven buildout complements GPU sourcing",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "Meta Platforms",
+      "target": "Amazon (AWS)",
+      "type": "COMPETES_WITH",
+      "relation_label": "AI infrastructure race",
+      "basis": "Parallel aggressive capex escalation",
+      "valence": "adversarial",
+      "polarity": -0.3,
+      "strength": 0.6,
+      "sign": "-"
+    },
+    {
+      "source": "Alphabet (Google)",
+      "target": "Meta Platforms",
+      "type": "COMPETES_WITH",
+      "relation_label": "AI model and infrastructure competition",
+      "basis": "Both among top capex spenders escalating 2027 plans",
+      "valence": "adversarial",
+      "polarity": -0.3,
+      "strength": 0.6,
+      "sign": "-"
+    },
+    {
+      "source": "OpenAI",
+      "target": "Oracle",
+      "type": "DEPENDS_ON",
+      "relation_label": "Stargate compute capacity",
+      "basis": "OpenAI anchors Stargate demand underwriting Oracle's buildout",
+      "valence": "directional",
+      "polarity": 0.7,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "Goldman Sachs",
+      "target": "Alphabet (Google)",
+      "type": "INFLUENCES",
+      "relation_label": "research shapes consensus and financing appetite",
+      "basis": "Bank forecasts >=$1T 2027 AI capex influence market expectations",
+      "valence": "directional",
+      "polarity": 0.4,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "IEA",
+      "target": "EIA",
+      "type": "OTHER",
+      "relation_label": "parallel agency demand outlooks",
+      "basis": "Both outlooks cluster below 20% datacenter growth for 2027",
+      "valence": "neutral",
+      "polarity": 0.3,
+      "strength": 0.4,
+      "sign": "+"
+    }
+  ],
+  "hot_topics": [
+    "Q3 2026 earnings season as first 2027 guidance window",
+    "GE Vernova 125 GW end-2026 gas contract target",
+    "ERCOT connection pause and 49.8 GW exposure",
+    "PJM IRAS bring-your-own-capacity rules from June 2027",
+    "Transformer lead times above 160 weeks",
+    "SPV/debt financing of hyperscaler buildout (Meta Hyperion, Oracle Stargate)",
+    "IEA 485-to-950 TWh path vs >20% growth threshold",
+    "Dominion contracted pipeline (~53.8 GW) conversion pace",
+    "AI monetization vs investor capex scrutiny",
+    "Whether >5 GW of 36.3 GW scheduled 2027 US capacity slips into 2028"
+  ],
+  "key_events": [
+    {
+      "date": "2025-10",
+      "event": "Q3 2025 earnings: four hyperscalers collectively expected more than $380 billion of 2025 capex; Amazon raised guidance to roughly $125 billion, Alphabet to $91–93 billion, Meta narrowed to $70–72 billion",
+      "staleness_days": 384,
+      "is_stale": true
+    },
+    {
+      "date": "2025-12",
+      "event": "Dominion reported 40,000 MW of datacenter-related capacity requests; 451 Virginia datacenters consuming 3,583 MW in 2024",
+      "staleness_days": 323,
+      "is_stale": false
+    },
+    {
+      "date": "2026-01-14",
+      "event": "PJM forecast cut summer 2027 peak by about 4 GW and 2028 by 4.4 GW, citing stricter datacenter vetting",
+      "staleness_days": 279,
+      "is_stale": false
+    },
+    {
+      "date": "2026-01",
+      "event": "Meta's reported nuclear agreements for up to 6.6 GW by 2035",
+      "staleness_days": 292,
+      "is_stale": false
+    },
+    {
+      "date": "2026-02",
+      "event": "EIA STEO vintage: total US load up 1.9% in 2026 and 2.5% in 2027 (reported)",
+      "staleness_days": 261,
+      "is_stale": false
+    },
+    {
+      "date": "2026-04",
+      "event": "Press tallies put four hyperscalers' 2025 capex actual at roughly $410 billion, against 2026 plans of about $725 billion",
+      "staleness_days": 202,
+      "is_stale": false
+    },
+    {
+      "date": "2026-06-18",
+      "event": "FERC issued order on large-load interconnection protocols",
+      "staleness_days": 124,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07-22",
+      "event": "GE Vernova release: datacenter electrification orders above $5 billion year-to-date, Q2 orders $24.2 billion, backlog $176 billion, 2026 revenue guidance raised to $45.5–46.5 billion",
+      "staleness_days": 90,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07",
+      "event": "Alphabet raised its 2026 capex outlook; Amazon, Meta and Microsoft shares fell amid capex scrutiny",
+      "staleness_days": 111,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07",
+      "event": "Dominion Energy Virginia reportedly held about 53.8 GW of contracted data center capacity, up roughly 5.3 GW from December 2025",
+      "staleness_days": 111,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07-31",
+      "event": "PJM Expedited Interconnection Track opened: up to 10 projects/yr (≥250 MW) in 2026–27, GIAs in ~10 months",
+      "staleness_days": 81,
+      "is_stale": false
+    },
+    {
+      "date": "2026-08-03",
+      "event": "Texas governor's order paused new ERCOT data center connections; BNEF says could delay 49.8 GW",
+      "staleness_days": 78,
+      "is_stale": false
+    },
+    {
+      "date": "2026-08",
+      "event": "MarketScreener consensus table (as compiled by I/O Fund) put calendar-2027 four-hyperscaler capex at $934.5 billion",
+      "staleness_days": 80,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09",
+      "event": "Meta issued $30 billion of debt for the Louisiana Hyperion data center via SPV financing",
+      "staleness_days": 49,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-06",
+      "event": "EIA Short-Term Energy Outlook forecast US commercial-sector electricity demand growth of 2.8% in 2027",
+      "staleness_days": 14,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10",
+      "event": "Oracle issued $18 billion for Stargate data centers",
+      "staleness_days": 19,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-20",
+      "event": "As-of date: none of the four hyperscalers had issued formal 2027 capex guidance",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "date": "2026-11-16",
+      "event": "RTO show-cause responses to FERC large-load protocols due (reported)",
+      "staleness_days": -27,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10",
+      "event": "Q3 2026 earnings calls (late October–November 2026) identified as next decisive 2027 disclosure",
+      "staleness_days": 19,
+      "is_stale": false
+    },
+    {
+      "date": "2027-06-01",
+      "event": "PJM IRAS large-load rules take effect: new ≥50 MW loads must bring new capacity, buy a backstop, or face curtailment",
+      "staleness_days": -224,
+      "is_stale": false
+    }
+  ],
+  "quantitative_facts": [
+    {
+      "metric": "Four-hyperscaler combined capex",
+      "value": ">380",
+      "series": "Hyperscaler capex",
+      "unit": "billion USD",
+      "as_of_date": "2025-10",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "Collective expectation as of Q3 2025 earnings",
+      "source": "Q3 2025 earnings",
+      "value_type": "estimate",
+      "source_url": "https://www.cnbc.com/2025/10/31/tech-ai-google-meta-amazon-microsoft-spend.html",
+      "tier": "S3",
+      "value_num": 380.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Q3 2025 earnings",
+      "metric_family": "installed cost",
+      "staleness_days": 384,
+      "is_stale": true
+    },
+    {
+      "metric": "Four-hyperscaler combined capex",
+      "value": "~410",
+      "series": "Hyperscaler capex",
+      "unit": "billion USD",
+      "as_of_date": "2026-04",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "2025 actual per press tallies",
+      "source": "Press tallies",
+      "value_type": "actual",
+      "source_url": "https://aiweekly.co/alerts/amazon-microsoft-alphabet-meta-plan-725b-ai-capex-in-2026",
+      "tier": "S3",
+      "value_num": 410.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Press tallies",
+      "metric_family": "installed cost",
+      "staleness_days": 202,
+      "is_stale": false
+    },
+    {
+      "metric": "Four-hyperscaler combined capex guidance",
+      "value": "720–745",
+      "series": "Hyperscaler capex",
+      "unit": "billion USD",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026",
+      "geography": "Global",
+      "definition": "Amazon ~$220B, Alphabet $195–205B, Meta $130–145B, Microsoft ~$175B; mixed lease bases",
+      "source": "Guidance aggregation",
+      "value_type": "estimate",
+      "source_url": "https://mlq.ai/news/big-techs-2026-capex-range-reaches-720-billion-to-745-billion/",
+      "tier": "S3",
+      "value_num": 732.5,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Guidance aggregation",
+      "metric_family": "installed cost",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Four-hyperscaler combined capex consensus",
+      "value": "934.5",
+      "series": "Hyperscaler capex",
+      "unit": "billion USD",
+      "as_of_date": "2026-08",
+      "period_end": "2027",
+      "geography": "Global",
+      "definition": "MarketScreener consensus: Alphabet $284.8B, Amazon $256.5B, Microsoft $207.6B, Meta $185.6B",
+      "source": "MarketScreener",
+      "value_type": "forecast",
+      "source_url": "https://io-fund.com/ai-stocks/ai-capex-1-trillion-estimates-too-low",
+      "tier": "S3",
+      "value_num": 934.5,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "MarketScreener",
+      "metric_family": "installed cost",
+      "staleness_days": 80,
+      "is_stale": false
+    },
+    {
+      "metric": "Microsoft fiscal 2025 capex",
+      "value": "64.55",
+      "series": "Hyperscaler capex",
+      "unit": "billion USD",
+      "as_of_date": "2025-10",
+      "period_end": "2025-06",
+      "geography": "Global",
+      "definition": "FY ended June 2025, excluding finance leases not yet commenced, +45%",
+      "source": "Microsoft earnings",
+      "value_type": "actual",
+      "source_url": "https://www.cnbc.com/2025/10/31/tech-ai-google-meta-amazon-microsoft-spend.html",
+      "tier": "S3",
+      "value_num": 64.55,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Microsoft earnings",
+      "metric_family": "installed cost",
+      "staleness_days": 384,
+      "is_stale": true
+    },
+    {
+      "metric": "Amazon 2025 capex guidance",
+      "value": "~125",
+      "series": "Hyperscaler capex",
+      "unit": "billion USD",
+      "as_of_date": "2025-10",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "Raised from $118 billion",
+      "source": "Amazon guidance",
+      "value_type": "estimate",
+      "source_url": "https://www.cnbc.com/2025/10/31/tech-ai-google-meta-amazon-microsoft-spend.html",
+      "tier": "S3",
+      "value_num": 125.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Amazon guidance",
+      "metric_family": "installed cost",
+      "staleness_days": 384,
+      "is_stale": true
+    },
+    {
+      "metric": "Alphabet 2025 capex guidance",
+      "value": "91–93",
+      "series": "Hyperscaler capex",
+      "unit": "billion USD",
+      "as_of_date": "2025-10",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "Raised from $75–85 billion",
+      "source": "Alphabet guidance",
+      "value_type": "estimate",
+      "source_url": "https://www.cnbc.com/2025/10/31/tech-ai-google-meta-amazon-microsoft-spend.html",
+      "tier": "S3",
+      "value_num": 92.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Alphabet guidance",
+      "metric_family": "installed cost",
+      "staleness_days": 384,
+      "is_stale": true
+    },
+    {
+      "metric": "Meta 2025 capex guidance",
+      "value": "70–72",
+      "series": "Hyperscaler capex",
+      "unit": "billion USD",
+      "as_of_date": "2025-10",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "Narrowed range",
+      "source": "Meta guidance",
+      "value_type": "estimate",
+      "source_url": "https://www.cnbc.com/2025/10/31/tech-ai-google-meta-amazon-microsoft-spend.html",
+      "tier": "S3",
+      "value_num": 71.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Meta guidance",
+      "metric_family": "installed cost",
+      "staleness_days": 384,
+      "is_stale": true
+    },
+    {
+      "metric": "Analyst estimate ceiling for 2026 four-company capex",
+      "value": "~760",
+      "series": "Hyperscaler capex",
+      "unit": "billion USD",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026",
+      "geography": "Global",
+      "definition": "Per Statista",
+      "source": "Statista",
+      "value_type": "forecast",
+      "source_url": "https://www.statista.com/chart/35046/capital-expenditure-of-meta-alphabet-amazon-and-microsoft/?srsltid=AU7gw4VwImWUOgo_pmEDDQP52w-XYBYBzJ8DHkOtLx8lEXGDuyXxsUcz",
+      "tier": "S3",
+      "value_num": 760.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Statista",
+      "metric_family": "installed cost",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "H2 2026 hyperscaler spend",
+      "value": "~432",
+      "series": "Hyperscaler capex",
+      "unit": "billion USD",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-12",
+      "geography": "Global",
+      "definition": "Back-loaded deployment",
+      "source": "I/O Fund",
+      "value_type": "estimate",
+      "source_url": "https://io-fund.com/ai-stocks/ai-capex-1-trillion-estimates-too-low",
+      "tier": "S3",
+      "value_num": 432.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "I/O Fund",
+      "metric_family": "installed cost",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "2026 estimate revision path",
+      "value": "~284 to >525",
+      "series": "Hyperscaler capex forecasts",
+      "unit": "billion USD",
+      "as_of_date": "2026-08",
+      "period_end": "2026",
+      "geography": "Global",
+      "definition": "Successive analyst revisions on Goldman Sachs (FactSet) data",
+      "source": "Goldman Sachs (FactSet)",
+      "value_type": "estimate",
+      "source_url": "https://io-fund.com/ai-stocks/ai-capex-1-trillion-estimates-too-low",
+      "tier": "S3",
+      "value_num": 284.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Goldman Sachs (FactSet)",
+      "metric_family": "installed cost",
+      "staleness_days": 80,
+      "is_stale": false
+    },
+    {
+      "metric": "2025 estimate revision path",
+      "value": "~253 to ~394",
+      "series": "Hyperscaler capex forecasts",
+      "unit": "billion USD",
+      "as_of_date": "2026-08",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "Successive revisions",
+      "source": "Goldman Sachs (FactSet)",
+      "value_type": "estimate",
+      "source_url": "https://io-fund.com/ai-stocks/ai-capex-1-trillion-estimates-too-low",
+      "tier": "S3",
+      "value_num": 253.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Goldman Sachs (FactSet)",
+      "metric_family": "installed cost",
+      "staleness_days": 80,
+      "is_stale": false
+    },
+    {
+      "metric": "Largest tech companies combined capex",
+      "value": ">400",
+      "series": "Tech capex",
+      "unit": "billion USD",
+      "as_of_date": "2026-10-20",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "IEA estimate; expected to jump another 75% in 2026",
+      "source": "IEA",
+      "value_type": "estimate",
+      "source_url": "https://www.iea.org/reports/key-questions-on-energy-and-ai/executive-summary",
+      "tier": "S1",
+      "value_num": 400.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "IEA",
+      "metric_family": "installed cost",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Global data center electricity consumption",
+      "value": "415",
+      "series": "Global datacenter electricity",
+      "unit": "TWh",
+      "as_of_date": "2025",
+      "period_end": "2024",
+      "geography": "Global",
+      "definition": "~1.5% of global electricity",
+      "source": "IEA",
+      "value_type": "estimate",
+      "source_url": "https://www.iea.org/reports/energy-and-ai/executive-summary",
+      "tier": "S1",
+      "value_num": 415.0,
+      "year": 2024,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "IEA",
+      "staleness_days": 657,
+      "is_stale": true
+    },
+    {
+      "metric": "Global data center electricity consumption",
+      "value": "485",
+      "series": "Global datacenter electricity",
+      "unit": "TWh",
+      "as_of_date": "2026",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "IEA central projection; +17% in 2025",
+      "source": "IEA",
+      "value_type": "estimate",
+      "source_url": "https://www.iea.org/reports/key-questions-on-energy-and-ai/executive-summary",
+      "tier": "S1",
+      "value_num": 485.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "IEA",
+      "staleness_days": 292,
+      "is_stale": false
+    },
+    {
+      "metric": "Global data center electricity consumption 2030 projection",
+      "value": "~950",
+      "series": "Global datacenter electricity",
+      "unit": "TWh",
+      "as_of_date": "2026",
+      "period_end": "2030",
+      "geography": "Global",
+      "definition": "IEA central projection, ~3% of global electricity",
+      "source": "IEA",
+      "value_type": "forecast",
+      "source_url": "https://www.iea.org/reports/key-questions-on-energy-and-ai/executive-summary",
+      "tier": "S1",
+      "value_num": 950.0,
+      "year": 2030,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "IEA",
+      "staleness_days": 292,
+      "is_stale": false
+    },
+    {
+      "metric": "AI-focused datacenter consumption growth",
+      "value": "50",
+      "series": "AI datacenter electricity",
+      "unit": "percent",
+      "as_of_date": "2026",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "Growth in 2025; triples 2025–2030",
+      "source": "IEA",
+      "value_type": "estimate",
+      "source_url": "https://www.iea.org/reports/key-questions-on-energy-and-ai/executive-summary",
+      "tier": "S1",
+      "value_num": 50.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "IEA",
+      "metric_family": "growth rate",
+      "staleness_days": 292,
+      "is_stale": false
+    },
+    {
+      "metric": "Interpolated 2027 global datacenter electricity",
+      "value": "~635",
+      "series": "Global datacenter electricity",
+      "unit": "TWh",
+      "as_of_date": "2026-10-20",
+      "period_end": "2027",
+      "geography": "Global",
+      "definition": "Derived interpolation of IEA 485→950 TWh endpoints, ~14%/yr",
+      "source": "Derived from IEA",
+      "value_type": "forecast",
+      "source_url": "https://www.iea.org/reports/key-questions-on-energy-and-ai/executive-summary",
+      "tier": "S1",
+      "value_num": 635.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Derived from IEA",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "US commercial retail electricity sales",
+      "value": "150578.728",
+      "series": "EIA retail sales, commercial",
+      "unit": "million kWh",
+      "as_of_date": "2026-07",
+      "period_end": "2026-07",
+      "geography": "United States",
+      "definition": "EIA sample estimate; 144363.1467 million kWh in July 2025",
+      "source": "EIA",
+      "value_type": "estimate",
+      "source_url": "https://www.eia.gov/electricity/data/browser/",
+      "tier": "S1",
+      "value_num": 150578.728,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "EIA",
+      "staleness_days": 111,
+      "is_stale": false
+    },
+    {
+      "metric": "US commercial retail sales YoY growth",
+      "value": "4.306",
+      "series": "EIA retail sales, commercial YoY",
+      "unit": "percent",
+      "as_of_date": "2026-07",
+      "period_end": "2026-07",
+      "geography": "United States",
+      "definition": "5-year range -2.122% to 8.715%; window max 11.042% (2021-05); 0 of 240 months >20%",
+      "source": "EIA",
+      "value_type": "actual",
+      "source_url": "https://www.eia.gov/electricity/data/browser/",
+      "tier": "S1",
+      "value_num": 4.306,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "EIA",
+      "metric_family": "growth rate",
+      "staleness_days": 111,
+      "is_stale": false
+    },
+    {
+      "metric": "Virginia commercial retail sales YoY growth",
+      "value": "9.788",
+      "series": "EIA retail sales, Virginia commercial YoY",
+      "unit": "percent",
+      "as_of_date": "2025-12",
+      "period_end": "2025-12",
+      "geography": "Virginia, US",
+      "definition": "7 of 240 months >20%, all 2021–2023; 5-year range -6.782% to 27.222%",
+      "source": "EIA",
+      "value_type": "actual",
+      "source_url": "https://www.eia.gov/electricity/data/browser/",
+      "tier": "S1",
+      "value_num": 9.788,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Virginia, US",
+      "analyst": "EIA",
+      "metric_family": "growth rate",
+      "staleness_days": 323,
+      "is_stale": false
+    },
+    {
+      "metric": "US commercial electricity demand growth forecast",
+      "value": "2.8",
+      "series": "EIA STEO",
+      "unit": "percent",
+      "as_of_date": "2026-10-06",
+      "period_end": "2027",
+      "geography": "United States",
+      "definition": "Commercial sector, which includes data centers",
+      "source": "EIA STEO",
+      "value_type": "forecast",
+      "source_url": "https://www.eia.gov/outlooks/steo/report/elec_coal_renew.php",
+      "tier": "S1",
+      "value_num": 2.8,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "EIA STEO",
+      "metric_family": "growth rate",
+      "staleness_days": 14,
+      "is_stale": false
+    },
+    {
+      "metric": "US total electricity generation forecast",
+      "value": "4613",
+      "series": "EIA STEO",
+      "unit": "billion kWh",
+      "as_of_date": "2026-10-06",
+      "period_end": "2027",
+      "geography": "United States",
+      "definition": "4,545 billion kWh in 2026; 4,430 billion kWh in 2025",
+      "source": "EIA STEO",
+      "value_type": "forecast",
+      "source_url": "https://www.eia.gov/outlooks/steo/report/elec_coal_renew.php",
+      "tier": "S1",
+      "value_num": 4613.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "EIA STEO",
+      "staleness_days": 14,
+      "is_stale": false
+    },
+    {
+      "metric": "US wholesale electricity price",
+      "value": "52",
+      "series": "EIA STEO",
+      "unit": "USD/MWh",
+      "as_of_date": "2026-10-06",
+      "period_end": "2026",
+      "geography": "United States",
+      "definition": "+11%, PJM +41%; easing to $49/MWh in 2027",
+      "source": "EIA STEO",
+      "value_type": "forecast",
+      "source_url": "https://www.eia.gov/outlooks/steo/report/elec_coal_renew.php",
+      "tier": "S1",
+      "value_num": 52.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "EIA STEO",
+      "staleness_days": 14,
+      "is_stale": false
+    },
+    {
+      "metric": "US electricity additions 2026–2030",
+      "value": ">420",
+      "series": "IEA Electricity 2026",
+      "unit": "TWh",
+      "as_of_date": "2026-10-20",
+      "period_end": "2030",
+      "geography": "United States",
+      "definition": "Data centres about half of growth",
+      "source": "IEA",
+      "value_type": "forecast",
+      "source_url": "https://www.iea.org/reports/electricity-2026/demand",
+      "tier": "S1",
+      "value_num": 420.0,
+      "year": 2030,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "IEA",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "US real GDP growth projection",
+      "value": "2.293",
+      "series": "IMF WEO",
+      "unit": "percent",
+      "as_of_date": "2026-10-20",
+      "period_end": "2027",
+      "geography": "United States",
+      "definition": "2026: 2.328%",
+      "source": "IMF",
+      "value_type": "forecast",
+      "source_url": "https://data360.worldbank.org/en/indicator/IMF_WEO_NGDP_RPCH",
+      "tier": "S1",
+      "value_num": 2.293,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "IMF",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Real PCE growth",
+      "value": "3.8",
+      "series": "US Real PCE",
+      "unit": "percent",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026-Q2",
+      "geography": "United States",
+      "definition": "2.1% in 2025-Q2",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DPCERL1Q225SBEA",
+      "tier": "S1",
+      "value_num": 3.8,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "US transmission interconnection queue",
+      "value": ">2060",
+      "series": "Berkeley Lab Queued Up",
+      "unit": "GW",
+      "as_of_date": "2025-12",
+      "period_end": "2025",
+      "geography": "United States",
+      "definition": "Generation and storage actively seeking interconnection; 13% of 2000–2020 requests reached commercial operation by end-2025, 75% withdrawn",
+      "source": "Berkeley Lab",
+      "value_type": "estimate",
+      "source_url": "https://emp.lbl.gov/queues",
+      "tier": "S1",
+      "value_num": 2060.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Berkeley Lab",
+      "staleness_days": 323,
+      "is_stale": false
+    },
+    {
+      "metric": "Median request-to-operation time",
+      "value": ">5",
+      "series": "Berkeley Lab Queued Up",
+      "unit": "years",
+      "as_of_date": "2025-12",
+      "period_end": "2025",
+      "geography": "United States",
+      "definition": "For projects built in 2025",
+      "source": "Berkeley Lab",
+      "value_type": "actual",
+      "source_url": "https://emp.lbl.gov/queues",
+      "tier": "S1",
+      "value_num": 5.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Berkeley Lab",
+      "staleness_days": 323,
+      "is_stale": false
+    },
+    {
+      "metric": "US datacenter capacity additions scheduled",
+      "value": "36.3",
+      "series": "Goldman Sachs/Aterio",
+      "unit": "GW",
+      "as_of_date": "2026-10-20",
+      "period_end": "2027",
+      "geography": "United States",
+      "definition": "13.6 GW scheduled 2026; realized 6.4 GW (2024), 8.5 GW (2025); ~60% on-time one year out, ~50% two years out",
+      "source": "Goldman Sachs Research/Aterio",
+      "value_type": "forecast",
+      "source_url": "https://www.goldmansachs.com/insights/articles/us-data-center-power-demand-projected-to-double-by-2027",
+      "tier": "S3",
+      "value_num": 36.3,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Goldman Sachs Research/Aterio",
+      "metric_family": "annual installations",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "ERCOT pause exposure",
+      "value": "49.8",
+      "series": "BNEF",
+      "unit": "GW",
+      "as_of_date": "2026-08-03",
+      "period_end": "2026",
+      "geography": "Texas, US",
+      "definition": "Of the 253-GW US pipeline; only 1.2 GW ERCOT additions forecast 2Q26–1Q27",
+      "source": "BNEF",
+      "value_type": "forecast",
+      "source_url": "https://www.powermag.com/texas-audit-could-delay-49-8-gw-of-data-center-load-cost-projects-up-to-15-billion-bnef-warns/",
+      "tier": "S3",
+      "value_num": 49.8,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Texas, US",
+      "analyst": "BNEF",
+      "metric_family": "annual installations",
+      "staleness_days": 78,
+      "is_stale": false
+    },
+    {
+      "metric": "PJM Cycle 1 qualified capacity",
+      "value": "201.5",
+      "series": "PJM interconnection",
+      "unit": "GW",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026",
+      "geography": "PJM, US",
+      "definition": "Of 220 GW proposed; 51 GW of signed GIAs held",
+      "source": "PJM",
+      "value_type": "actual",
+      "source_url": "https://insidelines.pjm.com/over-800-new-generation-projects-seek-to-connect-under-pjms-reformed-process/",
+      "tier": "S3",
+      "value_num": 201.5,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "PJM, US",
+      "analyst": "PJM",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "GE Vernova gas capacity under contract",
+      "value": "116",
+      "series": "GE Vernova gas",
+      "unit": "GW",
+      "as_of_date": "2026-07-22",
+      "period_end": "2026-Q2",
+      "geography": "Global",
+      "definition": "Up from 100 GW; at least 125 GW expected by end-2026",
+      "source": "GE Vernova",
+      "value_type": "actual",
+      "source_url": "https://www.gevernova.com/news/articles/ge-vernova-releases-second-quarter-2026-financial-results",
+      "tier": "S3",
+      "value_num": 116.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "GE Vernova",
+      "staleness_days": 90,
+      "is_stale": false
+    },
+    {
+      "metric": "GE Vernova slot reservations",
+      "value": "56",
+      "series": "GE Vernova gas",
+      "unit": "GW",
+      "as_of_date": "2026-Q1",
+      "period_end": "2026-Q1",
+      "geography": "Global",
+      "definition": "Up from 43 GW; 21 GW of new gas turbine agreements signed in Q1 2026",
+      "source": "GE Vernova",
+      "value_type": "actual",
+      "source_url": "https://www.power-eng.com/gas/turbines/data-centers-drive-record-surge-in-ge-vernova-power-equipment-orders-as-turbine-slots-tighten-through-2030/",
+      "tier": "S3",
+      "value_num": 56.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "GE Vernova",
+      "staleness_days": 292,
+      "is_stale": false
+    },
+    {
+      "metric": "GE Vernova gas turbine lead time",
+      "value": "~3",
+      "series": "GE Vernova",
+      "unit": "years",
+      "as_of_date": "2026-Q1",
+      "period_end": "2026-Q1",
+      "geography": "Global",
+      "definition": "Directional lead time on new heavy-duty orders per CEO Scott Strazik",
+      "source": "GE Vernova",
+      "value_type": "estimate",
+      "source_url": "https://www.power-eng.com/gas/turbines/data-centers-drive-record-surge-in-ge-vernova-power-equipment-orders-as-turbine-slots-tighten-through-2030/",
+      "tier": "S3",
+      "value_num": 3.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "GE Vernova",
+      "metric_family": "order book",
+      "staleness_days": 292,
+      "is_stale": false
+    },
+    {
+      "metric": "GSU transformer lead time",
+      "value": ">160",
+      "series": "Transformer lead times",
+      "unit": "weeks",
+      "as_of_date": "2026-Q1",
+      "period_end": "2026-Q1",
+      "geography": "United States",
+      "definition": "Up from 143-week average in 2024",
+      "source": "Reuters",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/business/energy/us-power-companies-scramble-secure-equipment-surging-data-center-demand-strains-2026-07-09/",
+      "tier": "S2",
+      "value_num": 160.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Reuters",
+      "staleness_days": 292,
+      "is_stale": false
+    },
+    {
+      "metric": "Main power transformer lead time",
+      "value": "128",
+      "series": "Transformer lead times",
+      "unit": "weeks",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026",
+      "geography": "United States",
+      "definition": "Vendor page; GSU units 144 weeks",
+      "source": "Vendor pages",
+      "value_type": "estimate",
+      "source_url": "https://www.gigaenergy.com/blog/lead-time-delays-for-data-centers",
+      "tier": "S3",
+      "value_num": 128.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Vendor pages",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "GE Vernova total backlog",
+      "value": "176",
+      "series": "GE Vernova",
+      "unit": "billion USD",
+      "as_of_date": "2026-07-22",
+      "period_end": "2026-Q2",
+      "geography": "Global",
+      "definition": "Q2 2026 orders $24.2B (+88% organic); 2026 revenue guidance $45.5–46.5B",
+      "source": "GE Vernova",
+      "value_type": "actual",
+      "source_url": "https://www.gevernova.com/news/articles/ge-vernova-releases-second-quarter-2026-financial-results",
+      "tier": "S3",
+      "value_num": 176.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "GE Vernova",
+      "metric_family": "annual revenue",
+      "staleness_days": 90,
+      "is_stale": false
+    },
+    {
+      "metric": "Gas turbine price projection",
+      "value": "600",
+      "series": "Wood Mackenzie",
+      "unit": "USD/kW",
+      "as_of_date": "2026-10-20",
+      "period_end": "2027-12",
+      "geography": "Global",
+      "definition": "By end-2027, nearly triple 2019 levels",
+      "source": "Wood Mackenzie",
+      "value_type": "forecast",
+      "source_url": "https://www.power-eng.com/gas/turbines/data-centers-drive-record-surge-in-ge-vernova-power-equipment-orders-as-turbine-slots-tighten-through-2030/",
+      "tier": "S3",
+      "value_num": 600.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Wood Mackenzie",
+      "metric_family": "power capex",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Alphabet bond sale",
+      "value": "25",
+      "series": "Hyperscaler debt",
+      "unit": "billion USD",
+      "as_of_date": "2026",
+      "period_end": "2026",
+      "geography": "United States",
+      "definition": "Against AI-linked order book above $115 billion",
+      "source": "Alphabet",
+      "value_type": "actual",
+      "source_url": "https://aiweekly.co/alerts/amazon-microsoft-alphabet-meta-plan-725b-ai-capex-in-2026",
+      "tier": "S3",
+      "value_num": 25.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Alphabet",
+      "metric_family": "order book",
+      "staleness_days": 292,
+      "is_stale": false
+    },
+    {
+      "metric": "Meta debt issuance",
+      "value": "30",
+      "series": "Hyperscaler debt",
+      "unit": "billion USD",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "For Louisiana Hyperion data center via SPV financing",
+      "source": "Financial Times",
+      "value_type": "actual",
+      "source_url": "https://www.facebook.com/elerianm/posts/from-the-financial-timesprices-of-bonds-issued-to-fund-prominent-data-centres-wh/1692271715594281/",
+      "tier": "S3",
+      "value_num": 30.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Financial Times",
+      "staleness_days": 49,
+      "is_stale": false
+    },
+    {
+      "metric": "Oracle debt issuance",
+      "value": "18",
+      "series": "Datacenter debt",
+      "unit": "billion USD",
+      "as_of_date": "2026-10",
+      "period_end": "2026-10",
+      "geography": "United States",
+      "definition": "For Stargate data centers",
+      "source": "Oracle",
+      "value_type": "actual",
+      "source_url": "https://www.quinnemanuel.com/media/4dzkfccz/client-alert-ai-data-center-financing-and-litigation-risks.pdf",
+      "tier": "S3",
+      "value_num": 18.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Oracle",
+      "staleness_days": 19,
+      "is_stale": false
+    },
+    {
+      "metric": "Tech datacenter lease commitments",
+      "value": ">850",
+      "series": "Lease commitments",
+      "unit": "billion USD",
+      "as_of_date": "2026-07",
+      "period_end": "2026",
+      "geography": "United States",
+      "definition": "Future commitments, led by Meta and Microsoft",
+      "source": "Trackers",
+      "value_type": "estimate",
+      "source_url": "https://tech-insider.org/data-center-leases-850-billion-2026/",
+      "tier": "S3",
+      "value_num": 850.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Trackers",
+      "staleness_days": 111,
+      "is_stale": false
+    },
+    {
+      "metric": "Dominion datacenter capacity requests",
+      "value": "40000",
+      "series": "Dominion",
+      "unit": "MW",
+      "as_of_date": "2024-12",
+      "period_end": "2024-12",
+      "geography": "Virginia, US",
+      "definition": "451 Virginia datacenters consumed 3,583 MW in 2024",
+      "source": "Dominion",
+      "value_type": "actual",
+      "source_url": "https://virginiabusiness.com/dominion-data-center-power-demand-virginia-scc/",
+      "tier": "S3",
+      "value_num": 40000.0,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "Virginia, US",
+      "analyst": "Dominion",
+      "staleness_days": 688,
+      "is_stale": true
+    },
+    {
+      "metric": "Dominion contracted datacenter capacity",
+      "value": "~53.8",
+      "series": "Dominion",
+      "unit": "GW",
+      "as_of_date": "2026-07",
+      "period_end": "2026-07",
+      "geography": "Virginia, US",
+      "definition": "Up roughly 5.3 GW from December 2025, per Zacks summaries",
+      "source": "Zacks",
+      "value_type": "estimate",
+      "source_url": "https://finance.yahoo.com/energy/articles/dominion-energy-leverage-data-center-142300316.html",
+      "tier": "S3",
+      "value_num": 53.8,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Virginia, US",
+      "analyst": "Zacks",
+      "staleness_days": 111,
+      "is_stale": false
+    },
+    {
+      "metric": "PJM 2027/28 auction value",
+      "value": "16.4",
+      "series": "PJM capacity auction",
+      "unit": "billion USD",
+      "as_of_date": "2026-10-20",
+      "period_end": "2027",
+      "geography": "PJM, US",
+      "definition": "Data centers $6.5 billion (reported)",
+      "source": "PJM",
+      "value_type": "actual",
+      "source_url": "https://avanzaenergy.substack.com/p/the-60-day-clock-ferc-just-forced",
+      "tier": "S3",
+      "value_num": 16.4,
+      "year": 2027,
+      "value_kind": "actual",
+      "region": "PJM, US",
+      "analyst": "PJM",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "PJM summer 2027 peak forecast cut",
+      "value": "~4",
+      "series": "PJM forecast",
+      "unit": "GW",
+      "as_of_date": "2026-01-14",
+      "period_end": "2027",
+      "geography": "PJM, US",
+      "definition": "2028 cut by 4.4 GW; stricter datacenter vetting",
+      "source": "PJM",
+      "value_type": "estimate",
+      "source_url": "https://www.utilitydive.com/news/pjm-interconnection-load-forecast-data-centers/809717/",
+      "tier": "S3",
+      "value_num": 4.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "PJM, US",
+      "analyst": "PJM",
+      "staleness_days": 279,
+      "is_stale": false
+    },
+    {
+      "metric": "Global datacenter energy use historical",
+      "value": "194 to 205",
+      "series": "Masanet et al.",
+      "unit": "TWh",
+      "as_of_date": "2020",
+      "period_end": "2018",
+      "geography": "Global",
+      "definition": "194 TWh in 2010 to 205 TWh in 2018, ~1% of world electricity",
+      "source": "Masanet et al., Science 2020",
+      "value_type": "estimate",
+      "source_url": "https://datacenters.lbl.gov/sites/default/files/Masanet_et_al_Science_2020.full_.pdf",
+      "tier": "S1",
+      "value_num": 199.5,
+      "year": 2018,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Masanet et al., Science 2020",
+      "staleness_days": 2484,
+      "is_stale": true
+    },
+    {
+      "metric": "US datacenter use",
+      "value": "176",
+      "series": "CRS",
+      "unit": "TWh",
+      "as_of_date": "2023",
+      "period_end": "2023",
+      "geography": "United States",
+      "definition": "Reported",
+      "source": "CRS",
+      "value_type": "estimate",
+      "source_url": "https://www.congress.gov/crs-product/R48646",
+      "tier": "S1",
+      "value_num": 176.0,
+      "year": 2023,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "CRS",
+      "staleness_days": 1388,
+      "is_stale": true
+    },
+    {
+      "metric": "IEA risk of planned datacentre project delays",
+      "value": "~20",
+      "series": "IEA Energy and AI",
+      "unit": "percent",
+      "as_of_date": "2025",
+      "period_end": "2030",
+      "geography": "Global",
+      "definition": "Share of planned projects at risk of delay absent grid action",
+      "source": "IEA",
+      "value_type": "forecast",
+      "source_url": "https://www.iea.org/reports/energy-and-ai/executive-summary",
+      "tier": "S1",
+      "value_num": 20.0,
+      "year": 2030,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "IEA",
+      "metric_family": "market share",
+      "staleness_days": 657,
+      "is_stale": true
+    },
+    {
+      "metric": "Rack power density increase",
+      "value": "11x",
+      "series": "IEA",
+      "unit": "multiple",
+      "as_of_date": "2026",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "2020–2025; further fourfold increase set by 2027",
+      "source": "IEA",
+      "value_type": "estimate",
+      "source_url": "https://www.iea.org/reports/key-questions-on-energy-and-ai/executive-summary",
+      "tier": "S1",
+      "value_num": 11.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "IEA",
+      "staleness_days": 292,
+      "is_stale": false
+    },
+    {
+      "metric": "Dominion expected load growth",
+      "value": "5.4",
+      "series": "Dominion",
+      "unit": "percent per year",
+      "as_of_date": "2026-10-20",
+      "period_end": "2030s",
+      "geography": "Virginia, US",
+      "definition": "Expected annual load growth",
+      "source": "Dominion",
+      "value_type": "forecast",
+      "source_url": "https://www.utilitydive.com/news/dominion-energy-details-its-65b-5-year-spending-plan/812984/",
+      "tier": "S3",
+      "value_num": 5.4,
+      "year": 2030,
+      "value_kind": "forecast",
+      "region": "Virginia, US",
+      "analyst": "Dominion",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Microsoft Three Mile Island PPA",
+      "value": "~835",
+      "series": "Nuclear PPAs",
+      "unit": "MW",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026",
+      "geography": "United States",
+      "definition": "Constellation arrangement, reported",
+      "source": "Constellation/Microsoft (reported)",
+      "value_type": "estimate",
+      "source_url": "https://www.constellationr.com/insights/news/constellation-energy-microsoft-ink-nuclear-power-pact-ai-data-center",
+      "tier": "S3",
+      "value_num": 835.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Constellation/Microsoft (reported)",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Chevron–GE Vernova fast gas partnership",
+      "value": "4",
+      "series": "Fast gas deployment",
+      "unit": "GW",
+      "as_of_date": "2026-10-20",
+      "period_end": "2027",
+      "geography": "United States",
+      "definition": "Vendor-reported; containerized units advertised powering a site in 2 weeks",
+      "source": "GE Vernova/Chevron (vendor)",
+      "value_type": "target",
+      "source_url": "https://www.gevernova.com/gas-power/industries/data-centers",
+      "tier": "S3",
+      "value_num": 4.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "GE Vernova/Chevron (vendor)",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Nikkei Asia five-company 2026 capex figure",
+      "value": "~1.65",
+      "series": "Tech capex tally",
+      "unit": "trillion USD",
+      "as_of_date": "2026-10-20",
+      "period_end": "2026",
+      "geography": "Global",
+      "definition": "Five companies incl. Oracle; combines uncommenced leases, commitments, guarantees and JV exposures",
+      "source": "Nikkei Asia",
+      "value_type": "estimate",
+      "source_url": "https://mlq.ai/news/big-techs-2026-capex-range-reaches-720-billion-to-745-billion/",
+      "tier": "S3",
+      "value_num": 1.65,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Nikkei Asia",
+      "metric_family": "installed cost",
+      "staleness_days": 0,
+      "is_stale": false
+    }
+  ],
+  "contested_claims": [
+    {
+      "claim": "Appropriate total for big-tech AI capex in 2027",
+      "positions": [
+        {
+          "stance": "Combined four-hyperscaler 2027 capex consensus of $934.5 billion (MarketScreener, Aug 2026)",
+          "sources": [
+            "https://io-fund.com/ai-stocks/ai-capex-1-trillion-estimates-too-low"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "JP Morgan and Goldman Sachs each forecast AI capex of $1 trillion or more in 2027; Evercore and Bank of America model combined above $1 trillion",
+          "sources": [
+            "https://io-fund.com/ai-stocks/ai-capex-1-trillion-estimates-too-low",
+            "https://aiweekly.co/alerts/amazon-microsoft-alphabet-meta-plan-725b-ai-capex-in-2026"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "The widely cited ~$1.65 trillion 'Nikkei Asia' figure covers five companies including Oracle and combines leases, commitments, guarantees and JV exposures, so it is not a four-company capex total",
+          "sources": [
+            "https://mlq.ai/news/big-techs-2026-capex-range-reaches-720-billion-to-745-billion/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different company scopes (four vs five firms) and different capex definitions (cash capex vs finance-lease-inclusive vs commitments and guarantees)"
+    },
+    {
+      "claim": "2025 four-hyperscaler capex total",
+      "positions": [
+        {
+          "stance": "Collective expectation of more than $380 billion as of October 2025",
+          "sources": [
+            "https://www.cnbc.com/2025/10/31/tech-ai-google-meta-amazon-microsoft-spend.html"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Record of roughly $410 billion actual per April 2026 tallies",
+          "sources": [
+            "https://aiweekly.co/alerts/amazon-microsoft-alphabet-meta-plan-725b-ai-capex-in-2026",
+            "https://finance.yahoo.com/sectors/technology/articles/google-microsoft-meta-amazon-capex-131823436.html"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Definitional scope (cash capex vs finance-lease-inclusive measures) and timing of full-year actuals vs guidance expectations"
+    },
+    {
+      "claim": "Transformer lead times in 2026",
+      "positions": [
+        {
+          "stance": "GSU transformer lead times surpassed 160 weeks in Q1 2026, up from 143-week average in 2024",
+          "sources": [
+            "https://www.reuters.com/business/energy/us-power-companies-scramble-secure-equipment-surging-data-center-demand-strains-2026-07-09/"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "Vendor pages put main power transformers at 128 weeks and GSU units at 144 weeks",
+          "sources": [
+            "https://www.gigaenergy.com/blog/lead-time-delays-for-data-centers",
+            "https://www.gamechangeenergy.com/news/transformer-lead-times-in-2026-what-pad-mounted-and-substation-buyers-can-expect"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Equipment class and survey vintage differ between trade-press reporting and vendor surveys"
+    },
+    {
+      "claim": "Global datacenter electricity growth in 2026",
+      "positions": [
+        {
+          "stance": "Snippet suggesting a 75% increase 'in 2026' is unconfirmed in scope and must not be read as total datacentre growth",
+          "sources": [
+            "https://iea.blob.core.windows.net/assets/3179f7f8-01f6-4dd6-bffa-c9f7b73f1dc9/KeyQuestionsonEnergyandAI.pdf"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "IEA central path 485 TWh (2025) to ~950 TWh (2030) implies ~14% per year, with bottlenecks reducing likelihood of aggressive near-term scenarios",
+          "sources": [
+            "https://www.iea.org/reports/key-questions-on-energy-and-ai/executive-summary"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "The 75% snippet's scope is unverified (may cover AI-focused datacentres or capex, not total consumption); definitional ambiguity between report editions"
+    },
+    {
+      "claim": "Whether gas turbines are the binding constraint on datacenter buildout",
+      "positions": [
+        {
+          "stance": "GE Vernova argues turbines are not 'gating' buildouts and the turbine is often not a project's binding constraint",
+          "sources": [
+            "https://naturalgasintel.com/news/natural-gas-turbines-arent-gating-data-center-buildouts-ge-vernova-says/",
+            "https://www.power-eng.com/gas/turbines/data-centers-drive-record-surge-in-ge-vernova-power-equipment-orders-as-turbine-slots-tighten-through-2030/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Turbine slots effectively closed for 2027 delivery: reservations sold out through 2029–2030, ~3-year lead times on new orders",
+          "sources": [
+            "https://www.utilitydive.com/news/ge-vernova-gas-turbine-investor/807662/",
+            "https://www.gevernova.com/news/articles/ge-vernova-releases-second-quarter-2026-financial-results"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Vendor incentive to downplay constraints vs trade-press reading of backlog and slot reservation data; distinction between turbine supply and other project constraints"
+    },
+    {
+      "claim": "Magnitude of US datacenter pipeline delay risk",
+      "positions": [
+        {
+          "stance": "Applying 40–50% slippage to 36.3 GW scheduled for 2027 implies roughly 15–18 GW arriving late",
+          "sources": [
+            "https://www.goldmansachs.com/insights/articles/us-data-center-power-demand-projected-to-double-by-2027"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "SemiAnalysis counters that 'half cancelled' framings overstate risk by sampling the most cancellation-prone pipeline slice",
+          "sources": [
+            "https://newsletter.semianalysis.com/p/stop-saying-half-of-2026-us-datacenter"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Selection bias in the project sample: aggregate on-time rates vs cancellation-prone pipeline slices"
+    },
+    {
+      "claim": "Whether >5 GW of 2027-planned US datacenter capacity slips into 2028",
+      "positions": [
+        {
+          "stance": "Derived slippage arithmetic makes a slip above 5 GW more likely than not (15–18 GW at risk)",
+          "sources": [
+            "https://www.goldmansachs.com/insights/articles/us-data-center-power-demand-projected-to-double-by-2027"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Canonical frame prices the severe capex-stalling version at only 15% (Power-constrained slowdown)",
+          "sources": [
+            "https://www.utilitydive.com/news/pjm-interconnection-load-forecast-data-centers/809717/",
+            "https://www.powermag.com/texas-audit-could-delay-49-8-gw-of-data-center-load-cost-projects-up-to-15-billion-bnef-warns/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "The 5-GW threshold can be crossed without the broader capex-stalling scenario; different constructs (GW slippage vs macro scenario)"
+    }
+  ],
+  "forecast_inputs": {
+    "scenarios": [
+      {
+        "name": "Continued buildout surge",
+        "probability": 0.45,
+        "narrative": "Hyperscaler capex reaches roughly $950 billion to $1.1 trillion in 2027 and datacenter electricity growth exceeds 20 percent as committed GPU and power capacity arrives on trend; prior: continuation of the 2024-2026 acceleration."
+      },
+      {
+        "name": "Measured growth plateau",
+        "probability": 0.35,
+        "narrative": "Capex lands near $800-950 billion with YoY growth decelerating and datacenter electricity growth of roughly 12-20 percent as interconnection and turbine constraints bind; prior: agency outlooks cluster below 20 percent."
+      },
+      {
+        "name": "Power-constrained slowdown",
+        "probability": 0.15,
+        "narrative": "Grid delays push more than 5 GW of US datacenter capacity into 2028 and capex growth stalls near current 2026 levels, with electricity growth under 15 percent."
+      },
+      {
+        "name": "Overbuild correction",
+        "probability": 0.05,
+        "narrative": "Weak AI monetization triggers capex cuts to below 2026 levels and datacenter electricity growth drops sharply; prior: rare but precedented tech capex busts."
+      }
+    ],
+    "base_rates": [
+      {
+        "reference_class": "Global documented calendar years of datacentre electricity growth, threshold >20% YoY, ~2005–2024",
+        "outcome_frequency": "Essentially 0 of ~15 documented years exceeded 20%; Laplace (0+1)/(15+2) ≈ 6%",
+        "basis": "Stitched IEA, LBNL and Koomey estimates [S22][S27][S28][S29][S30]"
+      },
+      {
+        "reference_class": "US commercial retail sales, monthly YoY >20%, 240 months 2006-08 to 2026-07",
+        "outcome_frequency": "0 of 240; window maximum 11.042% (2021-05)",
+        "basis": "EIA retail sales of electricity, US commercial sector [S10]"
+      },
+      {
+        "reference_class": "Virginia commercial retail sales, monthly YoY >20%, 240 months 2006-01 to 2025-12",
+        "outcome_frequency": "7 of 240 (~2.9%)",
+        "basis": "EIA retail sales of electricity, Virginia commercial sector [S11]"
+      },
+      {
+        "reference_class": "US datacenter capacity scheduled a year out / two years out arriving online on time",
+        "outcome_frequency": "only ~60% of capacity scheduled a year out and ~50% two years out is expected online on time",
+        "basis": "Goldman Sachs Research on Aterio facility-level data [S35]"
+      },
+      {
+        "reference_class": "US generation/storage projects requesting transmission interconnection 2000–2020, reaching commercial operation by end-2025",
+        "outcome_frequency": "only 13% of capacity requesting interconnection in 2000–2020 had reached commercial operation by end-2025, with 75% withdrawn",
+        "basis": "Berkeley Lab 'Queued Up' observed dataset [S7]"
+      }
+    ],
+    "drivers": [
+      {
+        "variable": "Hyperscaler capex guidance revisions (Q3 2026 earnings calls)",
+        "direction": "up (guidance raises) / down (cuts)",
+        "why_it_matters": "Consensus has drifted persistently upward (2026 forecasts from ~$284 billion to more than $525 billion) and guidance moves in contagion, making the late-2026 calls the next decisive disclosure [S2][S17]"
+      },
+      {
+        "variable": "Gas turbine slot availability and GE Vernova contracted backlog",
+        "direction": "down if below target",
+        "why_it_matters": "Heavy-duty orders carry ~3-year lead times and reservations are sold out toward 2030, gating 2027 power capacity [S44][S45][S8]"
+      },
+      {
+        "variable": "Grid interconnection timing (ERCOT pause, PJM rules, queue durations)",
+        "direction": "down",
+        "why_it_matters": "Median request-to-operation exceeds five years and the ERCOT pause could delay 49.8 GW, pushing 2027 capacity into 2028 [S7][S40][S41]"
+      },
+      {
+        "variable": "Transformer and grid-equipment lead times",
+        "direction": "down",
+        "why_it_matters": "GSU transformer lead times surpassed 160 weeks in Q1 2026 versus a 143-week 2024 average, binding energization timing [S38]"
+      },
+      {
+        "variable": "AI monetization / cloud revenue growth",
+        "direction": "down if disappointing",
+        "why_it_matters": "Shares of Amazon, Meta and Microsoft fell after Alphabet's capex hike amid scrutiny, and the consensus is exposed to the first sustained downward revision [S17][S2]"
+      },
+      {
+        "variable": "Debt-market appetite for datacenter financing",
+        "direction": "down if it dries up",
+        "why_it_matters": "Hundreds of billions of 2026 datacenter-linked issuance against a >$3 trillion buildout makes debt markets a gating factor for 2027 capacity [S21][S18][S19]"
+      },
+      {
+        "variable": "Dominion contracted datacenter pipeline additions",
+        "direction": "up if ≥5 GW per half-year",
+        "why_it_matters": "Contracted capacity of roughly 53.8 GW in July 2026 tracks the largest load pocket's buildout pace; below ~2 GW per half-year signals constraints binding [S59][S55]"
+      },
+      {
+        "variable": "EIA STEO / IEA demand-series revisions",
+        "direction": "up if revised above 2.8% commercial growth / above the ~635 TWh 2027 interpolation",
+        "why_it_matters": "Agency outlooks cluster below 20 percent datacentre growth, anchoring the central case; revisions would move the probability [S9][S5]"
+      }
+    ],
+    "indicators": [
+      {
+        "indicator": "Gross domestic product (GDP), Constant prices, Percent change: United States (wb:IMF_WEO_NGDP_RPCH/USA)",
+        "series": "wb:IMF_WEO_NGDP_RPCH/USA",
+        "latest_value": 2.344098,
+        "latest_date": "2025-12-31",
+        "latest_period": "2025",
+        "status": "estimate",
+        "units": "Percent change",
+        "frequency": "A",
+        "date_or_trigger": "next annual release after 2025",
+        "source_ref": "S4"
+      },
+      {
+        "indicator": "EIA: Retail Sales of Electricity: U.S. total, commercial sector (year-over-year % change) (usgov:eia/electricity_sales/US.COM#yoy)",
+        "series": "usgov:eia/electricity_sales/US.COM#yoy",
+        "latest_value": 4.30551806593602,
+        "latest_date": "2026-07-31",
+        "latest_period": "2026-07",
+        "status": "observed",
+        "units": "Percent change from year ago",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-07",
+        "source_ref": "S10"
+      },
+      {
+        "indicator": "EIA: Retail Sales of Electricity: Virginia, commercial sector (year-over-year % change) (usgov:eia/electricity_sales/VA.COM#yoy)",
+        "series": "usgov:eia/electricity_sales/VA.COM#yoy",
+        "latest_value": 9.7876892905298,
+        "latest_date": "2025-12-31",
+        "latest_period": "2025-12",
+        "status": "observed",
+        "units": "Percent change from year ago",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2025-12",
+        "source_ref": "S11"
+      },
+      {
+        "indicator": "EIA: Retail Sales of Electricity: U.S. total, commercial sector (usgov:eia/electricity_sales/US.COM)",
+        "series": "usgov:eia/electricity_sales/US.COM",
+        "latest_value": 150578.72802,
+        "latest_date": "2026-07-31",
+        "latest_period": "2026-07",
+        "status": "observed",
+        "units": "Million kilowatt-hours",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-07",
+        "source_ref": "S15"
+      },
+      {
+        "indicator": "Real Personal Consumption Expenditures — United States (fred:DPCERL1Q225SBEA)",
+        "series": "fred:DPCERL1Q225SBEA",
+        "latest_value": 3.8,
+        "latest_date": "2026-06-30",
+        "latest_period": "2026-Q2",
+        "status": "observed",
+        "units": "Percent Change from Preceding Period",
+        "frequency": "Q",
+        "date_or_trigger": "next quarterly release after 2026-Q2",
+        "source_ref": "S16"
+      }
+    ]
+  }
+}

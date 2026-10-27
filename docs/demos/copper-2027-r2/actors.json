@@ -1,0 +1,2323 @@
+{
+  "central_question": "What will the LME copper cash settlement price (USD per tonne) be on 31 December 2027, expressed as a probability-weighted central forecast with P10/P50/P90 levels (forecaster central: P50 ≈ $13,400/t, weighted mean $13,750/t, P10 ≈ $9,900/t, P90 ≈ $18,300/t)?",
+  "as_of_date": "2026-10-24",
+  "situation_brief": {
+    "current_situation": "Copper is in a record regime: LME cash around $14,415–14,751/t in October 2026, the IMF monthly series at 14,473.0559 USD/t for 2026-09 (+44.8% y/y). A concentrate-led squeeze dominates: the 2026 Antofagasta–Jiangxi TC benchmark settled at $0/t and the SMM imported concentrate index is deeply negative (−$231.68/dmt on 30 Sep 2026). COMEX warehouses hold >714,000 t (~70% of visible stocks) stranded behind 50% Section 232 tariffs, while LME stocks are 229,650–273,750 t; combined exchange cover ≈ 0.4 months of world consumption. ICSG (14 Oct 2026) forecasts a 104,000 t refined surplus in 2026 widening to 368,000 t in 2027.",
+    "context": "Chinese smelting overcapacity presses against scarce mine supply. ICSG projects mine growth of 1.3% in 2026 and 3.1% in 2027 on a Cobre Panama restart plus Kamoa-Kakula, QB2 and Chilean ramps. Chinese refined output grew 4% y/y Jan–Aug 2026 despite the CSPT's November 2025 pledge to cut >10%, cushioned by sulphuric-acid and gold/silver byproducts. The LME December 2027 prompt anchors the market mid at $14,650/t (14 Oct 2026); Goldman's 2027 average is $15,400/t after a $3,700/t upward revision in nine months.",
+    "dynamics": "Record prices coexist with a realized ICSG surplus (+218 kt Jan–Aug 2026) because metal is stranded in US warehouses and ex-US refined supply is capped by negative TCs, Q4 2026 smelter maintenance (~80,000 t cut), a scrap-tax crackdown and concentrate import declines (−4.1% y/y in Sep 2026). The 2027 balance hinges on whether mine increments and smelter discipline rebuild TCs toward zero or the squeeze persists into end-2027.",
+    "fault_lines": [
+      "Concentrate shortage vs mine-supply ramp (Squeeze persists 40% vs Supply catches up 30%)",
+      "US Section 232 tariff dislocation and the Annex III sunset landing exactly on 31 Dec 2027",
+      "Chinese smelter overcapacity vs CSPT output-cut compliance under negative TCs",
+      "State stockpiling (SRB, US Project Vault ~$12bn) vs countercyclical 2021 release precedent",
+      "Decelerating demand (China below 2%) vs electrification build-outs (grid, EV, datacentres)",
+      "Cobre Panama restart: commission recommended negotiations 30 Sep 2026, no scope or timing set"
+    ],
+    "catalysts": [
+      "2027 Antofagasta–Chinese smelter TC/RC benchmark at Asia Copper Week, 17–19 Nov 2026",
+      "Q4 2026 Chinese smelter maintenance (~80,000 t) and scrap-tax crackdown",
+      "ICSG April 2027 semi-annual forecast revision",
+      "Cobre Panama restart negotiations with First Quantum",
+      "Rolling Section 232 additions by US Commerce/USTR; Annex III sunset 31 Dec 2027",
+      "SMM weekly concentrate index path (recovery above −$100 vs deeper lows)",
+      "LME stock builds vs draws; COMEX–LME spread re-widening",
+      "Kamoa-Kakula 2027 delivery on 500,000–540,000 t guidance; Cochilco's +5.2% Chile rebound"
+    ]
+  },
+  "actors": [
+    {
+      "name": "Chinese copper smelters (CSPT, Jiangxi Copper, Tongling)",
+      "type": "Organization",
+      "role": "Refined copper producers holding the binding constraint: output-cut decisions under negative TCs set 2027 refined supply",
+      "stance": "Pledged >10% primary output cut for 2026 (Nov 2025) but output up 4% y/y Jan–Aug 2026; Q4 2026 maintenance of ~80,000 t scheduled",
+      "description": "CSPT member smelters negotiating the annual TC/RC benchmark with Antofagasta; refined growth slowed to a projected 3–3.4% in 2026, the lowest since at least 2000 versus 10.4% in 2025, squeezed by negative spot TCs, falling acid prices (−11% in Sep 2026) and a scrap crackdown.",
+      "stated_vs_revealed": "Stated: >10% output cut pledge; revealed: output growth of 4% y/y Jan–Aug 2026 — partial compliance only now visible in Q4 maintenance",
+      "memory": "2026 benchmark settled at $0/t TC (January 2026), the lowest ever; CSPT cut pledge November 2025; seven smelters scheduled 30–60 days maintenance Oct–Nov 2026.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "CSPT",
+        "Jiangxi Copper",
+        "Tongling"
+      ],
+      "goals": [
+        "Maximize byproduct economics (sulphuric acid, gold, silver) despite negative TCs",
+        "Secure concentrate feed",
+        "Preserve market share and capacity utilization"
+      ],
+      "constraints": [
+        "Deeply negative spot TCs (−$231.68/dmt SMM, 30 Sep 2026)",
+        "Concentrate import decline (−4.1% y/y Sep 2026)",
+        "Government scrap-tax crackdown",
+        "Eight-month sulphuric-acid export suspension since May 2026"
+      ],
+      "assets": [
+        "Large smelting nameplate capacity",
+        "Byproduct revenue streams"
+      ],
+      "vulnerabilities": [
+        "Feed scarcity compels output cuts or losses per tonne",
+        "Acid price collapse erodes the byproduct cushion"
+      ],
+      "incentives": [
+        {
+          "driver": "Byproduct and market-share economics",
+          "gains_if": "TCs recover toward zero via supply growth or self-discipline",
+          "loses_if": "Prolonged deeply negative TCs force broad curtailments",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Capacity preservation",
+          "State-aligned industrial policy"
+        ],
+        "beliefs": [
+          "Byproducts can cushion negative TCs temporarily",
+          "Benchmark system under strain after $0/t 2026 settlement"
+        ],
+        "identity": "Chinese primary smelting establishment",
+        "frame": "Survive the concentrate squeeze; discipline as a last resort"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "Smelter curtailment decisions are the single binding uncertainty on 2027 refined supply"
+      }
+    },
+    {
+      "name": "Antofagasta plc",
+      "type": "Organization",
+      "role": "Miner and counterparty to the annual TC/RC benchmark settlement with Chinese smelters",
+      "stance": "Shifted provisionally mid-2026 toward index-linked pricing; benchmark talks resume 17–19 Nov 2026",
+      "description": "Chilean copper miner whose January 2026 settlement with Jiangxi/Tongling at $0/t TC and 0.0¢/lb RC was the lowest ever recorded; CRU reports a drift to index-linked terms.",
+      "stated_vs_revealed": "Stated participation in benchmark talks; revealed preference for index-linked terms after provisional mid-year shift",
+      "memory": "2026 benchmark $0/t; CRU notes the spot-minus-contract gap widened from a $12 average (2000–2023) to ~$90 in 2024–25.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "Maximize treatment-charge-free revenue",
+        "Move pricing to indices"
+      ],
+      "constraints": [
+        "Concentrate market scarcity favours miners",
+        "Counterparty relations with Chinese smelters"
+      ],
+      "assets": [
+        "Chilean concentrate production",
+        "Benchmark-setting position"
+      ],
+      "vulnerabilities": [
+        "Benchmark system could fragment, reducing pricing power predictability"
+      ],
+      "incentives": [
+        {
+          "driver": "Concentrate scarcity",
+          "gains_if": "2027 benchmark settles ≤$0 or index-linked",
+          "loses_if": "Supply recovery forces positive TCs",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Shareholder returns",
+          "Long-term sales security"
+        ],
+        "beliefs": [
+          "Concentrate shortage persists into 2027"
+        ],
+        "identity": "Major diversified Chilean miner",
+        "frame": "Scarcity rents accrue to miners"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.85,
+        "basis": "Counterparty to the nearest dated catalyst, the 2027 benchmark settlement"
+      }
+    },
+    {
+      "name": "First Quantum Minerals",
+      "type": "Organization",
+      "role": "Owner of Cobre Panama (~330 kt/yr pre-shutdown scale, unconfirmed), the largest single 2027 supply swing",
+      "stance": "Seeking restart after Panama's commission recommended negotiations on 30 Sep 2026",
+      "description": "Canadian miner awaiting a restart framework with Panama; no scope, timing or legal structure set as of the as-of date.",
+      "stated_vs_revealed": "Stated: open to negotiation; revealed: no binding commitments yet",
+      "memory": "Mine shut in 2023; 30 Sep 2026 commission recommendation to negotiate a reopening funding an orderly closure.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "FQM"
+      ],
+      "goals": [
+        "Restart Cobre Panama",
+        "Recover asset value"
+      ],
+      "constraints": [
+        "Panamanian government approval and legal structure",
+        "No published restart timeline"
+      ],
+      "assets": [
+        "Cobre Panama mine infrastructure"
+      ],
+      "vulnerabilities": [
+        "Political risk in Panama",
+        "Prolonged closure costs"
+      ],
+      "incentives": [
+        {
+          "driver": "Restart economics at $14,000+/t copper",
+          "gains_if": "Framework agreement signed; production resumes",
+          "loses_if": "Negotiations stall through 2027",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Shareholder value",
+          "Operational restoration"
+        ],
+        "beliefs": [
+          "Restart is achievable via negotiated framework"
+        ],
+        "identity": "Copper-focused mid-major",
+        "frame": "Cobre Panama is the marginal mine of the 2027 balance"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.9,
+        "basis": "Restart timing discriminates Supply catches up (30%) from Squeeze persists (40%)"
+      }
+    },
+    {
+      "name": "Government of Panama",
+      "type": "Government",
+      "role": "Approves or blocks the Cobre Panama restart",
+      "stance": "Commission recommended opening negotiations on 30 Sep 2026 while financing an orderly closure",
+      "description": "Holds the legal authority over the mine's fate; no scope, timing or legal structure set.",
+      "stated_vs_revealed": "Stated: neutral negotiation posture; revealed: incremental movement toward talks since Sep 2026",
+      "memory": "2023 shutdown; 30 Sep 2026 commission recommendation.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "arbiter",
+      "goals": [
+        "Fiscal revenue and political stability",
+        "Orderly resolution of the mine standoff"
+      ],
+      "constraints": [
+        "Domestic opposition to the mine",
+        "Legal complexity of any restart structure"
+      ],
+      "assets": [
+        "Sovereign approval power"
+      ],
+      "vulnerabilities": [
+        "Foregone revenue if the mine stays shut"
+      ],
+      "incentives": [
+        {
+          "driver": "Fiscal and political balance",
+          "gains_if": "Negotiated restart delivers royalties without unrest",
+          "loses_if": "Restart triggers domestic backlash",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Sovereignty",
+          "Social license"
+        ],
+        "beliefs": [
+          "A negotiated framework can reconcile closure financing with reopening"
+        ],
+        "identity": "National government",
+        "frame": "Mine as leverage and liability"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 1,
+        "score": 0.85,
+        "basis": "Sole arbiter of the largest 2027 supply increment"
+      }
+    },
+    {
+      "name": "Ivanhoe Mines",
+      "type": "Organization",
+      "role": "Operator of Kamoa-Kakula, a large named 2027 supply increment (guidance 500,000–540,000 t vs 380,000–420,000 t in 2026)",
+      "stance": "Delivering Phase 3 ramp; mining rate to 10 Mt/a in 2027",
+      "description": "DRC miner; Project 95 lifts Phase 1/2 recovery to ~95% from Q2 2026; Q3 2026 output 76,401 t; Phase 4 (~500 kt/a reported) ramps toward 2028 and is excluded from 2026–27 guidance.",
+      "stated_vs_revealed": "Consistent guidance (3 Dec 2025) and quarterly reporting",
+      "memory": "Phase 3 ramp, Project 95 completion Q2 2026, Q3 2026 output 76,401 t.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Hit 2027 guidance of 500,000–540,000 t",
+        "Advance Phase 4"
+      ],
+      "constraints": [
+        "Power supply and ramp execution in the DRC",
+        "Phase 4 outside the horizon window"
+      ],
+      "assets": [
+        "Kamoa-Kakula complex",
+        "Guided ~+120 kt/yr midpoint increment for 2027"
+      ],
+      "vulnerabilities": [
+        "Operational disruptions; Q3 2026 run-rate trails annualized guidance"
+      ],
+      "incentives": [
+        {
+          "driver": "Volume growth at record prices",
+          "gains_if": "Guidance delivered, adding surplus-side supply",
+          "loses_if": "Ramp shortfalls tighten the concentrate market",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Growth",
+          "Long-life asset development"
+        ],
+        "beliefs": [
+          "Phase 3 concentrator fills to 10 Mt/a in 2027"
+        ],
+        "identity": "Copper growth producer in the DRC",
+        "frame": "Deliver the ramp"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.7,
+        "basis": "Named ~120 kt/yr increment inside ICSG's 3.1% 2027 mine-growth assumption"
+      }
+    },
+    {
+      "name": "Teck Resources",
+      "type": "Organization",
+      "role": "Operator of Quebrada Blanca 2, a named increment with revised guidance",
+      "stance": "QB 2027 guidance cut to 240,000–275,000 t (Reuters, 8 Oct 2025) on a tailings constraint — ≈ −60 kt/yr vs prior plan",
+      "description": "Canadian miner whose QB2 ramp in Chile underperformed; the cut is unconfirmed on Teck's own release.",
+      "stated_vs_revealed": "Public guidance vs Reuters-reported cut not yet reconciled on filings",
+      "memory": "Oct 2025 guidance cut per Reuters; 2027 range 240,000–275,000 t.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Teck"
+      ],
+      "goals": [
+        "Stabilize QB2 output",
+        "Resolve tailings constraint"
+      ],
+      "constraints": [
+        "Tailings capacity",
+        "Chilean permitting/operational conditions"
+      ],
+      "assets": [
+        "QB2 mine and infrastructure"
+      ],
+      "vulnerabilities": [
+        "Guidance credibility after cuts"
+      ],
+      "incentives": [
+        {
+          "driver": "Ramp stabilization",
+          "gains_if": "Output recovery toward guidance ceiling",
+          "loses_if": "Further tailings-driven cuts",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Operational discipline"
+        ],
+        "beliefs": [
+          "QB2 can stabilize at 240–275 kt"
+        ],
+        "identity": "Diversified miner with a major Chilean ramp",
+        "frame": "Execution recovery"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "Moderate negative increment versus plan"
+      }
+    },
+    {
+      "name": "Codelco",
+      "type": "Organization",
+      "role": "State miner central to the Chilean output recovery or further decline (Chile forecast 5.27 Mt in 2026, +5.2% in 2027 per Cochilco)",
+      "stance": "Recovering from a 15-year-low Jan–Jul 2026 period (Chile −7% y/y); El Teniente suffered a September 2026 accident",
+      "description": "Chilean state copper company; Chilean ore grades fell 13% over four years, a structural subtraction offsetting the projected 2027 rebound.",
+      "stated_vs_revealed": "Recovery plans versus persistent underdelivery through Jul 2026",
+      "memory": "Jan–Jul 2026 Chilean output 2.88 Mt, −7% y/y, a 15-year low for the period; Sep 2026 El Teniente accident.",
+      "influence": "high",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Output recovery under a multi-year investment plan"
+      ],
+      "constraints": [
+        "Ore-grade decline",
+        "Accident risk (El Teniente, Sep 2026)"
+      ],
+      "assets": [
+        "Large Chilean underground and open-pit portfolio"
+      ],
+      "vulnerabilities": [
+        "Grade decline and operational incidents"
+      ],
+      "incentives": [
+        {
+          "driver": "State revenue mandate",
+          "gains_if": "Rebound to Cochilco's +5.2% 2027 path",
+          "loses_if": "Accidents and grades keep output falling",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "State revenue",
+          "National production"
+        ],
+        "beliefs": [
+          "Project pipeline can reverse decline"
+        ],
+        "identity": "Chilean national champion",
+        "frame": "Recovery against structural decline"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.75,
+        "basis": "First-order supply swing in the 2027 mine-growth assumption"
+      }
+    },
+    {
+      "name": "China State Reserve Bureau",
+      "type": "Government",
+      "role": "Discretionary stockpiler whose buying or releases absorb surplus or tighten deficits",
+      "stance": "No confirmed buying at record prices; CNIA recommended expanding reserves in Feb 2026; 2021 precedent was countercyclical releases (20,000–30,000 t batches)",
+      "description": "Chinese state stockpiler; price inquiries reported March 2025; outright buying at $14,473/t would run against the 2021 auction pattern.",
+      "stated_vs_revealed": "Association-level recommendation (CNIA) vs no confirmed state tenders at current prices",
+      "memory": "2021 batch releases of 20,000–30,000 t; Feb 2026 CNIA reserve-expansion recommendation; Mar 2025 price inquiries.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "SRB"
+      ],
+      "goals": [
+        "Strategic resource security",
+        "Countercyclical price management"
+      ],
+      "constraints": [
+        "Record prices discourage buying",
+        "Political cost of stoking prices"
+      ],
+      "assets": [
+        "Large discretionary budget and storage",
+        "Stockpiles for release"
+      ],
+      "vulnerabilities": [
+        "Public scrutiny of purchase timing"
+      ],
+      "incentives": [
+        {
+          "driver": "Strategic security",
+          "gains_if": "Buys on price weakness to build reserves",
+          "loses_if": "Chases record highs and amplifies the squeeze",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Supply security",
+          "Price stability"
+        ],
+        "beliefs": [
+          "Copper is strategically essential"
+        ],
+        "identity": "State stockpile administrator",
+        "frame": "Buy low, release high"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 1,
+        "score": 0.8,
+        "basis": "Marginal bid capable of driving Supercycle breakout (15%)"
+      }
+    },
+    {
+      "name": "Government of China (NDRC/MIIT)",
+      "type": "Government",
+      "role": "Sets smelter capacity policy, scrap-tax enforcement and stockpile decisions",
+      "stance": "Supporting capacity discipline via CSPT; eight-month sulphuric-acid export suspension since May 2026; scrap-tax crackdown tightening secondary feed",
+      "description": "Chinese industrial policymakers whose actions simultaneously tighten concentrate, scrap and byproduct outlet conditions for smelters.",
+      "stated_vs_revealed": "Stated policy of capacity restraint vs continued 4% refined output growth",
+      "memory": "May 2026 acid-export suspension lapsing ~Jan 2027; 2026 scrap-tax crackdown; CSPT cut pledge.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "NDRC",
+        "MIIT"
+      ],
+      "goals": [
+        "Orderly smelter sector",
+        "Resource security",
+        "Trade leverage"
+      ],
+      "constraints": [
+        "Employment and output interests in smelting provinces"
+      ],
+      "assets": [
+        "Regulatory and tax powers",
+        "Strategic stockpile directives"
+      ],
+      "vulnerabilities": [
+        "Policy-induced supply tightness raising domestic prices"
+      ],
+      "incentives": [
+        {
+          "driver": "Industrial coordination",
+          "gains_if": "Discipline restores smelter margins and TCs",
+          "loses_if": "Overcapacity defies policy as in Jan–Aug 2026",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Strategic self-sufficiency",
+          "Sector discipline"
+        ],
+        "beliefs": [
+          "Command tools can manage overcapacity"
+        ],
+        "identity": "Central economic planners",
+        "frame": "Coordinate supply to stabilize margins"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.85,
+        "basis": "Controls smelter discipline, scrap flow and stockpiling — the demand-side and supply-side swing"
+      }
+    }
+  ],
+  "relationships": [],
+  "hot_topics": [],
+  "key_events": [
+    {
+      "date": "2026-01-06",
+      "event": "Copper record high dated by Goldman at $13,387/t after a 22% rally from under $11,000/t at end-November 2025",
+      "staleness_days": 291,
+      "is_stale": false
+    },
+    {
+      "date": "2026-01",
+      "event": "2026 annual concentrate benchmark settled at $0/t TC and 0.0¢/lb RC between Antofagasta and Jiangxi/Tongling, the lowest ever recorded",
+      "staleness_days": 296,
+      "is_stale": false
+    },
+    {
+      "date": "2025-11",
+      "event": "CSPT pledged to cut 2026 primary smelting output by more than 10%",
+      "staleness_days": 357,
+      "is_stale": false
+    },
+    {
+      "date": "2026-04-06",
+      "event": "US Section 232 copper tariff rates became 50% on semi-finished products and 25% on copper-intensive derivatives (10% if ≥95% US content)",
+      "staleness_days": 201,
+      "is_stale": false
+    },
+    {
+      "date": "2025-07-30",
+      "event": "Proclamation 10962 imposed 50% Section 232 copper tariffs (Federal Register August 5, 2025)",
+      "staleness_days": 451,
+      "is_stale": true
+    },
+    {
+      "date": "2026-05-15",
+      "event": "SMM Imported Copper Concentrate Index broke below −$100/dmt for the first time at −$102.84/dmt",
+      "staleness_days": 162,
+      "is_stale": false
+    },
+    {
+      "date": "2026-05",
+      "event": "China suspended sulphuric-acid exports for eight months from May 2026",
+      "staleness_days": 176,
+      "is_stale": false
+    },
+    {
+      "date": "2026-08-17",
+      "event": "LME cash-over-3M backwardation hit $545/t, widest since 2021",
+      "staleness_days": 68,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-30",
+      "event": "SMM weekly imported concentrate index printed −$231.68/dmt",
+      "staleness_days": 24,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-30",
+      "event": "Panama government commission recommended opening negotiations to reopen Cobre Panama while funding an orderly closure",
+      "staleness_days": 24,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09",
+      "event": "Accidents at Escondida, Las Bambas and El Teniente temporarily compounded concentrate disruption",
+      "staleness_days": 53,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-09",
+      "event": "Fastmarkets assessed spot TC at −US$272.20/t",
+      "staleness_days": 15,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-14",
+      "event": "ICSG October forecast released: 104,000 t refined surplus in 2026 widening to 368,000 t in 2027",
+      "staleness_days": 10,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-23",
+      "event": "Westmetall reported LME cash $14,415.00/t, 3M $14,270.00/t, stocks 273,750 t",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-14",
+      "event": "LME December-2027 prompt reported at $14,650/t against cash of $14,751/t",
+      "staleness_days": 10,
+      "is_stale": false
+    },
+    {
+      "date": "2026-11-17",
+      "event": "Asia Copper Week (17–19 November 2026): 2027 TC/RC benchmark talks",
+      "staleness_days": -24,
+      "is_stale": false
+    },
+    {
+      "date": "2025-10-08",
+      "event": "Reuters reported Teck cut QB guidance to 200,000–235,000 t (2026) and 240,000–275,000 t (2027) on a tailings issue",
+      "staleness_days": 381,
+      "is_stale": true
+    },
+    {
+      "date": "2025-12-03",
+      "event": "Ivanhoe issued Kamoa-Kakula guidance of 380,000–420,000 t for 2026 and 500,000–540,000 t for 2027",
+      "staleness_days": 325,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10",
+      "event": "COMEX–LME spread narrowed to about $310/t, from over $3,000/t in July 2025",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10",
+      "event": "COMEX warehouses held more than 714,000 t, roughly 70% of visible global stocks, after rising nearly 750% since February 2025",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "date": "2027-12-31",
+      "event": "Annex III floating-tariff framework sunsets, exactly on the forecast horizon",
+      "staleness_days": -433,
+      "is_stale": false
+    },
+    {
+      "date": "2027-04",
+      "event": "ICSG semi-annual forecast update expected (cadence: 23 Apr 2026 and 14 Oct 2026 releases)",
+      "staleness_days": -159,
+      "is_stale": false
+    },
+    {
+      "date": "2025-10",
+      "event": "ICSG October 2025 forecast foresaw a 150,000 t 2026 deficit",
+      "staleness_days": 388,
+      "is_stale": true
+    },
+    {
+      "date": "2026-04",
+      "event": "ICSG April 2026 release projected a 96,000 t surplus for 2026 and 377,000 t for 2027",
+      "staleness_days": 206,
+      "is_stale": false
+    },
+    {
+      "date": "2025-02",
+      "event": "CNIA recommended expanding state copper reserves and concentrate buffers",
+      "staleness_days": 630,
+      "is_stale": true
+    },
+    {
+      "date": "2026-10-22",
+      "event": "VIX at 19.03 (2026-10-22)",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10",
+      "event": "Seven Chinese smelters scheduled 30–60 days of maintenance for October–November 2026, cutting about 80,000 t",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "date": "2025-12-15",
+      "event": "PricePedia carried the Dec-2027 copper future at $11,605/t on 15 December 2025",
+      "staleness_days": 313,
+      "is_stale": false
+    }
+  ],
+  "quantitative_facts": [
+    {
+      "metric": "LME cash settlement",
+      "value": "14415.00",
+      "series": "LME cash copper (Westmetall)",
+      "unit": "USD/t",
+      "as_of_date": "2026-10-23",
+      "geography": "Global",
+      "definition": "LME cash settlement",
+      "source": "Westmetall",
+      "value_type": "actual",
+      "source_url": "https://www.westmetall.com/en/markdaten.php?action=table&field=LME_Cu_cash",
+      "tier": "S3",
+      "value_num": 14415.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Westmetall",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "LME 3-month price",
+      "value": "14270.00",
+      "series": "LME 3M copper (Westmetall)",
+      "unit": "USD/t",
+      "as_of_date": "2026-10-23",
+      "geography": "Global",
+      "definition": "3M price",
+      "source": "Westmetall",
+      "value_type": "actual",
+      "source_url": "https://www.westmetall.com/en/markdaten.php?action=table&field=LME_Cu_cash",
+      "tier": "S3",
+      "value_num": 14270.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Westmetall",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "LME stocks",
+      "value": "273750",
+      "series": "LME warehouse stocks (Westmetall)",
+      "unit": "tonnes",
+      "as_of_date": "2026-10-23",
+      "geography": "Global",
+      "definition": "LME stocks",
+      "source": "Westmetall",
+      "value_type": "actual",
+      "source_url": "https://www.westmetall.com/en/markdaten.php?action=table&field=LME_Cu_cash",
+      "tier": "S3",
+      "value_num": 273750.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Westmetall",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "metric": "LME stocks",
+      "value": "229650",
+      "series": "LME warehouse stocks (Crux analysis of LME data)",
+      "unit": "tonnes",
+      "as_of_date": "2026-10-14",
+      "geography": "Global",
+      "definition": "mid-October LME stocks",
+      "source": "Crux / LME data",
+      "value_type": "actual",
+      "source_url": "https://www.cruxinvestor.com/posts/tariff-arbitrage-collapse-strands-us-copper-lifting-ex-us-pricing",
+      "tier": "S3",
+      "value_num": 229650.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Crux / LME data",
+      "staleness_days": 10,
+      "is_stale": false
+    },
+    {
+      "metric": "LME stocks October average",
+      "value": "238617",
+      "series": "Aggregator of LME data",
+      "unit": "tonnes",
+      "as_of_date": "2026-10",
+      "period_end": "2026-10",
+      "geography": "Global",
+      "definition": "October average",
+      "source": "snippet-based aggregator",
+      "value_type": "actual",
+      "source_url": "https://www.westmetall.com/en/markdaten.php?action=averages&field=LME_Cu_cash",
+      "tier": "S3",
+      "value_num": 238617.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "snippet-based aggregator",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "COMEX stocks",
+      "value": ">714000",
+      "series": "COMEX warehouse stocks",
+      "unit": "tonnes",
+      "as_of_date": "2026-10-14",
+      "geography": "United States",
+      "definition": "COMEX-approved US warehouses, ~70% of visible global stocks, up nearly 750% since February 2025",
+      "source": "Crux",
+      "value_type": "actual",
+      "source_url": "https://www.cruxinvestor.com/posts/tariff-arbitrage-collapse-strands-us-copper-lifting-ex-us-pricing",
+      "tier": "S3",
+      "value_num": 714000.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Crux",
+      "staleness_days": 10,
+      "is_stale": false
+    },
+    {
+      "metric": "Global copper monthly price",
+      "value": "14473.0559",
+      "series": "FRED PCOPPUSDM (IMF)",
+      "unit": "USD/metric ton",
+      "as_of_date": "2026-10",
+      "period_end": "2026-09",
+      "geography": "Global",
+      "definition": "monthly average, +4478.2827 (+44.806%) year on year",
+      "source": "FRED / IMF",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/PCOPPUSDM",
+      "tier": "S1",
+      "value_num": 14473.0559,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "FRED / IMF",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Global copper monthly price",
+      "value": "9994.7732",
+      "series": "FRED PCOPPUSDM",
+      "unit": "USD/metric ton",
+      "period_end": "2025-09",
+      "geography": "Global",
+      "definition": "monthly average",
+      "source": "FRED / IMF",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/PCOPPUSDM",
+      "tier": "S1",
+      "value_num": 9994.7732,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "FRED / IMF"
+    },
+    {
+      "metric": "Global copper monthly price",
+      "value": "9259.1286",
+      "series": "FRED PCOPPUSDM",
+      "unit": "USD/metric ton",
+      "period_end": "2024-09",
+      "geography": "Global",
+      "definition": "monthly average",
+      "source": "FRED / IMF",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/PCOPPUSDM",
+      "tier": "S1",
+      "value_num": 9259.1286,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "FRED / IMF"
+    },
+    {
+      "metric": "LME Dec-2027 prompt",
+      "value": "14650",
+      "series": "LME futures (via The Industry Spread)",
+      "unit": "USD/t",
+      "as_of_date": "2026-10-14",
+      "geography": "Global",
+      "definition": "December 2027 prompt close; cash that day $14,751/t",
+      "source": "The Industry Spread quoting LME",
+      "value_type": "actual",
+      "source_url": "https://theindustryspread.com/lme-copper-to-14635-by-january-14-2027-premium-fades/",
+      "tier": "S3",
+      "value_num": 14650.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "The Industry Spread quoting LME",
+      "staleness_days": 10,
+      "is_stale": false
+    },
+    {
+      "metric": "LME cash October month-to-date average",
+      "value": "14566",
+      "series": "LME cash (Crux)",
+      "unit": "USD/t",
+      "as_of_date": "2026-10",
+      "period_end": "2026-10",
+      "geography": "Global",
+      "definition": "October MTD average, vs $13,089 in January 2026",
+      "source": "Crux",
+      "value_type": "actual",
+      "source_url": "https://www.cruxinvestor.com/posts/tariff-arbitrage-collapse-strands-us-copper-lifting-ex-us-pricing",
+      "tier": "S3",
+      "value_num": 14566.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Crux",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "COMEX-linked US copper cost record",
+      "value": "15057",
+      "series": "COMEX (Crux)",
+      "unit": "USD/t",
+      "as_of_date": "2026-10",
+      "period_end": "2026-10",
+      "geography": "United States",
+      "definition": "record COMEX-linked US cost",
+      "source": "Crux",
+      "value_type": "actual",
+      "source_url": "https://www.cruxinvestor.com/posts/tariff-arbitrage-collapse-strands-us-copper-lifting-ex-us-pricing",
+      "tier": "S3",
+      "value_num": 15057.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Crux",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Cash-3M backwardation",
+      "value": "545",
+      "series": "LME cash-3M spread (Reuters)",
+      "unit": "USD/t",
+      "as_of_date": "2026-08-17",
+      "geography": "Global",
+      "definition": "widest backwardation since 2021, later easing to $176/t; $145/t on 23 Oct per Westmetall",
+      "source": "Reuters / Westmetall",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/commentary/reuters-open-interest/lme-gripped-by-flash-squeeze-copper-tensions-boil-over-2026-08-19/",
+      "tier": "S2",
+      "value_num": 545.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Reuters / Westmetall",
+      "staleness_days": 68,
+      "is_stale": false
+    },
+    {
+      "metric": "COMEX-LME spread",
+      "value": "310",
+      "series": "COMEX-LME arbitrage (Crux)",
+      "unit": "USD/t",
+      "as_of_date": "2026-10",
+      "geography": "Global",
+      "definition": "narrowed from over $3,000/t in July 2025",
+      "source": "Crux",
+      "value_type": "actual",
+      "source_url": "https://www.cruxinvestor.com/posts/tariff-arbitrage-collapse-strands-us-copper-lifting-ex-us-pricing",
+      "tier": "S3",
+      "value_num": 310.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Crux",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "2026 benchmark TC/RC",
+      "value": "0 / 0.0",
+      "series": "Antofagasta–Jiangxi/Tongling annual benchmark",
+      "unit": "USD/t TC / ¢/lb RC",
+      "as_of_date": "2026-01",
+      "period_end": "2026",
+      "geography": "Global",
+      "definition": "lowest ever recorded benchmark settlement",
+      "source": "Report citing SMM/Cru",
+      "value_type": "actual",
+      "source_url": "https://novaex.ai/blog/copper-tcrc-at-0-which-number-should-a-producers-book-carry-for-2027/",
+      "tier": "S3",
+      "value_num": 0.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Report citing SMM/Cru",
+      "staleness_days": 296,
+      "is_stale": false
+    },
+    {
+      "metric": "2025 benchmark TC/RC",
+      "value": "21.25 / 2.125",
+      "series": "Annual benchmark",
+      "unit": "USD/t / ¢/lb",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "2025 benchmark",
+      "source": "Report",
+      "value_type": "actual",
+      "source_url": "https://www.linkedin.com/posts/albert-mackenzie-b34681149_copper-copperconcentrates-tcrcs-activity-7341139277394657280-WYol",
+      "tier": "S3",
+      "value_num": 21.25,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Report"
+    },
+    {
+      "metric": "SMM imported concentrate index",
+      "value": "-231.68",
+      "series": "SMM Imported Copper Concentrate Index",
+      "unit": "USD/dmt",
+      "as_of_date": "2026-09-30",
+      "geography": "China",
+      "definition": "weekly index, latest verifiable value",
+      "source": "SMM via Novaex",
+      "value_type": "actual",
+      "source_url": "https://novaex.ai/blog/copper-tcrc-at-0-which-number-should-a-producers-book-carry-for-2027/",
+      "tier": "S3",
+      "value_num": -231.68,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "SMM via Novaex",
+      "staleness_days": 24,
+      "is_stale": false
+    },
+    {
+      "metric": "Spot TC (Fastmarkets)",
+      "value": "-272.20",
+      "series": "Fastmarkets spot TC",
+      "unit": "USD/t",
+      "as_of_date": "2026-10-09",
+      "geography": "Global",
+      "definition": "spot treatment charge",
+      "source": "Fastmarkets via The Oregon Group",
+      "value_type": "actual",
+      "source_url": "https://theoregongroup.com/latest-news/coppers-104000-tonne-surplus-masks-continued-mine-supply-constraint/",
+      "tier": "S3",
+      "value_num": -272.2,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Fastmarkets via The Oregon Group",
+      "staleness_days": 15,
+      "is_stale": false
+    },
+    {
+      "metric": "Spot TC (CRU first weekly assessment)",
+      "value": "-124",
+      "series": "CRU weekly TC",
+      "unit": "USD/t",
+      "as_of_date": "2026-04-14",
+      "geography": "Global",
+      "definition": "CRU first weekly assessment (14–21 Apr 2026)",
+      "source": "CRU",
+      "value_type": "actual",
+      "source_url": "https://novaex.ai/blog/copper-tcrc-at-0-which-number-should-a-producers-book-carry-for-2027/",
+      "tier": "S3",
+      "value_num": -124.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "CRU",
+      "staleness_days": 193,
+      "is_stale": false
+    },
+    {
+      "metric": "ICSG 2026 refined surplus forecast",
+      "value": "104000",
+      "series": "ICSG October 2026 forecast",
+      "unit": "tonnes",
+      "as_of_date": "2026-10-14",
+      "period_end": "2026",
+      "geography": "Global",
+      "definition": "refined balance",
+      "source": "ICSG (via Crux)",
+      "value_type": "forecast",
+      "source_url": "https://www.cruxinvestor.com/posts/tariff-arbitrage-collapse-strands-us-copper-lifting-ex-us-pricing",
+      "tier": "S3",
+      "value_num": 104000.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "ICSG (via Crux)",
+      "staleness_days": 10,
+      "is_stale": false
+    },
+    {
+      "metric": "ICSG 2027 refined surplus forecast",
+      "value": "368000",
+      "series": "ICSG October 2026 forecast",
+      "unit": "tonnes",
+      "as_of_date": "2026-10-14",
+      "period_end": "2027",
+      "geography": "Global",
+      "definition": "refined balance",
+      "source": "ICSG (via Crux / Mining Weekly)",
+      "value_type": "forecast",
+      "source_url": "https://www.cruxinvestor.com/posts/tariff-arbitrage-collapse-strands-us-copper-lifting-ex-us-pricing",
+      "tier": "S3",
+      "value_num": 368000.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "ICSG (via Crux / Mining Weekly)",
+      "staleness_days": 10,
+      "is_stale": false
+    },
+    {
+      "metric": "ICSG 2027 mine production growth",
+      "value": "3.1",
+      "series": "ICSG October 2026 forecast",
+      "unit": "%",
+      "as_of_date": "2026-10-14",
+      "period_end": "2027",
+      "geography": "Global",
+      "definition": "mine production growth; 2026 growth cut to 1.3% from 1.6% in April",
+      "source": "ICSG",
+      "value_type": "forecast",
+      "source_url": "https://theoregongroup.com/latest-news/coppers-104000-tonne-surplus-masks-continued-mine-supply-constraint/",
+      "tier": "S3",
+      "value_num": 3.1,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "ICSG",
+      "metric_family": "growth rate",
+      "staleness_days": 10,
+      "is_stale": false
+    },
+    {
+      "metric": "ICSG refined output growth",
+      "value": "+0.4 / +3.4",
+      "series": "ICSG October 2026 forecast",
+      "unit": "%",
+      "as_of_date": "2026-10-14",
+      "period_end": "2026/2027",
+      "geography": "Global",
+      "definition": "2026 / 2027 refined production growth",
+      "source": "ICSG",
+      "value_type": "forecast",
+      "source_url": "https://theoregongroup.com/latest-news/coppers-104000-tonne-surplus-masks-continued-mine-supply-constraint/",
+      "tier": "S3",
+      "value_num": 0.4,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "ICSG",
+      "metric_family": "growth rate",
+      "staleness_days": 10,
+      "is_stale": false
+    },
+    {
+      "metric": "ICSG usage growth",
+      "value": "+1.5 / +2.5",
+      "series": "ICSG October 2026 forecast",
+      "unit": "%",
+      "as_of_date": "2026-10-14",
+      "period_end": "2026/2027",
+      "geography": "Global",
+      "definition": "apparent refined usage growth",
+      "source": "ICSG via Mining Weekly",
+      "value_type": "forecast",
+      "source_url": "https://www.miningweekly.com/article/icsg-sees-global-refined-copper-surplus-widening-in-2027-2026-10-15",
+      "tier": "S3",
+      "value_num": 1.5,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "ICSG via Mining Weekly",
+      "metric_family": "growth rate",
+      "staleness_days": 10,
+      "is_stale": false
+    },
+    {
+      "metric": "World refined consumption 2026 (expected)",
+      "value": "28.59",
+      "series": "ICSG tables computed by The Oregon Group",
+      "unit": "Mt",
+      "as_of_date": "2026-10-14",
+      "period_end": "2026",
+      "geography": "Global",
+      "definition": "expected 2026 world usage; 29.31 Mt in 2027",
+      "source": "ICSG via The Oregon Group",
+      "value_type": "forecast",
+      "source_url": "https://theoregongroup.com/latest-news/coppers-104000-tonne-surplus-masks-continued-mine-supply-constraint/",
+      "tier": "S3",
+      "value_num": 28.59,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "ICSG via The Oregon Group",
+      "staleness_days": 10,
+      "is_stale": false
+    },
+    {
+      "metric": "Realized refined balances",
+      "value": "-579 / -125 / -24 / +419 / +218",
+      "series": "ICSG Table 1",
+      "unit": "kt",
+      "period_end": "2022–Jan-Aug 2026",
+      "geography": "Global",
+      "definition": "balances 2022, 2023, 2024, 2025, Jan–Aug 2026 (+181 kt bonded-adjusted)",
+      "source": "ICSG",
+      "value_type": "actual",
+      "source_url": "https://icsg.org/wp-content/uploads/Table1.pdf",
+      "tier": "S3",
+      "value_num": -579.0,
+      "year": 2022,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "ICSG"
+    },
+    {
+      "metric": "Chinese refined output growth",
+      "value": "4",
+      "series": "Chinese refined copper output",
+      "unit": "% y/y",
+      "period_end": "2026-08",
+      "geography": "China",
+      "definition": "January–August 2026 y/y growth; +7.4% y/y through April 2026 reported",
+      "source": "Report",
+      "value_type": "actual",
+      "source_url": "https://www.reuters.com/world/asia-pacific/chinas-refined-copper-output-track-lowest-growth-decades-this-year-analysts-say-2026-09-28/",
+      "tier": "S2",
+      "value_num": 4.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "Report",
+      "metric_family": "growth rate"
+    },
+    {
+      "metric": "CSPT output cut pledge",
+      "value": ">10",
+      "series": "CSPT",
+      "unit": "%",
+      "as_of_date": "2025-11",
+      "period_end": "2026",
+      "geography": "China",
+      "definition": "pledge to cut 2026 primary output",
+      "source": "Report",
+      "value_type": "target",
+      "source_url": "https://www.reuters.com/commentary/reuters-open-interest/copper-soars-smelters-cant-bank-it-survive-2026-06-26/",
+      "tier": "S2",
+      "value_num": 10.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "China",
+      "analyst": "Report",
+      "staleness_days": 357,
+      "is_stale": false
+    },
+    {
+      "metric": "Kamoa-Kakula 2027 guidance",
+      "value": "500000-540000",
+      "series": "Ivanhoe guidance",
+      "unit": "t",
+      "as_of_date": "2025-12-03",
+      "period_end": "2027",
+      "geography": "DRC",
+      "definition": "2027 guidance vs 380,000–420,000 t for 2026",
+      "source": "Ivanhoe Mines",
+      "value_type": "target",
+      "source_url": "https://www.ivanhoemines.com/news-stories/news-release/ivanhoe-mines-announces-kamoa-kakula-copper-production-guidance-for-2026-and-2027-as-recovery-plan-advances/",
+      "tier": "S3",
+      "value_num": 520000.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "DRC",
+      "analyst": "Ivanhoe Mines",
+      "staleness_days": 325,
+      "is_stale": false
+    },
+    {
+      "metric": "Kamoa-Kakula Q3 2026 output",
+      "value": "76401",
+      "series": "Ivanhoe quarterly",
+      "unit": "t",
+      "period_end": "2026-Q3",
+      "geography": "DRC",
+      "definition": "Q3 2026 copper output",
+      "source": "Report",
+      "value_type": "actual",
+      "source_url": "https://www.newsfilecorp.com/release/318074/Ivanhoe-Mines-Reports-76401-Tonnes-of-Copper-Produced-by-KamoaKakula-for-Q3-2026",
+      "tier": "S3",
+      "value_num": 76401.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "DRC",
+      "analyst": "Report"
+    },
+    {
+      "metric": "QB2 2027 guidance",
+      "value": "240000-275000",
+      "series": "Teck (Reuters)",
+      "unit": "t",
+      "as_of_date": "2025-10-08",
+      "period_end": "2027",
+      "geography": "Chile",
+      "definition": "cut from 280,000–310,000 t on tailings constraint; unconfirmed on Teck's own release",
+      "source": "Reuters",
+      "value_type": "target",
+      "source_url": "https://www.reuters.com/business/teck-resources-cuts-copper-production-guidance-flagship-chilean-mine-qb-2025-10-08/",
+      "tier": "S2",
+      "value_num": 257500.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Chile",
+      "analyst": "Reuters",
+      "staleness_days": 381,
+      "is_stale": true
+    },
+    {
+      "metric": "Chile 2026 production forecast",
+      "value": "5.27",
+      "series": "Cochilco forecast",
+      "unit": "Mt",
+      "period_end": "2026",
+      "geography": "Chile",
+      "definition": "5.27 Mt in 2026, +5.2% in 2027",
+      "source": "Cochilco",
+      "value_type": "forecast",
+      "source_url": "https://www.industrialinfo.com/news/article/chiles-cochilco-raises-2026-copper-price-forecast--361453",
+      "tier": "S3",
+      "value_num": 5.27,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Chile",
+      "analyst": "Cochilco"
+    },
+    {
+      "metric": "Chile Jan-Jul 2026 output",
+      "value": "2.88",
+      "series": "Cochilco data via secondary reports",
+      "unit": "Mt",
+      "period_end": "2026-07",
+      "geography": "Chile",
+      "definition": "-7% y/y, 15-year low for the period",
+      "source": "Cochilco via secondary reports",
+      "value_type": "actual",
+      "source_url": "https://www.facebook.com/100064030239881/posts/chiles-copper-industry-suffered-a-sharp-setback-in-august-with-monthly-productio/1568429045301422/",
+      "tier": "S3",
+      "value_num": 2.88,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Chile",
+      "analyst": "Cochilco via secondary reports"
+    },
+    {
+      "metric": "Chilean ore grade decline",
+      "value": "13",
+      "series": "Cochilco",
+      "unit": "%",
+      "period_end": "past four years",
+      "geography": "Chile",
+      "definition": "fall in ore grades over past four years",
+      "source": "Cochilco",
+      "value_type": "actual",
+      "source_url": "https://www.linkedin.com/posts/thomasschmidt1_chile-cuts-copper-production-forecast-again-activity-7493209500980625408-6WRJ",
+      "tier": "S3",
+      "value_num": 13.0,
+      "value_kind": "actual",
+      "region": "Chile",
+      "analyst": "Cochilco"
+    },
+    {
+      "metric": "Peru 2025 production",
+      "value": "2.77",
+      "series": "Peru Ministry of Mines",
+      "unit": "Mt",
+      "period_end": "2025",
+      "geography": "Peru",
+      "definition": "2025 copper production",
+      "source": "Ministry of Mines",
+      "value_type": "actual",
+      "source_url": "https://www.cruxinvestor.com/posts/perus-copper-push-arrives-too-late-for-a-530-000-tonne-concentrate-deficit",
+      "tier": "S3",
+      "value_num": 2.77,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Peru",
+      "analyst": "Ministry of Mines"
+    },
+    {
+      "metric": "Peru June 2026 output",
+      "value": "218232",
+      "series": "Peru monthly output",
+      "unit": "t",
+      "period_end": "2026-06",
+      "geography": "Peru",
+      "definition": "vs 226,096 t in May 2026",
+      "source": "Report",
+      "value_type": "actual",
+      "source_url": "https://tradingeconomics.com/peru/copper-production",
+      "tier": "S3",
+      "value_num": 218232.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Peru",
+      "analyst": "Report"
+    },
+    {
+      "metric": "Cobre Panama pre-shutdown scale",
+      "value": "~330",
+      "series": "Cobre Panama",
+      "unit": "kt/yr",
+      "period_end": "pre-2023",
+      "geography": "Panama",
+      "definition": "~1% of world mine supply; figure unconfirmed",
+      "source": "Report",
+      "value_type": "estimate",
+      "source_url": "https://www.reuters.com/business/panama-commission-recommends-reopening-first-quantum-mine-order-gradually-close-2026-09-30/",
+      "tier": "S2",
+      "value_num": 330.0,
+      "value_kind": "forecast",
+      "region": "Panama",
+      "analyst": "Report"
+    },
+    {
+      "metric": "Chinese concentrate imports September 2026",
+      "value": "2.48",
+      "series": "China concentrate imports",
+      "unit": "Mt",
+      "period_end": "2026-09",
+      "geography": "China",
+      "definition": "down 4.1% year on year",
+      "source": "Report",
+      "value_type": "actual",
+      "source_url": "https://connectore.org/posts/copper-weekly-brief-15th-october-2026/",
+      "tier": "S3",
+      "value_num": 2.48,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "Report"
+    },
+    {
+      "metric": "Sulphuric acid index",
+      "value": "1665",
+      "series": "SMM China smelting acid index",
+      "unit": "yuan/mt",
+      "as_of_date": "2026",
+      "period_end": "2026",
+      "geography": "China",
+      "definition": "up 83.7% from start of 2026; acid prices fell 11% in September 2026 (Oilchem)",
+      "source": "SMM / Oilchem",
+      "value_type": "actual",
+      "source_url": "https://news.metal.com/newscontent/103909269-copper-concentrate-tcs-break-through-negative-triple-digits-what-challenges-do-smelters-face",
+      "tier": "S3",
+      "value_num": 1665.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "SMM / Oilchem",
+      "staleness_days": 296,
+      "is_stale": false
+    },
+    {
+      "metric": "Chinese 2026 refined growth forecast",
+      "value": "3-3.4",
+      "series": "Wood Mackenzie and Zijin Tianfeng",
+      "unit": "%",
+      "as_of_date": "2026",
+      "period_end": "2026",
+      "geography": "China",
+      "definition": "lowest since at least 2000, vs 10.4% in 2025",
+      "source": "Wood Mackenzie / Zijin Tianfeng",
+      "value_type": "forecast",
+      "source_url": "https://www.reuters.com/world/asia-pacific/chinas-refined-copper-output-track-lowest-growth-decades-this-year-analysts-say-2026-09-28/",
+      "tier": "S2",
+      "value_num": 3.2,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "China",
+      "analyst": "Wood Mackenzie / Zijin Tianfeng",
+      "metric_family": "growth rate",
+      "staleness_days": 296,
+      "is_stale": false
+    },
+    {
+      "metric": "Datacentre copper demand 2025",
+      "value": "260000",
+      "series": "CRU projection",
+      "unit": "t",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "78,000 t in 2020 rising to >650,000 t by 2030",
+      "source": "CRU",
+      "value_type": "estimate",
+      "source_url": "https://www.reuters.com/sustainability/climate-energy/global-power-grid-expansion-fuels-fresh-copper-demand-surge-2025-07-31/",
+      "tier": "S2",
+      "value_num": 260000.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "CRU"
+    },
+    {
+      "metric": "Grid copper demand 2025",
+      "value": "12.52",
+      "series": "Benchmark Mineral Intelligence",
+      "unit": "Mt",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "12.52 Mt (2025) → 14.87 Mt (2030); unconfirmed on cited page",
+      "source": "Benchmark Mineral Intelligence",
+      "value_type": "forecast",
+      "source_url": "https://www.reuters.com/sustainability/climate-energy/global-power-grid-expansion-fuels-fresh-copper-demand-surge-2025-07-31/",
+      "tier": "S2",
+      "value_num": 12.52,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Benchmark Mineral Intelligence"
+    },
+    {
+      "metric": "EV copper demand 2025",
+      "value": "1.2",
+      "series": "BMI",
+      "unit": "Mt",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "1.2 Mt (2025) → 2.2 Mt (2030); ~70 kg/BEV (Benchmark)",
+      "source": "BMI / Benchmark",
+      "value_type": "forecast",
+      "source_url": "https://www.reuters.com/sustainability/climate-energy/global-power-grid-expansion-fuels-fresh-copper-demand-surge-2025-07-31/",
+      "tier": "S2",
+      "value_num": 1.2,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "BMI / Benchmark"
+    },
+    {
+      "metric": "Datacentre copper demand 2025 (S&P)",
+      "value": "~1.1",
+      "series": "S&P Global projection",
+      "unit": "Mt",
+      "period_end": "2025",
+      "geography": "Global",
+      "definition": "~1.1 Mt in 2025 to ~2.5 Mt by 2040; total demand ~28 Mt → 42 Mt",
+      "source": "S&P Global",
+      "value_type": "forecast",
+      "source_url": "https://www.spglobal.com/en/research-insights/special-reports/copper-in-the-age-of-ai",
+      "tier": "S3",
+      "value_num": 1.1,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "S&P Global"
+    },
+    {
+      "metric": "Bank of America demand forecast",
+      "value": "30.32",
+      "series": "BofA forecast",
+      "unit": "Mt",
+      "period_end": "2030",
+      "geography": "Global",
+      "definition": "demand up 10% to 30.32 Mt by 2030 with a 1.84 Mt deficit that year",
+      "source": "Bank of America",
+      "value_type": "forecast",
+      "source_url": "https://www.reuters.com/sustainability/climate-energy/global-power-grid-expansion-fuels-fresh-copper-demand-surge-2025-07-31/",
+      "tier": "S2",
+      "value_num": 30.32,
+      "year": 2030,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Bank of America"
+    },
+    {
+      "metric": "Goldman end-2026 forecast",
+      "value": "14700",
+      "series": "Goldman Sachs (Oct 2026 revision)",
+      "unit": "USD/t",
+      "as_of_date": "2026-10",
+      "period_end": "2026",
+      "geography": "Global",
+      "definition": "2027 average $15,400/t, raised from $13,800/t",
+      "source": "Goldman Sachs via Mining.com",
+      "value_type": "forecast",
+      "source_url": "https://x.com/mining/status/2112561592759931135",
+      "tier": "S3",
+      "value_num": 14700.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Goldman Sachs via Mining.com",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Goldman earlier end-2026 forecast",
+      "value": "11000",
+      "series": "Goldman Sachs Research (Jan 2026)",
+      "unit": "USD/t",
+      "as_of_date": "2026-01-23",
+      "period_end": "2026",
+      "geography": "Global",
+      "definition": "decline to $11,000/t by end-2026; Q4-2026 average $11,200/t; fair price ~$11,500/t",
+      "source": "Goldman Sachs Research",
+      "value_type": "forecast",
+      "source_url": "https://www.goldmansachs.com/insights/articles/why-record-high-copper-prices-arent-forecast-to-last",
+      "tier": "S3",
+      "value_num": 11000.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Goldman Sachs Research",
+      "staleness_days": 274,
+      "is_stale": false
+    },
+    {
+      "metric": "J.P. Morgan Q4-2026 forecast",
+      "value": "14800",
+      "series": "J.P. Morgan Global Research",
+      "unit": "USD/t",
+      "period_end": "2026-Q4",
+      "geography": "Global",
+      "definition": "Q4 average; bearish-macro downside $11,100–11,200/t",
+      "source": "J.P. Morgan",
+      "value_type": "forecast",
+      "source_url": "https://www.jpmorgan.com/insights/global-research/commodities/aluminum-steel-copper-prices",
+      "tier": "S3",
+      "value_num": 14800.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "J.P. Morgan"
+    },
+    {
+      "metric": "Reuters analyst poll 2026 average",
+      "value": "13169",
+      "series": "Reuters poll of 27 analysts",
+      "unit": "USD/t",
+      "period_end": "2026",
+      "geography": "Global",
+      "definition": "2026 average consensus",
+      "source": "Reuters",
+      "value_type": "forecast",
+      "source_url": "https://www.devere-group.com/copper-price/",
+      "tier": "S3",
+      "value_num": 13169.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Reuters"
+    },
+    {
+      "metric": "CRU Q4-2026 forecast",
+      "value": "14500",
+      "series": "CRU (Brian Peng, 23 Sep 2026)",
+      "unit": "USD/t",
+      "as_of_date": "2026-09-23",
+      "period_end": "2026-Q4",
+      "geography": "Global",
+      "definition": "Q4 average; 2026 YTD range $11,700–14,875",
+      "source": "CRU",
+      "value_type": "forecast",
+      "source_url": "https://www.reuters.com/world/asia-pacific/chinas-refined-copper-output-track-lowest-growth-decades-this-year-analysts-say-2026-09-28/",
+      "tier": "S2",
+      "value_num": 14500.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "CRU",
+      "staleness_days": 31,
+      "is_stale": false
+    },
+    {
+      "metric": "Copper implied volatility",
+      "value": "24.1306",
+      "series": "CME CVOL",
+      "unit": "index (30-day implied vol, %)",
+      "as_of_date": "2026-10",
+      "geography": "Global",
+      "definition": "30-day implied volatility measure",
+      "source": "CME",
+      "value_type": "actual",
+      "source_url": "https://www.cmegroup.com/markets/metals/base/copper.quotes.html",
+      "tier": "S3",
+      "value_num": 24.1306,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "CME",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "VIX",
+      "value": "19.03",
+      "series": "CBOE Volatility Index (FRED)",
+      "unit": "index",
+      "as_of_date": "2026-10-22",
+      "geography": "United States",
+      "definition": "monthly mean 15.7755 for 2026-09",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/VIXCLS",
+      "tier": "S1",
+      "value_num": 19.03,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "metric": "S&P 500",
+      "value": "7669.4143",
+      "series": "FRED SP500",
+      "unit": "index",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "+1085.3962 (+16.485%) year on year",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/SP500",
+      "tier": "S1",
+      "value_num": 7669.4143,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED"
+    },
+    {
+      "metric": "90th percentile C1 cash cost",
+      "value": "~6700",
+      "series": "Secondary estimate",
+      "unit": "USD/t (~$3.04/lb)",
+      "geography": "Global",
+      "definition": "uncorroborated secondary estimate; Wood Mackenzie cost curve paywalled",
+      "source": "Secondary estimate",
+      "value_type": "estimate",
+      "source_url": "https://www.linkedin.com/posts/craig-hutton-475807170_headline-copper-price-analysis-the-90th-activity-7376857449430974465-TYm8",
+      "tier": "S3",
+      "value_num": 6700.0,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Secondary estimate"
+    },
+    {
+      "metric": "2026 5-year price range",
+      "value": "7544.8095 to 14473.0559",
+      "series": "FRED PCOPPUSDM",
+      "unit": "USD/t",
+      "period_end": "2022-07 to 2026-09",
+      "geography": "Global",
+      "definition": "5-year low (2022-07) to high (2026-09)",
+      "source": "FRED / IMF",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/PCOPPUSDM",
+      "tier": "S1",
+      "value_num": 11008.9327,
+      "year": 2022,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "FRED / IMF"
+    },
+    {
+      "metric": "2008 peak-to-trough",
+      "value": "8714.18 to 3105.10",
+      "series": "FRED PCOPPUSDM",
+      "unit": "USD/t monthly averages",
+      "period_end": "2008-04 to 2008-12",
+      "geography": "Global",
+      "definition": "~64% drawdown in eight months",
+      "source": "FRED / IMF",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/PCOPPUSDM",
+      "tier": "S1",
+      "value_num": 5909.64,
+      "year": 2008,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "FRED / IMF"
+    },
+    {
+      "metric": "Project Vault size",
+      "value": "~12 billion (USD); Mercuria delivered 12000 t",
+      "series": "US stockpiling program",
+      "unit": "USD / t",
+      "as_of_date": "2026",
+      "geography": "United States",
+      "definition": "US strategic buying program; Wood Mackenzie: 60-day copper supply alone would cost $4.9 billion",
+      "source": "Report",
+      "value_type": "estimate",
+      "source_url": "https://www.mining.com/web/mercuria-delivers-12000-tons-of-drc-copper-to-us-project-vault/",
+      "tier": "S3",
+      "value_num": 12.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Report",
+      "staleness_days": 296,
+      "is_stale": false
+    },
+    {
+      "metric": "Mirador Phase II capacity",
+      "value": ">200000",
+      "series": "Mirador (Ecuador)",
+      "unit": "t/y copper",
+      "geography": "Ecuador",
+      "definition": "capacity above 200,000 t/y; Mirador North adds 60,000 t/d milling for $653m; ramp timing undated",
+      "source": "Report",
+      "value_type": "target",
+      "source_url": "https://www.seetaoe.com/details/221963.html",
+      "tier": "S3",
+      "value_num": 200000.0,
+      "value_kind": "forecast",
+      "region": "Ecuador",
+      "analyst": "Report"
+    }
+  ],
+  "contested_claims": [
+    {
+      "claim": "The exact copper record price print and date",
+      "positions": [
+        {
+          "stance": "Record at $13,387/t on 6 January 2026",
+          "sources": [
+            "https://www.goldmansachs.com/insights/articles/why-record-high-copper-prices-arent-forecast-to-last"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Cash briefly exceeded USD 14,500/t intraday in January 2026 (IEA), first passing USD 12,000/t in December 2025",
+          "sources": [
+            "https://www.iea.org/commentaries/copper-prices-have-hit-record-highs-but-smelters-face-mounting-strategic-pressures"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "FRED monthly average of 14,473.0559 USD/t for September 2026 is the top of the 5-year range",
+          "sources": [
+            "https://fred.stlouisfed.org/series/PCOPPUSDM"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different instruments and observation frequencies (daily record vs intraday vs monthly average); the report states the exact record print is unconfirmed"
+    },
+    {
+      "claim": "LME copper stock level in late October 2026",
+      "positions": [
+        {
+          "stance": "229,650 t in mid-October 2026 (Crux analysis of LME data)",
+          "sources": [
+            "https://www.cruxinvestor.com/posts/tariff-arbitrage-collapse-strands-us-copper-lifting-ex-us-pricing"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "273,750 t on 23 October 2026 (Westmetall)",
+          "sources": [
+            "https://www.westmetall.com/en/markdaten.php?action=table&field=LME_Cu_cash"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "238,617 t October average (snippet-based aggregator)",
+          "sources": [
+            "https://www.westmetall.com/en/markdaten.php?action=averages&field=LME_Cu_cash"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "resolved",
+      "why_they_differ": "Different dates and methodology rather than a substantive dispute; direction is agreed"
+    },
+    {
+      "claim": "ICSG 2026 refined balance",
+      "positions": [
+        {
+          "stance": "150,000 t deficit forecast (October 2025)",
+          "sources": [
+            "https://www.reuters.com/business/slower-production-growth-will-push-copper-market-deficit-2026-says-icsg-2025-10-08/"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "96,000 t surplus forecast (April 2026), 377,000 t for 2027",
+          "sources": [
+            "https://policycommons.net/artifacts/59829045/copper-market-forecast-20262027/60727111/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "104,000 t surplus forecast (October 2026)",
+          "sources": [
+            "https://www.cruxinvestor.com/posts/tariff-arbitrage-collapse-strands-us-copper-lifting-ex-us-pricing"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Successive forecast vintages by the same publisher swinging ~350 kt within a year on usage and secondary-output revisions"
+    },
+    {
+      "claim": "Spot copper concentrate treatment charge levels in 2026",
+      "positions": [
+        {
+          "stance": "−$231.68/dmt on 30 Sep 2026 (SMM index via Novaex)",
+          "sources": [
+            "https://novaex.ai/blog/copper-tcrc-at-0-which-number-should-a-producers-book-carry-for-2027/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "−US$272.20/t on 9 Oct 2026 (Fastmarkets)",
+          "sources": [
+            "https://theoregongroup.com/latest-news/coppers-104000-tonne-surplus-masks-continued-mine-supply-constraint/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "−126.80/t at end-June 2026 (Crux citing IEA)",
+          "sources": [
+            "https://www.cruxinvestor.com/posts/chinese-smelters-pay-miners-for-copper-concentrate-as-mine-supply-becomes-the-key-constraint"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "−159.4 USD/t at end-July 2026 (reported)",
+          "sources": [
+            "https://www.minfutures.com/plat_files/upload/png_upload/20260814/202608141786688737200.pdf"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different assessment methodologies, indices (SMM vs Fastmarkets vs CRU) and dates; all agree spot TCs are deeply negative"
+    },
+    {
+      "claim": "Chinese refined copper output versus pledged cuts",
+      "positions": [
+        {
+          "stance": "CSPT pledged in November 2025 to cut 2026 primary output by more than 10%",
+          "sources": [
+            "https://www.reuters.com/commentary/reuters-open-interest/copper-soars-smelters-cant-bank-it-survive-2026-06-26/"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "Output rose 7.4% y/y through April 2026",
+          "sources": [
+            "https://www.linkedin.com/posts/discovery-alert-australia_chinas-copper-smelters-are-now-paying-to-activity-7473034766347333632-A0ND"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Refined output grew 4% y/y in January–August 2026",
+          "sources": [
+            "https://www.reuters.com/world/asia-pacific/chinas-refined-copper-output-track-lowest-growth-decades-this-year-analysts-say-2026-09-28/"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "Wood Mackenzie and Zijin Tianfeng expect full-year 2026 growth of only 3–3.4%",
+          "sources": [
+            "https://www.reuters.com/world/asia-pacific/chinas-refined-copper-output-track-lowest-growth-decades-this-year-analysts-say-2026-09-28/"
+          ],
+          "tier": "S2"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Partial compliance with the pledge cushioned by byproduct (sulphuric acid, gold, silver) economics; analyst projections of a sharp Q4 fall differ from realized data to date"
+    },
+    {
+      "claim": "Quebrada Blanca 2 guidance",
+      "positions": [
+        {
+          "stance": "Teck cut 2027 guidance to 240,000–275,000 t (2026: 200,000–235,000 t) on a tailings issue",
+          "sources": [
+            "https://www.reuters.com/business/teck-resources-cuts-copper-production-guidance-flagship-chilean-mine-qb-2025-10-08/"
+          ],
+          "tier": "S2"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Reuters report not confirmed against Teck's own release; no counter-position retrieved"
+    },
+    {
+      "claim": "Cobre Panama pre-shutdown production scale",
+      "positions": [
+        {
+          "stance": "~330 kt/yr, roughly 1% of world mine supply",
+          "sources": [
+            "https://www.reuters.com/business/panama-commission-recommends-reopening-first-quantum-mine-order-gradually-close-2026-09-30/"
+          ],
+          "tier": "S2"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Figure flagged as unconfirmed in the report; no alternative figure retrieved"
+    },
+    {
+      "claim": "Grid copper demand trajectory",
+      "positions": [
+        {
+          "stance": "12.52 Mt (2025) → 14.87 Mt (2030) per Benchmark Mineral Intelligence",
+          "sources": [
+            "https://www.reuters.com/sustainability/climate-energy/global-power-grid-expansion-fuels-fresh-copper-demand-surge-2025-07-31/"
+          ],
+          "tier": "S2"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Figures flagged as unconfirmed on the cited page; no second source retrieved"
+    },
+    {
+      "claim": "90th-percentile C1 cash cost",
+      "positions": [
+        {
+          "stance": "About $6,700/t (~$3.04/lb) as 90th-percentile C1 cash cost",
+          "sources": [
+            "https://www.linkedin.com/posts/craig-hutton-475807170_headline-copper-price-analysis-the-90th-activity-7376857449430974465-TYm8"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Uncorroborated secondary estimate; Wood Mackenzie cost curve is paywalled with no public percentile"
+    },
+    {
+      "claim": "Copper price record versus realized surplus in 2026",
+      "positions": [
+        {
+          "stance": "Record prices with a realized +218 kt Jan–Aug 2026 refined surplus: rally driven by concentrate scarcity, tariff dislocation and expectations",
+          "sources": [
+            "https://icsg.org/wp-content/uploads/Table1.pdf"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "ICSG October 2026 projects surpluses of 104 kt (2026) and 368 kt (2027)",
+          "sources": [
+            "https://www.cruxinvestor.com/posts/tariff-arbitrage-collapse-strands-us-copper-lifting-ex-us-pricing"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Bank of America expects a 1.84 Mt deficit by 2030",
+          "sources": [
+            "https://www.reuters.com/sustainability/climate-energy/global-power-grid-expansion-fuels-fresh-copper-demand-surge-2025-07-31/"
+          ],
+          "tier": "S2"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different horizons and definitions (realized balance vs forecast vs long-run projections); near-term ICSG surplus views conflict with structural-deficit bank narratives"
+    },
+    {
+      "claim": "Consensus 2026 price level",
+      "positions": [
+        {
+          "stance": "Reuters poll of 27 analysts: $13,169/t 2026 average",
+          "sources": [
+            "https://www.devere-group.com/copper-price/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Goldman revised year-end 2026 to $14,700/t and 2027 average $15,400/t",
+          "sources": [
+            "https://x.com/mining/status/2112561592759931135"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "J.P. Morgan Q4-2026 average $14,800/t",
+          "sources": [
+            "https://www.jpmorgan.com/insights/global-research/commodities/aluminum-steel-copper-prices"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "CRU Q4-2026 average $14,500/t",
+          "sources": [
+            "https://www.reuters.com/world/asia-pacific/chinas-refined-copper-output-track-lowest-growth-decades-this-year-analysts-say-2026-09-28/"
+          ],
+          "tier": "S2"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Vintage differences: the poll predates the rally; banks revised upward repeatedly, making consensus a lagging anchor"
+    }
+  ],
+  "forecast_inputs": {
+    "scenarios": [
+      {
+        "name": "Squeeze persists",
+        "probability": 0.4,
+        "narrative": "Concentrate shortage and smelter curtailments keep the refined market in deficit, stocks stay tight and copper holds or extends above the $13,000-16,000 regime by end-2027; prior: copper 20-25% annual volatility around an elevated spot."
+      },
+      {
+        "name": "Supply catches up",
+        "probability": 0.3,
+        "narrative": "Cobre Panama restart plus project ramp-ups and Chinese capacity discipline flip the balance to surplus per ICSG 2027, easing prices back toward $11,000-13,000; prior: deficits historically resolve within 18-24 months of high prices."
+      },
+      {
+        "name": "Supercycle breakout",
+        "probability": 0.15,
+        "narrative": "Tariff escalation, SRB buying or a major supply shock plus demand acceleration drives copper above $18,000; prior: ~1-sigma tail under 20-25% volatility from a $14,400 base."
+      },
+      {
+        "name": "Demand recession",
+        "probability": 0.15,
+        "narrative": "A global or Chinese downturn plus high-price demand destruction pulls copper below $11,000; prior: ~1-sigma downside tail."
+      }
+    ],
+    "base_rates": [
+      {
+        "reference_class": "12-month changes in the monthly copper price series, 2006-09 to 2026-09, threshold ±40%",
+        "outcome_frequency": "at least four distinct ±40%-plus episodes in twenty years",
+        "basis": "FRED/IMF Global price of Copper monthly series (PCOPPUSDM) [S2]"
+      },
+      {
+        "reference_class": "Annualized copper price volatility implied by the stored monthly series over twenty years",
+        "outcome_frequency": "annualized volatility in the low-to-mid 20s percent",
+        "basis": "FRED monthly series [S2]"
+      },
+      {
+        "reference_class": "ICSG 2026 refined balance forecast vintages (October 2025, April 2026, October 2026)",
+        "outcome_frequency": "sign instability approaching 350 kt within a year",
+        "basis": "ICSG forecast releases as reported [S15][S16][S4]"
+      },
+      {
+        "reference_class": "Demand-shock drawdowns: 2008 and 2022 episodes",
+        "outcome_frequency": "about −64% in eight months (2008) and ~26% correction within four months (2022)",
+        "basis": "FRED monthly series [S2] with ICSG balances [S17]"
+      },
+      {
+        "reference_class": "CRU spot-minus-contract TC gap, 2000–2023 versus 2024–25",
+        "outcome_frequency": "averaged $12 over 2000–2023 versus roughly $90 in 2024–25",
+        "basis": "CRU as cited [S7]"
+      }
+    ],
+    "drivers": [
+      {
+        "variable": "Spot copper concentrate treatment charges (SMM imported concentrate index)",
+        "direction": "more negative TCs push the LME price up",
+        "why_it_matters": "smelters paying for feed caps refined supply and signals concentrate scarcity, the squeeze mechanism setting the price level [S7]"
+      },
+      {
+        "variable": "Chinese smelter output discipline (CSPT curtailments and Q4 2026 maintenance)",
+        "direction": "deeper curtailments push the price up",
+        "why_it_matters": "seven smelters cutting ~80,000 t in Oct–Nov 2026 and a tax crackdown on scrap tighten refined supply despite byproduct cushions [S8][S9]"
+      },
+      {
+        "variable": "Mine supply increments (Kamoa-Kakula ramp, Chile rebound, QB2, Cobre Panama restart)",
+        "direction": "faster ramps push the price down",
+        "why_it_matters": "ICSG's 3.1% 2027 mine-growth projection rests on these named increments flipping the balance to a 368,000 t surplus [S6][S14][S24][S28]"
+      },
+      {
+        "variable": "COMEX stranded stocks and the Section 232 tariff regime",
+        "direction": "stranded US metal keeps ex-US tightness and supports the price",
+        "why_it_matters": "COMEX holds >714,000 t, ~70% of visible stocks, behind tariffs that sunset exactly on 31 December 2027 [S4][S46]"
+      },
+      {
+        "variable": "Demand growth (datacentres, grid, EVs vs China property drag)",
+        "direction": "higher net demand growth pushes the price up",
+        "why_it_matters": "ICSG expects usage +2.5% in 2027 with datacentre demand rising ~65–80 kt/yr, while China slows from 4–5% toward 2% [S14][S41][S44]"
+      },
+      {
+        "variable": "State stockpiling (China SRB, US Project Vault)",
+        "direction": "confirmed purchases push the price up",
+        "why_it_matters": "CNIA recommended expanding reserves and Project Vault (~$12 billion) has begun buying; Ghali projects the US and China could jointly hold 71% of global inventories within a year [S47][S52][S53]"
+      },
+      {
+        "variable": "Scrap/secondary supply and its policy crackdown",
+        "direction": "tighter scrap supply pushes the price up",
+        "why_it_matters": "ICSG projects secondary refined output +5.7% in 2027, making scrap the marginal feed, while a tax crackdown tightens the stream [S38][S8]"
+      },
+      {
+        "variable": "The 2027 annual TC/RC benchmark settlement",
+        "direction": "a settlement at or below $0 sustains the squeeze and supports the price",
+        "why_it_matters": "the 2026 benchmark settled at a record-low $0/t and the 2027 talks at Asia Copper Week are the nearest dated decision [S7][S40]"
+      }
+    ],
+    "risks": [
+      {
+        "event": "First Quantum–Panama restart/framework agreement signed",
+        "probability": "55%",
+        "per": "by 31 Dec 2027",
+        "source": "Panama panel recommends First Quantum mine restart to fund phased closure | Reuters [S33]",
+        "source_url": "https://www.reuters.com/business/panama-commission-recommends-reopening-first-quantum-mine-order-gradually-close-2026-09-30/",
+        "tier": "S2",
+        "effects": [],
+        "affects": [
+          "First Quantum Minerals",
+          "Government of Panama"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "Cobre Panama produces saleable copper",
+        "probability": "20%",
+        "per": "during 2027",
+        "source": "Panama panel recommends First Quantum mine restart to fund phased closure | Reuters [S33]",
+        "source_url": "https://www.reuters.com/business/panama-commission-recommends-reopening-first-quantum-mine-order-gradually-close-2026-09-30/",
+        "tier": "S2",
+        "effects": [],
+        "affects": [
+          "First Quantum Minerals",
+          "ICSG"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "US Annex III floating copper-tariff framework still in force",
+        "probability": "70%",
+        "per": "on 30 Dec 2027",
+        "source": "President Trump Makes Major Changes to Section 232 Tariffs on Aluminum, Steel, and Copper | SmarTrade [S46]",
+        "source_url": "https://www.thompsonhinesmartrade.com/2026/04/president-trump-makes-major-changes-to-section-232-tariffs-on-aluminum-steel-and-copper/",
+        "tier": "S3",
+        "effects": [
+          {
+            "metric": "COMEX stocks",
+            "change": "",
+            "direction": "up"
+          },
+          {
+            "metric": "COMEX-LME spread",
+            "change": "",
+            "direction": "up"
+          }
+        ],
+        "affects": [
+          "US President / Commerce Department (Section 232)",
+          "LME"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "Kamoa-Kakula 2027 output reaches guidance floor",
+        "probability": "70%",
+        "per": "2027 output ≥ 500,000 t",
+        "source": "Ivanhoe Mines Announces Kamoa-Kakula Copper Production Guidance for 2026 and 2027 as Recovery Plan Advances – Ivanhoe… [S24]",
+        "source_url": "https://www.ivanhoemines.com/news-stories/news-release/ivanhoe-mines-announces-kamoa-kakula-copper-production-guidance-for-2026-and-2027-as-recovery-plan-advances/",
+        "tier": "S3",
+        "effects": [
+          {
+            "metric": "Kamoa-Kakula 2027 guidance",
+            "change": "",
+            "direction": "up"
+          }
+        ],
+        "affects": [
+          "Ivanhoe Mines"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "Chile 2027 copper output reaches or exceeds 5.4 Mt",
+        "probability": "50%",
+        "per": "2027 output ≥ 5.4 Mt",
+        "source": "Chile's Cochilco Raises 2026 Copper Price Forecast [S28]",
+        "source_url": "https://www.industrialinfo.com/news/article/chiles-cochilco-raises-2026-copper-price-forecast--361453",
+        "tier": "S3",
+        "effects": [],
+        "affects": [
+          "Codelco"
+        ],
+        "recurring": false
+      },
+      {
+        "event": "ICSG April 2027 release keeps the 2027 surplus at or above 200 kt",
+        "probability": "55%",
+        "per": "",
+        "source": "ICSG sees global refined copper surplus widening in 2027 [S14]",
+        "source_url": "https://www.miningweekly.com/article/icsg-sees-global-refined-copper-surplus-widening-in-2027-2026-10-15",
+        "tier": "S3",
+        "effects": [],
+        "affects": [
+          "ICSG"
+        ],
+        "recurring": false
+      }
+    ],
+    "indicators": [
+      {
+        "indicator": "Global price of Copper (fred:PCOPPUSDM)",
+        "series": "fred:PCOPPUSDM",
+        "latest_value": 14473.05590909091,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "U.S. Dollars per Metric Ton",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S2"
+      },
+      {
+        "indicator": "S&P 500 — United States (fred:SP500)",
+        "series": "fred:SP500",
+        "latest_value": 7669.414285714286,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Index",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S22"
+      },
+      {
+        "indicator": "CBOE Volatility Index: VIX — United States (fred:VIXCLS)",
+        "series": "fred:VIXCLS",
+        "latest_value": 15.775454545454545,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Index",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S23"
+      }
+    ]
+  }
+}

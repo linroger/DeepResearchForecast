@@ -1,0 +1,775 @@
+{
+ "entity_types": [
+  {
+   "name": "Person",
+   "description": "Individual leaders and decision-makers whose choices causally drive the war end-state",
+   "attributes": [
+    {
+     "name": "full_name",
+     "type": "text",
+     "description": "Full official name"
+    },
+    {
+     "name": "role_title",
+     "type": "text",
+     "description": "Position held (e.g. President of Ukraine)"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "Country or entity the person leads"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "Current stated position on war termination (e.g. freeze-first vs final-deal-first)"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "High/medium/low influence over the forecast outcome"
+    }
+   ],
+   "examples": [
+    "Volodymyr Zelensky",
+    "Vladimir Putin",
+    "Steve Witkoff"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Named individuals who personally decide war aims, negotiation posture, or mediation policy",
+   "anti_examples": [
+    "Analysts, journalists, pollsters commenting on the war (sources, not actors)"
+   ],
+   "agency_class": "individual_leader",
+   "levers": [
+    "accept or reject ceasefire terms",
+    "order escalation or mobilization",
+    "grant or waive sanctions relief",
+    "propose security-guarantee architectures"
+   ]
+  },
+  {
+   "name": "Government",
+   "description": "Sovereign governments and national finance/defense blocs shaping war, sanctions and aid",
+   "attributes": [
+    {
+     "name": "country",
+     "type": "text",
+     "description": "Country or polity represented"
+    },
+    {
+     "name": "policy_levers",
+     "type": "text",
+     "description": "Main instruments (sanctions, aid, mediation, budget)"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "Position on war termination and sanctions sequencing"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "High/medium/low influence over the forecast outcome"
+    }
+   ],
+   "examples": [
+    "US administration",
+    "German government",
+    "Chinese government",
+    "UK government",
+    "Russian government finance bloc"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Executive governments or national ministries holding war-relevant decision power",
+   "anti_examples": [
+    "Multilateral bodies like the EU or NATO (Organization); individuals (Person)"
+   ],
+   "agency_class": "sovereign_government",
+   "levers": [
+    "impose or waive sanctions",
+    "approve aid packages and loans",
+    "set defense budget paths",
+    "broker or block negotiations"
+   ]
+  },
+  {
+   "name": "Organization",
+   "description": "Institutions, alliances, military commands and central banks that act on the war and macro outcome",
+   "attributes": [
+    {
+     "name": "org_kind",
+     "type": "text",
+     "description": "Kind: military command, defense ministry, alliance, central bank, other"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "Jurisdiction or membership scope"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "Current policy posture relevant to the forecast"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "High/medium/low influence over the forecast outcome"
+    }
+   ],
+   "examples": [
+    "European Union",
+    "NATO",
+    "European Central Bank",
+    "Federal Reserve",
+    "OPEC+",
+    "Ukrainian military command",
+    "Russian Ministry of Defense",
+    "Ukrainian Ministry of Finance"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "stakeholder",
+   "selection_rule": "Formal institutions that decide policy rates, sanctions, aid, defense posture or battlefield tempo",
+   "anti_examples": [
+    "Media outlets, think tanks, data providers cited as sources"
+   ],
+   "agency_class": "international_org",
+   "levers": [
+    "set policy rates",
+    "adopt sanctions packages",
+    "approve financing instruments",
+    "conduct offensives and mobilization"
+   ]
+  },
+  {
+   "name": "Other",
+   "description": "Non-state actors such as shadow-fleet operators and insurers gating Russian export flows",
+   "attributes": [
+    {
+     "name": "actor_kind",
+     "type": "text",
+     "description": "Category of non-state actor"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "Operating jurisdiction or legal base"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "Posture toward sanctions enforcement and Russian trade"
+    }
+   ],
+   "examples": [
+    "Shadow-fleet operators and insurers"
+   ],
+   "archetype": "collective",
+   "simulation_tier": 2,
+   "role_class": "intermediary",
+   "selection_rule": "Diffuse non-state commercial actors whose behavior materially conditions the forecast",
+   "anti_examples": [
+    "Named private firms better modeled as Organization; abstract concepts"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "continue or halt Russian oil carriage",
+    "adjust insurance and freight terms"
+   ]
+  },
+  {
+   "name": "MarketAsset",
+   "description": "Tradeable prices and macro series the forecast must price (Brent, TTF, gold, rates, spending)",
+   "attributes": [
+    {
+     "name": "asset_class",
+     "type": "text",
+     "description": "Commodity, safe haven, rate, inflation or spending aggregate"
+    },
+    {
+     "name": "unit",
+     "type": "text",
+     "description": "Quotation unit (USD/bbl, EUR/MWh, USD/oz, %, USD bn)"
+    },
+    {
+     "name": "current_level",
+     "type": "text",
+     "description": "Latest baseline reading and date"
+    },
+    {
+     "name": "resolution_source",
+     "type": "text",
+     "description": "Official series used for settlement (ICE, EIA, Eurostat, IMF)"
+    }
+   ],
+   "examples": [
+    "Brent crude",
+    "Dutch TTF gas",
+    "Gold",
+    "Euro-area HICP inflation",
+    "ECB deposit facility rate",
+    "European NATO defense spending aggregate"
+   ],
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": null,
+   "selection_rule": "A specific priced instrument or official macro series named in the forecast deliverables",
+   "anti_examples": [
+    "Abstract notions like 'market sentiment'; actors influencing prices"
+   ]
+  },
+  {
+   "name": "SanctionsRegime",
+   "description": "Legally effective sanctions and relief instruments (packages, waivers, licenses, price cap)",
+   "attributes": [
+    {
+     "name": "instrument_type",
+     "type": "text",
+     "description": "Sanctions package, executive waiver, Treasury license, maritime ban"
+    },
+    {
+     "name": "issuer",
+     "type": "text",
+     "description": "Issuing authority (EU Council, US Treasury, OFAC)"
+    },
+    {
+     "name": "effective_window",
+     "type": "text",
+     "description": "Entry into force and expiry dates"
+    },
+    {
+     "name": "current_status",
+     "type": "text",
+     "description": "In force, waived, pending adoption"
+    }
+   ],
+   "examples": [
+    "EU 20th sanctions package",
+    "US diesel-delivery sanctions license (to April 2027)",
+    "Graham Act waiver",
+    "Oil price cap and shadow-fleet measures"
+   ],
+   "archetype": "institution_rule",
+   "simulation_tier": 3,
+   "role_class": "arbiter",
+   "selection_rule": "A specific legally effective or pending sanctions instrument, not a general policy stance",
+   "anti_examples": [
+    "General diplomatic positions (actor stances); narrative claims about sanctions decay"
+   ]
+  },
+  {
+   "name": "WarStateScenario",
+   "description": "The five war end-states on the forecast continuum with attached probabilities",
+   "attributes": [
+    {
+     "name": "state_label",
+     "type": "text",
+     "description": "One of the five continuum states"
+    },
+    {
+     "name": "probability",
+     "type": "text",
+     "description": "Assigned probability weight"
+    },
+    {
+     "name": "defining_criteria",
+     "type": "text",
+     "description": "Verifiable intensity and formality criteria"
+    },
+    {
+     "name": "indicative_timing",
+     "type": "text",
+     "description": "Expected trajectory and timing through 2027"
+    }
+   ],
+   "examples": [
+    "Active high-intensity war (15%)",
+    "Reduced-intensity attrition (35%)",
+    "Frozen conflict (32%)",
+    "Formal armistice (15%)",
+    "Comprehensive peace settlement (3%)"
+   ],
+   "archetype": "scenario",
+   "simulation_tier": 4,
+   "role_class": null,
+   "selection_rule": "One of the five explicitly defined end-states of the war continuum",
+   "anti_examples": [
+    "Individual battles or daily events; abstract 'escalation risk'"
+   ]
+  },
+  {
+   "name": "MacroeconomicDriver",
+   "description": "Structural transmission channels linking war state to prices: fiscal strain, manpower, storage, s...",
+   "attributes": [
+    {
+     "name": "driver_kind",
+     "type": "text",
+     "description": "Fiscal, manpower, energy-infra, industrial capacity, election-cycle"
+    },
+    {
+     "name": "current_reading",
+     "type": "text",
+     "description": "Latest measured value and date"
+    },
+    {
+     "name": "binding_threshold",
+     "type": "text",
+     "description": "Level at which the driver becomes binding for a scenario shift"
+    }
+   ],
+   "examples": [
+    "Russian fiscal position (3.2% deficit, $50/bbl fiscal-rule cutoff)",
+    "Ukrainian manpower (200,000 AWOL)",
+    "EU gas storage (74% full, lowest since 2018)",
+    "OPEC+ spare capacity",
+    "US diesel price election politics"
+   ],
+   "archetype": "constraint_resource",
+   "simulation_tier": 4,
+   "role_class": null,
+   "selection_rule": "A measurable structural constraint or channel that transmits war state into market outcomes",
+   "anti_examples": [
+    "Abstract 'geopolitical risk'; actors themselves"
+   ]
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "OPPOSES",
+   "description": "Adversarial stance or armed/diplomatic opposition between actors",
+   "source_targets": [
+    {
+     "source": "Person",
+     "target": "Person"
+    },
+    {
+     "source": "Person",
+     "target": "Organization"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Person"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "adversarial degree"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "Intensity of opposition"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Onset of open hostility"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "Source opposes or fights target"
+  },
+  {
+   "name": "INFLUENCES",
+   "description": "One actor exerts pressure or leverage over another's decisions",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Person"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Organization",
+     "target": "Person"
+    },
+    {
+     "source": "Person",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "mechanism",
+     "type": "text",
+     "description": "Lever used (aid, sanctions, mediation)"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "Degree of leverage"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "Cooperative or coercive"
+    }
+   ],
+   "family": "influence",
+   "valence": "directional",
+   "direction_semantics": "Source pressures or shapes target's choices"
+  },
+  {
+   "name": "SANCTIONS",
+   "description": "Imposes or maintains sanctions instruments on a target actor",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Person"
+    },
+    {
+     "source": "Organization",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Other"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "Person"
+    },
+    {
+     "source": "Government",
+     "target": "Other"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "instrument",
+     "type": "text",
+     "description": "Specific package or measure"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "Enforcement intensity"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Date sanctions took effect"
+    }
+   ],
+   "family": "governance",
+   "valence": "adversarial",
+   "direction_semantics": "Source sanctions target"
+  },
+  {
+   "name": "FUNDS",
+   "description": "Provides financing, loans or budgetary support to another actor",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Organization",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "amount",
+     "type": "text",
+     "description": "Committed or disbursed amount"
+    },
+    {
+     "name": "instrument",
+     "type": "text",
+     "description": "Loan, grant, budget line"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Start of financing"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "Source finances target"
+  },
+  {
+   "name": "PARTNERS_WITH",
+   "description": "Formal cooperation or alliance partnership between actors",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Organization",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "Depth of partnership"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "Cooperative tone"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Partnership start"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "Source cooperates with target (symmetric)"
+  },
+  {
+   "name": "SUPPLIES",
+   "description": "Provides goods, materials or export revenue support to another actor",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Other",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "goods",
+     "type": "text",
+     "description": "What is supplied (dual-use goods, oil carriage)"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "Share or volume of supply"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Supply relationship start"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "Source supplies target"
+  },
+  {
+   "name": "SUPPORTS",
+   "description": "Material, military or political backing of one actor by another",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Person"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "support_kind",
+     "type": "text",
+     "description": "Military, financial, political"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "Scale of support"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "Supportive"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "Source backs target"
+  },
+  {
+   "name": "COMPETES_WITH",
+   "description": "Rivalry or divergent policy tracks between actors",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Organization",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "domain",
+     "type": "text",
+     "description": "Domain of rivalry (sanctions track, currency policy)"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "Degree of divergence"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "Source competes or diverges from target (symmetric)"
+  },
+  {
+   "name": "BACKS",
+   "description": "Endorses or underwrites another actor's policy framework or budget path",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "commitment",
+     "type": "text",
+     "description": "Pledged amount or scope"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "Reliability of backing"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "Source endorses or underwrites target"
+  },
+  {
+   "name": "DEPENDS_ON",
+   "description": "Reliance on another actor for critical capabilities, financing or political survival",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Person"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "dependency_kind",
+     "type": "text",
+     "description": "What is depended on (weapons, intelligence, fiscal backing)"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "Criticality of dependency"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Time horizon of the dependency"
+    }
+   ],
+   "family": "dependency",
+   "valence": "directional",
+   "direction_semantics": "Source depends on target"
+  }
+ ],
+ "analysis_summary": "该预测问题以俄乌战争的五种终局状态为核心定价驱动，要求对2027年底的Brent、TTF、黄金、欧元区通胀与利率及欧洲防务支出做概率加权定价。主体阵容由2位个人领导人（泽连斯基、普京）、5个政府行为体（美国政府、德国政府、中国政府、英国政府、俄罗斯财政集团）、8个组织机构（欧盟、北约、欧央行、美联储、OPEC+、乌俄军事与财政机构）以及影子船队等非国家行为体构成。本体保留种子四类主体类型，并新增四个领域专属类型：MarketAsset（被定价的市场与宏观序列）、SanctionsRegime（法律生效的制裁与豁免工具）、WarStateScenario（五种战争终局情景）与MacroeconomicDriver（财政、人力、储气等传导约束）。关系层保留全部13个种子关系类型以对齐已注入图谱，并新增CAUSES、TRIGGERS、CONSTRAINS三条因果边，使战争状态→市场价格的传导链（含sign/magnitude/lag属性）成为可检索的预测机制。媒体与智库（Reuters、ISW、Kiel等）仅作为信息来源（tier 3），不建模为能动主体。"
+}

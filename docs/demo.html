@@ -28,6 +28,7 @@
 
   <div class="viewer-prompt">
     <span class="plabel" data-i18n="viewer.prompt">Prompt</span>
+    <span id="run-date" class="run-date"></span>
     <span id="prompt-text">…</span>
   </div>
 
@@ -53,7 +54,9 @@
 <script src="i18n.js?v=20260930a"></script>
 <script>
 (function () {
-  var RUN_KEYS = { 'us-ai-2030': 'run.ai.title', 'ev-2035': 'run.ev.title', 'russia-ukraine': 'run.ru.title', 'semiconductors-2030': 'run.semi.title', 'memory-semi-2030': 'run.mem.title', 'china-storage-2035': 'run.ess.title', 'us-iran-2026': 'run.iran.title', 'storage-semi-2028': 'run.storage.title', 'cloud-2030': 'run.cloud.title', 'collision-decade-2031': 'run.collision.title', 'us-midterms-2026': 'run.midterms.title', 'us-trade-2028': 'run.trade.title', 'grid-storage-2040': 'run.grid.title', 'datacenter-2030': 'run.dc.title', 'quantum-2040': 'run.quantum.title', 'copper-2027': 'run.copper.title', 'bitcoin-2027': 'run.bitcoin.title' };
+  var RUN_KEYS = { 'us-ai-2030': 'run.ai.title', 'ev-2035': 'run.ev.title', 'russia-ukraine': 'run.ru.title', 'semiconductors-2030': 'run.semi.title', 'memory-semi-2030': 'run.mem.title', 'china-storage-2035': 'run.ess.title', 'us-iran-2026': 'run.iran.title', 'storage-semi-2028': 'run.storage.title', 'cloud-2030': 'run.cloud.title', 'collision-decade-2031': 'run.collision.title', 'us-midterms-2026': 'run.midterms.title', 'us-trade-2028': 'run.trade.title', 'grid-storage-2040': 'run.grid.title', 'datacenter-2030': 'run.dc.title', 'quantum-2040': 'run.quantum.title', 'copper-2027': 'run.copper.title', 'bitcoin-2027': 'run.bitcoin.title', 'ai-capex-2027': 'run.aicapex.title', 'ev-tariffs-2027': 'run.evtariff.title', 'france-crisis-2027': 'run.france.title', 'gold-2027': 'run.gold.title', 'russia-ukraine-2027': 'run.ru2027.title', 'ru-war-impact-2027': 'run.ruimpact.title', 'iran-standoff-2027': 'run.iranwar.title', 'ust10y-2027': 'run.ust10y.title', 'sp500-2027': 'run.sp500.title', 'copper-2027-r2': 'run.copper2.title', 'semichain-2027': 'run.semichain.title', 'ust10y-deep-2027': 'run.ust10ydeep.title', 'cybersecurity-2027': 'run.cyber.title' };
+  // run date = the date each pipeline's report stage finished (local time)
+  var RUN_DATES = { 'us-ai-2030': '2026-06-09', 'russia-ukraine': '2026-06-08', 'semiconductors-2030': '2026-06-10', 'china-storage-2035': '2026-06-10', 'us-iran-2026': '2026-06-12', 'memory-semi-2030': '2026-06-13', 'storage-semi-2028': '2026-06-22', 'cloud-2030': '2026-06-22', 'collision-decade-2031': '2026-07-02', 'us-trade-2028': '2026-07-02', 'us-midterms-2026': '2026-07-03', 'ev-2035': '2026-07-12', 'grid-storage-2040': '2026-07-15', 'datacenter-2030': '2026-09-18', 'quantum-2040': '2026-09-28', 'copper-2027': '2026-10-23', 'bitcoin-2027': '2026-10-23', 'ai-capex-2027': '2026-10-20', 'ev-tariffs-2027': '2026-10-20', 'france-crisis-2027': '2026-10-21', 'gold-2027': '2026-10-22', 'russia-ukraine-2027': '2026-10-22', 'ru-war-impact-2027': '2026-10-23', 'iran-standoff-2027': '2026-10-23', 'ust10y-2027': '2026-10-23', 'sp500-2027': '2026-10-24', 'copper-2027-r2': '2026-10-24', 'semichain-2027': '2026-10-24', 'ust10y-deep-2027': '2026-10-26', 'cybersecurity-2027': '2026-10-26' };
   var params = new URLSearchParams(location.search);
   var runKey = params.get('run');
   var body = document.getElementById('stage-body');
@@ -421,6 +424,8 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     document.title = drfT(RUN_KEYS[runKey]) + ' — DeepAgentForecast';
+    var dateEl = document.getElementById('run-date');
+    if (dateEl && RUN_DATES[runKey]) dateEl.textContent = RUN_DATES[runKey];
     fetchJSON('meta.json').then(function (m) {
       document.getElementById('prompt-text').textContent = m.prompt || '—';
     }).catch(function () {

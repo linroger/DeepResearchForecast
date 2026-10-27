@@ -1,0 +1,90 @@
+{
+ "pipeline_id": "pipe_93634335798e",
+ "report_id": "report_0d6e54840afc",
+ "simulation_id": "sim_6de28c57020d",
+ "graph_id": "mirofish_32eb3361925041bc",
+ "status": "completed",
+ "prompt": "Forecast the S&P 500 index level (close) as of December 31, 2027, and separately the probability that the index experiences a drawdown of 20% or more from any 2026-2027 peak before that date. Establish the baseline: current index level, trailing and forward P/E, 2024-2026 annual returns, and the current earnings-growth consensus. Research and weigh the principal drivers: Earnings growth path and AI-capex contribution breadth; valuation mean-reversion base rates at current multiples; Fed policy and recession probability; concentration risk in mega-cap tech; margin sensitivity to wages and tariffs; historical 2-year return distributions from similar starting valuations. Deliverables: 3-5 mutually exclusive scenarios with probabilities, a most-likely trajectory, and at least 10 binary forecasts with concrete thresholds, counts or dates, each with a probability and resolution criteria anchored to verifiable sources.",
+ "created_at": "2026-10-23T21:44:00.816368+00:00",
+ "mode": "full",
+ "rounds": 14,
+ "personas": 12,
+ "has_actors": true,
+ "research_log": {
+  "line_count": 312,
+  "source_count": 1,
+  "complete": true,
+  "event_fidelity": "summarized_progress_events"
+ },
+ "dossier_assets": [
+  "research-charts/data_fred_sp500_27cd291ad955bc97.png",
+  "research-charts/data_fred_sp500_yoy_449476441e338eb4.png",
+  "research-charts/data_bis_ws_cbpol_m_us_eae44f753af36114.png",
+  "research-charts/data_fred_recprousm156n_f364c815868fac8b.png",
+  "research-charts/data_fred_ces0500000003_063a14ec551b71b4.png",
+  "research-charts/data_usgov_treasury_mts_customs_duties_237244547d210738.png",
+  "research-charts/data_fred_sahmrealtime_bbf917e8a5cc3c29.png",
+  "research-charts/data_fred_t10y3m_4aefaf7432bbac9a.png",
+  "research-charts/timeline.png",
+  "research-charts/timeline.html",
+  "research-charts/metric_trajectories.png",
+  "research-charts/metric_trajectories.html"
+ ],
+ "report_assets": [
+  "charts/binary_forecast_dotplot.png",
+  "charts/official_indicators.png",
+  "charts/official_series_mrcdmtladtppbctr.png",
+  "charts/official_series_oaefafronmbbacta.png",
+  "charts/official_series_lfbrtnalcapaqdpa.png",
+  "charts/metric_trajectories.png",
+  "charts/scenario_probabilities.png",
+  "charts/timeline_lanes.png"
+ ],
+ "dossier_languages": {
+  "en": "dossier.md"
+ },
+ "report_languages": {
+  "en": "report.md",
+  "zh": "report.zh.md"
+ },
+ "artifact_sha256": {
+  "research_log.txt": "d6456b0937db892e65ac7ecad5ce1d9a4805c96e87193e39f30d3cb92c38dec8",
+  "dossier.md": "fd50e0123ff61644424f252b07b6ad2b38c3511d02464c91849ebf11fc755b46",
+  "actors.json": "250985e64160424725bd886e05533979bbe79c1bade4733a6b8577b63fba9c20",
+  "sources.json": "dce3d5a4e54b223bb04d933dea5fd73d4dada7fd926859271592ce5604d87b41",
+  "ontology.json": "bb4b743eec5038e1922e1965966e1c79cece98a180f073947ac746e94c379ae2",
+  "graph.json": "22042f0c3fa00e725d4e9c5d32e9d94137aef708b3a8e7930787547b70812fef",
+  "forum.json": "1cf0218702a2fa4a8e38584639dda98f88bb161724e884749edc323cb084d624",
+  "report.md": "9d748e686de50caf3d144dd20d746c7ea6543763fda0df0de1010e00ee1f024a",
+  "report.zh.md": "39cda151efde60eaeef9d88471cc790eb83fe9be6a28af2bd56a2c5ef8caf6d6",
+  "research-charts/data_fred_sp500_27cd291ad955bc97.png": "b16f76ff3e2f990c041a71fa3c471386e30bbfae595d4cc564715b104364e69a",
+  "research-charts/data_fred_sp500_yoy_449476441e338eb4.png": "3e3785b712abf826eb01339b6a6f17126c7463adac895cb02afba516ed17b763",
+  "research-charts/data_bis_ws_cbpol_m_us_eae44f753af36114.png": "92990f30343a060d164f42cf5fc740667f4b3e1f9b5b5e67f6b0c320ad47cc28",
+  "research-charts/data_fred_recprousm156n_f364c815868fac8b.png": "22bfd99d85fb471a82ced5cdb6b66c8e277d8ac7be47b07698fbcc8e54f4ef63",
+  "research-charts/data_fred_ces0500000003_063a14ec551b71b4.png": "b3bddb21b0c747257d937a78d4a545c187fff2b4ad1c61d015277a410a1fea80",
+  "research-charts/data_usgov_treasury_mts_customs_duties_237244547d210738.png": "1b43a5ba3ed064704d6d767ed5dfc6f4204b08d5b7d136dfe71c1572c56c00c5",
+  "research-charts/data_fred_sahmrealtime_bbf917e8a5cc3c29.png": "d916a1cf4d40374c4cb556dbadab137921cba441a349885eb815bea3d33ccda3",
+  "research-charts/data_fred_t10y3m_4aefaf7432bbac9a.png": "b15fa589265f0da1ab8b6a8f5802bcc13191c844b425640117f051eadf4033e6",
+  "research-charts/timeline.png": "d4c62e381772121bf7036eee3d37bc4b74d114a6e96c0f6e22680143c6e0f545",
+  "research-charts/timeline.html": "f5dcb67b2b97fa1c15431e05b83f310adf7f65e3fd06d495a122748f2cb5bc17",
+  "research-charts/metric_trajectories.png": "f33a9d0b0a33bf21be3b9d97e93fe266dde6a35c3b95b117a7afb0052c3ab6d4",
+  "research-charts/metric_trajectories.html": "45d00e4660b6c5957d92bf9983b415973ebb796384f14a2ed673ed2f2c2c1f21",
+  "charts/binary_forecast_dotplot.png": "eb7955ef1df8c1d9f2a7fa32b21794db0e8b45014706b05365213dfd4476ce53",
+  "charts/official_indicators.png": "af3f04d690229661c576926b4274def453ec795a08c9f7b53310f7da5f5b0925",
+  "charts/official_series_mrcdmtladtppbctr.png": "11b2c71758fdb9c3ced47f99ff45fc80143f6d607a9f76be11a0331cc67cbc78",
+  "charts/official_series_oaefafronmbbacta.png": "fdb2a7f018bf7ff5fca89a4d90205929cebd93545b6548acba203232a954eb40",
+  "charts/official_series_lfbrtnalcapaqdpa.png": "ab5e7d5b81cac78c22e4619e2510628aec71f314502484c0c4e9d94410d540fd",
+  "charts/metric_trajectories.png": "4f7d7b3abc6c890551b6034ba1121ffbaa43ea7652d918a874b5b00e3fbe633a",
+  "charts/scenario_probabilities.png": "9686d76119de8ceb80b3889a5e3ca72ba2fa45fbd69aa96ff211168f4e69cda1",
+  "charts/timeline_lanes.png": "9929aefb0f0c3f6605c252efd680708a2b6360080dbcd78cb38c3d19706a9e0c"
+ },
+ "publication": {
+  "hard_passed": true,
+  "publish_passed": true,
+  "scenario_contract_valid": true,
+  "citation_coverage": 0.829,
+  "semantic_citations_passed": true,
+  "markdown_sha256": "abb64719c5c20704e94fcea470d687998d85ee50b6fd3549cadca1a337edde6c",
+  "forecast_sha256": "fedc220d45d0aee3f7d54bd835a244b13b6bd2519f3ea63f538ab5637d039dc8"
+ }
+}

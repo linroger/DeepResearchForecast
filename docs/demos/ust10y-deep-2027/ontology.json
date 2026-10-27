@@ -1,0 +1,546 @@
+{
+ "entity_types": [
+  {
+   "name": "Government",
+   "description": "Sovereign policymaking bodies: Fed/FOMC, Treasury, Congress, BOJ, SAFE, BLS",
+   "attributes": [
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "Country/political jurisdiction"
+    },
+    {
+     "name": "agency_class",
+     "type": "text",
+     "description": "central_bank / treasury / legislature / statistics_agency / fx_administrator"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low impact on the 10Y yield forecast"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "Current policy stance (hawkish/dovish/neutral) or issuance guidance"
+    }
+   ],
+   "examples": [
+    "美联储(FOMC)",
+    "美国财政部",
+    "美国国会",
+    "日本银行(BOJ)",
+    "中国国家外汇管理局",
+    "美国劳工统计局(BLS)"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Any governmental body whose policy decisions (rates, issuance, budgets, FX reserves, data) causally affect the 10Y Treasury yield",
+   "anti_examples": [
+    "财政部发布的DGS10数据序列本身（属信号客体）",
+    "智库或评级机构（归Organization）"
+   ],
+   "agency_class": "sovereign_government",
+   "levers": [
+    "调整政策利率",
+    "调整缩表/资产负债表操作",
+    "调整国债拍卖规模与久期结构",
+    "立法改变税收/支出/债务上限",
+    "调整外储中美元资产配置"
+   ]
+  },
+  {
+   "name": "Person",
+   "description": "Individual decision-makers: Fed chair, FOMC voters, Treasury Secretary",
+   "attributes": [
+    {
+     "name": "role",
+     "type": "text",
+     "description": "Position held (e.g., Fed Chair, FOMC voter, Treasury Secretary)"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "Hawkish/dovish/neutral policy disposition"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence on rate path"
+    }
+   ],
+   "examples": [
+    "美联储主席(沃什)",
+    "财长贝森特",
+    "FOMC投票委员"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Named individuals with direct votes or decisions affecting monetary/fiscal policy relevant to the yield",
+   "anti_examples": [
+    "被引用的经济学家专栏作者",
+    "记者/评论员"
+   ],
+   "agency_class": "individual_leader",
+   "levers": [
+    "投票加息/降息",
+    "公开表态引导预期",
+    "决定再融资指引",
+    "国会投票"
+   ]
+  },
+  {
+   "name": "Organization",
+   "description": "Non-state institutions: CBO, NY Fed model team, rating agencies, dealers, strategy desks",
+   "attributes": [
+    {
+     "name": "org_class",
+     "type": "text",
+     "description": "budget_office / regional_fed_research / rating_agency / primary_dealer / sell_side_research"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence on yield-relevant expectations"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "Published outlook or assessment"
+    }
+   ],
+   "examples": [
+    "国会预算办公室(CBO)",
+    "纽约联储(ACM模型团队)",
+    "穆迪/标普评级机构",
+    "主要国债一级交易商",
+    "摩根大通利率策略团队"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 2,
+   "role_class": "stakeholder",
+   "selection_rule": "Organizations that shape fiscal expectations, risk pricing, market liquidity or forecasts of the 10Y yield",
+   "anti_examples": [
+    "纯数据聚合网站（Macrotrends）",
+    "预测市场平台页面本身"
+   ],
+   "agency_class": "research_institution",
+   "levers": [
+    "发布赤字/债务基线预测",
+    "发布期限溢价与衰退概率模型",
+    "下调主权评级",
+    "在拍卖中缩减承接/压低投标"
+   ]
+  },
+  {
+   "name": "TreasuryInstrument",
+   "description": "Trackable asset objects: 10Y note, 2Y, 3M, TIPS, JGB, bills",
+   "attributes": [
+    {
+     "name": "maturity",
+     "type": "text",
+     "description": "Tenor (3M/2Y/10Y/30Y)"
+    },
+    {
+     "name": "current_level",
+     "type": "text",
+     "description": "Latest yield level and date"
+    },
+    {
+     "name": "issuing_sovereign",
+     "type": "text",
+     "description": "US / Japan"
+    }
+   ],
+   "examples": [
+    "美国10年期国债(DGS10)",
+    "10年期TIPS",
+    "10年期JGB",
+    "美国国库券(Bills)"
+   ],
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Specific tradable securities whose yields/prices are tracked for the forecast",
+   "anti_examples": [
+    "“期限溢价”这一抽象分解量（归MacroIndicator）",
+    "收益率曲线形态概念本身"
+   ]
+  },
+  {
+   "name": "MacroIndicator",
+   "description": "Official signal series: term premium, breakeven, spread, recession prob, MOVE",
+   "attributes": [
+    {
+     "name": "series_code",
+     "type": "text",
+     "description": "FRED/official series identifier"
+    },
+    {
+     "name": "latest_value",
+     "type": "text",
+     "description": "Latest reading and period"
+    },
+    {
+     "name": "trigger_threshold",
+     "type": "text",
+     "description": "Threshold that shifts scenario weights"
+    }
+   ],
+   "examples": [
+    "Kim-Wright期限溢价(THREEFYTP10)",
+    "盈亏平衡通胀(T10YIE)",
+    "2s10s利差(T10Y2Y)",
+    "平滑衰退概率",
+    "密歇根1年通胀预期",
+    "MOVE指数"
+   ],
+   "archetype": "signal",
+   "simulation_tier": 4,
+   "role_class": "amplifier",
+   "selection_rule": "Quantitative time series whose levels/thresholds discriminate between forecast scenarios",
+   "anti_examples": [
+    "发布该数据的机构（归Government/Organization）",
+    "抽象的“市场情绪”"
+   ]
+  },
+  {
+   "name": "ForecastSource",
+   "description": "Cited research/media outlets providing yield forecasts (passive sources)",
+   "attributes": [
+    {
+     "name": "source_type",
+     "type": "text",
+     "description": "sell_side / survey / prediction_market / news_wire"
+    },
+    {
+     "name": "published_view",
+     "type": "text",
+     "description": "Point estimate or scenario range for 2027 10Y yield"
+    },
+    {
+     "name": "as_of_date",
+     "type": "text",
+     "description": "Publication date of the view"
+    }
+   ],
+   "examples": [
+    "WSJ经济学家调查",
+    "摩根士丹利利率展望",
+    "摩根大通财富管理展望",
+    "Polymarket收益率合约",
+    "路透社报道"
+   ],
+   "archetype": "source",
+   "simulation_tier": 3,
+   "role_class": "amplifier",
+   "selection_rule": "Media/survey/prediction-market entities cited as evidence but not causally deciding the outcome",
+   "anti_examples": [
+    "美联储FOMC（能动决策者，归Government）",
+    "CBO（直接影响财政立法预期，归Organization）"
+   ]
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "INFLUENCES",
+   "description": "Source shapes target's decisions, cost of funding or risk pricing",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Person",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "TreasuryInstrument"
+    },
+    {
+     "source": "Government",
+     "target": "MacroIndicator"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/negative/neutral direction of influence"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "channel",
+     "type": "text",
+     "description": "policy_rate / term_premium / fiscal_expectations / inflation_expectations"
+    }
+   ],
+   "family": "influence",
+   "valence": "directional",
+   "direction_semantics": "source 影响/施压 target 的决策或定价（如评级机构影响财政部融资成本）"
+  },
+  {
+   "name": "SUPPLIES",
+   "description": "Source supplies securities, data or estimates to target",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "TreasuryInstrument"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "supply_type",
+     "type": "text",
+     "description": "securities_issuance / economic_data / model_estimates"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "source 向 target 供应（财政部向交易商发行国债；BLS向美联储供应数据）"
+  },
+  {
+   "name": "COMPETES_WITH",
+   "description": "Source's policy normalization competes for the same investor demand",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "dimension",
+     "type": "text",
+     "description": "e.g., global safe-asset demand / yield differential"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "source 与 target 在吸引债券资金/利差上竞争（BOJ加息 vs 美联储，驱动日本资金回流）"
+  },
+  {
+   "name": "CUSTOMER_OF",
+   "description": "Source is a buyer/holder of target's issued securities",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "holding_trend",
+     "type": "text",
+     "description": "accumulating / stable / reducing"
+    },
+    {
+     "name": "holding_size",
+     "type": "text",
+     "description": "Approximate current holdings"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Period of established holder relationship"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "source 是 target 所发行证券的客户/持有方（如SAFE持有美国国债）"
+  },
+  {
+   "name": "REGULATES",
+   "description": "Source has statutory authority over target's budget/issuance",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "instrument",
+     "type": "text",
+     "description": "debt_ceiling / appropriations / oversight"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "governance",
+   "valence": "directional",
+   "direction_semantics": "source 立法/授权约束 target（国会监管财政部的借债与支出）"
+  },
+  {
+   "name": "SUPPORTS",
+   "description": "Source provides analytical or operational support to target",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "support_type",
+     "type": "text",
+     "description": "model_estimates / market_operations / research"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "source 为 target 提供支持（纽约联储模型团队支持FOMC决策）"
+  },
+  {
+   "name": "TRIGGERS",
+   "description": "Indicator or decision that causally triggers repricing of an instrument",
+   "source_targets": [
+    {
+     "source": "MacroIndicator",
+     "target": "TreasuryInstrument"
+    },
+    {
+     "source": "Government",
+     "target": "TreasuryInstrument"
+    },
+    {
+     "source": "Organization",
+     "target": "TreasuryInstrument"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "upward/downward pressure on yield"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Days/quarters before effect materializes"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source 触发 target 的重定价（如期限溢价升破1%推升10Y收益率）"
+  },
+  {
+   "name": "CONSTRAINS",
+   "description": "Institutional or fiscal constraint limiting yield direction or policy space",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "TreasuryInstrument"
+    },
+    {
+     "source": "Organization",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "constraint_type",
+     "type": "text",
+     "description": "debt_ceiling / shutdown / issuance_guidance / rating"
+    },
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "upward/downward bias imposed"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Time window until constraint binds"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source 约束 target（债务上限/停摆约束收益率路径；CBO基线约束国会财政空间）"
+  },
+  {
+   "name": "REPORTS_ON",
+   "description": "Passive source publishes forecasts or coverage of instruments/actors",
+   "source_targets": [
+    {
+     "source": "ForecastSource",
+     "target": "TreasuryInstrument"
+    },
+    {
+     "source": "ForecastSource",
+     "target": "Government"
+    },
+    {
+     "source": "ForecastSource",
+     "target": "MacroIndicator"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "as_of_date",
+     "type": "text",
+     "description": "Publication date"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "bullish/neutral/bearish on yields"
+    }
+   ],
+   "family": "information",
+   "valence": "neutral",
+   "direction_semantics": "source 报道/预测 target，不构成因果关系"
+  }
+ ],
+ "analysis_summary": "本预测问题聚焦2027年12月31日美国10年期国债收益率（DGS10）水平，核心驱动链条为：美联储加息路径与资产负债表政策→短端与期限溢价；财政部发行结构与财政赤字→供给溢价；BOJ正常化与中日减持（TIC）→境外需求；衰退概率与通胀预期→实际利率。本体保留actor阵容种子类型Government/Person/Organization（对应6个政府机构、5个组织、1个自然人决策者），并新增4个领域类型：TreasuryInstrument（可追踪资产客体）、MacroIndicator（判别情景的信号序列，含触发阈值）、ForecastSource（被引用的卖方/调查/预测市场，tier=3被动信息源）。关系覆盖已实证的六条种子边（INFLUENCES/SUPPLIES/COMPETES_WITH/CUSTOMER_OF/REGULATES/SUPPORTS），并新增TRIGGERS/CONSTRAINS两条因果边（带sign/lag/strength）刻画期限溢价、债务上限等冲击向收益率的传导，以及REPORTS_ON信息边区分被动来源与能动主体。"
+}

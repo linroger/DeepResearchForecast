@@ -1,0 +1,82 @@
+{
+ "pipeline_id": "pipe_d129e1956e73",
+ "report_id": "report_4883650cf3bc",
+ "simulation_id": "sim_9ae6378766a6",
+ "graph_id": "mirofish_1e7be59c73784d3b",
+ "status": "completed",
+ "prompt": "Forecast the outcome of France budgetary and political crisis through the first round of the presidential election in April 2027, explicitly incorporating the recent French riots and their likely fiscal, market, and electoral ramifications. Deliver calibrated probabilities with objective resolution criteria for: (1) Fiscal path - whether the 2027 loi de finances is enacted before 31 December 2026, whether it passes via Article 49.3, and whether the 2026 general government deficit exceeds 5.5 percent of GDP; the 10-year OAT-Bund spread at the first-round date. (2) Public order - whether large-scale rioting recurs before the election (insurance-declared catastrophe events, curfews, or emergency measures), drawing on the recent riots casualty, arrest, and insured-loss estimates. (3) Government survival - probability the current Prime Minister or a successor of the same bloc survives all censure motions before the election; probability of a technocratic government. (4) Election consequences - first-round qualification and runoff-win probabilities for the leading candidates (Rassemblement National, left-wing coalition, centre-right, Macron-affiliated), with explicit analysis of how the riots shift vote shares and turnout; probability the election is postponed or held under a state of emergency. (5) Markets - CAC 40 drawdown and OAT spread scenarios conditional on riot escalation versus de-escalation, and bank downgrade risk. Ground everything in current polling averages, the state of the 2027 budget process, the EU Excessive Deficit Procedure timeline, riot-loss data from insurers and reinsurers, and market data.",
+ "created_at": "2026-10-21T05:55:47.522135+00:00",
+ "mode": "full",
+ "rounds": 13,
+ "personas": 14,
+ "has_actors": true,
+ "research_log": {
+  "line_count": 353,
+  "source_count": 1,
+  "complete": true,
+  "event_fidelity": "summarized_progress_events"
+ },
+ "dossier_assets": [
+  "research-charts/data_wb_imf_weo_ggxcnl_ngdp_fra_2e9b37645458b321.png",
+  "research-charts/data_wb_wb_gep_nygdpmktpkdz_emu_910d8aca34949694.png",
+  "research-charts/data_wb_wb_wdi_ny_gdp_mktp_kd_zg_fra_49123abcb3127114.png",
+  "research-charts/timeline.png",
+  "research-charts/timeline.html",
+  "research-charts/market_probabilities.png",
+  "research-charts/market_probabilities.html"
+ ],
+ "report_assets": [
+  "charts/binary_forecast_dotplot.png",
+  "charts/official_indicators.png",
+  "charts/official_series_otlmnabcbnlmrllo.png",
+  "charts/official_series_metbnrqopopsbnml.png",
+  "charts/scenario_probabilities.png",
+  "charts/worldstate_trajectory.png",
+  "charts/metric_trajectories.png",
+  "charts/quantitative_claims.png",
+  "charts/timeline_lanes.png"
+ ],
+ "dossier_languages": {
+  "en": "dossier.md"
+ },
+ "report_languages": {
+  "en": "report.md",
+  "zh": "report.zh.md"
+ },
+ "artifact_sha256": {
+  "research_log.txt": "9729e739867d60f5e0c1a0be2643dd27559d278e5fd08f5af009451546681de3",
+  "dossier.md": "780f537fb88bfe71ae9c27d5d945649fdbc8866d8034105f28eaab3083cd03eb",
+  "actors.json": "be052d933e2c0c065e321d0e5ae7aa6494243a88a85356615e019cd53233f11d",
+  "sources.json": "785e8da09e84c6e76b24c06e9e39a21bb41bb013c4fdcd7be0e5ace26cf3a737",
+  "ontology.json": "7e5ffcdea8ea5dfff7a618bdcb4fed0d104a19096d1e5c37042b7ed27083b4c1",
+  "graph.json": "57a6cd481b3da4655a5340e5e0d29908c9a9d60780404b1d45439047b480d2ab",
+  "forum.json": "faccb52236d85e069a96394b1cd75581afe91dbf2f713d1a0357a90563db92c4",
+  "report.md": "ed79816c5236ee8527b12f1b0b1a7aa4c79cad7ba1cd8b83e6620bf180c5f750",
+  "report.zh.md": "a1bf1a4b3d81579dd2db1ba8739d345063155d1aa904ef3f67850af52ba09a36",
+  "research-charts/data_wb_imf_weo_ggxcnl_ngdp_fra_2e9b37645458b321.png": "0540f1b9f64ba8d2ad8c54842e56180981760eb13b7c91cd3503c84f24ca5ea5",
+  "research-charts/data_wb_wb_gep_nygdpmktpkdz_emu_910d8aca34949694.png": "b9c6ea7bfb46e45edc957c1d6b266bd66e16d9db934cdc84b2dcfccc3edca09c",
+  "research-charts/data_wb_wb_wdi_ny_gdp_mktp_kd_zg_fra_49123abcb3127114.png": "2698d65e49d9e95814afde612822421648446e8c18c0257eba204c00023896f0",
+  "research-charts/timeline.png": "00bf59913e60fc1cba3eebb417a02ba2bab178a8dca7506a005cf9fa417a6c0d",
+  "research-charts/timeline.html": "1f3a454bfd81487875e9b94fd72b355a9e5fb160097d9497de74a99a94d07e45",
+  "research-charts/market_probabilities.png": "c486566b5d1950a469fbbe21c86668d78b352e25bce02e1d53b44de70d907920",
+  "research-charts/market_probabilities.html": "d81e5561d1c1b138265e3a18ba3b54cc2d33175d1b71bbbb4d232ac022faea4b",
+  "charts/binary_forecast_dotplot.png": "96eae4f2de446103463a1070326725c7d2294d7a5f6498ce6dff16d235f03771",
+  "charts/official_indicators.png": "8408ed8315bc98979afe349652a5ec71a4a206fa2fae3646bc8d158bbb91eb98",
+  "charts/official_series_otlmnabcbnlmrllo.png": "aeb14249f9e17c4ca2d4e66fef86ccdb2d146e7f629be3c8fadf838d44bf04b9",
+  "charts/official_series_metbnrqopopsbnml.png": "33212b8f74e8cb85e1e575290366ead93eb1ecbd109940cbc2d706fc752f302e",
+  "charts/scenario_probabilities.png": "a4460bad5d6128ad0a253e85b4cf92c3a5d98f1ed421d896692e67e95c660d1d",
+  "charts/worldstate_trajectory.png": "e86b93b2feebeb25b7690610bf1c2256524296eddcc9253d2cf9b624b20e4d03",
+  "charts/metric_trajectories.png": "439631270950794f693909c4662106857ca9a70c768140637446be6ceb83a196",
+  "charts/quantitative_claims.png": "214d1eb351d90226c95f1903ae7d9110069b2136dbc64806f776548d9c60b0ed",
+  "charts/timeline_lanes.png": "06c4d2dd50c6a10d762131ed0585beccea58409cf7885ad3cf3b7027b4173598"
+ },
+ "publication": {
+  "hard_passed": true,
+  "publish_passed": true,
+  "scenario_contract_valid": true,
+  "citation_coverage": 0.845,
+  "semantic_citations_passed": true,
+  "markdown_sha256": "7bb0e438eb4d832502a87311be24f8dd9c2e2955e148920ccab750eaa2751069",
+  "forecast_sha256": "f4e79ce7e378ceba1e77e0806e86d5ea2299092e831ff76210aa7d71831c22c3"
+ }
+}

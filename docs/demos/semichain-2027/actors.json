@@ -1,0 +1,3229 @@
+{
+  "central_question": "Which segments of the global semiconductor supply chain (advanced packaging, HBM, leading-edge logic, substrates, equipment, materials, memory, mature nodes, OSAT) become binding capacity or capability bottlenecks between late October 2026 and 31 December 2027, and how severe does each bottleneck become?",
+  "as_of_date": "2026-10-24",
+  "situation_brief": {
+    "current_situation": "As of late October 2026, advanced packaging (CoWoS/SoIC) and HBM are the binding constraints: TSMC's CEO said on 16 July 2026 that packaging capacity is 'so tight that now it's limiting my customers' growth' [S1], with CoWoS lead times reported at 52-78 weeks fully booked, and HBM effectively sold out into 2027 with supplier inventories below 10 days. ASML stated on 14 October 2026 that its planned 2027-28 supply 'will not fully meet the demand of our customers' [S2], gating leading-edge ramps. Most other segments (mature-node foundry, wafers, OSAT) are tightening but not broadly scarce; US NAICS 3344 utilization was 76.51% in September 2026, well below the 92.195% peak of February 2022 [S3].",
+    "context": "AI accelerator demand is pulling the bill of materials: NVIDIA's Rubin ships H2 2026 with up to 288 GB HBM4 per GPU [S5]; Rubin Ultra's 2027 configuration (1 TB-class quad-die vs reported 192 GB dual-die redesign) is contested and swings per-package 2027 HBM demand roughly fivefold [S6][S8]. Estimated CoWoS demand rose from ~370,000 wafers (2024) toward ~1,000,000 (2026) [S1]. Relief is largely dated beyond the horizon: IBIDEN Ono ramps from Q1 2028, Unimicron completes mid-2028, Amkor's +300% by end-2028 [S45]. Global equipment billings hit a record US$40.53 billion in Q2 2026, +23% YoY [S10].",
+    "dynamics": "Tightening propagates upstream from packaging and HBM into leading-edge logic and equipment. TSMC guides 2026 revenue up ~44% USD and 2026-28 capex 'even more significantly higher than the past three years' while calling tool supply tight [S17]. Memory makers allocate DRAM wafers to HBM, tightening conventional DRAM and NAND prices (4Q26 forecasts +10-15% and +15-20% QoQ) [S25][S28]. Base rates favor persistence: only 1-2 of five documented bottleneck episodes since 2017 resolved within 18 months, and all three capability/AI-structural episodes (CoWoS, HBM, ABF) persisted [S3][S11][S12][S13].",
+    "fault_lines": [
+      "Rubin Ultra HBM configuration unresolved: 1 TB-class 12-Hi roadmap vs reported 192 GB 8-Hi dual-die redesign - roughly fivefold HBM demand gap [S6][S8][S42]",
+      "ASML-declared 2027-28 tool supply shortfall gating all leading-edge and packaging ramps [S2][S17]",
+      "Substrate and materials concentration: IBIDEN ~35% of high-end ABF; Unimicron chairman warns of 20% supply shortfall in glass fiber cloth, CCL and ABF in 2027 and equipment lead times up to 30 months [S29][S51]",
+      "HBM wafer allocation crowding out conventional DRAM/NAND supply [S25][S28]",
+      "Samsung 2nm yield still unqualified for external customers, leaving TSMC the sole qualified leading-edge source [S21][S22][S23]"
+    ],
+    "catalysts": [
+      "BIS Affiliates Rule suspension lapses 9 November 2026 absent a Federal Register extension [S14][S16]",
+      "China MOFCOM Announcement No. 70 pause of October 2025 rare-earth controls ends 10 November 2026, no extension published as of 16 October 2026 [S15]",
+      "TSMC January 2027 Q4 call: 2027 capex guidance and packaging commentary [S17][S1]",
+      "ASML Q4 2026 results (January 2027): whether the 2027-28 shortfall statement is reiterated or dropped [S2]",
+      "NVIDIA Rubin Ultra roadmap confirmation (8-Hi vs 12-Hi) by GTC March 2027 [S8][S42]",
+      "TrendForce quarterly CoWoS gap and HBM ASP prints [S20][S25]",
+      "Memory supplier earnings late Oct-Nov 2026: 2027 HBM allocations and inventory levels [S28]"
+    ]
+  },
+  "actors": [
+    {
+      "name": "TSMC",
+      "type": "Organization",
+      "role": "Dominant leading-edge foundry and owner of most CoWoS/SoIC packaging capacity",
+      "stance": "Expanding aggressively; packaging capacity tight and limiting customers' growth",
+      "description": "Q3 2026 revenue USD 46.7 billion, Q4 guide $52.3-54.3 billion, ~44% FY USD growth expected; N3 at 33% of wafer revenue in 3Q26; CoWoS capacity compounding above 80% annually 2022-2027; 2026-28 capex to be 'even more significantly higher than the past three years'.",
+      "stated_vs_revealed": "Publicly 'prudent' on 2027 while committing to capex significantly above prior years - revealed stance is aggressive expansion under allocation.",
+      "memory": "CoWoS constraint has persisted 10+ quarters despite capacity doubling in 2024 and 2025.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "Taiwan Semiconductor Manufacturing Company"
+      ],
+      "goals": [
+        "Ramp CoWoS toward ~200,000 wpm industry capacity in 2027",
+        "Ramp 2nm to 90,000 wpm end-2026 and 110,000 wpm by mid-2027",
+        "Hold leading-edge pricing power and node-mix leadership"
+      ],
+      "constraints": [
+        "Tool supply tight (ASML shortfall)",
+        "CoWoS capacity limiting customers' growth since mid-2023",
+        "Overseas fab dilution of gross margin (~40bp in Q4 2026)"
+      ],
+      "assets": [
+        "Effectively sole qualified leading-edge logic source through the horizon",
+        "Majority of global CoWoS/SoIC capacity",
+        "N3 at ~98% estimated utilization with 104-156-week lead times"
+      ],
+      "vulnerabilities": [
+        "Dependence on ASML tool deliveries",
+        "Taiwan geographic concentration",
+        "Demand-side risk if AI orders soften (management 'prudent' on 2027)"
+      ],
+      "incentives": [
+        {
+          "driver": "AI accelerator demand",
+          "gains_if": "AI-led tightness persists; record capex converts to allocated, high-margin capacity",
+          "loses_if": "AI air pocket leaves excess N2/N3 capacity",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Capacity discipline",
+          "Customer trust",
+          "Technology leadership"
+        ],
+        "beliefs": [
+          "AI demand is structural, not cyclical",
+          "Packaging is now a first-order constraint"
+        ],
+        "identity": "The leading-edge foundry gatekeeper",
+        "frame": "Expand ahead of AI demand while managing tool-supply gating"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.98,
+        "basis": "Owns the two most-likely bottleneck segments (CoWoS/SoIC and leading-edge logic)"
+      }
+    },
+    {
+      "name": "NVIDIA",
+      "type": "Organization",
+      "role": "Largest driver of HBM and packaging bill-of-materials pull",
+      "stance": "Locking in supply via multibillion-dollar reservations and 2.5x capacity agreements",
+      "description": "Estimated to hold ~60% of 2026 CoWoS capacity (~595,000 wafers), with NVIDIA, Broadcom and AMD above 85% combined; October 2026 supply-chain agreements target 2.5x substrate capacity over three years; Rubin ships H2 2026 with up to 288 GB 12-Hi HBM4.",
+      "stated_vs_revealed": "Roadmap publicly shows 1 TB-class HBM4e; reported internal actions suggest a de-scoped 192 GB dual-die redesign to fit packaging constraints.",
+      "memory": "Quad-die Rubin Ultra reportedly cancelled over CoWoS-L warpage/yield issues.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "Secure CoWoS lanes, HBM4 allocation and ABF substrates through 2027",
+        "Resolve Rubin Ultra package design (quad-die 1 TB vs dual-die 192 GB)"
+      ],
+      "constraints": [
+        "TSMC packaging capacity limiting its growth",
+        "Substrate relief (IBIDEN Ono, Unimicron full capacity) dated 2028",
+        "Reported quad-die cancellation over CoWoS-L substrate warpage and yield issues"
+      ],
+      "assets": [
+        "Dominant share of advanced packaging allocation",
+        "Reservation advances (e.g., $1.1 billion KYEC) and capacity agreements"
+      ],
+      "vulnerabilities": [
+        "Single-source dependence on TSMC CoWoS",
+        "Fivefold uncertainty in its own 2027 HBM demand depending on package design"
+      ],
+      "incentives": [
+        {
+          "driver": "Accelerator roadmap execution",
+          "gains_if": "Packaging/HBM allocation secured ahead of rivals",
+          "loses_if": "CoWoS/substrate shortfalls cap Rubin Ultra shipments",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Supply-chain control",
+          "Performance leadership"
+        ],
+        "beliefs": [
+          "Packaging, not compute dies, is the gating resource"
+        ],
+        "identity": "The demand engine of the chain",
+        "frame": "Buy forward capacity to convert scarcity into moat"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "Its bill of materials defines demand for the top two bottleneck segments"
+      }
+    },
+    {
+      "name": "SK Hynix",
+      "type": "Organization",
+      "role": "Leading HBM supplier with majority HBM4 wafer allocation",
+      "stance": "Sold out into 2027; prioritizing HBM4 over conventional DRAM",
+      "description": "Q2 2026 HBM revenue share 50% (Counterpoint); UBS estimates ~70% of Rubin-generation HBM4 supply; with Samsung processes an estimated 150,000-200,000 HBM wpm; finished-memory inventory below 10 days (September 2026).",
+      "stated_vs_revealed": "Reports of sold-out 2027 output are unconfirmed by the company directly.",
+      "memory": "HBM shortage has run 10-12 quarters since 2024-class episodes.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "Hold HBM4 leadership and Rubin-generation share",
+        "Maximize blended HBM ASP (+121% YoY 2027 forecast per TrendForce)"
+      ],
+      "constraints": [
+        "Finite DRAM wafer capacity forcing conventional DRAM crowding-out",
+        "HBM demand tied to unresolved Rubin Ultra configuration"
+      ],
+      "assets": [
+        "Majority HBM4 allocation for NVIDIA's Rubin generation",
+        "Low inventories signaling sold-out books"
+      ],
+      "vulnerabilities": [
+        "Oversupply flip if AI demand air pocket hits in late 2027"
+      ],
+      "incentives": [
+        {
+          "driver": "HBM4 allocation premium",
+          "gains_if": "Tightness persists through 2027",
+          "loses_if": "Rubin Ultra switches to 8-Hi, cutting bits per GPU ~33%",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Allocation discipline",
+          "Yield leadership"
+        ],
+        "beliefs": [
+          "HBM tightness is structural through 2027"
+        ],
+        "identity": "The HBM incumbent",
+        "frame": "Prioritize HBM over commodity DRAM"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.92,
+        "basis": "Co-owner of the #2 ranked bottleneck segment (HBM, 85% probability)"
+      }
+    },
+    {
+      "name": "Samsung Electronics",
+      "type": "Organization",
+      "role": "Second HBM/DRAM source and 2nm foundry contender",
+      "stance": "Scaling HBM4 lines while trying to qualify SF2 2nm foundry",
+      "description": "Q2 2026 HBM revenue share 33%, DRAM share 38%; runs ~150,000 DRAM wpm through HBM lines (~75,000 wpm HBM4); SF2 yield leak-reported from ~30% (Q1 2026) toward 50-60% with Exynos 2600 as first mass-production product; finished-memory inventory below 10 days.",
+      "stated_vs_revealed": "No official yield disclosure; leaks suggest progress but external qualification remains unverified.",
+      "memory": "SF2 yield reported ~30% in Q1 2026 rising toward 50-60% late 2026 (unconfirmed).",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "Samsung Foundry"
+      ],
+      "goals": [
+        "Close HBM4 gap with SK Hynix",
+        "Win external 2nm foundry qualification"
+      ],
+      "constraints": [
+        "SF2 yield still unproven; no verified external 2nm customer qualification",
+        "SF1.4 shifted to 2029"
+      ],
+      "assets": [
+        "Largest overall DRAM capacity",
+        "Second HBM source with rapidly scaling HBM4 wafers"
+      ],
+      "vulnerabilities": [
+        "Leak-based yield figures unconfirmed",
+        "Foundry competitiveness gap vs TSMC"
+      ],
+      "incentives": [
+        {
+          "driver": "Dual-track memory + foundry recovery",
+          "gains_if": "HBM tightness persists and SF2 qualifies externally by mid-2027",
+          "loses_if": "Memory flips to oversupply while foundry stays unqualified",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Vertical integration",
+          "Scale"
+        ],
+        "beliefs": [
+          "2nm can be competitive with yield recovery"
+        ],
+        "identity": "Challenger in both HBM and leading-edge foundry",
+        "frame": "Convert DRAM scale into HBM share"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.85,
+        "basis": "Second HBM source and the only potential alternative leading-edge foundry"
+      }
+    },
+    {
+      "name": "Unimicron",
+      "type": "Organization",
+      "role": "Major ABF substrate maker (~14% share) expanding capacity",
+      "stance": "Expanding KF site; warning publicly about 2027 materials and equipment shortfalls",
+      "description": "Chairman said 20 October 2026 that lead times for over 80% of substrate-making equipment have lengthened (some to 30 months) and low-CTE glass fiber cloth, CCL and ABF could face a 20% supply shortfall in 2027; raised 2026 capex to NT$53.7 billion, over 80% for ABF; KF expansion adds capacity from Q2 2027, full by mid-2028.",
+      "stated_vs_revealed": "Publicly warning of shortfalls while being a beneficiary of the resulting pricing.",
+      "memory": "October 2026 public warning on 20% materials shortfall.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Bring KF capacity online Q2 2027"
+      ],
+      "constraints": [
+        "Equipment lead times up to 30 months",
+        "Upstream materials (glass cloth, ABF film) shortfalls"
+      ],
+      "assets": [
+        "Major substrate share with dated 2027 capacity addition"
+      ],
+      "vulnerabilities": [
+        "Tool procurement gating its own ramp"
+      ],
+      "incentives": [
+        {
+          "driver": "ABF price/lead-time upside",
+          "gains_if": "Substrate tightness persists through 2027",
+          "loses_if": "Expansion completes into a demand air pocket",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Capacity expansion with caution"
+        ],
+        "beliefs": [
+          "2027 materials gap is real"
+        ],
+        "identity": "The vocal substrate bellwether",
+        "frame": "Signal scarcity to justify capex"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.72,
+        "basis": "Only substrate maker with in-horizon capacity addition (Q2 2027)"
+      },
+      "aliases": [
+        "Micron"
+      ]
+    },
+    {
+      "name": "ASML",
+      "type": "Organization",
+      "role": "Sole EUV/High-NA supplier gating all leading-edge ramps",
+      "stance": "Supplier-declared shortfall: planned 2027-28 supply will not fully meet demand",
+      "description": "Record Q3 2026 net sales EUR 11.7 billion, net income EUR 5.0 billion; plans ~30% increase in low-NA EUV/DUV immersion capacity for 2027 yet states supply for 2027 and 2028 'will not fully meet the demand of our customers'; NXE:3800F small-quantity introduction early 2027; one High-NA system sold in Q3 2026.",
+      "stated_vs_revealed": "Publicly declares the shortfall rather than hiding it - consistent with its allocation posture.",
+      "memory": "Q3 2026 record results amid declared 2027-28 shortfall.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "goals": [
+        "Raise capacity ~30% for 2027",
+        "Introduce NXE:3800F at 260 wafers per hour"
+      ],
+      "constraints": [
+        "Own supply chain limits",
+        "Install throughput, not shipment count, gates node ramps"
+      ],
+      "assets": [
+        "Monopoly on EUV lithography",
+        "Record bookings from all leading-edge rampers"
+      ],
+      "vulnerabilities": [
+        "Single point of failure for the entire chain",
+        "Backlash if allocation decisions favor one customer"
+      ],
+      "incentives": [
+        {
+          "driver": "Allocation of scarce tool capacity",
+          "gains_if": "Tightness persists (pricing power, backlog)",
+          "loses_if": "Demand shock strands expanded capacity",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Long-term capacity planning",
+          "Customer neutrality"
+        ],
+        "beliefs": [
+          "Demand structurally exceeds its planned capacity through 2028"
+        ],
+        "identity": "The chain's ultimate gatekeeper",
+        "frame": "Manage scarcity through planned allocation"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "Ranked #4 bottleneck (equipment, 60% probability) and gate on all others"
+      }
+    },
+    {
+      "name": "IBIDEN",
+      "type": "Organization",
+      "role": "Key CoWoS/ABF substrate maker and single-source risk (~35% high-end share)",
+      "stance": "Expanding under NVIDIA reservation but ramp dated after 2027",
+      "description": "Holds ~35% of high-end FC-BGA/ABF capacity; Gama Cell 6 (~JPY 220bn first phase of ~JPY 500bn FY2026-28 plan) mass production from FY2027; Ono 3x capacity ramp begins Q1 2028 under NVIDIA multibillion-dollar reservation.",
+      "stated_vs_revealed": "Expansion committed but dated beyond the forecast horizon.",
+      "memory": "NVIDIA multibillion-dollar Ono reservation announced October 2026.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Ibiden"
+      ],
+      "goals": [
+        "Execute Gama Cell 6 and Ono expansions"
+      ],
+      "constraints": [
+        "Ono ramp begins Q1 2028 - no relief inside the horizon"
+      ],
+      "assets": [
+        "Largest high-end ABF substrate share"
+      ],
+      "vulnerabilities": [
+        "Qualification-dependent timelines",
+        "Concentration makes it a chokepoint"
+      ],
+      "incentives": [
+        {
+          "driver": "Reserved-capacity economics",
+          "gains_if": "Substrate scarcity persists into 2028",
+          "loses_if": "Demand shortfall strands new capacity",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Quality leadership in high-layer substrates"
+        ],
+        "beliefs": [
+          "AI substrate demand justifies 3x expansion"
+        ],
+        "identity": "The premium substrate incumbent",
+        "frame": "Grow only with customer reservations"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.75,
+        "basis": "Named single-source concentration risk in the #3 ranked bottleneck"
+      }
+    },
+    {
+      "name": "Shin-Etsu Chemical",
+      "type": "Organization",
+      "role": "Dominant photoresist (incl. EUV) supplier",
+      "stance": "No dated post-2024 capacity expansion confirmed",
+      "description": "Last dated capacity move is a ~JPY 30 billion photoresist investment (Naoetsu, Joetsu, Douliu) dating from around 2020; current EUV resist capacity unknown in the evidence.",
+      "stated_vs_revealed": "Silent in the evidence; no quantified utilization or lead times.",
+      "memory": "No dated expansion since ~2020 investments.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "goals": [
+        "Maintain photoresist leadership"
+      ],
+      "constraints": [
+        "No dated post-AI-surge expansion found"
+      ],
+      "assets": [
+        "Dominant EUV photoresist position"
+      ],
+      "vulnerabilities": [
+        "Single-source concentration if demand steps up with leading-edge ramps"
+      ],
+      "incentives": [
+        {
+          "driver": "Photoresist pricing power",
+          "gains_if": "EUV wafer starts grow faster than resist capacity",
+          "loses_if": "Opaque but low propagation keeps it under the radar",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Quality and stability"
+        ],
+        "beliefs": [
+          "Unknown from evidence"
+        ],
+        "identity": "The quiet chokepoint",
+        "frame": "Steady-state supply"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.45,
+        "basis": "Named single-source risk but no current data; unquantified propagation"
+      }
+    },
+    {
+      "name": "SUMCO",
+      "type": "Organization",
+      "role": "Top 300mm silicon wafer maker",
+      "stance": "Focusing on sophistication rather than volume",
+      "description": "States focus on 'sophistication or refinement' rather than volume; last large greenfield commitment was a $2 billion expansion announced in 2021; record-high 300mm shipments projected for Q2 FY2026.",
+      "stated_vs_revealed": "Volume discipline stated and matched by absent commitments.",
+      "memory": "2021 $2bn expansion was last big commitment.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "goals": [
+        "Refine product mix over adding volume"
+      ],
+      "constraints": [
+        "No new volume commitment deliverable by end-2027 found"
+      ],
+      "assets": [
+        "Top-tier 300mm wafer share"
+      ],
+      "vulnerabilities": [
+        "Episodic tightness if leading-edge ramps accelerate (segment only 40% bottleneck probability)"
+      ],
+      "incentives": [
+        {
+          "driver": "Price over volume",
+          "gains_if": "Utilization above 90% persists",
+          "loses_if": "Oversupply trims ASPs",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Capital discipline"
+        ],
+        "beliefs": [
+          "Refinement beats volume growth"
+        ],
+        "identity": "The disciplined wafer incumbent",
+        "frame": "Ride high utilization"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "Ranked #6 bottleneck (40%) - moderate"
+      }
+    },
+    {
+      "name": "SMIC",
+      "type": "Organization",
+      "role": "Dominant China mature-node foundry under US export controls",
+      "stance": "Repricing upward from a 2024 trough despite Entity List constraints",
+      "description": "On US Entity List since December 2020; 28nm wafer pricing fell from ~$2,500 to ~$1,500 in 2024 with 5-20% increases planned for 2026; mature-node capacity is the chain's slack pool with 4-17-week lead times.",
+      "stated_vs_revealed": "Planned price increases against a loose market suggest cost-push and localization leverage.",
+      "memory": "Entity List since December 2020.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "goals": [
+        "Raise mature-node prices",
+        "Continue build-out under licence constraints"
+      ],
+      "constraints": [
+        "Entity List licence-by-licence exports",
+        "US SME exports to China fell from $6.8bn (2021) to $4.2bn (2024)"
+      ],
+      "assets": [
+        "Dominant China mature-node capacity"
+      ],
+      "vulnerabilities": [
+        "Tool access restrictions",
+        "Price war overhang from China capacity additions"
+      ],
+      "incentives": [
+        {
+          "driver": "Mature-node re-pricing",
+          "gains_if": "Tightness spreads to mature nodes via export shock",
+          "loses_if": "China additions keep 28nm+ loose",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Self-sufficiency",
+          "Scale"
+        ],
+        "beliefs": [
+          "Mature nodes are a strategic asset"
+        ],
+        "identity": "China's foundry champion",
+        "frame": "Grow under controls"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.45,
+        "basis": "Mature node ranked low as bottleneck; relevant mainly via export controls"
+      }
+    },
+    {
+      "name": "ASE Technology",
+      "type": "Organization",
+      "role": "Largest OSAT with advanced packaging outsourcing share",
+      "stance": "Beneficiary of TSMC CoWoS overflow; expansion dated 2027-28",
+      "description": "ASE+Amkor CoWoS-equivalent capacity of ~110,000 wpm is an end-2028 estimate; OSAT partners add an estimated 50,000-60,000 wpm of 2026 CoWoS capacity.",
+      "stated_vs_revealed": "Consistent expansion posture.",
+      "memory": "110,000 wpm ASE+Amkor estimate is end-2028.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Capture spillover advanced packaging demand"
+      ],
+      "constraints": [
+        "Capacity additions dated late"
+      ],
+      "assets": [
+        "Largest OSAT footprint"
+      ],
+      "vulnerabilities": [
+        "Tool lead times gating its own expansion"
+      ],
+      "incentives": [
+        {
+          "driver": "Packaging overflow",
+          "gains_if": "CoWoS stays binding and spillover continues",
+          "loses_if": "TSMC internalizes packaging capacity",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Outsourcing value"
+        ],
+        "beliefs": [
+          "Advanced packaging moves OSAT-side over time"
+        ],
+        "identity": "The packaging spillover absorber",
+        "frame": "Follow TSMC's overflow"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.55,
+        "basis": "Named beneficiary of the #1 bottleneck"
+      }
+    },
+    {
+      "name": "Intel",
+      "type": "Organization",
+      "role": "First High-NA adopter and 14A competitiveness variable; packaging beneficiary",
+      "stance": "Deploying High-NA tools; potential CoWoS alternative",
+      "description": "Deployed the first EXE:5200B in December 2025 and reportedly expanded its order to two units at roughly $370-380 million per tool; named as a beneficiary if CoWoS stays constrained.",
+      "stated_vs_revealed": "Tool purchases signal commitment; production impact not yet visible.",
+      "memory": "First EXE:5200B deployed December 2025.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "goals": [
+        "Make 14A competitive",
+        "Offer packaging alternatives"
+      ],
+      "constraints": [
+        "Near-zero High-NA volume through the horizon"
+      ],
+      "assets": [
+        "First-mover High-NA experience"
+      ],
+      "vulnerabilities": [
+        "High-NA is a capability constraint, not yet volume production"
+      ],
+      "incentives": [
+        {
+          "driver": "Foundry relevance",
+          "gains_if": "Packaging tightness pushes customers to alternatives",
+          "loses_if": "14A slips further",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Process leadership restoration"
+        ],
+        "beliefs": [
+          "High-NA early adoption confers advantage"
+        ],
+        "identity": "The High-NA pioneer",
+        "frame": "Differentiate via tools"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 3,
+        "score": 0.4,
+        "basis": "Background variable for leading-edge competition"
+      }
+    },
+    {
+      "name": "US Department of Commerce/BIS",
+      "type": "Government",
+      "role": "Sets export-control and entity-list constraints",
+      "stance": "Suspension of Affiliates Rule in place but expiring 9 November 2026 absent extension",
+      "description": "Affiliates Rule suspension runs 'until November 9, 2026' per Federal Register; Treasury announced a Busan truce extension to 10 January 2027 on 23 September 2026 but BIS has published no matching notice; maintains Entity List (SMIC since Dec 2020).",
+      "stated_vs_revealed": "Truce extension announced politically but legally unpublished - revealed implementation lags stated intent.",
+      "memory": "Affiliates Rule suspension published 12 November 2025, effective through 9 November 2026.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "arbiter",
+      "aliases": [
+        "BIS"
+      ],
+      "goals": [
+        "Leverage controls in trade negotiations",
+        "Restrict China's advanced capability"
+      ],
+      "constraints": [
+        "Political truce commitments vs legal text lag"
+      ],
+      "assets": [
+        "Extraterritorial equipment and technology licensing power"
+      ],
+      "vulnerabilities": [
+        "Simultaneous revival with China rare-earth measures would hit global supply"
+      ],
+      "incentives": [
+        {
+          "driver": "Negotiating leverage",
+          "gains_if": "Extensions extracted from China",
+          "loses_if": "Uncoordinated lapse triggers shock",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "National security",
+          "Technological primacy"
+        ],
+        "beliefs": [
+          "Controls slow rather than halt China's build-out"
+        ],
+        "identity": "The rule-setter",
+        "frame": "Manage China's semiconductor rise"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.85,
+        "basis": "Controls the dated policy cliff that could trigger the Oversupply scenario"
+      }
+    },
+    {
+      "name": "China MOFCOM",
+      "type": "Government",
+      "role": "Controls gallium, germanium and rare-earth exports",
+      "stance": "October 2025 rare-earth controls suspended until 10 November 2026; no extension published",
+      "description": "Announcement No. 70 suspended the October 2025 rare-earth controls until 10 November 2026 with no extension as of 16 October 2026; Ga/Ge licensing (Aug 2023), Dec 2024 prohibition in principle on Ga/Ge/Sb to the US, and April 2025 heavy-REE licensing remain in force; China refines ~98% of world gallium; rare-earth exports fell 9.6% YoY in Jan-Sep 2026.",
+      "stated_vs_revealed": "Pause in force but exports down 9.6% YoY during it - friction persists beneath the suspension.",
+      "memory": "Antimony limits cut Chinese exports ~97% and doubled trioxide prices - proof of leverage.",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "arbiter",
+      "aliases": [
+        "MOFCOM"
+      ],
+      "goals": [
+        "Preserve leverage over US export controls",
+        "Protect strategic materials position"
+      ],
+      "constraints": [
+        "Truce commitments under the Busan framework"
+      ],
+      "assets": [
+        "Near-monopoly on refined gallium and heavy rare earths",
+        "Per-shipment licensing machinery already built"
+      ],
+      "vulnerabilities": [
+        "Retaliation harms Chinese exporters too"
+      ],
+      "incentives": [
+        {
+          "driver": "Counter-leverage",
+          "gains_if": "US extends Affiliates suspension",
+          "loses_if": "Escalation disrupts its own export industries",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Strategic self-reliance",
+          "Reciprocity"
+        ],
+        "beliefs": [
+          "Rare earths are usable leverage"
+        ],
+        "identity": "The materials counterweight",
+        "frame": "Match US pressure measure for measure"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 1,
+        "score": 0.8,
+        "basis": "Co-controls the 10 November 2026 policy cliff"
+      }
+    },
+    {
+      "name": "Broadcom",
+      "type": "Organization",
+      "role": "Co-exclusive holder of CoWoS capacity (with NVIDIA and AMD >85% combined)",
+      "stance": "Aggressive AI ASIC capacity claimant",
+      "description": "With NVIDIA and AMD, holds an estimated >85% of 2026 CoWoS capacity; custom-ASIC AI HBM demand projected by Goldman Sachs to grow 82% to one-third of total HBM demand.",
+      "stated_vs_revealed": "Allocation-seeking behavior inferred from capacity share estimates.",
+      "memory": "Named among top-3 CoWoS capacity holders.",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "goals": [
+        "Secure CoWoS lanes and HBM for custom ASICs"
+      ],
+      "constraints": [
+        "Same packaging and HBM constraints as NVIDIA"
+      ],
+      "assets": [
+        "Custom ASIC design franchise",
+        "Large CoWoS allocation share"
+      ],
+      "vulnerabilities": [
+        "Dependence on TSMC packaging allocation"
+      ],
+      "incentives": [
+        {
+          "driver": "Custom AI ASIC growth",
+          "gains_if": "Packaging allocation prioritized",
+          "loses_if": "NVIDIA crowds out ASIC customers",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Design leadership"
+        ],
+        "beliefs": [
+          "ASICs take share from GPUs"
+        ],
+        "identity": "The GPU-alternative demand pole",
+        "frame": "Compete for the same scarce packaging"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "Material competitor for the #1 bottleneck's capacity"
+      }
+    },
+    {
+      "name": "Amkor",
+      "type": "Organization",
+      "role": "Major OSAT expanding US packaging/test capacity",
+      "stance": "Scaling Arizona campus to ~$12 billion",
+      "description": "Raised its Arizona packaging and test campus plan to roughly US$12 billion as of September 2026; NVIDIA announcements add Amkor capacity growth above 300% by end-2028.",
+      "stated_vs_revealed": "Large announced capex, late ramp.",
+      "memory": "Arizona plan raised to ~$12bn September 2026.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "goals": [
+        "Build US advanced packaging footprint"
+      ],
+      "constraints": [
+        "Growth dated end-2028"
+      ],
+      "assets": [
+        "NVIDIA reservation backing"
+      ],
+      "vulnerabilities": [
+        "Horizon-missing relief"
+      ],
+      "incentives": [
+        {
+          "driver": "US packaging onshoring",
+          "gains_if": "Packaging tightness persists into 2028",
+          "loses_if": "Demand air pocket",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "US manufacturing"
+        ],
+        "beliefs": [
+          "Advanced packaging onshores"
+        ],
+        "identity": "The US OSAT builder",
+        "frame": "Build with customer prepayment"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.4,
+        "basis": "Relief beyond horizon; spillover beneficiary"
+      }
+    },
+    {
+      "name": "Applied Materials",
+      "type": "Organization",
+      "role": "Etch/deposition tool supplier; beneficiary of tight tool supply",
+      "stance": "Unnamed directly in evidence; exposure inferred from SEMI records and TSMC's 'tool supply is tight'",
+      "description": "No direct shipment or lead-time figures in the evidence; exposure inferred from record SEMI billings, TSMC's tight-tool statement, and substrate-equipment lead times up to 30 months.",
+      "stated_vs_revealed": "Absent from the evidence directly; inferred posture.",
+      "memory": "Record SEMI billings as proxy.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "aliases": [
+        "AMAT"
+      ],
+      "goals": [
+        "Capture record deposition/etch demand"
+      ],
+      "constraints": [
+        "No direct data in evidence"
+      ],
+      "assets": [
+        "Etch/deposition duopoly position"
+      ],
+      "vulnerabilities": [
+        "Its own supply chain gating output"
+      ],
+      "incentives": [
+        {
+          "driver": "Tool allocation power",
+          "gains_if": "Equipment shortfall persists",
+          "loses_if": "Capex cuts reduce orders",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Process breadth"
+        ],
+        "beliefs": [
+          "Unknown from evidence"
+        ],
+        "identity": "Tool incumbent",
+        "frame": "Serve record backlog"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.4,
+        "basis": "Part of the #4 ranked bottleneck segment without direct data"
+      }
+    },
+    {
+      "name": "GlobalWafers",
+      "type": "Organization",
+      "role": "Major 300mm wafer maker with US expansion",
+      "stance": "High utilization with CHIPS-backed US build",
+      "description": "Projects >90% 300mm utilization from 2025 to 2027; holds July 2024 CHIPS preliminary terms for the first US 300mm source; reported to lift 12-inch prices in H2 2026.",
+      "stated_vs_revealed": "Price hikes reported while projecting sustained high utilization.",
+      "memory": "Projecting >90% utilization 2025-2027.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "goals": [
+        "Build first US 300mm wafer source"
+      ],
+      "constraints": [
+        "Utilization capped above 90% - little slack"
+      ],
+      "assets": [
+        "CHIPS funding terms",
+        "High utilization"
+      ],
+      "vulnerabilities": [
+        "Episodic tightness if leading-edge ramps accelerate"
+      ],
+      "incentives": [
+        {
+          "driver": "Wafer price upside",
+          "gains_if": "Wafer demand exceeds 90%-utilized capacity",
+          "loses_if": "Oversupply",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Supply security"
+        ],
+        "beliefs": [
+          "Wafers stay tight through 2027"
+        ],
+        "identity": "The diversified wafer maker",
+        "frame": "Onshore with subsidies"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.45,
+        "basis": "Part of #6 ranked bottleneck segment"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source": "NVIDIA",
+      "target": "TSMC",
+      "type": "CUSTOMER_OF",
+      "relation_label": "holds ~60% of 2026 CoWoS capacity via foundry relationship",
+      "since": "2023",
+      "basis": "NVIDIA estimated at ~60% of 2026 CoWoS wafers; packaging 'limiting my customers' growth' [S1]",
+      "valence": "transactional",
+      "polarity": 0.6,
+      "strength": 0.9,
+      "sign": "+"
+    },
+    {
+      "source": "Broadcom",
+      "target": "TSMC",
+      "type": "CUSTOMER_OF",
+      "relation_label": "co-claims CoWoS allocation for AI ASICs",
+      "since": "2023",
+      "basis": "NVIDIA, Broadcom and AMD above 85% of 2026 CoWoS capacity combined [S1]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "SK Hynix",
+      "target": "NVIDIA",
+      "type": "SUPPLIES",
+      "relation_label": "~70% of Rubin-generation HBM4 supply (UBS estimate)",
+      "since": "2024",
+      "basis": "UBS estimate [S43]",
+      "valence": "transactional",
+      "polarity": 0.7,
+      "strength": 0.85,
+      "sign": "+"
+    },
+    {
+      "source": "Samsung Electronics",
+      "target": "NVIDIA",
+      "type": "SUPPLIES",
+      "relation_label": "second HBM4 source",
+      "since": "2024",
+      "basis": "Q2 2026 HBM share 33% [S24]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "Unimicron",
+      "target": "NVIDIA",
+      "type": "SUPPLIES",
+      "relation_label": "growing HBM supplier",
+      "since": "2024",
+      "basis": "18% HBM revenue share Q2 2026 [S24]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "TSMC",
+      "target": "ASML",
+      "type": "DEPENDS_ON",
+      "relation_label": "leading-edge and packaging ramps gated by EUV tool supply",
+      "basis": "TSMC: 'the tool supply is tight'; ASML: 2027-28 supply short of demand [S17][S2]",
+      "valence": "directional",
+      "polarity": 0.5,
+      "strength": 0.9,
+      "sign": "+"
+    },
+    {
+      "source": "ASML",
+      "target": "TSMC",
+      "type": "SUPPLIES",
+      "relation_label": "sole EUV lithography supplier",
+      "basis": "ASML sole EUV supplier gating all leading-edge ramps [S2]",
+      "valence": "transactional",
+      "polarity": 0.6,
+      "strength": 0.9,
+      "sign": "+"
+    },
+    {
+      "source": "ASML",
+      "target": "Intel",
+      "type": "SUPPLIES",
+      "relation_label": "first High-NA adopter, two EXE:5200B units",
+      "since": "2025",
+      "basis": "First EXE:5200B deployed December 2025 [S64][S65]",
+      "valence": "transactional",
+      "polarity": 0.6,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "NVIDIA",
+      "target": "IBIDEN",
+      "type": "PARTNERS_WITH",
+      "relation_label": "multibillion-dollar Ono capacity reservation",
+      "since": "2026",
+      "basis": "NVIDIA reservation; ramp begins Q1 2028 [S45]",
+      "valence": "allied",
+      "polarity": 0.8,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "NVIDIA",
+      "target": "Unimicron",
+      "type": "PARTNERS_WITH",
+      "relation_label": "substrate capacity agreement, KF from Q2 2027",
+      "since": "2026",
+      "basis": "2.5x capacity over three years agreements [S45][S54]",
+      "valence": "allied",
+      "polarity": 0.7,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "NVIDIA",
+      "target": "Amkor",
+      "type": "PARTNERS_WITH",
+      "relation_label": "+300% capacity growth by end-2028 backing",
+      "since": "2026",
+      "basis": "October 2026 NVIDIA announcements [S45][S38]",
+      "valence": "allied",
+      "polarity": 0.7,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "TSMC",
+      "target": "ASE Technology",
+      "type": "PARTNERS_WITH",
+      "relation_label": "OSAT partners add 50,000-60,000 wpm CoWoS-equivalent",
+      "basis": "Institutional estimates via TrendForce [S20]",
+      "valence": "transactional",
+      "polarity": 0.6,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "SK Hynix",
+      "target": "Samsung Electronics",
+      "type": "COMPETES_WITH",
+      "relation_label": "HBM leadership race",
+      "basis": "HBM shares 50% vs 33% Q2 2026 [S24]",
+      "valence": "adversarial",
+      "polarity": -0.4,
+      "strength": 0.8,
+      "sign": "-"
+    },
+    {
+      "source": "Samsung Electronics",
+      "target": "TSMC",
+      "type": "COMPETES_WITH",
+      "relation_label": "2nm foundry challenger",
+      "basis": "SF2 yield leak-reported toward 50-60%, no external qualification verified [S21][S22]",
+      "valence": "adversarial",
+      "polarity": -0.4,
+      "strength": 0.6,
+      "sign": "-"
+    },
+    {
+      "source": "Unimicron",
+      "target": "SK Hynix",
+      "type": "COMPETES_WITH",
+      "relation_label": "HBM share contest",
+      "basis": "Micron fastest-growing share, 18% [S24]",
+      "valence": "adversarial",
+      "polarity": -0.3,
+      "strength": 0.6,
+      "sign": "-"
+    },
+    {
+      "source": "Broadcom",
+      "target": "NVIDIA",
+      "type": "COMPETES_WITH",
+      "relation_label": "custom ASICs vs GPUs competing for CoWoS and HBM",
+      "basis": "Both among top CoWoS capacity holders; ASIC HBM demand growing 82% [S1][S43]",
+      "valence": "adversarial",
+      "polarity": -0.5,
+      "strength": 0.7,
+      "sign": "-"
+    },
+    {
+      "source": "US Department of Commerce/BIS",
+      "target": "SMIC",
+      "type": "REGULATES",
+      "relation_label": "Entity List licence-by-licence exports since Dec 2020",
+      "since": "2020-12",
+      "basis": "SMIC added to Entity List [S70]",
+      "valence": "adversarial",
+      "polarity": -0.7,
+      "strength": 0.8,
+      "sign": "-"
+    },
+    {
+      "source": "China MOFCOM",
+      "target": "US Department of Commerce/BIS",
+      "type": "OPPOSES",
+      "relation_label": "rare-earth and Ga/Ge controls as counter-leverage; suspended until 10 Nov 2026",
+      "since": "2023",
+      "basis": "Announcement No. 70 pause; Ga/Ge licensing; Dec 2024 prohibition [S15][S59][S71]",
+      "valence": "adversarial",
+      "polarity": -0.6,
+      "strength": 0.8,
+      "sign": "-"
+    },
+    {
+      "source": "SMIC",
+      "target": "TSMC",
+      "type": "COMPETES_WITH",
+      "relation_label": "mature-node foundry competition",
+      "basis": "SMIC 28nm pricing and planned 2026 increases vs loose 4-17-week market [S35][S36][S1]",
+      "valence": "adversarial",
+      "polarity": -0.3,
+      "strength": 0.4,
+      "sign": "-"
+    },
+    {
+      "source": "SUMCO",
+      "target": "TSMC",
+      "type": "SUPPLIES",
+      "relation_label": "300mm wafer supplier at record shipments",
+      "basis": "Record 300mm shipments; SEMI 11.8% shipment growth [S33][S10]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "GlobalWafers",
+      "target": "TSMC",
+      "type": "SUPPLIES",
+      "relation_label": "300mm wafers at >90% utilization",
+      "basis": "GlobalWafers >90% utilization 2025-2027 [S32]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "Shin-Etsu Chemical",
+      "target": "TSMC",
+      "type": "SUPPLIES",
+      "relation_label": "dominant EUV photoresist supplier",
+      "basis": "Dominant photoresist incl. EUV supplier [S39]",
+      "valence": "transactional",
+      "polarity": 0.4,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "Applied Materials",
+      "target": "TSMC",
+      "type": "SUPPLIES",
+      "relation_label": "etch/deposition tools in tight supply",
+      "basis": "Inferred from TSMC 'tool supply is tight' and record SEMI billings [S17][S10]",
+      "valence": "transactional",
+      "polarity": 0.5,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "US Department of Commerce/BIS",
+      "target": "ASML",
+      "type": "REGULATES",
+      "relation_label": "US export-control jurisdiction over tool sales to China",
+      "basis": "US SME exports to China fell $6.8bn (2021) to $4.2bn (2024) [S60]",
+      "valence": "adversarial",
+      "polarity": -0.5,
+      "strength": 0.6,
+      "sign": "-"
+    }
+  ],
+  "hot_topics": [
+    "Rubin Ultra HBM configuration: 8-Hi 192 GB redesign vs 1 TB-class 12-Hi roadmap (fivefold demand gap)",
+    "ASML-declared 2027-28 tool supply shortfall and 30% capacity increase",
+    "CoWoS gap narrowing from ~20% to ~10% by end-2026; whether 2027 capacity reaches 200,000 wpm",
+    "9-10 November 2026 expiry of BIS Affiliates Rule suspension and MOFCOM rare-earth pause",
+    "2027 blended HBM ASP forecast +121% YoY",
+    "ABF substrate shortfall: Unimicron's 20% 2027 materials warning and 30-month equipment lead times",
+    "Samsung SF2 2nm yield and external qualification",
+    "TSMC 2026-28 capex 'even more significantly higher' vs 'prudent' 2027 stance",
+    "DRAM wafer allocation to HBM crowding out conventional DRAM/NAND",
+    "Supplier memory inventories below 10 days as oversupply-flip signal"
+  ],
+  "context_entities": [
+    {
+      "name": "SEMI",
+      "type": "Media",
+      "role": "Publishes equipment billings and fab capacity data used as leading indicators",
+      "stance": "Neutral data publisher",
+      "description": "Record US$40.53 billion Q2 2026 billings, +23% YoY, second consecutive record; full-year 2025 billings $135 billion; forecasts 11.8% silicon wafer shipment growth in 2026 with records through 2029.",
+      "stated_vs_revealed": "Consistent methodological publisher.",
+      "memory": "Two consecutive record quarters in 2026.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "amplifier",
+      "goals": [
+        "Accurate industry measurement"
+      ],
+      "constraints": [
+        "~5-week reporting lag after quarter end"
+      ],
+      "assets": [
+        "Canonical billings series used for scenario signposts"
+      ],
+      "incentives": [
+        {
+          "driver": "Industry standard-setting",
+          "gains_if": "N/A - informational role",
+          "loses_if": "N/A",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Data transparency"
+        ],
+        "beliefs": [
+          "Billings lead cycle turns"
+        ],
+        "identity": "The industry's scoreboard",
+        "frame": "Neutral measurement"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.5,
+        "basis": "Primary signpost source for binary forecasts"
+      }
+    },
+    {
+      "name": "TrendForce",
+      "type": "Media",
+      "role": "Settling source for HBM, packaging and memory pricing data",
+      "stance": "Neutral research publisher",
+      "description": "Forecasts 4Q26 conventional DRAM +10-15% QoQ and NAND +15-20% QoQ; 2026 HBM prices up 70-140% YoY; 2027 blended HBM ASP +121% YoY; CoWoS gap narrowing from ~20% to ~10% by end-2026; carries estimates of ~200,000 wpm 2027 CoWoS capacity.",
+      "stated_vs_revealed": "Publishes forecasts that anchor the market's tightness narrative.",
+      "memory": "2027 HBM ASP forecast revised to +121% YoY.",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "amplifier",
+      "goals": [
+        "Market intelligence leadership"
+      ],
+      "constraints": [
+        "Estimates, not company disclosures (TSMC discloses no CoWoS figure)"
+      ],
+      "assets": [
+        "De facto settlement source for multiple forecast thresholds"
+      ],
+      "incentives": [
+        {
+          "driver": "Analytical authority",
+          "gains_if": "N/A - informational role",
+          "loses_if": "N/A",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Market data rigor"
+        ],
+        "beliefs": [
+          "Tightness persists into 2027 with gradual narrowing"
+        ],
+        "identity": "The pricing referee",
+        "frame": "Quantify the gap"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.55,
+        "basis": "Resolution record for several binary forecasts"
+      }
+    }
+  ],
+  "key_events": [
+    {
+      "date": "2026-07-16",
+      "event": "TSMC CEO said packaging capacity is 'so tight that now it's limiting my customers' growth'",
+      "staleness_days": 100,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-14",
+      "event": "ASML stated its supply 'as currently planned for both 2027 and 2028 will not fully meet the demand of our customers'",
+      "staleness_days": 10,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-15",
+      "event": "TSMC said 'the tool supply is tight' and 2026-2028 capex will be 'even more significantly higher than the past three years'",
+      "staleness_days": 9,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-20",
+      "event": "Commercial Times via TrendForce reported NVIDIA considering switching Rubin Ultra from 12-Hi to 8-Hi HBM stacks",
+      "staleness_days": 4,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-20",
+      "event": "Unimicron's chairman said lead times for more than 80% of substrate-making equipment have lengthened, some to 30 months, and warned of a possible 20% supply shortfall in 2027",
+      "staleness_days": 4,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-14",
+      "event": "Economic Daily News via TrendForce reported TSMC targets 2nm capacity of 90,000 wpm at end-2026 rising to 110,000 wpm by mid-2027",
+      "staleness_days": 40,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-23",
+      "event": "Treasury Secretary Bessent stated the Busan truce was extended to 10 January 2027; BIS has published no matching notice",
+      "staleness_days": 31,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-07",
+      "event": "Samsung and SK Hynix finished-memory inventory fell below 10 days of supply (KB Securities estimate)",
+      "staleness_days": 47,
+      "is_stale": false
+    },
+    {
+      "date": "2026-11-09",
+      "event": "BIS Affiliates Rule suspension runs only 'until November 9, 2026' absent a Federal Register extension",
+      "staleness_days": -16,
+      "is_stale": false
+    },
+    {
+      "date": "2026-11-10",
+      "event": "China's Announcement No. 70 pause of the October 2025 rare-earth controls ends; no extension published as of 16 October 2026",
+      "staleness_days": -17,
+      "is_stale": false
+    },
+    {
+      "date": "2027-01-10",
+      "event": "Stated end date of the Busan truce extension per Treasury",
+      "staleness_days": -78,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-16",
+      "event": "No MOFCOM extension of Announcement No. 70 pause published as of this date",
+      "staleness_days": 8,
+      "is_stale": false
+    },
+    {
+      "date": "2025-12-05",
+      "event": "Suspended October 2025 China measures would largely deny military-affiliated applicants from 1 December 2025",
+      "staleness_days": 323,
+      "is_stale": false
+    },
+    {
+      "date": "2025-12-01",
+      "event": "Intel deployed the first EXE:5200B High-NA system",
+      "staleness_days": 327,
+      "is_stale": false
+    },
+    {
+      "date": "2025-11-12",
+      "event": "US published the one-year suspension of the Affiliates Rule, effective through 2026-11-09",
+      "staleness_days": 346,
+      "is_stale": false
+    },
+    {
+      "date": "2025-11-07",
+      "event": "China suspended the October 2025 REE/magnet controls until 2026-11-10 (Announcement No. 70)",
+      "staleness_days": 351,
+      "is_stale": false
+    },
+    {
+      "date": "2025-04-04",
+      "event": "China imposed heavy-REE per-shipment licensing (Tb, Dy, Sm, Gd, Lu, Sc, Y), never paused",
+      "staleness_days": 568,
+      "is_stale": true
+    },
+    {
+      "date": "2024-12-03",
+      "event": "China prohibited gallium/germanium/antimony exports to the US in principle (MOFCOM Notice 2024 No. 46)",
+      "staleness_days": 690,
+      "is_stale": true
+    },
+    {
+      "date": "2023-08-01",
+      "event": "China gallium/germanium export licensing became effective",
+      "staleness_days": 1180,
+      "is_stale": true
+    },
+    {
+      "date": "2023-07-03",
+      "event": "China announced gallium/germanium export licensing",
+      "staleness_days": 1209,
+      "is_stale": true
+    },
+    {
+      "date": "2024-08-01",
+      "event": "China imposed antimony export limits; exports subsequently fell about 97%",
+      "staleness_days": 814,
+      "is_stale": true
+    },
+    {
+      "date": "2020-12-01",
+      "event": "SMIC added to the US Entity List",
+      "staleness_days": 2153,
+      "is_stale": true
+    },
+    {
+      "date": "2024-04-01",
+      "event": "Magnitude-7.4 earthquake struck Taiwan",
+      "staleness_days": 936,
+      "is_stale": true
+    },
+    {
+      "date": "2026-09-01",
+      "event": "Amkor raised its Arizona packaging/test campus plan to roughly US$12 billion (as of September 2026)",
+      "staleness_days": 53,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-01",
+      "event": "NVIDIA October 2026 supply-chain announcements: Amkor capacity growth above 300% by end-2028, KYEC $1.1 billion reservation advance, SPIL 15x optical-engine capacity by mid-2027, 2.5x substrate capacity over three years",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07-01",
+      "event": "NVIDIA developer blog set Rubin H2 2026 anchor: up to 288 GB of HBM4 per GPU in 12-Hi stacks",
+      "staleness_days": 115,
+      "is_stale": false
+    },
+    {
+      "date": "2026-05-01",
+      "event": "TSMC said in May 2026 that CoWoS capacity will compound at more than 80% annually from 2022 to 2027",
+      "staleness_days": 176,
+      "is_stale": false
+    },
+    {
+      "date": "2027-01-01",
+      "event": "ASML NXE:3800F (260 wafers per hour) planned for small-quantity introduction in early 2027",
+      "staleness_days": -69,
+      "is_stale": false
+    },
+    {
+      "date": "2028-03-01",
+      "event": "IBIDEN's Ono ramp begins Q1 2028 (NVIDIA multibillion-dollar reservation)",
+      "staleness_days": -494,
+      "is_stale": false
+    },
+    {
+      "date": "2027-06-30",
+      "event": "Unimicron KF expansion adds capacity from Q2 2027, reaching full run-rate mid-2028",
+      "staleness_days": -249,
+      "is_stale": false
+    },
+    {
+      "date": "2029-01-01",
+      "event": "Samsung SF1.4 node shifted to 2029",
+      "staleness_days": -800,
+      "is_stale": false
+    },
+    {
+      "date": "2026-11-01",
+      "event": "FRED NAICS 3344 utilization next reading due mid-November 2026",
+      "staleness_days": -8,
+      "is_stale": false
+    }
+  ],
+  "quantitative_facts": [
+    {
+      "metric": "Capacity utilization",
+      "value": "76.51",
+      "series": "NAICS 3344, United States",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Semiconductor and Other Electronic Component manufacturing capacity utilization",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/CAPUTLG3344S",
+      "tier": "S1",
+      "value_num": 76.51,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "metric_family": "utilization",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Capacity utilization prior year",
+      "value": "73.723",
+      "series": "NAICS 3344",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2025-09",
+      "geography": "United States",
+      "definition": "same series, year-earlier",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/CAPUTLG3344S",
+      "tier": "S1",
+      "value_num": 73.723,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "metric_family": "utilization",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Capacity utilization trough",
+      "value": "71.096",
+      "series": "NAICS 3344",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-03",
+      "geography": "United States",
+      "definition": "cycle trough",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/CAPUTLG3344S",
+      "tier": "S1",
+      "value_num": 71.096,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "metric_family": "utilization",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Capacity utilization peak",
+      "value": "92.195",
+      "series": "NAICS 3344",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2022-02",
+      "geography": "United States",
+      "definition": "cycle peak",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/CAPUTLG3344S",
+      "tier": "S1",
+      "value_num": 92.195,
+      "year": 2022,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "metric_family": "utilization",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Industrial production",
+      "value": "198.6335",
+      "series": "NAICS 3344",
+      "unit": "Index 2017=100",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "durable goods semiconductor and electronic component production",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/IPG3344S",
+      "tier": "S1",
+      "value_num": 198.6335,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Industrial production prior year",
+      "value": "165.667",
+      "series": "NAICS 3344",
+      "unit": "Index 2017=100",
+      "as_of_date": "2026-10-24",
+      "period_end": "2025-09",
+      "geography": "United States",
+      "definition": "year-earlier print; +19.899% YoY",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/IPG3344S",
+      "tier": "S1",
+      "value_num": 165.667,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Global semiconductor equipment billings",
+      "value": "40.53",
+      "series": "SEMI WWSEMS",
+      "unit": "US$ billion",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-Q2",
+      "geography": "global",
+      "definition": "quarterly billings, +23% YoY, record",
+      "source": "SEMI",
+      "value_type": "actual",
+      "source_url": "https://www.semi.org/en/semi-press-release/global-semiconductor-equipment-billings-increased-23-percent-year-over-year-in-q2-2026-semi-reports",
+      "tier": "S3",
+      "value_num": 40.53,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "SEMI",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Global semiconductor equipment billings",
+      "value": "135",
+      "series": "SEMI WWSEMS",
+      "unit": "US$ billion",
+      "as_of_date": "2026-10-24",
+      "period_end": "2025",
+      "geography": "global",
+      "definition": "full-year 2025 billings",
+      "source": "SEMI",
+      "value_type": "actual",
+      "source_url": "https://www.semi.org/en/products-services/market-data/equipment",
+      "tier": "S3",
+      "value_num": 135.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "SEMI",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "TSMC revenue",
+      "value": "46.7",
+      "series": "TSMC quarterly results",
+      "unit": "USD billion",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-Q3",
+      "geography": "global",
+      "definition": "Q3 2026 revenue, above guidance",
+      "source": "TSMC",
+      "value_type": "actual",
+      "source_url": "https://investor.tsmc.com/chinese/encrypt/files/encrypt_file/reports/2026-10/eba4fac72873bf546b669bd2b5d973df5c93215d/TSMC%203Q26%20Transcript.pdf",
+      "tier": "S3",
+      "value_num": 46.7,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "TSMC",
+      "metric_family": "annual revenue",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "TSMC revenue guidance",
+      "value": "52.3-54.3",
+      "series": "TSMC quarterly guidance",
+      "unit": "USD billion",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-Q4",
+      "geography": "global",
+      "definition": "Q4 2026 guidance vs $33.73 billion a year earlier",
+      "source": "TSMC",
+      "value_type": "forecast",
+      "source_url": "https://www.reuters.com/world/asia-pacific/tsmc-expected-report-sixth-straight-quarter-record-profit-thanks-ai-boom-2026-10-14/",
+      "tier": "S2",
+      "value_num": 53.3,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "TSMC",
+      "metric_family": "annual revenue",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "TSMC full-year growth guidance",
+      "value": "~44",
+      "series": "TSMC guidance",
+      "unit": "% YoY USD",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "global",
+      "definition": "full-year 2026 USD revenue growth",
+      "source": "TSMC",
+      "value_type": "forecast",
+      "source_url": "https://investor.tsmc.com/chinese/encrypt/files/encrypt_file/reports/2026-10/eba4fac72873bf546b669bd2b5d973df5c93215d/TSMC%203Q26%20Transcript.pdf",
+      "tier": "S3",
+      "value_num": 44.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "TSMC",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "TSMC Q4 gross margin guidance",
+      "value": "66",
+      "series": "TSMC guidance",
+      "unit": "% at midpoint",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-Q4",
+      "geography": "global",
+      "definition": "down about 40 basis points on 2nm ramp dilution and overseas fabs",
+      "source": "TSMC",
+      "value_type": "forecast",
+      "source_url": "https://investor.tsmc.com/chinese/encrypt/files/encrypt_file/reports/2026-10/eba4fac72873bf546b669bd2b5d973df5c93215d/TSMC%203Q26%20Transcript.pdf",
+      "tier": "S3",
+      "value_num": 66.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "TSMC",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "N3 share of wafer revenue",
+      "value": "33",
+      "series": "TSMC node mix (Silicon Analysts tally)",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "3Q26",
+      "geography": "global",
+      "definition": "up from 28% in 4Q25",
+      "source": "Silicon Analysts",
+      "value_type": "estimate",
+      "source_url": "https://siliconanalysts.com/tools/allocation",
+      "tier": "S3",
+      "value_num": 33.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Silicon Analysts",
+      "metric_family": "market share",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "N3 utilization",
+      "value": "near 98",
+      "series": "Silicon Analysts estimate",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "global",
+      "definition": "with 104-156-week lead times; TSMC does not disclose",
+      "source": "Silicon Analysts",
+      "value_type": "estimate",
+      "source_url": "https://siliconanalysts.com/tools/allocation",
+      "tier": "S3",
+      "value_num": 98.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Silicon Analysts",
+      "metric_family": "utilization",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "CoWoS demand",
+      "value": "~370,000 / ~670,000 / ~1,000,000",
+      "series": "Silicon Analysts / trade estimates",
+      "unit": "wafers",
+      "as_of_date": "2026-10-24",
+      "period_end": "2024/2025/2026",
+      "geography": "global",
+      "definition": "annual CoWoS demand; TSMC discloses no CoWoS capacity",
+      "source": "Silicon Analysts citing trade reports",
+      "value_type": "estimate",
+      "source_url": "https://siliconanalysts.com/analysis/foundry-allocation-status-q1-2026",
+      "tier": "S3",
+      "value_num": 370000.0,
+      "year": 2024,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Silicon Analysts citing trade reports",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "CoWoS-S/L lead times",
+      "value": "52-78",
+      "series": "trade reports",
+      "unit": "weeks",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "global",
+      "definition": "fully booked; not confirmed by TSMC",
+      "source": "trade reports",
+      "value_type": "estimate",
+      "source_url": "https://siliconanalysts.com/analysis/foundry-allocation-status-q1-2026",
+      "tier": "S3",
+      "value_num": 65.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "trade reports",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "CoWoS supply-demand gap",
+      "value": "~20 narrowing to ~10",
+      "series": "TrendForce",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "mid-2026 to end-2026",
+      "geography": "global",
+      "definition": "gap narrowing through 2026",
+      "source": "TrendForce",
+      "value_type": "forecast",
+      "source_url": "https://www.trendforce.com/news/2026/06/15/news-tsmc-cowos-supply-demand-gap-reportedly-seen-narrowing-from-20-to-10-by-end-2026-as-capacity-expands/",
+      "tier": "S3",
+      "value_num": 20.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "TrendForce",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "2026 industry CoWoS capacity",
+      "value": "120,000-140,000 plus 50,000-60,000",
+      "series": "TrendForce institutional estimates",
+      "unit": "wafers per month",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "global",
+      "definition": "TSMC monthly CoWoS plus OSAT partners, near 200,000 wpm industry-wide",
+      "source": "TrendForce",
+      "value_type": "estimate",
+      "source_url": "https://www.trendforce.com/news/2026/06/15/news-tsmc-cowos-supply-demand-gap-reportedly-seen-narrowing-from-20-to-10-by-end-2026-as-capacity-expands/",
+      "tier": "S3",
+      "value_num": 130000.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "TrendForce",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "2027 CoWoS capacity forecast",
+      "value": "~200,000",
+      "series": "Morgan Stanley forecast",
+      "unit": "wafers per month",
+      "as_of_date": "2026-10-24",
+      "period_end": "2027",
+      "geography": "global",
+      "definition": "2027 monthly CoWoS capacity",
+      "source": "Morgan Stanley",
+      "value_type": "forecast",
+      "source_url": "https://admiralmarkets.com/analytics/traders-blog/tsmc-earnings-q3-2026-preview",
+      "tier": "S3",
+      "value_num": 200000.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Morgan Stanley",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "CoWoS capacity CAGR",
+      "value": ">80",
+      "series": "TSMC statement",
+      "unit": "% per year",
+      "as_of_date": "2026-10-24",
+      "period_end": "2022-2027",
+      "geography": "global",
+      "definition": "TSMC CoWoS capacity compounding",
+      "source": "TSMC",
+      "value_type": "target",
+      "source_url": "https://www.trendforce.com/news/2026/06/15/news-tsmc-cowos-supply-demand-gap-reportedly-seen-narrowing-from-20-to-10-by-end-2026-as-capacity-expands/",
+      "tier": "S3",
+      "value_num": 80.0,
+      "year": 2022,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "TSMC",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "NVIDIA share of 2026 CoWoS capacity",
+      "value": "~60 (~595,000 wafers)",
+      "series": "Silicon Analysts estimate",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "global",
+      "definition": "NVIDIA, Broadcom and AMD above 85% combined",
+      "source": "Silicon Analysts",
+      "value_type": "estimate",
+      "source_url": "https://siliconanalysts.com/analysis/foundry-allocation-status-q1-2026",
+      "tier": "S3",
+      "value_num": 60.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Silicon Analysts",
+      "metric_family": "market share",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Rubin HBM per GPU",
+      "value": "up to 288",
+      "series": "NVIDIA developer blog",
+      "unit": "GB HBM4",
+      "as_of_date": "2026-10-24",
+      "period_end": "H2 2026",
+      "geography": "global",
+      "definition": "12-Hi stacks, 22 TB/s peak bandwidth, 336 billion transistors, two reticle-limited compute dies",
+      "source": "NVIDIA",
+      "value_type": "actual",
+      "source_url": "https://developer.nvidia.com/blog/inside-nvidia-rubin-gpu-architecture-powering-the-era-of-agentic-ai/",
+      "tier": "S3",
+      "value_num": 288.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "NVIDIA",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "HBM revenue share Q2 2026",
+      "value": "SK Hynix 50 / Samsung 33 / Micron 18",
+      "series": "Counterpoint",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-Q2",
+      "geography": "global",
+      "definition": "HBM revenue shares",
+      "source": "Counterpoint",
+      "value_type": "actual",
+      "source_url": "https://counterpointresearch.com/en/insights/global-dram-and-hbm-market-share",
+      "tier": "S3",
+      "value_num": 50.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Counterpoint",
+      "metric_family": "market share",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "DRAM revenue share Q2 2026",
+      "value": "Samsung 38 / SK Hynix 25 / Micron 24 / CXMT 10",
+      "series": "Counterpoint",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-Q2",
+      "geography": "global",
+      "definition": "DRAM revenue shares",
+      "source": "Counterpoint",
+      "value_type": "actual",
+      "source_url": "https://counterpointresearch.com/en/insights/global-dram-and-hbm-market-share",
+      "tier": "S3",
+      "value_num": 38.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "Counterpoint",
+      "metric_family": "market share",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Conventional DRAM contract price forecast",
+      "value": "+10-15",
+      "series": "TrendForce",
+      "unit": "% QoQ",
+      "as_of_date": "2026-10-24",
+      "period_end": "4Q26",
+      "geography": "global",
+      "definition": "market undersupplied",
+      "source": "TrendForce",
+      "value_type": "forecast",
+      "source_url": "https://www.trendforce.com/presscenter/news/20260930-13258.html",
+      "tier": "S3",
+      "value_num": 12.5,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "TrendForce",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "NAND contract price forecast",
+      "value": "+15-20",
+      "series": "TrendForce",
+      "unit": "% QoQ",
+      "as_of_date": "2026-10-24",
+      "period_end": "4Q26",
+      "geography": "global",
+      "definition": "NAND contract prices",
+      "source": "TrendForce",
+      "value_type": "forecast",
+      "source_url": "https://www.trendforce.com/presscenter/news/20260930-13258.html",
+      "tier": "S3",
+      "value_num": 17.5,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "TrendForce",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Server DRAM price forecast",
+      "value": "+13-18",
+      "series": "TrendForce",
+      "unit": "% QoQ",
+      "as_of_date": "2026-10-24",
+      "period_end": "3Q26",
+      "geography": "global",
+      "definition": "capped by LTAs",
+      "source": "TrendForce",
+      "value_type": "forecast",
+      "source_url": "https://www.trendforce.com/presscenter/news/20260709-13140.html",
+      "tier": "S3",
+      "value_num": 15.5,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "TrendForce",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "2026 HBM price forecast",
+      "value": "+70-140",
+      "series": "TrendForce",
+      "unit": "% YoY",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "global",
+      "definition": "HBM price increase",
+      "source": "TrendForce",
+      "value_type": "forecast",
+      "source_url": "https://www.trendforce.com/presscenter/news/20260825-13198.html",
+      "tier": "S3",
+      "value_num": 105.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "TrendForce",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "2027 blended HBM ASP forecast",
+      "value": "+121",
+      "series": "TrendForce",
+      "unit": "% YoY",
+      "as_of_date": "2026-10-24",
+      "period_end": "2027",
+      "geography": "global",
+      "definition": "revised 2027 blended HBM ASP",
+      "source": "TrendForce",
+      "value_type": "forecast",
+      "source_url": "https://www.trendforce.com/presscenter/news/20260930-13258.html",
+      "tier": "S3",
+      "value_num": 121.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "TrendForce",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Finished-memory inventory",
+      "value": "below 10",
+      "series": "KB Securities estimate",
+      "unit": "days of supply",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-09-07",
+      "geography": "Samsung + SK Hynix",
+      "definition": "finished-memory inventory",
+      "source": "KB Securities",
+      "value_type": "estimate",
+      "source_url": "https://tech-insider.org/hbm4-memory-shortage-dram-inventory-2026/",
+      "tier": "S3",
+      "value_num": 10.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Samsung + SK Hynix",
+      "analyst": "KB Securities",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Samsung DRAM wafers through HBM lines",
+      "value": "~150,000 (~75,000 HBM4)",
+      "series": "reported estimate",
+      "unit": "wafers per month",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-09",
+      "geography": "global",
+      "definition": "roughly half dedicated to HBM4",
+      "source": "reported",
+      "value_type": "estimate",
+      "source_url": "https://tech-insider.org/hbm4-memory-shortage-dram-inventory-2026/",
+      "tier": "S3",
+      "value_num": 150000.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "reported",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Micron HBM wpm",
+      "value": "~100,000",
+      "series": "reported estimate",
+      "unit": "wafers per month",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-12",
+      "geography": "global",
+      "definition": "HBM wafers per month by December 2026",
+      "source": "reported",
+      "value_type": "estimate",
+      "source_url": "https://tech-insider.org/hbm4-memory-shortage-dram-inventory-2026/",
+      "tier": "S3",
+      "value_num": 100000.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "reported",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "SK Hynix + Samsung HBM wpm",
+      "value": "150,000-200,000",
+      "series": "reported estimate",
+      "unit": "wafers per month",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "global",
+      "definition": "three to four times Micron's volume",
+      "source": "reported",
+      "value_type": "estimate",
+      "source_url": "https://tech-insider.org/hbm4-memory-shortage-dram-inventory-2026/",
+      "tier": "S3",
+      "value_num": 175000.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "reported",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "ABF substrate ASP",
+      "value": "~$65 (2024) to ~$82 (2025)",
+      "series": "2026 analysis",
+      "unit": "US$ (per unit)",
+      "as_of_date": "2026-10-24",
+      "period_end": "2025",
+      "geography": "global",
+      "definition": "+26%; 14-layer lead times 20-28 weeks",
+      "source": "2026 analysis",
+      "value_type": "actual",
+      "source_url": "https://www.datagravity.dev/p/the-abf-substrate-bottleneck",
+      "tier": "S3",
+      "value_num": 65.0,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "2026 analysis",
+      "metric_family": "average selling price",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "High-tier ABF lead times",
+      "value": "48-56",
+      "series": "reported",
+      "unit": "weeks",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "global",
+      "definition": "up to 4.7x equilibrium; likely tier difference vs 20-28 weeks",
+      "source": "reported",
+      "value_type": "estimate",
+      "source_url": "https://finance.biggo.com/news/02cf5c8f-c58d-45f8-a7a3-8fe37716bc8f",
+      "tier": "S3",
+      "value_num": 52.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "reported",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "ABF film price rise",
+      "value": "30",
+      "series": "reported",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "global",
+      "definition": "Ajinomoto ABF film price increase",
+      "source": "reported",
+      "value_type": "actual",
+      "source_url": "https://www.atlaspcb.com/news/news-ajinomoto-abf-substrate-price-increase-2026/",
+      "tier": "S3",
+      "value_num": 30.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "reported",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Substrate capacity shares",
+      "value": "Ibiden ~35 / Shinko ~18 / Unimicron ~14 / AT&S ~10 / Nan Ya ~5",
+      "series": "2026 analysis",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "global",
+      "definition": "high-end FC-BGA/ABF capacity shares",
+      "source": "2026 analysis",
+      "value_type": "estimate",
+      "source_url": "https://www.datagravity.dev/p/the-abf-substrate-bottleneck",
+      "tier": "S3",
+      "value_num": 35.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "2026 analysis",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "300mm utilization projection",
+      "value": ">90",
+      "series": "GlobalWafers projection",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2025-2027",
+      "geography": "global",
+      "definition": "300mm utilization",
+      "source": "GlobalWafers",
+      "value_type": "forecast",
+      "source_url": "https://www.sas-globalwafers.com/%E6%92%AD%E5%A0%B1%E7%89%88gwc_company-profile_20241105-en/",
+      "tier": "S3",
+      "value_num": 90.0,
+      "year": 2025,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "GlobalWafers",
+      "metric_family": "utilization",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Silicon wafer shipment growth forecast",
+      "value": "11.8",
+      "series": "SEMI",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "global",
+      "definition": "record highs through 2029",
+      "source": "SEMI",
+      "value_type": "forecast",
+      "source_url": "https://www.semi.org/en/semi-press-release/global-semiconductor-equipment-billings-increased-23-percent-year-over-year-in-q2-2026-semi-reports",
+      "tier": "S3",
+      "value_num": 11.8,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "SEMI",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "ASML Q3 2026 net sales",
+      "value": "11.7",
+      "series": "ASML quarterly release",
+      "unit": "€ billion",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-Q3",
+      "geography": "global",
+      "definition": "record; net income €5.0 billion",
+      "source": "ASML",
+      "value_type": "actual",
+      "source_url": "https://investor.asml.com/news-releases/news-release-details/asml-reports-eu11.7-billion-total-net-sales-and-eu5.0-billion-net-income-q3-2026",
+      "tier": "S3",
+      "value_num": 11.7,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "ASML",
+      "metric_family": "net income",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "ASML FY2026 net sales guidance",
+      "value": "44-45",
+      "series": "ASML",
+      "unit": "€ billion",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "global",
+      "definition": "Q4 guidance €14.2-15.2 billion",
+      "source": "ASML",
+      "value_type": "forecast",
+      "source_url": "https://investor.asml.com/news-releases/news-release-details/asml-reports-eu11.7-billion-total-net-sales-and-eu5.0-billion-net-income-q3-2026",
+      "tier": "S3",
+      "value_num": 44.5,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "ASML",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "ASML low-NA EUV/DUV capacity increase for 2027",
+      "value": "+30",
+      "series": "ASML",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2027",
+      "geography": "global",
+      "definition": "capacity increase ASML itself calls insufficient vs demand",
+      "source": "ASML",
+      "value_type": "target",
+      "source_url": "https://investor.asml.com/news-releases/news-release-details/asml-reports-eu11.7-billion-total-net-sales-and-eu5.0-billion-net-income-q3-2026",
+      "tier": "S3",
+      "value_num": 30.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "ASML",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "New lithography systems sold",
+      "value": "86 (Q2 2026) / 113 (Q3 2026)",
+      "series": "secondary summaries of ASML results",
+      "unit": "units",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-Q3",
+      "geography": "global",
+      "definition": "per secondary summaries",
+      "source": "secondary summaries",
+      "value_type": "actual",
+      "source_url": "https://ml-eu.globenewswire.com/Resource/Download/4beff1ba-33cc-4f21-b926-43b673c9708d",
+      "tier": "S3",
+      "value_num": 86.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "secondary summaries",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "NXE:3800F throughput",
+      "value": "260",
+      "series": "ASML Q3 2026 call summary",
+      "unit": "wafers per hour",
+      "as_of_date": "2026-10-24",
+      "period_end": "2027",
+      "geography": "global",
+      "definition": "small-quantity introduction early 2027",
+      "source": "ASML",
+      "value_type": "target",
+      "source_url": "https://www.fool.com/earnings/call-transcripts/2026/10/14/asml-asml-q3-2026-earnings-call-transcript/",
+      "tier": "S3",
+      "value_num": 260.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "ASML",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "High-NA tool price",
+      "value": "roughly $370-380",
+      "series": "reported",
+      "unit": "US$ million per tool",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "global",
+      "definition": "Intel reportedly expanded order to two units",
+      "source": "reported",
+      "value_type": "estimate",
+      "source_url": "https://www.linkedin.com/pulse/tech-news-intel-reportedly-boosts-asml-high-na-euv-orders-dwksc",
+      "tier": "S3",
+      "value_num": 375.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "reported",
+      "metric_family": "order book",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "SMIC 28nm wafer pricing",
+      "value": "~$2,500 falling to ~$1,500 (2024); +5-20% planned 2026",
+      "series": "reported",
+      "unit": "US$ per wafer",
+      "as_of_date": "2026-10-24",
+      "period_end": "2024-2026",
+      "geography": "China",
+      "definition": "28nm pricing cycle",
+      "source": "reported",
+      "value_type": "actual",
+      "source_url": "https://markmancapitalinsight.substack.com/p/three-companies-set-to-dominate-2026",
+      "tier": "S3",
+      "value_num": 12.5,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "reported",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "UMC/GlobalFoundries price hike assumptions",
+      "value": "5-10",
+      "series": "analyst assumptions",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "H2 2026 and 2027",
+      "geography": "global",
+      "definition": "price increases in H2 2026 and another 5-10% in 2027",
+      "source": "analyst assumptions",
+      "value_type": "forecast",
+      "source_url": "https://ca.finance.yahoo.com/news/globalfoundries-climbs-8-umc-pricing-135009229.html",
+      "tier": "S3",
+      "value_num": 7.5,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "analyst assumptions",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "US SME exports to China",
+      "value": "$6.8bn (2021), $5.1bn (2022), $4.4bn (2023), $4.2bn (2024)",
+      "series": "reported trade data",
+      "unit": "US$ billion",
+      "as_of_date": "2026-10-24",
+      "period_end": "2024",
+      "geography": "United States to China",
+      "definition": "excluding third-market sales",
+      "source": "reported",
+      "value_type": "actual",
+      "source_url": "https://www.congress.gov/crs-product/R48642",
+      "tier": "S1",
+      "value_num": 6.8,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "United States to China",
+      "analyst": "reported",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "China rare-earth exports",
+      "value": "43,711",
+      "series": "China customs",
+      "unit": "tonnes",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-01/2026-09",
+      "geography": "China",
+      "definition": "-9.6% YoY; September 2026 rose 6.7%",
+      "source": "China customs via report",
+      "value_type": "actual",
+      "source_url": "https://www.technology.org/2026/10/19/china-rare-earth-export-pause-november-10/",
+      "tier": "S3",
+      "value_num": 43711.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "China",
+      "analyst": "China customs via report",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "China share of refined gallium",
+      "value": "~98",
+      "series": "reported estimate",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "China",
+      "definition": "share of world refined gallium",
+      "source": "reported",
+      "value_type": "estimate",
+      "source_url": "https://anderseninstitute.org/chinas-export-control-architecture-and-its-use-of-critical-minerals-as-strategic-pressure-points/",
+      "tier": "S3",
+      "value_num": 98.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "China",
+      "analyst": "reported",
+      "metric_family": "market share",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Samsung SF2 yield",
+      "value": "~30 (Q1 2026) rising to ~50-60 (late 2026)",
+      "series": "leak-based reports",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "Samsung Foundry",
+      "definition": "unconfirmed by Samsung",
+      "source": "leak-based reports",
+      "value_type": "estimate",
+      "source_url": "https://www.instagram.com/p/Dd3dchWm2_j/",
+      "tier": "S3",
+      "value_num": 55.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Samsung Foundry",
+      "analyst": "leak-based reports",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "TSMC 2nm capacity target",
+      "value": "90,000 (end-2026) rising to 110,000 (mid-2027)",
+      "series": "Economic Daily News via TrendForce",
+      "unit": "wafers per month",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-12",
+      "geography": "Taiwan",
+      "definition": "3nm capacity up more than 16%",
+      "source": "Economic Daily News via TrendForce",
+      "value_type": "target",
+      "source_url": "https://www.trendforce.com/news/2026/09/14/news-tsmc-reportedly-targets-22-2nm-16-3nm-capacity-boost-by-mid-2027-cowos-to-double-by-2028/",
+      "tier": "S3",
+      "value_num": 90000.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Taiwan",
+      "analyst": "Economic Daily News via TrendForce",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "2026 HBM market size",
+      "value": "54.6",
+      "series": "Bank of America",
+      "unit": "US$ billion",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "global",
+      "definition": "+58% YoY",
+      "source": "Bank of America",
+      "value_type": "forecast",
+      "source_url": "https://siliconanalysts.com/analysis/hbm4-market-share-race-2026",
+      "tier": "S3",
+      "value_num": 54.6,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Bank of America",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Custom-ASIC AI HBM demand growth",
+      "value": "+82, to one-third of total HBM demand",
+      "series": "Goldman Sachs projection",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2027",
+      "geography": "global",
+      "definition": "custom-ASIC AI HBM demand",
+      "source": "Goldman Sachs",
+      "value_type": "forecast",
+      "source_url": "https://siliconanalysts.com/analysis/hbm4-market-share-race-2026",
+      "tier": "S3",
+      "value_num": 82.0,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "Goldman Sachs",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "SK Hynix share of Rubin-generation HBM4",
+      "value": "~70",
+      "series": "UBS estimate",
+      "unit": "%",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-2027",
+      "geography": "global",
+      "definition": "share of Rubin-generation HBM4 supply",
+      "source": "UBS",
+      "value_type": "estimate",
+      "source_url": "https://siliconanalysts.com/analysis/hbm4-market-share-race-2026",
+      "tier": "S3",
+      "value_num": 70.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Global",
+      "analyst": "UBS",
+      "metric_family": "market share",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Unimicron 2026 capex",
+      "value": "NT$53.7",
+      "series": "Unimicron",
+      "unit": "billion NT$",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026",
+      "geography": "Taiwan",
+      "definition": "over 80% for ABF",
+      "source": "Unimicron",
+      "value_type": "target",
+      "source_url": "https://techsoda.substack.com/p/dr-change-column-15-as-chips-get",
+      "tier": "S3",
+      "value_num": 53.7,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Taiwan",
+      "analyst": "Unimicron",
+      "metric_family": "installed cost",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "IBIDEN Gama Cell 6 investment",
+      "value": "~¥220bn first phase of ~¥500bn FY2026-28 plan",
+      "series": "IBIDEN plan",
+      "unit": "yen",
+      "as_of_date": "2026-10-24",
+      "period_end": "FY2026-28",
+      "geography": "Japan",
+      "definition": "mass production from FY2027",
+      "source": "IBIDEN",
+      "value_type": "target",
+      "source_url": "https://www.ibiden.com/company/2026/02/notice-regarding-capital-investment-plan-for-high-performance-ic-package-substrates.html",
+      "tier": "S3",
+      "value_num": 1027.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "Japan",
+      "analyst": "IBIDEN",
+      "metric_family": "annual shipments",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "SUMCO last large greenfield expansion",
+      "value": "$2",
+      "series": "SUMCO announcement",
+      "unit": "US$ billion",
+      "as_of_date": "2026-10-24",
+      "period_end": "2021",
+      "geography": "global",
+      "definition": "announced 2021",
+      "source": "SUMCO",
+      "value_type": "actual",
+      "source_url": "https://www.electronicsweekly.com/news/business/sumco-put-2bn-new-300mm-wafer-capacity-2021-10/",
+      "tier": "S3",
+      "value_num": 2.0,
+      "year": 2021,
+      "value_kind": "actual",
+      "region": "Global",
+      "analyst": "SUMCO",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Amkor Arizona campus plan",
+      "value": "~12",
+      "series": "Amkor",
+      "unit": "US$ billion",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "raised packaging/test campus plan",
+      "source": "Amkor",
+      "value_type": "target",
+      "source_url": "https://techsoda.substack.com/p/dr-change-column-16-packaging-takes",
+      "tier": "S3",
+      "value_num": 12.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Amkor",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Real exports of goods and services",
+      "value": "2814.538",
+      "series": "FRED",
+      "unit": "Billions of Chained 2017 Dollars",
+      "as_of_date": "2026-10-24",
+      "period_end": "2026-Q2",
+      "geography": "United States",
+      "definition": "+5.837% YoY vs 2659.32",
+      "source": "FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/EXPGSC1",
+      "tier": "S1",
+      "value_num": 2814.538,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "FRED",
+      "metric_family": "growth rate",
+      "staleness_days": 0,
+      "is_stale": false
+    }
+  ],
+  "contested_claims": [
+    {
+      "claim": "Rubin Ultra (H2 2027) HBM configuration and package design",
+      "positions": [
+        {
+          "stance": "quad-die Rubin Ultra with 1 TB-class HBM4e in 12-Hi stacks",
+          "sources": [
+            "https://vrlatech.com/nvidia-gpu-roadmap-2026-2030/?srsltid=AYCX9vIcDsO4oy5ser6bGaI535zV9_lLnNIUb9w8m-J5WEnTbnCg-Dlb",
+            "https://vrlatech.com/nvidia-gpu-roadmap-2026-2030/?srsltid=AYCX9vLiJakDeqo-C7kMEt1ZZpX5_ypVT7caa-Luwp3jnWDfGsoGMQzw"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "quad-die design cancelled over substrate warpage and CoWoS-L yield issues, replaced by dual-die package with 192 GB of 8-Hi HBM4",
+          "sources": [
+            "https://mlq.ai/news/nvidia-scraps-quad-die-rubin-ultra-gpu-design-cites-packaging-yield-issues/",
+            "https://x.com/SemiAnalysis_/status/2091994110911557679?lang=en"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "switch from 12-Hi to 8-Hi under active consideration, cutting HBM per GPU by about 33%",
+          "sources": [
+            "https://www.trendforce.com/news/2026/10/20/news-dram-prices-seen-rising-20-qoq-in-4q26-despite-slower-gains-ai-demand-tight-supply-support-outlook/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "roadmap reports versus leaked redesign reporting; a roughly fivefold gap in per-package HBM bits for 2027; NVIDIA has not confirmed"
+    },
+    {
+      "claim": "CoWoS-S/L lead times and bookings",
+      "positions": [
+        {
+          "stance": "52-78-week lead times, fully booked",
+          "sources": [
+            "https://siliconanalysts.com/analysis/foundry-allocation-status-q1-2026"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "TSMC has not confirmed these figures",
+          "sources": [
+            "https://investor.tsmc.com/chinese/encrypt/files/encrypt_file/reports/2026-10/eba4fac72873bf546b669bd2b5d973df5c93215d/TSMC%203Q26%20Transcript.pdf"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "trade-report estimates versus TSMC non-disclosure policy"
+    },
+    {
+      "claim": "ABF substrate lead times",
+      "positions": [
+        {
+          "stance": "14-layer lead times at 20-28 weeks",
+          "sources": [
+            "https://www.datagravity.dev/p/the-abf-substrate-bottleneck"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "high-tier ABF at 48-56 weeks, up to 4.7x equilibrium",
+          "sources": [
+            "https://finance.biggo.com/news/02cf5c8f-c58d-45f8-a7a3-8fe37716bc8f"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "most likely a tier difference (commodity versus large AI substrates)"
+    },
+    {
+      "claim": "2027 CoWoS capacity",
+      "positions": [
+        {
+          "stance": "about 200,000 wpm forecast",
+          "sources": [
+            "https://admiralmarkets.com/analytics/traders-blog/tsmc-earnings-q3-2026-preview"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "~130,000 wpm at end-2026 doubling to ~260,000 by end-2028",
+          "sources": [
+            "https://finance.biggo.com/news/adcec901-53b3-453f-bf00-8373ebb1bb97"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "at least 200,000 wpm in 2027 (single-sourced rumor)",
+          "sources": [
+            "https://x.com/dnystedt/status/2075374878644146511?lang=en"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "different institutional estimates and a single-sourced rumor; TSMC discloses no CoWoS capacity"
+    },
+    {
+      "claim": "Memory sold out through 2027",
+      "positions": [
+        {
+          "stance": "all three HBM suppliers have sold through 2027 output",
+          "sources": [
+            "https://www.facebook.com/ign/posts/a-new-report-suggests-that-all-three-memory-manufacturers-samsung-sk-hynix-and-m/1622562369525562/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "claim unconfirmed in the evidence",
+          "sources": [
+            "https://www.useluminix.com/reports/industry-analysis/dram-cycle-position-analysis-peak-timing-indicators"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "single unconfirmed secondary claim lacking corroboration"
+    },
+    {
+      "claim": "Samsung SF2 (2nm) yield",
+      "positions": [
+        {
+          "stance": "~30% in Q1 2026 rising to ~50%",
+          "sources": [
+            "https://www.instagram.com/p/Dd3dchWm2_j/",
+            "https://x.com/jukan05/status/1972815934764220807"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "about 60% in late 2026",
+          "sources": [
+            "https://www.smbom.com/news/46255?srsltid=AYCX9vKwgMc6B7bkCw2Cpil-R5ZrV-1Fis5OQ2blOv5riPrv4NfoRkr0"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "no official figure; Samsung has not confirmed any yield number",
+          "sources": [
+            "https://www.instagram.com/p/Dd3dchWm2_j/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "all figures leak-based and unconfirmed; differing leak provenance"
+    },
+    {
+      "claim": "N3 lead times",
+      "positions": [
+        {
+          "stance": "N3 lead times of 104-156 weeks with utilization near 98%",
+          "sources": [
+            "https://siliconanalysts.com/tools/allocation"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "TSMC does not disclose utilization or lead-time figures",
+          "sources": [
+            "https://investor.tsmc.com/chinese/encrypt/files/encrypt_file/reports/2026-10/eba4fac72873bf546b669bd2b5d973df5c93215d/TSMC%203Q26%20Transcript.pdf"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "third-party estimate (Silicon Analysts) versus company non-disclosure"
+    },
+    {
+      "claim": "Affiliates Rule suspension extension status",
+      "positions": [
+        {
+          "stance": "truce extended to 10 January 2027 with Affiliates extension 'expected'",
+          "sources": [
+            "https://www.millercanfield.com/resources-BIS-Affiliates-Rule-Suspension-Extended.html"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "suspension runs only until November 9, 2026 absent a Federal Register extension; none published",
+          "sources": [
+            "https://www.federalregister.gov/documents/2025/11/12/2025-19846/one-year-suspension-of-expansion-of-end-user-controls-for-affiliates-of-certain-listed-entities"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "political statement by Treasury versus absent legal text in the Federal Register"
+    },
+    {
+      "claim": "2Q26 memory contract price changes",
+      "positions": [
+        {
+          "stance": "4Q26 DRAM +10-15% QoQ and NAND +15-20% QoQ",
+          "sources": [
+            "https://www.trendforce.com/presscenter/news/20260930-13258.html"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "about 20% QoQ DRAM increases in 4Q26",
+          "sources": [
+            "https://www.trendforce.com/news/2026/10/20/news-dram-prices-seen-rising-20-qoq-in-4q26-despite-slower-gains-ai-demand-tight-supply-support-outlook/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "secondary summary puts 2Q26 at +58-63% QoQ DRAM and +70-75% QoQ NAND",
+          "sources": [
+            "https://www.ampheo.com/blog/memory-chip-market-forecast-2026-dram-nand-hbm-and-nor-flash?srsltid=AYCX9vIFxdUJMAzTi7q5PC8uM-ADPWyRzoQ3qKi8XIWgLvSmokBhvi6y"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "different TrendForce editions and a secondary summary; timing and product mix differ"
+    },
+    {
+      "claim": "Historical bottleneck resolution base rate",
+      "positions": [
+        {
+          "stance": "only one of two non-overlapping episodes fell below 76% within 18 months of a peak above 80%",
+          "sources": [
+            "https://fred.stlouisfed.org/series/CAPUTLG3344S"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "one to two of five documented episodes cleared within 18 months",
+          "sources": [
+            "https://www.useluminix.com/reports/industry-analysis/dram-cycle-position-analysis-peak-timing-indicators",
+            "https://wccftech.com/report-tsmc-to-double-cowos-capacity-by-2028-as-ai-chip-shortage-spills-over-to-rivals/",
+            "https://a2globalelectronics.com/shortage-mitigation/abf-substrate-shortages/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "different reference classes (US utilization series count versus five named episodes incl. capability bottlenecks)"
+    },
+    {
+      "claim": "Semiconductor equipment billings YoY growth Q1 2026",
+      "positions": [
+        {
+          "stance": "+14% (Q1 2026) after +21% (Q1 2025), +24% (Q2 2025), +11% (Q3 2025)",
+          "sources": [
+            "https://www.semi.org/en/products-services/market-data/equipment"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Q2 2026 up 23% YoY, +11% QoQ",
+          "sources": [
+            "https://www.semi.org/en/semi-press-release/global-semiconductor-equipment-billings-increased-23-percent-year-over-year-in-q2-2026-semi-reports"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "different quarters from the same SEMI series; not strictly conflicting"
+    }
+  ],
+  "forecast_inputs": {
+    "scenarios": [
+      {
+        "name": "AI-led broad tightness",
+        "probability": 0.4,
+        "narrative": "Accelerator demand outruns CoWoS/SoIC and HBM4 ramps, keeping advanced packaging and HBM binding into 2027 and spilling into leading-edge logic; prior: HBM and CoWoS shortages persisted 6-8 quarters in 2023-25."
+      },
+      {
+        "name": "Packaging-only bottleneck",
+        "probability": 0.25,
+        "narrative": "Capacity additions elsewhere catch up by mid-2027 but CoWoS/SoIC and substrates remain the single binding constraint as in 2023-24, when packaging lagged wafer capacity by about a year."
+      },
+      {
+        "name": "Balanced chain",
+        "probability": 0.2,
+        "narrative": "Record 2026-27 capex and sold-out 2027 memory books clear the gaps, leaving only isolated, short allocation episodes; prior: most announced semiconductor capacity ramps close shortages within 4-6 quarters."
+      },
+      {
+        "name": "Oversupply and correction",
+        "probability": 0.15,
+        "narrative": "An AI demand air pocket or export-control shock flips HBM and mainstream memory into oversupply by late 2027, echoing the 2019 and 2023 memory downturns."
+      }
+    ],
+    "base_rates": [
+      {
+        "reference_class": "Documented semiconductor bottleneck episodes since 2017/2020, counting whether the episode resolved within 18 months of supply passing demand",
+        "outcome_frequency": "1-2 of 5 episodes cleared within 18 months; both fast cases were commodity segments",
+        "basis": "US NAICS 3344 utilization series (own count) [S3] and cycle analysis [S11][S12][S13][S76]"
+      },
+      {
+        "reference_class": "Commodity memory bottlenecks (DRAM 2017-18; DRAM 2021-22), resolved within 18 months of supply passing demand",
+        "outcome_frequency": "1 of 2 episodes",
+        "basis": "US NAICS 3344 utilization: peak 84.069% (Jan 2018) to sub-76% by Nov 2018; peak 92.195% (Feb 2022) to 74.164% (Jan 2024), about 23 months [S3]"
+      },
+      {
+        "reference_class": "Capability/AI-structural bottlenecks (CoWoS 2023-; HBM 2024-; ABF 2020-23), still binding at 18 months",
+        "outcome_frequency": "3 of 3 episodes",
+        "basis": "TSMC CEO statement 16 Jul 2026 [S1]; HBM sold out into 2027 [S11]; ABF episode ran about three years [S13][S76]"
+      },
+      {
+        "reference_class": "Prior DRAM cycles, downturn timing relative to inventory builds",
+        "outcome_frequency": "downturns preceded by inventory builds six to nine months ahead; prior cycles ran about 36 and 39 months",
+        "basis": "October 2026 cycle analysis [S11]"
+      }
+    ],
+    "drivers": [
+      {
+        "variable": "Rubin Ultra HBM configuration",
+        "direction": "swings 2027 HBM demand",
+        "why_it_matters": "quad-die 1 TB-class HBM4e roadmap [S6][S7] versus reported dual-die 192 GB 8-Hi redesign [S8][S9] changes per-package HBM demand roughly fivefold, separating the two leading scenarios"
+      },
+      {
+        "variable": "ASML 2027-28 equipment supply",
+        "direction": "tightens",
+        "why_it_matters": "ASML states supply 'as currently planned for both 2027 and 2028 will not fully meet the demand of our customers' [S2], gating all leading-edge ramps"
+      },
+      {
+        "variable": "CoWoS capacity ramp",
+        "direction": "loosens",
+        "why_it_matters": "supply-demand gap narrows from ~20% mid-2026 to ~10% by end-2026 as capacity compounds above 80% CAGR 2022-2027 [S20]"
+      },
+      {
+        "variable": "HBM wafer allocation at Samsung/SK Hynix",
+        "direction": "tightens conventional DRAM",
+        "why_it_matters": "Samsung runs ~150,000 DRAM wpm through HBM lines with roughly half HBM4, crowding out conventional DRAM supply [S28]"
+      },
+      {
+        "variable": "Substrate relief timing",
+        "direction": "keeps packaging binding",
+        "why_it_matters": "IBIDEN Ono ramp begins Q1 2028 and Unimicron reaches full run-rate only mid-2028, so most new substrate volume lands after the horizon [S45]"
+      },
+      {
+        "variable": "Memory supplier inventory",
+        "direction": "signals direction of memory prices",
+        "why_it_matters": "Samsung and SK Hynix finished-memory inventory below 10 days of supply (Sept 2026) versus downturn norms of 10-15+ weeks [S28][S11]"
+      },
+      {
+        "variable": "TSMC 2026-2028 capex",
+        "direction": "loosens via record investment",
+        "why_it_matters": "management guides capex 'even more significantly higher than the past three years' while flagging 'the tool supply is tight' [S17]"
+      },
+      {
+        "variable": "NVIDIA packaging share concentration",
+        "direction": "tightens allocation for others",
+        "why_it_matters": "NVIDIA estimated to hold ~60% of 2026 CoWoS capacity (~595,000 wafers), with NVIDIA, Broadcom and AMD above 85% combined [S1]"
+      }
+    ],
+    "risks": [],
+    "indicators": [
+      {
+        "indicator": "Capacity Utilization: Manufacturing: Durable Goods: Semiconductor and Other Electronic Component (NAICS = 3344) — United States (fred:CAPUTLG3344S)",
+        "series": "fred:CAPUTLG3344S",
+        "latest_value": 76.5104,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S3"
+      },
+      {
+        "indicator": "Industrial Production: Manufacturing: Durable Goods: Semiconductor and Other Electronic Component (NAICS = 3344) — United States (fred:IPG3344S)",
+        "series": "fred:IPG3344S",
+        "latest_value": 198.6335,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Index 2017=100",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S4"
+      },
+      {
+        "indicator": "Real Exports of Goods and Services — United States (fred:EXPGSC1)",
+        "series": "fred:EXPGSC1",
+        "latest_value": 2814.538,
+        "latest_date": "2026-06-30",
+        "latest_period": "2026-Q2",
+        "status": "observed",
+        "units": "Billions of Chained 2017 Dollars",
+        "frequency": "Q",
+        "date_or_trigger": "next quarterly release after 2026-Q2",
+        "source_ref": "S40"
+      },
+      {
+        "indicator": "Real imports of goods and services — United States (fred:IMPGSC1)",
+        "series": "fred:IMPGSC1",
+        "latest_value": 3913.833,
+        "latest_date": "2026-06-30",
+        "latest_period": "2026-Q2",
+        "status": "observed",
+        "units": "Billions of Chained 2017 Dollars",
+        "frequency": "Q",
+        "date_or_trigger": "next quarterly release after 2026-Q2",
+        "source_ref": "S41"
+      }
+    ]
+  }
+}

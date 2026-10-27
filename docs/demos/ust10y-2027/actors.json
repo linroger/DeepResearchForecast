@@ -1,0 +1,2644 @@
+{
+  "central_question": "What will the US 10-year Treasury constant maturity yield (FRED DGS10) be on December 31, 2027, given the current (late October 2026) level near 5.13% and the positively sloped curve, and how do Fed policy/QT, inflation expectations and term premium, Treasury issuance and deficits, foreign official demand, and recession probabilities shape the distribution of outcomes?",
+  "as_of_date": "2026-10-23",
+  "situation_brief": {
+    "current_situation": "DGS10 printed 5.13% on 2026-10-21, at the top of its five-year monthly range (1.37% in 2021-09 to 4.989% in 2026-09), with 2s10s at 0.31% and 3M10Y at 0.78% on 2026-10-23. The funds target range stands at 3-3/4 to 4 percent after a 12-0 hike on 2026-09-16. The rise above 5% is driven by real yields and term premium (Kim-Wright term premium 0.96% in 2026-09, top of its five-year range), not by inflation expectations (10-year breakeven 2.351%, 5y5y forward 2.34%).",
+    "context": "CBO's February 2026 baseline projects a $1.9 trillion FY2026 deficit (5.8% of GDP) averaging $2.4 trillion a year over 2027-2036; Treasury has held nominal coupon and FRN auction sizes unchanged 'for at least the next several quarters' and pushed marginal borrowing into bills. QT ended October 2025 ($2.2 trillion reduction); the Fed has run reserve-management purchases of shorter-term Treasuries since December 2025 with total assets at $6,753,604 millions on 2026-10-21. The September 2026 SEP median funds rate is 4.25% at end-2026 and end-2027, with core PCE medians of 3.4% (2026) and 2.5% (2027).",
+    "dynamics": "The expected-rate component (roughly 4pp of the ~5% fitted zero-coupon yield) is pinned by a Fed on hold near 4% with market pricing slightly below then above the dots through 2027; the swing factor is the term premium, which has climbed steadily (0.601% Jan 2026 to 0.96% Sep 2026, partial October 1.059%) alongside bill-heavy issuance and large deficits. Recession signals are dormant: the real-time Sahm indicator reads 0.00 percentage points (2026-09) and the Cleveland Fed puts one-year-ahead recession probability at 11.4 percent. Historical base rates from near-5% starts show small moves: 0 of 4 non-overlapping 14-month windows exceeded ±1.0 pp, and the single ±0.5 pp exceedance was downward into the 2007-08 recession.",
+    "fault_lines": [
+      "Term premium at a five-year high (~1%) against deficit/issuance pressure vs Treasury's coupon-size freeze",
+      "FOMC reaction function constrained by 3.4% core PCE, not by 4.1% unemployment",
+      "Divergent term-premium models: Kim-Wright ~1% vs ACM mirror 0.72-0.73%, implying different expected-rate pricing",
+      "Funds futures strip implying a path inconsistent with the 4.25% SEP medians; unresolved wedge",
+      "Household inflation expectations (Michigan 1-year at 4.6%) far above near-target market breakevens",
+      "Evidence gap: no TIC holdings data for Japan or China and no BoJ policy series in this run"
+    ],
+    "catalysts": [
+      "Quarterly refunding statement expected early November 2026 (date unconfirmed): any coupon-size increase",
+      "December 2026 FOMC meeting and new SEP (date not in evidence)",
+      "Monthly CPI/PCE and University of Michigan inflation prints through 2027",
+      "Monthly NY Fed recession-probability update (first two weeks of each month)",
+      "Monthly TIC releases on Japan and China holdings",
+      "Monthly Treasury Statement deficit tracking vs CBO's $1.9 trillion FY2026 baseline",
+      "Term premium (THREEFYTP10) monthly mean crossing 1.5% or falling below 0.75%"
+    ]
+  },
+  "actors": [
+    {
+      "name": "Federal Reserve / FOMC",
+      "type": "Organization",
+      "role": "Monetary policy authority setting the funds-rate path and balance-sheet rules that anchor the expected-rate component of the 10-year yield",
+      "stance": "Hawkish hold: raised the target range to 3-3/4 to 4 percent on 2026-09-16 by 12-0, citing elevated inflation; SEP medians hold 4.25% through 2028",
+      "description": "The committee raised rates in September 2026 and projects funds at 4.25% at end-2026 and end-2027, core PCE gliding from 3.4% to 2.5% in 2027, unemployment 4.1% and GDP growth 2.2-2.4%. Its September statement said the hike 'will support a timelier return to the Committee's 2 percent goal'.",
+      "stated_vs_revealed": "States a data-dependent path to 2% inflation; revealed behavior is a September 2026 hike and flat 4.25% dots, signaling higher-for-longer",
+      "memory": "QT from June 2022 to October 2025 cut securities holdings by $2.2 trillion; December 2025 pivot to reserve-management purchases; September 2026 hike after a year of net easing",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "FOMC",
+        "the Fed"
+      ],
+      "goals": [
+        "Return core PCE inflation to 2 percent",
+        "Keep the labor market near 4.1% unemployment",
+        "Maintain ample reserves via reserve-management purchases of shorter-term Treasuries"
+      ],
+      "constraints": [
+        "Core PCE at 3.4% for 2026, 1.4pp above goal, blocks near-term easing",
+        "A 2027 recession would force rapid cuts from the 3.875% midpoint",
+        "Political and fiscal backdrop of 6%+ of GDP deficits"
+      ],
+      "assets": [
+        "Policy rate at 3.75-4% target range",
+        "Balance sheet of $6,753,604 millions (2026-10-21) with reserve-management purchase tool",
+        "SEP communication channel and dots"
+      ],
+      "vulnerabilities": [
+        "Sticky household inflation expectations (Michigan 4.6%)",
+        "Over-tightening into a 2027 downturn with little easing cushion priced",
+        "Credibility if inflation stays above 3% while it holds"
+      ],
+      "incentives": [
+        {
+          "driver": "Inflation mandate",
+          "gains_if": "Core PCE tracks toward the 2.5% 2027 median",
+          "loses_if": "Inflation re-accelerates or a recession forces a policy reversal",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Price stability",
+          "Maximum employment",
+          "Data dependence"
+        ],
+        "beliefs": [
+          "Inflation remains elevated but will glide to 2.5% in 2027",
+          "Reserves are ample; balance sheet policy should be passive and short-dated"
+        ],
+        "identity": "US central bank",
+        "frame": "Restrictive stance held until inflation convincingly falls"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.95,
+        "basis": "Sets the expected-rate component, roughly 4pp of the ~5% 10-year yield"
+      }
+    },
+    {
+      "name": "Jerome Powell (or successor Chair)",
+      "type": "Person",
+      "role": "Fed Chair whose signaling drives rate expectations and balance-sheet guidance",
+      "stance": "Hawkish: presiding over a September 2026 hike with statement language on elevated inflation",
+      "description": "Chair of the Federal Reserve; the September 16, 2026 FOMC action and statement carry the Chair's framing that the hike supports a timelier return to 2% inflation.",
+      "stated_vs_revealed": "Communicates data dependence; has delivered a hike and a flat dot path, revealing a higher-for-longer bias",
+      "memory": "Led the 2022-2025 tightening and QT cycle, then the December 2025 reserve-management pivot",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "Fed Chair"
+      ],
+      "goals": [
+        "Deliver 2% inflation without a recession",
+        "Preserve Fed independence and market functioning"
+      ],
+      "constraints": [
+        "Core PCE at 3.4% in 2026",
+        "Divergent market pricing vs the dots"
+      ],
+      "assets": [
+        "Agenda-setting over FOMC communications",
+        "SEP and press-conference channels"
+      ],
+      "vulnerabilities": [
+        "Political pressure over holding rates at 4%+",
+        "Miscommunication risk on QT/reserve-management transition"
+      ],
+      "incentives": [
+        {
+          "driver": "Legacy and mandate",
+          "gains_if": "Inflation glides to target with unemployment near 4.1%",
+          "loses_if": "Recession or inflation resurgence on his watch",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Inflation control first",
+          "Institutional credibility"
+        ],
+        "beliefs": [
+          "Restrictive policy is working with a lag"
+        ],
+        "identity": "Fed Chair",
+        "frame": "Hold until inflation convincingly falls"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.85,
+        "basis": "Chair's signaling drives rate expectations and balance-sheet guidance"
+      }
+    },
+    {
+      "name": "US Department of the Treasury",
+      "type": "Government",
+      "role": "Chooses issuance mix and coupon sizes each quarterly refunding; the fiscal agent whose supply decisions press on the term premium",
+      "stance": "Coupon freeze: August 5, 2026 statement anticipates maintaining nominal coupon and FRN auction sizes 'for at least the next several quarters', absorbing marginal needs in bills",
+      "description": "Announced $628 billion of privately-held net marketable borrowing for October-December 2026 with an $850 billion end-of-December cash balance assumption; marketable debt on 2026-09-30 comprised $7,117,937m bills, $16,277,939m notes, $5,538,540m bonds; buybacks continue but are not expected to significantly affect net borrowing.",
+      "stated_vs_revealed": "States sizes are unchanged for several quarters; behavior consistent — no increase through August 2026",
+      "memory": "Held coupon sizes through 2026 refundings while borrowing estimates oscillated ($739b Q3 estimate, $628b Q4 estimate)",
+      "influence": "high",
+      "simulation_tier": 1,
+      "role_class": "principal",
+      "aliases": [
+        "US Treasury"
+      ],
+      "goals": [
+        "Fund the deficit at lowest cost",
+        "Preserve 'well positioned' flexibility for fiscal-outlook changes and SOMA portfolio shifts"
+      ],
+      "constraints": [
+        "Deficits averaging $2.4 trillion a year over 2027-2036 per CBO",
+        "Primary-dealer and hedge-fund intermediary capacity",
+        "TBAC preference for a different bills mix (bills ~22% of marketable debt vs ~23% historical average)"
+      ],
+      "assets": [
+        "Auction calendar and size decisions",
+        "Bills share at roughly 22-25% of marketable debt",
+        "Buyback program"
+      ],
+      "vulnerabilities": [
+        "A coupon-size increase announcement would validate the bear-steepening scenario; bill-heavy mix pushes duration supply onto constrained intermediaries"
+      ],
+      "incentives": [
+        {
+          "driver": "Debt-management cost minimization",
+          "gains_if": "Term premium stays near 1% with coupons frozen",
+          "loses_if": "Forced coupon increases into weak demand push term premium above 1.5%",
+          "intensity": "high"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Regular and predictable issuance",
+          "Market functioning"
+        ],
+        "beliefs": [
+          "Bill-heavy issuance is tolerable; capacity exists at the long end"
+        ],
+        "identity": "Sovereign issuer",
+        "frame": "Buy time with bills until fiscal outlook clarifies"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 1,
+        "score": 0.9,
+        "basis": "Quarterly refunding coupon decisions are a named discriminator between the plateau and bear-steepening scenarios"
+      }
+    },
+    {
+      "name": "Congressional Budget Office",
+      "type": "Organization",
+      "role": "Publishes the deficit baseline that frames fiscal-pressure expectations and the 10-year-rate assumption in forecasts",
+      "stance": "Projects persistent large deficits: $1.9 trillion FY2026 (5.8% of GDP), averaging $2.4 trillion a year 2027-2036, debt rising to 120% of GDP by 2036",
+      "description": "Its February 2026 baseline attributes deterioration to the 2025 reconciliation act (+$4.7 trillion over 2026-2035), tariffs (-$3.0 trillion) and immigration actions (+$0.5 trillion), and assumes the 10-year rate 'rises gradually through 2027 and remains relatively stable in later years'.",
+      "stated_vs_revealed": "Consistent: published baseline matches stated mission",
+      "memory": "February 2026 baseline updated the January 2025 outlook for reconciliation, tariffs and immigration actions",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "CBO"
+      ],
+      "goals": [
+        "Nonpartisan scoring of budget outlook"
+      ],
+      "constraints": [
+        "Baseline must reflect current law"
+      ],
+      "assets": [
+        "Analytical authority and official baseline status"
+      ],
+      "vulnerabilities": [
+        "Revisions when legislation changes the fiscal path"
+      ],
+      "incentives": [
+        {
+          "driver": "Analytical mandate",
+          "gains_if": "n/a (nonpartisan scorer)",
+          "loses_if": "n/a",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Nonpartisanship",
+          "Current-law scoring"
+        ],
+        "beliefs": [
+          "Rising net interest costs drive deficit growth"
+        ],
+        "identity": "Congressional scorekeeper",
+        "frame": "Fiscal trajectory is unsustainable"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.7,
+        "basis": "Deficit baseline frames fiscal-pressure expectations feeding the term premium"
+      }
+    },
+    {
+      "name": "New York Fed Markets Desk",
+      "type": "Organization",
+      "role": "Implements balance-sheet policy (reserve-management purchases) and publishes term-premium and survey data (Survey of Primary Dealers)",
+      "stance": "Executing ample-reserves regime with purchases concentrated at the short end since December 2025",
+      "description": "Sized reserve-management purchases of shorter-term Treasury securities to trend liability growth plus seasonal fluctuations; publishes the monthly yield-curve recession probit (prob_rec) within the first two weeks of each month, cautioning it is not an official forecast.",
+      "stated_vs_revealed": "Consistent execution of announced reserve-management policy",
+      "memory": "Managed QT wind-down through October 2025 and the December 2025 purchase announcement",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "intermediary",
+      "aliases": [
+        "NY Fed Markets Desk"
+      ],
+      "goals": [
+        "Maintain ample reserves and market functioning"
+      ],
+      "constraints": [
+        "Purchases directed to shorter-dated securities, offering little duration relief"
+      ],
+      "assets": [
+        "Purchase operations",
+        "Data publication (recession probit, surveys)"
+      ],
+      "vulnerabilities": [
+        "Short-end-only purchases leave the 10-year term premium unaddressed"
+      ],
+      "incentives": [
+        {
+          "driver": "Market-functioning mandate",
+          "gains_if": "Reserves stay ample, money markets orderly",
+          "loses_if": "Reserve scarcity or market dysfunction",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Operational precision",
+          "Transparency via data publication"
+        ],
+        "beliefs": [
+          "Reserves remain ample"
+        ],
+        "identity": "Fed's markets arm",
+        "frame": "Technical implementation, not policy setting"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 2,
+        "score": 0.65,
+        "basis": "Implementation channel for balance-sheet policy and publisher of recession-probability data"
+      }
+    },
+    {
+      "name": "Primary dealers and Treasury market hedge funds",
+      "type": "Organization",
+      "role": "Balance-sheet-constrained intermediaries whose capacity sets term-premium sensitivity to issuance",
+      "stance": "Absorbing a bill-heavy issuance mix with coupon sizes frozen",
+      "description": "Named actors whose intermediation capacity determines how much issuance pressure translates into term premium; the report notes no retrieved estimate of basis points per $100 billion of coupon supply, leaving the elasticity unquantified.",
+      "stated_vs_revealed": "No stated positions captured; behavior inferred from the steady term-premium climb",
+      "memory": "Operated through the 2022-2026 issuance expansion and QT transition",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "intermediary",
+      "aliases": [
+        "dealers",
+        "hedge funds"
+      ],
+      "goals": [
+        "Profit from intermediation and basis trades within balance-sheet limits"
+      ],
+      "constraints": [
+        "Post-GFC balance-sheet constraints",
+        "High issuance volumes and volatility around the 5% level"
+      ],
+      "assets": [
+        "Intermediation capacity at auction and in secondary markets"
+      ],
+      "vulnerabilities": [
+        "Capacity shortfalls at refundings could force term-premium repricing"
+      ],
+      "incentives": [
+        {
+          "driver": "Profit",
+          "gains_if": "Wide spreads and functioning auctions",
+          "loses_if": "Balance-sheet stress during coupon-size increases",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Risk management",
+          "Liquidity provision for fee"
+        ],
+        "beliefs": [
+          "Inferred: compensation for duration risk is rising"
+        ],
+        "identity": "Market intermediaries",
+        "frame": "Charge more to warehouse duration"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "Named in the brief as setting term-premium sensitivity to issuance"
+      }
+    },
+    {
+      "name": "Bank of Japan",
+      "type": "Organization",
+      "role": "Rate normalization shifts Japanese yields and demand for Treasuries",
+      "stance": "Unknown from this evidence: no BoJ policy-rate or JGB series was captured",
+      "description": "Identified actor whose normalization path affects foreign official demand for Treasuries; the report holds no data on its stance.",
+      "stated_vs_revealed": "No statements captured in this run",
+      "memory": "No history captured in this evidence base",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "aliases": [
+        "BoJ"
+      ],
+      "goals": [
+        "Unknown from evidence"
+      ],
+      "constraints": [
+        "Unknown from evidence"
+      ],
+      "assets": [
+        "Policy-rate and JGB purchase tools (not quantified here)"
+      ],
+      "vulnerabilities": [
+        "Normalization could reduce Japanese demand for US duration"
+      ],
+      "incentives": [
+        {
+          "driver": "Domestic price stability",
+          "gains_if": "n/a (stance unknown)",
+          "loses_if": "n/a",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Unknown"
+        ],
+        "beliefs": [
+          "Unknown"
+        ],
+        "identity": "Japan's central bank",
+        "frame": "Unknown"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.4,
+        "basis": "Named actor in the brief, but no captured data; operates through the foreign-demand channel"
+      }
+    },
+    {
+      "name": "Japan Ministry of Finance",
+      "type": "Government",
+      "role": "Largest foreign official holder of Treasuries; reserve and intervention decisions affect marginal demand",
+      "stance": "Unknown from this evidence: no TIC holdings figures for Japan captured",
+      "description": "Largest foreign official holder per the brief; holdings levels and trends are unknown in this run, a flagged evidence gap.",
+      "stated_vs_revealed": "No statements or data captured",
+      "memory": "No captured history",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Japan MoF"
+      ],
+      "goals": [
+        "Reserve management and currency stability (inferred from role)"
+      ],
+      "constraints": [
+        "Unknown from evidence"
+      ],
+      "assets": [
+        "Large Treasury holdings (size unknown here)"
+      ],
+      "vulnerabilities": [
+        "Unknown from evidence"
+      ],
+      "incentives": [
+        {
+          "driver": "Reserve and yen management",
+          "gains_if": "n/a",
+          "loses_if": "n/a",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Unknown"
+        ],
+        "beliefs": [
+          "Unknown"
+        ],
+        "identity": "Japan's treasury",
+        "frame": "Unknown"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.4,
+        "basis": "Named in the brief; holdings trend is an explicit evidence gap affecting the term-premium channel"
+      }
+    },
+    {
+      "name": "People's Bank of China / SAFE",
+      "type": "Government",
+      "role": "Second-largest foreign holder; allocation shifts affect marginal Treasury demand",
+      "stance": "Unknown from this evidence: no TIC or reserve-allocation data captured",
+      "description": "Named actor whose allocation decisions feed the foreign-demand channel; unquantified in this run.",
+      "stated_vs_revealed": "No data captured",
+      "memory": "No captured history",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "stakeholder",
+      "aliases": [
+        "PBoC",
+        "SAFE"
+      ],
+      "goals": [
+        "Unknown from evidence"
+      ],
+      "constraints": [
+        "Unknown from evidence"
+      ],
+      "assets": [
+        "Large Treasury holdings (size unknown here)"
+      ],
+      "vulnerabilities": [
+        "Unknown from evidence"
+      ],
+      "incentives": [
+        {
+          "driver": "Reserve management and policy goals",
+          "gains_if": "n/a",
+          "loses_if": "n/a",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Unknown"
+        ],
+        "beliefs": [
+          "Unknown"
+        ],
+        "identity": "China's central bank and reserve manager",
+        "frame": "Unknown"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 3,
+        "score": 0.4,
+        "basis": "Named in the brief; no holdings data, so influence is inferred via the term-premium channel"
+      }
+    },
+    {
+      "name": "US Congress",
+      "type": "Government",
+      "role": "Tax and spending legislation changes the deficit outlook",
+      "stance": "Legislated the 2025 reconciliation act that CBO scores as raising deficits by $4.7 trillion over 2026-2035",
+      "description": "Its 2025 reconciliation act, higher tariffs (scored -$3.0 trillion) and immigration actions (+$0.5 trillion) drive the CBO deterioration to 101% debt/GDP in 2026 rising to 120% by 2036.",
+      "stated_vs_revealed": "Legislation reveals appetite for deficits despite stated deficit concerns",
+      "memory": "2025 reconciliation act reshaped the CBO baseline",
+      "influence": "medium",
+      "simulation_tier": 2,
+      "role_class": "stakeholder",
+      "aliases": [
+        "Congress"
+      ],
+      "goals": [
+        "Fiscal priorities per majority preference"
+      ],
+      "constraints": [
+        "Debt trajectory and interest costs"
+      ],
+      "assets": [
+        "Taxing and spending authority"
+      ],
+      "vulnerabilities": [
+        "Further deficit expansion feeds term-premium pressure"
+      ],
+      "incentives": [
+        {
+          "driver": "Electoral and policy priorities",
+          "gains_if": "Spending/tax goals delivered",
+          "loses_if": "Bond-market backlash raises funding costs",
+          "intensity": "medium"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Constituent and party priorities"
+        ],
+        "beliefs": [
+          "Deficits tolerable while rates allow"
+        ],
+        "identity": "Legislative branch",
+        "frame": "Fiscal expansion within political limits"
+      },
+      "risk_tolerance": "high",
+      "salience": {
+        "tier": 2,
+        "score": 0.6,
+        "basis": "Legislation changes the deficit outlook that presses the term premium"
+      }
+    },
+    {
+      "name": "CME FedWatch market participants",
+      "type": "Platform",
+      "role": "Aggregate market pricing of the funds path that feeds the expected-rate component",
+      "stance": "Pricing an implied funds path near 4.2% in early 2027 rising to ~4.56% by November 2027 (derived, unconfirmed); FedWatch board shows 90.6%/9.4% odds for an unidentified upcoming meeting",
+      "description": "CME 30-day fed funds futures closed 2026-10-23 at 95.82 (Feb 2027), 95.53 (Jun 2027), 95.455 (Sep 2027), 95.44 (Nov 2027); FedWatch aggregates these into meeting probabilities.",
+      "stated_vs_revealed": "Prices reveal market expects a modest trough then rising funds path, above the Fed's own dots",
+      "memory": "Traded through the September 2026 hike cycle",
+      "influence": "medium",
+      "simulation_tier": 3,
+      "role_class": "amplifier",
+      "aliases": [
+        "CME FedWatch"
+      ],
+      "goals": [
+        "Price the funds-rate distribution"
+      ],
+      "constraints": [
+        "Thin back-contract liquidity; risk-neutral probabilities"
+      ],
+      "assets": [
+        "Exchange-traded futures prices and probability board"
+      ],
+      "vulnerabilities": [
+        "Implied rates are unconfirmed arithmetic on quoted prices and can diverge from SEP dots"
+      ],
+      "incentives": [
+        {
+          "driver": "Risk-neutral pricing",
+          "gains_if": "n/a (price aggregator)",
+          "loses_if": "n/a",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Price discovery"
+        ],
+        "beliefs": [
+          "Markets price slightly higher-for-longer than the SEP"
+        ],
+        "identity": "Futures market platform",
+        "frame": "Aggregate expectation"
+      },
+      "risk_tolerance": "medium",
+      "salience": {
+        "tier": 3,
+        "score": 0.55,
+        "basis": "Feeds the expected-rate component of the 10-year yield and is a monitored signpost"
+      }
+    },
+    {
+      "name": "Cleveland Fed",
+      "type": "Organization",
+      "role": "Publishes a multi-factor yield-curve recession-probability model (monthly)",
+      "stance": "Probability of recession one year ahead at 11.4 percent for September 2026, down from 12.3% (Aug) and 13.6% (Jul)",
+      "description": "Its model diverges from the NY Fed probit because it adds other factors beyond the single 10Y-3M spread; monitored as a signpost for the Recession flight to quality scenario.",
+      "stated_vs_revealed": "Consistent publication",
+      "memory": "Series declined from 13.6% (Jul) to 11.4% (Sep) 2026",
+      "influence": "low",
+      "simulation_tier": 4,
+      "role_class": "amplifier",
+      "goals": [
+        "Public recession-probability estimation"
+      ],
+      "constraints": [
+        "Model construction limits"
+      ],
+      "assets": [
+        "Published monthly series"
+      ],
+      "vulnerabilities": [
+        "Model disagreement with NY Fed probit confuses signals"
+      ],
+      "incentives": [
+        {
+          "driver": "Research mandate",
+          "gains_if": "n/a",
+          "loses_if": "n/a",
+          "intensity": "low"
+        }
+      ],
+      "worldview": {
+        "values": [
+          "Transparent modeling"
+        ],
+        "beliefs": [
+          "Recession odds moderate and easing"
+        ],
+        "identity": "Regional Fed research shop",
+        "frame": "Statistical early warning"
+      },
+      "risk_tolerance": "low",
+      "salience": {
+        "tier": 4,
+        "score": 0.4,
+        "basis": "Named recession-probability source; threshold above 11.4% is a scenario signpost"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source": "Federal Reserve / FOMC",
+      "target": "US Department of the Treasury",
+      "type": "INFLUENCES",
+      "relation_label": "sets SOMA composition context for issuance planning",
+      "since": "2025-12",
+      "basis": "Treasury's August 2026 refunding cites readiness for 'the size and composition of the SOMA portfolio'; Fed reserve-management purchases affect the mix Treasury must supply",
+      "valence": "transactional",
+      "polarity": 0.2,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "US Department of the Treasury",
+      "target": "Primary dealers and Treasury market hedge funds",
+      "type": "SUPPLIES",
+      "relation_label": "issues securities dealers must intermediate",
+      "basis": "Dealers' balance-sheet capacity sets term-premium sensitivity to Treasury's issuance mix",
+      "valence": "transactional",
+      "polarity": 0.0,
+      "strength": 0.8
+    },
+    {
+      "source": "Federal Reserve / FOMC",
+      "target": "CME FedWatch market participants",
+      "type": "INFLUENCES",
+      "relation_label": "policy path shapes futures pricing",
+      "basis": "SEP medians of 4.25% at end-2026/2027 vs futures-implied path of ~4.2% to ~4.56% (derived, unconfirmed); the wedge is unresolved",
+      "valence": "directional",
+      "polarity": 0.3,
+      "strength": 0.7,
+      "sign": "+"
+    },
+    {
+      "source": "Congressional Budget Office",
+      "target": "US Congress",
+      "type": "INFLUENCES",
+      "relation_label": "scores fiscal legislation",
+      "basis": "CBO scored the 2025 reconciliation act at +$4.7 trillion over 2026-2035",
+      "valence": "neutral",
+      "polarity": 0.0,
+      "strength": 0.6
+    },
+    {
+      "source": "US Congress",
+      "target": "US Department of the Treasury",
+      "type": "INFLUENCES",
+      "relation_label": "legislated deficits determine borrowing needs",
+      "basis": "CBO baseline of $1.9 trillion FY2026 deficit drives Treasury's $628 billion Q4 2026 borrowing estimate",
+      "valence": "directional",
+      "polarity": 0.4,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "Jerome Powell (or successor Chair)",
+      "target": "Federal Reserve / FOMC",
+      "type": "PARTNERS_WITH",
+      "relation_label": "leads the committee",
+      "basis": "Chair's signaling frames FOMC decisions such as the 12-0 September 2026 hike",
+      "valence": "allied",
+      "polarity": 0.7,
+      "strength": 0.9,
+      "sign": "+"
+    },
+    {
+      "source": "New York Fed Markets Desk",
+      "target": "Federal Reserve / FOMC",
+      "type": "DEPENDS_ON",
+      "relation_label": "implements FOMC balance-sheet policy",
+      "since": "2025-12",
+      "basis": "Desk executes reserve-management purchases announced by the FOMC on 2025-12-10",
+      "valence": "allied",
+      "polarity": 0.6,
+      "strength": 0.8,
+      "sign": "+"
+    },
+    {
+      "source": "Bank of Japan",
+      "target": "Japan Ministry of Finance",
+      "type": "PARTNERS_WITH",
+      "relation_label": "joint monetary-fiscal management",
+      "basis": "Both named actors in Japan's Treasury-demand channel; specifics unquantified in the evidence",
+      "valence": "allied",
+      "polarity": 0.5,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "Japan Ministry of Finance",
+      "target": "US Department of the Treasury",
+      "type": "INVESTS_IN",
+      "relation_label": "largest foreign official holder of Treasuries",
+      "basis": "Named largest foreign official holder in the brief; holdings data absent from this run",
+      "valence": "transactional",
+      "polarity": 0.4,
+      "strength": 0.6,
+      "sign": "+"
+    },
+    {
+      "source": "People's Bank of China / SAFE",
+      "target": "US Department of the Treasury",
+      "type": "INVESTS_IN",
+      "relation_label": "second-largest foreign holder of Treasuries",
+      "basis": "Named second-largest foreign holder in the brief; allocation data absent from this run",
+      "valence": "transactional",
+      "polarity": 0.3,
+      "strength": 0.5,
+      "sign": "+"
+    },
+    {
+      "source": "US Department of the Treasury",
+      "target": "Primary dealers and Treasury market hedge funds",
+      "type": "CUSTOMER_OF",
+      "relation_label": "relies on dealer bid capacity at auctions",
+      "basis": "Treasury's auction-size decisions depend on intermediary absorption capacity",
+      "valence": "transactional",
+      "polarity": 0.0,
+      "strength": 0.7
+    },
+    {
+      "source": "CME FedWatch market participants",
+      "target": "Federal Reserve / FOMC",
+      "type": "INFLUENCES",
+      "relation_label": "market pricing feeds policy expectations",
+      "basis": "FedWatch probabilities and the futures strip are monitored signposts against the SEP dots",
+      "valence": "directional",
+      "polarity": 0.2,
+      "strength": 0.4,
+      "sign": "+"
+    },
+    {
+      "source": "Cleveland Fed",
+      "target": "Federal Reserve / FOMC",
+      "type": "SUPPORTS",
+      "relation_label": "provides research input on recession risk",
+      "basis": "Publishes recession probabilities that inform the policy-risk backdrop",
+      "valence": "neutral",
+      "polarity": 0.1,
+      "strength": 0.3,
+      "sign": "+"
+    }
+  ],
+  "hot_topics": [
+    "Term premium at five-year high (~0.96-1.06%) vs the 1.5% bear-steepening trigger",
+    "November 2026 quarterly refunding coupon-size decision",
+    "Fed SEP dots at 4.25% through 2028 vs futures-implied path rising to ~4.56% by November 2027",
+    "Core PCE glide from 3.4% (2026) to 2.5% (2027) as the SEP median",
+    "CBO deficit baseline: $1.9 trillion FY2026, 6.1% of GDP average 2027-2036",
+    "Bills share of marketable debt at 22-25% vs TBAC preferences",
+    "Dormant recession signals: Sahm at 0.00pp, Cleveland Fed at 11.4%",
+    "Missing TIC data on Japan and China holdings",
+    "Michigan 1-year inflation expectations at 4.6% vs anchored market breakevens near 2.3%",
+    "Historical base rate: no near-5% start in the stored window moved up more than 1.0pp over 14 months"
+  ],
+  "key_events": [
+    {
+      "date": "2026-10-21",
+      "event": "DGS10 latest stored daily value printed 5.13%",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-05",
+      "event": "DGS10 daily 52-week high of 5.31% per Macrotrends aggregation",
+      "staleness_days": 18,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-23",
+      "event": "CME 30-Day Federal Funds futures closed at 95.82 (February 2027, ZQG7), 95.53 (June 2027), 95.455 (September 2027) and 95.44 (November 2027, ZQX7)",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-23",
+      "event": "10-year breakeven inflation rate at 2.34% daily and 2s10s spread at 0.31% daily",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-16",
+      "event": "Kim-Wright term premium daily print 0.986% and fitted 10-year zero-coupon yield 5.107%",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-13",
+      "event": "Term premium daily print of 1.0589%",
+      "staleness_days": 10,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10-22",
+      "event": "10-year TIPS yield 2.64% daily",
+      "staleness_days": 1,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-16",
+      "event": "FOMC raised the federal funds target range by 25 basis points to 3-3/4 to 4 percent by a 12–0 vote; statement said 'Inflation remains elevated'",
+      "staleness_days": 37,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-30",
+      "event": "DGS10 daily value 5.29% per Macrotrends; marketable debt outstanding: Bills $7,117,937 million, Notes $16,277,939 million, Bonds $5,538,540 million",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09",
+      "event": "DGS10 monthly mean 4.989%, at the top of the series' five-year monthly range",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09",
+      "event": "BIS US policy rate (end of period) at 3.875% per year",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09",
+      "event": "Kim-Wright term premium monthly mean 0.96%; fitted 10-year zero-coupon yield 5.003%",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09",
+      "event": "10-year breakeven 2.351%; 5y5y forward inflation expectation 2.34%; 10-year TIPS yield 2.638%; Michigan 1-year inflation expectation 4.6%",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09",
+      "event": "Real-time Sahm rule recession indicator at 0 percentage points, declining for ten consecutive months from November 2025 peak",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09",
+      "event": "Monthly Treasury Statement showed a September 2026 current-month deficit of -26,900,347,102.02 U.S. dollars versus a 197,949,630,362.16 U.S. dollar surplus in September 2025",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09",
+      "event": "Cleveland Fed yield-curve model put probability of recession one year ahead at 11.4 percent, down from 12.3 percent in August and 13.6 percent in July",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09-09",
+      "event": "Treasury buyback schedule last updated",
+      "staleness_days": 44,
+      "is_stale": false
+    },
+    {
+      "date": "2026-08-05",
+      "event": "Treasury refunding statement anticipated maintaining nominal coupon and FRN auction sizes 'for at least the next several quarters'",
+      "staleness_days": 79,
+      "is_stale": false
+    },
+    {
+      "date": "2026-08-03",
+      "event": "Treasury announced expected privately-held net marketable borrowing of $628 billion for October–December 2026, assuming an $850 billion end-of-December cash balance",
+      "staleness_days": 81,
+      "is_stale": false
+    },
+    {
+      "date": "2026-08-30",
+      "event": "30-year TIPS reopening of $8 billion",
+      "staleness_days": 54,
+      "is_stale": false
+    },
+    {
+      "date": "2026-08",
+      "event": "Sahm indicator five-year low of -0.07 percentage points (August 2026)",
+      "staleness_days": 83,
+      "is_stale": false
+    },
+    {
+      "date": "2026-09",
+      "event": "10-year TIPS reopening of $19 billion",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "date": "2026-10",
+      "event": "5-year TIPS new issue of $26 billion",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "date": "2026-07",
+      "event": "DGS10 monthly mean 4.6%; largest monthly deficit in stored five-year series: -432,307,874,621.48 U.S. dollars",
+      "staleness_days": 114,
+      "is_stale": false
+    },
+    {
+      "date": "2026-03-25",
+      "event": "Fed total assets $6.7 trillion, 21% of nominal GDP, up $49 billion over two quarters",
+      "staleness_days": 212,
+      "is_stale": false
+    },
+    {
+      "date": "2025-12-10",
+      "event": "FOMC judged reserves ample and announced reserve-management purchases of shorter-term Treasury securities",
+      "staleness_days": 317,
+      "is_stale": false
+    },
+    {
+      "date": "2025-11",
+      "event": "Real-time Sahm rule recession indicator peaked at 0.43 percentage points",
+      "staleness_days": 356,
+      "is_stale": false
+    },
+    {
+      "date": "2025-10-31",
+      "event": "QT programme ended; it ran from 1 June 2022 and reduced securities holdings by $2.2 trillion",
+      "staleness_days": 357,
+      "is_stale": false
+    },
+    {
+      "date": "2025-10-22",
+      "event": "DGS10 daily 52-week low of 3.97% per Macrotrends",
+      "staleness_days": 366,
+      "is_stale": true
+    },
+    {
+      "date": "2026-10-15",
+      "event": "Richmond Fed weekly Sahm-style (SOS) indicator updated",
+      "staleness_days": 8,
+      "is_stale": false
+    },
+    {
+      "date": "2024-10",
+      "event": "2s10s spread first positive (0.123%) after inversion from July 2022",
+      "staleness_days": 752,
+      "is_stale": true
+    },
+    {
+      "date": "2024-12",
+      "event": "3M10Y spread first positive print after -1.73% trough in May 2023",
+      "staleness_days": 691,
+      "is_stale": true
+    },
+    {
+      "date": "2026-01",
+      "event": "2s10s spread peaked at 0.676%",
+      "staleness_days": 295,
+      "is_stale": false
+    },
+    {
+      "date": "2026-02",
+      "event": "10-year TIPS yield five-year low of 1.825%",
+      "staleness_days": 264,
+      "is_stale": false
+    },
+    {
+      "date": "2026-11-04",
+      "event": "Next quarterly refunding statement expected (date unconfirmed)",
+      "staleness_days": -12,
+      "is_stale": false
+    }
+  ],
+  "quantitative_facts": [
+    {
+      "metric": "10-year Treasury constant maturity yield",
+      "value": "5.13",
+      "series": "FRED DGS10",
+      "unit": "percent",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026-10-21",
+      "geography": "United States",
+      "definition": "Latest stored daily value, investment basis",
+      "source": "Federal Reserve Bank of St. Louis / US Treasury H.15",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 5.13,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of St. Louis / US Treasury H.15",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "metric": "10-year Treasury constant maturity yield, monthly mean",
+      "value": "4.989",
+      "series": "FRED DGS10",
+      "unit": "percent",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Monthly mean; top of five-year monthly range 1.37%–4.989%",
+      "source": "Federal Reserve Bank of St. Louis",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 4.989,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of St. Louis",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "10-year Treasury constant maturity yield, partial-month mean",
+      "value": "5.202",
+      "series": "FRED DGS10",
+      "unit": "percent",
+      "as_of_date": "2026-10",
+      "period_end": "2026-10",
+      "geography": "United States",
+      "definition": "Partial-month October 2026 mean",
+      "source": "Federal Reserve Bank of St. Louis",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 5.202,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of St. Louis",
+      "staleness_days": 22,
+      "is_stale": false
+    },
+    {
+      "metric": "DGS10 52-week range low",
+      "value": "3.97",
+      "series": "Macrotrends aggregation of DGS10",
+      "unit": "percent",
+      "as_of_date": "2025-10-22",
+      "period_end": "2025-10-22",
+      "geography": "United States",
+      "definition": "52-week daily low",
+      "source": "Macrotrends",
+      "value_type": "actual",
+      "source_url": "https://www.macrotrends.net/2016/10-year-treasury-bond-rate-yield-chart",
+      "tier": "S3",
+      "value_num": 3.97,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Macrotrends",
+      "staleness_days": 366,
+      "is_stale": true
+    },
+    {
+      "metric": "DGS10 52-week range high",
+      "value": "5.31",
+      "series": "Macrotrends aggregation of DGS10",
+      "unit": "percent",
+      "as_of_date": "2026-10-05",
+      "period_end": "2026-10-05",
+      "geography": "United States",
+      "definition": "52-week daily high",
+      "source": "Macrotrends",
+      "value_type": "actual",
+      "source_url": "https://www.macrotrends.net/2016/10-year-treasury-bond-rate-yield-chart",
+      "tier": "S3",
+      "value_num": 5.31,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Macrotrends",
+      "staleness_days": 18,
+      "is_stale": false
+    },
+    {
+      "metric": "DGS10 December monthly mean 2024",
+      "value": "4.391",
+      "series": "FRED DGS10",
+      "unit": "percent",
+      "as_of_date": "2024-12",
+      "period_end": "2024-12",
+      "geography": "United States",
+      "definition": "2024 monthly range 3.72% (September) to 4.54% (April)",
+      "source": "Federal Reserve Bank of St. Louis",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 4.391,
+      "year": 2024,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of St. Louis",
+      "staleness_days": 691,
+      "is_stale": true
+    },
+    {
+      "metric": "DGS10 December monthly mean 2025",
+      "value": "4.143",
+      "series": "FRED DGS10",
+      "unit": "percent",
+      "as_of_date": "2025-12",
+      "period_end": "2025-12",
+      "geography": "United States",
+      "definition": "2025 monthly range 4.062% (October) to 4.629% (January)",
+      "source": "Federal Reserve Bank of St. Louis",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 4.143,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of St. Louis",
+      "staleness_days": 326,
+      "is_stale": false
+    },
+    {
+      "metric": "2s10s spread, daily",
+      "value": "0.31",
+      "series": "FRED T10Y2Y",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "United States",
+      "definition": "10-year minus 2-year Treasury constant maturity",
+      "source": "Federal Reserve Bank of St. Louis",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/T10Y2Y",
+      "tier": "S1",
+      "value_num": 0.31,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of St. Louis",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "2s10s spread, monthly mean",
+      "value": "0.338",
+      "series": "FRED T10Y2Y",
+      "unit": "percent",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Down 0.214 pp year over year",
+      "source": "Federal Reserve Bank of St. Louis",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/T10Y2Y",
+      "tier": "S1",
+      "value_num": 0.338,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of St. Louis",
+      "metric_family": "growth rate",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "3M10Y spread, daily",
+      "value": "0.78",
+      "series": "FRED T10Y3M",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "United States",
+      "definition": "10-year minus 3-month Treasury constant maturity",
+      "source": "Federal Reserve Bank of St. Louis",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/T10Y3M",
+      "tier": "S1",
+      "value_num": 0.78,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of St. Louis",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "3M10Y spread, monthly mean",
+      "value": "0.896",
+      "series": "FRED T10Y3M",
+      "unit": "percent",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Up 0.841 pp year over year",
+      "source": "Federal Reserve Bank of St. Louis",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/T10Y3M",
+      "tier": "S1",
+      "value_num": 0.896,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of St. Louis",
+      "metric_family": "growth rate",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "US central bank policy rate, end of period",
+      "value": "3.875",
+      "series": "BIS policy rate",
+      "unit": "percent per year",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Range midpoint; five-year range 0.125% (2021-09) to 5.375% (2023-07)",
+      "source": "BIS",
+      "value_type": "actual",
+      "source_url": "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US",
+      "tier": "S1",
+      "value_num": 3.875,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "BIS",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Federal funds target range upper bound",
+      "value": "4",
+      "series": "FOMC target range",
+      "unit": "percent",
+      "as_of_date": "2026-09-16",
+      "period_end": "2026-09-16",
+      "geography": "United States",
+      "definition": "Raised 25bp to 3-3/4 to 4 percent, 12–0 vote",
+      "source": "Federal Reserve FOMC",
+      "value_type": "actual",
+      "source_url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm",
+      "tier": "S1",
+      "value_num": 4.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve FOMC",
+      "staleness_days": 37,
+      "is_stale": false
+    },
+    {
+      "metric": "Fed funds futures, February 2027 contract",
+      "value": "95.82",
+      "series": "CME ZQG7",
+      "unit": "index points",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "United States",
+      "definition": "Close; implies average effective rate near 4.18% (derived, unconfirmed)",
+      "source": "CME",
+      "value_type": "actual",
+      "source_url": "https://www.cmegroup.com/markets/interest-rates/stirs/30-day-federal-fund.quotes.html",
+      "tier": "S3",
+      "value_num": 95.82,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "CME",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Fed funds futures, November 2027 contract",
+      "value": "95.44",
+      "series": "CME ZQX7",
+      "unit": "index points",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "United States",
+      "definition": "Close; implies about 4.56% (derived, unconfirmed)",
+      "source": "CME",
+      "value_type": "actual",
+      "source_url": "https://www.cmegroup.com/markets/interest-rates/stirs/30-day-federal-fund.quotes.html",
+      "tier": "S3",
+      "value_num": 95.44,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "CME",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "SEP median funds-rate projection, end-2026 and end-2027",
+      "value": "4.25",
+      "series": "September 2026 SEP",
+      "unit": "percent",
+      "as_of_date": "2026-09-16",
+      "period_end": "2027-12-31",
+      "geography": "United States",
+      "definition": "Year-end midpoints of target range; 3.75% at end-2029; 3.0% longer run",
+      "source": "Federal Reserve FOMC SEP",
+      "value_type": "forecast",
+      "source_url": "https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf",
+      "tier": "S1",
+      "value_num": 4.25,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Federal Reserve FOMC SEP",
+      "staleness_days": 37,
+      "is_stale": false
+    },
+    {
+      "metric": "SEP median core PCE inflation, 2026",
+      "value": "3.4",
+      "series": "September 2026 SEP",
+      "unit": "percent",
+      "as_of_date": "2026-09-16",
+      "period_end": "2026-12-31",
+      "geography": "United States",
+      "definition": "2027 median 2.5%, 2028 2.2%, 2029 2.0%; 2027 central tendency 2.3–2.6%",
+      "source": "Federal Reserve FOMC SEP",
+      "value_type": "forecast",
+      "source_url": "https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf",
+      "tier": "S1",
+      "value_num": 3.4,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Federal Reserve FOMC SEP",
+      "staleness_days": 37,
+      "is_stale": false
+    },
+    {
+      "metric": "SEP median unemployment rate, 2026–2029",
+      "value": "4.1",
+      "series": "September 2026 SEP",
+      "unit": "percent",
+      "as_of_date": "2026-09-16",
+      "period_end": "2029-12-31",
+      "geography": "United States",
+      "definition": "Held at 4.1% in each of 2026–29; longer-run median 4.2%",
+      "source": "Federal Reserve FOMC SEP",
+      "value_type": "forecast",
+      "source_url": "https://www.federalreserve.gov/monetarypolicy/fomcprojtabl20260916.htm",
+      "tier": "S1",
+      "value_num": 4.1,
+      "year": 2029,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Federal Reserve FOMC SEP",
+      "staleness_days": 37,
+      "is_stale": false
+    },
+    {
+      "metric": "SEP median real GDP growth, 2026",
+      "value": "2.3",
+      "series": "September 2026 SEP",
+      "unit": "percent",
+      "as_of_date": "2026-09-16",
+      "period_end": "2026-12-31",
+      "geography": "United States",
+      "definition": "Q4/Q4; 2027 2.4%, 2028 2.2%, 2029 2.1%",
+      "source": "Federal Reserve FOMC SEP",
+      "value_type": "forecast",
+      "source_url": "https://www.federalreserve.gov/monetarypolicy/fomcprojtabl20260916.htm",
+      "tier": "S1",
+      "value_num": 2.3,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Federal Reserve FOMC SEP",
+      "metric_family": "growth rate",
+      "staleness_days": 37,
+      "is_stale": false
+    },
+    {
+      "metric": "Fed total assets",
+      "value": "6753604",
+      "series": "FRED WALCL",
+      "unit": "millions of U.S. dollars",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026-10-21",
+      "geography": "United States",
+      "definition": "Wednesday level, less eliminations from consolidation",
+      "source": "Federal Reserve Board via FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/WALCL",
+      "tier": "S1",
+      "value_num": 6753604.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Board via FRED",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "metric": "Fed securities holdings reduction under QT",
+      "value": "2.2",
+      "series": "Fed balance sheet",
+      "unit": "trillion U.S. dollars",
+      "as_of_date": "2025-10-31",
+      "period_end": "2025-10-31",
+      "geography": "United States",
+      "definition": "QT ran 1 June 2022 to 31 October 2025",
+      "source": "Federal Reserve",
+      "value_type": "actual",
+      "source_url": "https://www.federalreserve.gov/monetarypolicy/May-2026-Federal-Reserve-Balance-Sheet-Developments.htm",
+      "tier": "S1",
+      "value_num": 2.2,
+      "year": 2025,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve",
+      "staleness_days": 357,
+      "is_stale": false
+    },
+    {
+      "metric": "Term premium on 10-year zero-coupon bond, monthly mean",
+      "value": "0.96",
+      "series": "FRED THREEFYTP10 (Kim-Wright)",
+      "unit": "percent",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Up 0.499 pp from 0.462% a year earlier; top of five-year range -0.193% to 0.96%",
+      "source": "Federal Reserve Bank of St. Louis",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/THREEFYTP10",
+      "tier": "S1",
+      "value_num": 0.96,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of St. Louis",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "Term premium, daily",
+      "value": "0.986",
+      "series": "FRED THREEFYTP10",
+      "unit": "percent",
+      "as_of_date": "2026-10-16",
+      "period_end": "2026-10-16",
+      "geography": "United States",
+      "definition": "October 2026 partial mean 1.059%",
+      "source": "Federal Reserve Bank of St. Louis",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/THREEFYTP10",
+      "tier": "S1",
+      "value_num": 0.986,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of St. Louis",
+      "staleness_days": 7,
+      "is_stale": false
+    },
+    {
+      "metric": "Fitted 10-year zero-coupon yield, monthly mean",
+      "value": "5.003",
+      "series": "FRED THREEFY10",
+      "unit": "percent",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Up 0.827 pp from 4.177% a year earlier; daily 5.107% on 2026-10-16",
+      "source": "Federal Reserve Bank of St. Louis",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/THREEFY10",
+      "tier": "S1",
+      "value_num": 5.003,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of St. Louis",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "10-year breakeven inflation rate, monthly mean",
+      "value": "2.351",
+      "series": "FRED T10YIE",
+      "unit": "percent",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Daily 2.34% on 2026-10-23; -0.02 pp year over year",
+      "source": "Federal Reserve Bank of St. Louis",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/T10YIE",
+      "tier": "S1",
+      "value_num": 2.351,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of St. Louis",
+      "metric_family": "growth rate",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "5y5y forward inflation expectation, monthly mean",
+      "value": "2.34",
+      "series": "FRED T5YIFR",
+      "unit": "percent",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Daily 2.2% on 2026-10-23; five-year range 2.05%–2.46%",
+      "source": "Federal Reserve Bank of St. Louis",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/T5YIFR",
+      "tier": "S1",
+      "value_num": 2.34,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of St. Louis",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "10-year TIPS yield, monthly mean",
+      "value": "2.638",
+      "series": "FRED DFII10",
+      "unit": "percent",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Daily 2.64% on 2026-10-22; five-year range 1.825%–2.638%",
+      "source": "Federal Reserve Bank of St. Louis",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DFII10",
+      "tier": "S1",
+      "value_num": 2.638,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of St. Louis",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "Michigan 1-year inflation expectation",
+      "value": "4.6",
+      "series": "FRED MICH",
+      "unit": "percent",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Household 1-year median; five-year range 2.6%–6.6%",
+      "source": "University of Michigan via FRED",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/MICH",
+      "tier": "S1",
+      "value_num": 4.6,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "University of Michigan via FRED",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "CBO FY2026 deficit projection",
+      "value": "1.9",
+      "series": "CBO February 2026 baseline",
+      "unit": "trillion U.S. dollars",
+      "as_of_date": "2026-02",
+      "period_end": "2026-09-30",
+      "geography": "United States",
+      "definition": "5.8 percent of GDP; deficits average $2.4 trillion per year 2027–2036 (6.1 percent of GDP)",
+      "source": "Congressional Budget Office",
+      "value_type": "forecast",
+      "source_url": "https://www.cbo.gov/publication/62105",
+      "tier": "S1",
+      "value_num": 1.9,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Congressional Budget Office",
+      "staleness_days": 264,
+      "is_stale": false
+    },
+    {
+      "metric": "CBO 2036 deficit projection",
+      "value": "3.1",
+      "series": "CBO February 2026 baseline",
+      "unit": "trillion U.S. dollars",
+      "as_of_date": "2026-02",
+      "period_end": "2036-09-30",
+      "geography": "United States",
+      "definition": "6.7 percent of GDP; debt held by the public rises from 101% of GDP (2026) to 120% (2036)",
+      "source": "Congressional Budget Office",
+      "value_type": "forecast",
+      "source_url": "https://www.cbo.gov/publication/62105",
+      "tier": "S1",
+      "value_num": 3.1,
+      "year": 2036,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Congressional Budget Office",
+      "staleness_days": 264,
+      "is_stale": false
+    },
+    {
+      "metric": "CBO estimated deficit effect of 2025 reconciliation act",
+      "value": "4.7",
+      "series": "CBO February 2026 baseline",
+      "unit": "trillion U.S. dollars",
+      "as_of_date": "2026-02",
+      "period_end": "2035-12-31",
+      "geography": "United States",
+      "definition": "Raises deficits over 2026–2035; tariffs reduce them by an estimated $3.0 trillion; immigration actions add $0.5 trillion",
+      "source": "Congressional Budget Office",
+      "value_type": "estimate",
+      "source_url": "https://www.cbo.gov/publication/62105",
+      "tier": "S1",
+      "value_num": 4.7,
+      "year": 2035,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Congressional Budget Office",
+      "staleness_days": 264,
+      "is_stale": false
+    },
+    {
+      "metric": "Treasury Q4 2026 net marketable borrowing estimate",
+      "value": "628",
+      "series": "Treasury marketable borrowing estimates",
+      "unit": "billion U.S. dollars",
+      "as_of_date": "2026-08-03",
+      "period_end": "2026-12-31",
+      "geography": "United States",
+      "definition": "Privately-held, October–December 2026; assumes $850 billion end-of-December cash balance",
+      "source": "US Department of the Treasury",
+      "value_type": "forecast",
+      "source_url": "https://home.treasury.gov/news/press-releases/sb0584",
+      "tier": "S1",
+      "value_num": 628.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "US Department of the Treasury",
+      "staleness_days": 81,
+      "is_stale": false
+    },
+    {
+      "metric": "Treasury Q3 2026 net marketable borrowing estimate",
+      "value": "739",
+      "series": "Treasury marketable borrowing estimates",
+      "unit": "billion U.S. dollars",
+      "as_of_date": "2026-08-03",
+      "period_end": "2026-09-30",
+      "geography": "United States",
+      "definition": "July–September 2026; $68 billion above the May estimate",
+      "source": "US Department of the Treasury",
+      "value_type": "forecast",
+      "source_url": "https://home.treasury.gov/news/press-releases/sb0584",
+      "tier": "S1",
+      "value_num": 739.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "US Department of the Treasury",
+      "staleness_days": 81,
+      "is_stale": false
+    },
+    {
+      "metric": "Actual April–June 2026 net marketable borrowing",
+      "value": "190",
+      "series": "Treasury marketable borrowing estimates",
+      "unit": "billion U.S. dollars",
+      "as_of_date": "2026-08-03",
+      "period_end": "2026-06-30",
+      "geography": "United States",
+      "definition": "Privately-held net marketable borrowing",
+      "source": "US Department of the Treasury",
+      "value_type": "actual",
+      "source_url": "https://home.treasury.gov/news/press-releases/sb0584",
+      "tier": "S1",
+      "value_num": 190.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "US Department of the Treasury",
+      "staleness_days": 81,
+      "is_stale": false
+    },
+    {
+      "metric": "Marketable debt outstanding, Bills",
+      "value": "7117937",
+      "series": "Monthly Statement of the Public Debt",
+      "unit": "millions of U.S. dollars",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09-30",
+      "geography": "United States",
+      "definition": "Notes $16,277,939 million; Bonds $5,538,540 million; bills ≈24.6% of bills+notes+bonds (derived)",
+      "source": "US Department of the Treasury",
+      "value_type": "actual",
+      "source_url": "https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/",
+      "tier": "S1",
+      "value_num": 7117937.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "US Department of the Treasury",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Monthly Treasury Statement deficit, September 2026",
+      "value": "-26900347102.02",
+      "series": "FRED Monthly Treasury Statement",
+      "unit": "U.S. dollars",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Current month; September 2025 surplus was 197,949,630,362.16 U.S. dollars",
+      "source": "US Treasury via FRED",
+      "value_type": "actual",
+      "source_url": "https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/",
+      "tier": "S1",
+      "value_num": -26900347102.02,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "US Treasury via FRED",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Largest monthly deficit in stored five-year series",
+      "value": "-432307874621.48",
+      "series": "FRED Monthly Treasury Statement",
+      "unit": "U.S. dollars",
+      "as_of_date": "2026-07-31",
+      "period_end": "2026-07",
+      "geography": "United States",
+      "definition": "Largest monthly deficit in the stored five-year series",
+      "source": "US Treasury via FRED",
+      "value_type": "actual",
+      "source_url": "https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/",
+      "tier": "S1",
+      "value_num": -432307874621.48,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "US Treasury via FRED",
+      "staleness_days": 84,
+      "is_stale": false
+    },
+    {
+      "metric": "Real-time Sahm rule recession indicator",
+      "value": "0",
+      "series": "FRED SAHMREALTIME",
+      "unit": "percentage points",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Down from 0.23 pp a year earlier; five-year range -0.07 to 0.43 pp",
+      "source": "Federal Reserve Bank of St. Louis",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/SAHMREALTIME",
+      "tier": "S1",
+      "value_num": 0.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of St. Louis",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Cleveland Fed probability of recession one year ahead",
+      "value": "11.4",
+      "series": "Cleveland Fed yield-curve model",
+      "unit": "percent",
+      "as_of_date": "2026-09",
+      "period_end": "2027-09",
+      "geography": "United States",
+      "definition": "Down from 12.3% in August and 13.6% in July 2026",
+      "source": "Federal Reserve Bank of Cleveland",
+      "value_type": "forecast",
+      "source_url": "https://www.clevelandfed.org/indicators-and-data/yield-curve-and-predicted-gdp-growth",
+      "tier": "S3",
+      "value_num": 11.4,
+      "year": 2027,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of Cleveland",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "NY Fed probit recession probability, 2026 year average",
+      "value": "0.28",
+      "series": "NY Fed yield-curve recession probability",
+      "unit": "percent",
+      "as_of_date": "2026",
+      "period_end": "2026-12-31",
+      "geography": "United States",
+      "definition": "Twelve-months-ahead, year-average; not official forecasts",
+      "source": "Federal Reserve Bank of New York",
+      "value_type": "forecast",
+      "source_url": "https://www.newyorkfed.org/medialibrary/media/research/capital_markets/prob_rec.pdf",
+      "tier": "S3",
+      "value_num": 0.28,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Federal Reserve Bank of New York",
+      "staleness_days": 295,
+      "is_stale": false
+    },
+    {
+      "metric": "Non-overlapping 14-month windows with |Δ|>0.5 pp",
+      "value": "13 of 16",
+      "series": "FRED DGS10 monthly means",
+      "unit": "count",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Window 2006-11 to 2026-09; ~81%, Laplace ≈78%",
+      "source": "Calculation on FRED DGS10",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 13.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Calculation on FRED DGS10",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "Non-overlapping 14-month windows with |Δ|>1.0 pp",
+      "value": "3 of 16",
+      "series": "FRED DGS10 monthly means",
+      "unit": "count",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Windows 2011-07, 2018-06, 2021-12; ~19%",
+      "source": "Calculation on FRED DGS10",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 3.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Calculation on FRED DGS10",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "Near-5% starts (4.5–5.5% band) with |Δ|>0.5 pp",
+      "value": "1 of 4",
+      "series": "FRED DGS10 monthly means",
+      "unit": "count",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Starts 2006-11, 2023-10, 2024-04, 2025-01; the exceedance was -0.86 pp from 2006-11",
+      "source": "Calculation on FRED DGS10",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 1.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Calculation on FRED DGS10",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "Near-5% starts (4.5–5.5% band) with |Δ|>1.0 pp",
+      "value": "0 of 4",
+      "series": "FRED DGS10 monthly means",
+      "unit": "count",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "No upward >1.0 pp move from a near-5% start in the stored window",
+      "source": "Calculation on FRED DGS10",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 0.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Calculation on FRED DGS10",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "Largest 14-month moves in stored window",
+      "value": "+1.90 and -1.53",
+      "series": "FRED DGS10 monthly means",
+      "unit": "percentage points",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "+1.90 pp (2022-01→2023-03) and -1.53 pp (2011-02→2012-04), overlapping windows",
+      "source": "Calculation on FRED DGS10",
+      "value_type": "actual",
+      "source_url": "https://fred.stlouisfed.org/series/DGS10",
+      "tier": "S1",
+      "value_num": 1.9,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Calculation on FRED DGS10",
+      "staleness_days": 52,
+      "is_stale": false
+    },
+    {
+      "metric": "ACM term premium (mirror)",
+      "value": "0.72–0.73",
+      "series": "NY Fed ACM via MacroMicro mirror",
+      "unit": "percent",
+      "as_of_date": "2026-10-21",
+      "period_end": "2026-10-21",
+      "geography": "United States",
+      "definition": "Mirror of NY Fed series; FRED reports ACMTP10 series does not exist; secondary site cites 0.82%",
+      "source": "MacroMicro (mirror of NY Fed)",
+      "value_type": "estimate",
+      "source_url": "https://en.macromicro.me/charts/45452/us-10-treasury-term-premium",
+      "tier": "S3",
+      "value_num": 0.725,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "MacroMicro (mirror of NY Fed)",
+      "staleness_days": 2,
+      "is_stale": false
+    },
+    {
+      "metric": "FedWatch near-meeting probabilities",
+      "value": "0.0 / 90.6 / 9.4",
+      "series": "CME FedWatch",
+      "unit": "percent",
+      "as_of_date": "2026-10-23",
+      "period_end": "2026-10-23",
+      "geography": "United States",
+      "definition": "Risk-neutral probabilities for an unidentified upcoming meeting",
+      "source": "CME FedWatch",
+      "value_type": "actual",
+      "source_url": "https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html",
+      "tier": "S3",
+      "value_num": 0.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "CME FedWatch",
+      "staleness_days": 0,
+      "is_stale": false
+    },
+    {
+      "metric": "Futures-implied probability of no funds-rate change through December 2026",
+      "value": "78.2",
+      "series": "Schwab commentary citing futures",
+      "unit": "percent",
+      "period_end": "2026-12-31",
+      "geography": "United States",
+      "definition": "Undated Schwab commentary; quoted 3.50–3.75% range predates the September 2026 hike",
+      "source": "Schwab",
+      "value_type": "estimate",
+      "source_url": "https://www.schwab.com/learn/story/why-fed-forecasting-tools-are-worth-watching",
+      "tier": "S3",
+      "value_num": 78.2,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Schwab"
+    },
+    {
+      "metric": "30-year TIPS reopening size",
+      "value": "8",
+      "series": "Treasury refunding",
+      "unit": "billion U.S. dollars",
+      "as_of_date": "2026-08-30",
+      "period_end": "2026-08",
+      "geography": "United States",
+      "definition": "August 2026 reopening; TIPS sizes unchanged",
+      "source": "US Department of the Treasury",
+      "value_type": "actual",
+      "source_url": "https://home.treasury.gov/news/press-releases/sb0590",
+      "tier": "S1",
+      "value_num": 8.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "US Department of the Treasury",
+      "staleness_days": 54,
+      "is_stale": false
+    },
+    {
+      "metric": "10-year TIPS reopening size",
+      "value": "19",
+      "series": "Treasury refunding",
+      "unit": "billion U.S. dollars",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "September 2026 reopening",
+      "source": "US Department of the Treasury",
+      "value_type": "actual",
+      "source_url": "https://home.treasury.gov/news/press-releases/sb0590",
+      "tier": "S1",
+      "value_num": 19.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "US Department of the Treasury",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "5-year TIPS new issue size",
+      "value": "26",
+      "series": "Treasury refunding",
+      "unit": "billion U.S. dollars",
+      "as_of_date": "2026-10-31",
+      "period_end": "2026-10",
+      "geography": "United States",
+      "definition": "October 2026 new issue",
+      "source": "US Department of the Treasury",
+      "value_type": "actual",
+      "source_url": "https://home.treasury.gov/news/press-releases/sb0590",
+      "tier": "S1",
+      "value_num": 26.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "US Department of the Treasury",
+      "staleness_days": -8,
+      "is_stale": false
+    },
+    {
+      "metric": "Bills share of marketable debt",
+      "value": "~22–25",
+      "series": "Reuters / TBAC",
+      "unit": "percent",
+      "as_of_date": "2026-09-30",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Reuters reports ~22% in mid-2026; TBAC 2024 analysis put bills near 25%, above ~23% historical average",
+      "source": "Reuters; TBAC",
+      "value_type": "estimate",
+      "source_url": "https://www.reuters.com/legal/transactional/us-treasury-bill-issuance-grows-heightens-long-term-risk-2026-07-23/",
+      "tier": "S2",
+      "value_num": 23.5,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Reuters; TBAC",
+      "metric_family": "market share",
+      "staleness_days": 23,
+      "is_stale": false
+    },
+    {
+      "metric": "Fed total assets as share of nominal GDP",
+      "value": "21",
+      "series": "Fed balance sheet reporting",
+      "unit": "percent",
+      "as_of_date": "2026-03-25",
+      "period_end": "2026-03-25",
+      "geography": "United States",
+      "definition": "Total assets $6.7 trillion; up $49 billion over two quarters; securities held outright up $71 billion",
+      "source": "Federal Reserve",
+      "value_type": "actual",
+      "source_url": "https://www.federalreserve.gov/monetarypolicy/May-2026-Federal-Reserve-Balance-Sheet-Developments.htm",
+      "tier": "S1",
+      "value_num": 21.0,
+      "year": 2026,
+      "value_kind": "actual",
+      "region": "United States",
+      "analyst": "Federal Reserve",
+      "metric_family": "market share",
+      "staleness_days": 212,
+      "is_stale": false
+    },
+    {
+      "metric": "Expected-rate component of fitted 10-year yield",
+      "value": "≈4.0",
+      "series": "Derived from THREEFY10 and THREEFYTP10",
+      "unit": "percentage points",
+      "as_of_date": "2026-09",
+      "period_end": "2026-09",
+      "geography": "United States",
+      "definition": "Derived: 5.003 − 0.96; not a published figure",
+      "source": "Derived by report author",
+      "value_type": "estimate",
+      "source_url": "https://fred.stlouisfed.org/series/THREEFYTP10",
+      "tier": "S1",
+      "value_num": 4.0,
+      "year": 2026,
+      "value_kind": "forecast",
+      "region": "United States",
+      "analyst": "Derived by report author",
+      "staleness_days": 52,
+      "is_stale": false
+    }
+  ],
+  "contested_claims": [
+    {
+      "claim": "SEP end-2027 median funds-rate projection",
+      "positions": [
+        {
+          "stance": "4.25% at end-2026, end-2027 and end-2028 per the official September 2026 SEP",
+          "sources": [
+            "https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "4.1% end-2026 and end-2027 medians, one further 25bp step then a hold",
+          "sources": [
+            "https://am.jpmorgan.com/us/en/asset-management/adv/insights/portfolio-insights/fixed-income/fixed-income-perspectives/fomc-statement-september-2026/",
+            "https://fred.stlouisfed.org/blog/2026/09/fomc-summary-of-economic-projections-september-2026"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Snippet summaries likely quote the same path on a different convention (rounding or averaging); the report resolves in favour of the official SEP document"
+    },
+    {
+      "claim": "Longer-run funds rate median",
+      "positions": [
+        {
+          "stance": "3.0% per official SEP",
+          "sources": [
+            "https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "3.2% per J.P. Morgan Asset Management",
+          "sources": [
+            "https://am.jpmorgan.com/us/en/asset-management/adv/insights/portfolio-insights/fixed-income/fixed-income-perspectives/fomc-statement-september-2026/"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "resolved",
+      "why_they_differ": "Different vintage or rounding convention; official SEP print governs"
+    },
+    {
+      "claim": "Current federal funds target range in late October 2026",
+      "positions": [
+        {
+          "stance": "3-3/4 to 4 percent after the September 16, 2026 hike (BIS midpoint 3.875%)",
+          "sources": [
+            "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm",
+            "https://data.bis.org/topics/CBPOL/BIS,WS_CBPOL,1.0/M.US"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "3.50%–3.75% with 78.2% probability of no change through December 2026",
+          "sources": [
+            "https://www.schwab.com/learn/story/why-fed-forecasting-tools-are-worth-watching"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "The Schwab commentary is undated and its quoted range predates the September 2026 hike; the report says the evidence does not resolve the difference"
+    },
+    {
+      "claim": "Level of the NY Fed ACM 10-year term premium",
+      "positions": [
+        {
+          "stance": "FRED reports the ACMTP10 series does not exist",
+          "sources": [
+            "https://en.macromicro.me/charts/45452/us-10-treasury-term-premium"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "0.72–0.73% on 2026-10-21 via MacroMicro mirror of the NY Fed series",
+          "sources": [
+            "https://en.macromicro.me/charts/45452/us-10-treasury-term-premium"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "0.82% cited by a secondary site",
+          "sources": [
+            "https://eco3min.fr/en/us-term-premium-dataset/"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Kim-Wright term premium 0.96% (2026-09 monthly mean)",
+          "sources": [
+            "https://fred.stlouisfed.org/series/THREEFYTP10"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Different factor models, vintages and monthly-versus-daily quoting conventions; decision-relevant because the premium level determines the implied expected-rate component"
+    },
+    {
+      "claim": "NY Fed 2027 average twelve-months-ahead recession probability",
+      "positions": [
+        {
+          "stance": "A 2027 average of 0.15 appears in one capture of the table",
+          "sources": [
+            "https://www.newyorkfed.org/medialibrary/media/research/capital_markets/Prob_Rec.pdf"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Could not be confirmed; only the 2026 year-average value of 0.28 percent is reliably reported",
+          "sources": [
+            "https://www.newyorkfed.org/medialibrary/media/research/capital_markets/prob_rec.pdf"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Single unconfirmed capture of the NY Fed table versus a snippet-reported 2026 figure"
+    },
+    {
+      "claim": "Bills share of outstanding marketable debt",
+      "positions": [
+        {
+          "stance": "~22 percent of outstanding marketable debt in mid-2026",
+          "sources": [
+            "https://www.reuters.com/legal/transactional/us-treasury-bill-issuance-grows-heightens-long-term-risk-2026-07-23/"
+          ],
+          "tier": "S2"
+        },
+        {
+          "stance": "Near 25 percent of total Treasury debt in TBAC's 2024 analysis, the highest on record",
+          "sources": [
+            "https://home.treasury.gov/system/files/221/TBACCharge1Q32024.pdf"
+          ],
+          "tier": "S1"
+        },
+        {
+          "stance": "Roughly 24.6 percent of bills-plus-notes-plus-bonds derived from September 2026 outstanding amounts",
+          "sources": [
+            "https://fiscaldata.treasury.gov/datasets/monthly-statement-public-debt/"
+          ],
+          "tier": "S1"
+        }
+      ],
+      "status": "contested",
+      "why_they_differ": "Definitional spread: share of outstanding marketable debt versus total Treasury debt versus bills+notes+bonds excluding FRNs and TIPS; the report treats 22–25% as a band"
+    },
+    {
+      "claim": "Richmond Fed weekly Sahm-style (SOS) indicator value",
+      "positions": [
+        {
+          "stance": "Updated on October 15, 2026, but its current value was not retrieved",
+          "sources": [
+            "https://www.richmondfed.org/research/national_economy/sos_recession_indicator"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Only the update date is known; the value is unconfirmed in the captured evidence"
+    },
+    {
+      "claim": "Market-implied average effective funds rate in 2027",
+      "positions": [
+        {
+          "stance": "Futures imply about 4.18% in February 2027 rising to about 4.56% by November 2027",
+          "sources": [
+            "https://www.cmegroup.com/markets/interest-rates/stirs/30-day-federal-fund.quotes.html"
+          ],
+          "tier": "S3"
+        },
+        {
+          "stance": "Described by the report itself as a derived, unconfirmed reading without day-count adjustment; December 2027 contract price not captured",
+          "sources": [
+            "https://www.cmegroup.com/markets/interest-rates/stirs/30-day-federal-fund.quotes.html"
+          ],
+          "tier": "S3"
+        }
+      ],
+      "status": "single-origin",
+      "why_they_differ": "Derived arithmetic (100 minus price) on quoted futures with thin back-contract liquidity; the wedge versus the SEP path is unresolved"
+    }
+  ],
+  "forecast_inputs": {
+    "scenarios": [
+      {
+        "name": "Higher-for-longer plateau",
+        "probability": 0.4,
+        "narrative": "Sticky inflation keeps the funds rate near 4% and term premium near 1%, holding DGS10 at end-2027 between 4.75% and 5.50%; prior: ~1 sigma (~1pp) 14-month band around a ~5.1% spot."
+      },
+      {
+        "name": "Bond bear steepening",
+        "probability": 0.2,
+        "narrative": "Deficit and issuance pressure plus soft foreign demand push term premium above 1.5% and DGS10 above 5.50% even as the Fed holds or eases little."
+      },
+      {
+        "name": "Disinflation glide",
+        "probability": 0.25,
+        "narrative": "Core inflation returns toward 2%, the Fed cuts toward its long-run dot, and DGS10 settles between 4.00% and 4.75%."
+      },
+      {
+        "name": "Recession flight to quality",
+        "probability": 0.15,
+        "narrative": "A 2027 recession triggers rapid cuts and a bull flattening that drives DGS10 below 4.00%; prior: US recession began in roughly 1 of 6.5 years since 1948."
+      }
+    ],
+    "base_rates": [
+      {
+        "reference_class": "All non-overlapping 14-month windows in stored DGS10 monthly means, 2006-11 to 2026-09, |Δ| > 0.5 pp",
+        "outcome_frequency": "13 of 16 (~81%; Laplace ≈78%)",
+        "basis": "FRED DGS10 monthly series [S1]"
+      },
+      {
+        "reference_class": "All non-overlapping 14-month windows in stored DGS10 monthly means, 2006-11 to 2026-09, |Δ| > 1.0 pp",
+        "outcome_frequency": "3 of 16 (~19%; Laplace ≈22%)",
+        "basis": "FRED DGS10 monthly series [S1]"
+      },
+      {
+        "reference_class": "14-month windows with start monthly mean in the 4.5–5.5% band, |Δ| > 0.5 pp",
+        "outcome_frequency": "1 of 4 (Laplace ≈33%)",
+        "basis": "FRED DGS10 monthly series [S1]"
+      },
+      {
+        "reference_class": "14-month windows with start monthly mean in the 4.5–5.5% band, |Δ| > 1.0 pp",
+        "outcome_frequency": "0 of 4 (Laplace ≈17%)",
+        "basis": "FRED DGS10 monthly series [S1]"
+      },
+      {
+        "reference_class": "Starts ≥ 4.25%, |Δ| > 1.0 pp, 14-month windows",
+        "outcome_frequency": "0 of 3 (Laplace 20%)",
+        "basis": "FRED DGS10 monthly series [S1]"
+      },
+      {
+        "reference_class": "US recession onset, 1948–present",
+        "outcome_frequency": "a US recession began in roughly 1 of 6.5 years since 1948",
+        "basis": "Report's canonical scenario frame prior [S1]"
+      }
+    ],
+    "drivers": [
+      {
+        "variable": "Term premium (Kim-Wright THREEFYTP10)",
+        "direction": "up",
+        "why_it_matters": "Roughly three-fifths of the year's 0.827pp rise in the fitted 10-year yield was compensation, and it sits at its five-year high [S6][S7]"
+      },
+      {
+        "variable": "Federal funds rate path (SEP median vs futures)",
+        "direction": "up",
+        "why_it_matters": "SEP medians hold the funds rate at 4.25% at end-2026, end-2027 and end-2028 before 3.75% in 2029, anchoring the expected-rate component [S21]"
+      },
+      {
+        "variable": "Federal deficit and Treasury coupon issuance",
+        "direction": "up",
+        "why_it_matters": "CBO projects deficits averaging $2.4 trillion a year (6.1 percent of GDP) over 2027–2036, pressuring term premium unless absorbed in bills [S11][S27]"
+      },
+      {
+        "variable": "Core PCE inflation",
+        "direction": "up",
+        "why_it_matters": "Core PCE median of 3.4% for 2026 glides to 2.5% (2027), 2.2% (2028), 2.0% (2029), setting the reaction function [S21][S28]"
+      },
+      {
+        "variable": "Foreign official demand (Japan, China)",
+        "direction": "up",
+        "why_it_matters": "Runs through the term premium; a persistent marginal-buyer problem produces the steady premium climb observed (0.601% January to 0.96% September 2026) [S6]"
+      },
+      {
+        "variable": "Labor market / recession indicators",
+        "direction": "down",
+        "why_it_matters": "A Sahm trigger or rising NY Fed probit would drive rapid cuts and bull flattening of the 0.31% 2s10s [S13][S2][S3]"
+      },
+      {
+        "variable": "Market-based inflation expectations (10-year breakeven, 5y5y forward)",
+        "direction": "up",
+        "why_it_matters": "Anchored near target (2.34% breakeven, 2.2% 5y5y on 2026-10-23), so the swing factor is compensation rather than expected inflation [S4][S5]"
+      },
+      {
+        "variable": "Fed balance-sheet stance",
+        "direction": "down",
+        "why_it_matters": "QT ended 31 October 2025; reserve-management purchases of shorter-term Treasuries since December 2025 keep the balance sheet flat-to-growing [S29][S17]"
+      }
+    ],
+    "risks": [
+      {
+        "event": "US recession within one year (Cleveland Fed yield-curve model)",
+        "probability": "11.4%",
+        "per": "September 2026",
+        "source": "Yield Curve and Predicted GDP Growth [S24]",
+        "source_url": "https://www.clevelandfed.org/indicators-and-data/yield-curve-and-predicted-gdp-growth",
+        "tier": "S3",
+        "effects": [],
+        "affects": [
+          "Federal Reserve / FOMC"
+        ],
+        "recurring": true
+      },
+      {
+        "event": "US recession, NY Fed yield-curve probit model signal",
+        "probability": "0.28%",
+        "per": "2026 year-average twelve-months-ahead",
+        "source": "Probability of US Recession Predicted by Treasury Spread [S37]",
+        "source_url": "https://www.newyorkfed.org/medialibrary/media/research/capital_markets/prob_rec.pdf",
+        "tier": "S3",
+        "effects": [],
+        "affects": [
+          "Federal Reserve / FOMC"
+        ],
+        "recurring": true
+      }
+    ],
+    "indicators": [
+      {
+        "indicator": "Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis (fred:DGS10)",
+        "series": "fred:DGS10",
+        "latest_value": 4.989047619047619,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S1"
+      },
+      {
+        "indicator": "10-Year Treasury Constant Maturity Minus 2-Year Treasury Constant Maturity — United States (fred:T10Y2Y)",
+        "series": "fred:T10Y2Y",
+        "latest_value": 0.3376190476190476,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S2"
+      },
+      {
+        "indicator": "10-Year Treasury Constant Maturity Minus 3-Month Treasury Constant Maturity — United States (fred:T10Y3M)",
+        "series": "fred:T10Y3M",
+        "latest_value": 0.8961904761904762,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S3"
+      },
+      {
+        "indicator": "10-Year Breakeven Inflation Rate — United States (fred:T10YIE)",
+        "series": "fred:T10YIE",
+        "latest_value": 2.3509523809523807,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S4"
+      },
+      {
+        "indicator": "5-Year, 5-Year Forward Inflation Expectation Rate — United States (fred:T5YIFR)",
+        "series": "fred:T5YIFR",
+        "latest_value": 2.3395238095238096,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S5"
+      },
+      {
+        "indicator": "Term Premium on a 10 Year Zero Coupon Bond — United States (fred:THREEFYTP10)",
+        "series": "fred:THREEFYTP10",
+        "latest_value": 0.9601285714285714,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S6"
+      },
+      {
+        "indicator": "Fitted Yield on a 10 Year Zero Coupon Bond — United States (fred:THREEFY10)",
+        "series": "fred:THREEFY10",
+        "latest_value": 5.003452380952381,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S7"
+      },
+      {
+        "indicator": "Central bank policy rates - United States - Monthly - End of period (bis:WS_CBPOL/M.US)",
+        "series": "bis:WS_CBPOL/M.US",
+        "latest_value": 3.875,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Per cent per year",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S8"
+      },
+      {
+        "indicator": "University of Michigan: Inflation Expectation (fred:MICH)",
+        "series": "fred:MICH",
+        "latest_value": 4.6,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S12"
+      },
+      {
+        "indicator": "Real-time Sahm Rule Recession Indicator — United States (fred:SAHMREALTIME)",
+        "series": "fred:SAHMREALTIME",
+        "latest_value": 0.0,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percentage Points",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S13"
+      },
+      {
+        "indicator": "Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis, Inflation-Indexed (fred:DFII10)",
+        "series": "fred:DFII10",
+        "latest_value": 2.638095238095238,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "Percent",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S16"
+      },
+      {
+        "indicator": "Assets: Total Assets: Total Assets (Less Eliminations from Consolidation): Wednesday Level — United States (fred:WALCL)",
+        "series": "fred:WALCL",
+        "latest_value": 6753604.0,
+        "latest_date": "2026-10-21",
+        "latest_period": "2026-10-21",
+        "status": "observed",
+        "units": "Millions of U.S. Dollars",
+        "frequency": "W",
+        "date_or_trigger": "next weekly release after 2026-10-21",
+        "source_ref": "S17"
+      },
+      {
+        "indicator": "Monthly Treasury Statement: Surplus (+) or Deficit (-) (current month) — United States (usgov:treasury/mts_deficit)",
+        "series": "usgov:treasury/mts_deficit",
+        "latest_value": -26900347102.02,
+        "latest_date": "2026-09-30",
+        "latest_period": "2026-09",
+        "status": "observed",
+        "units": "U.S. dollars",
+        "frequency": "M",
+        "date_or_trigger": "next monthly release after 2026-09",
+        "source_ref": "S18"
+      }
+    ]
+  }
+}

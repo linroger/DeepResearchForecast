@@ -1,0 +1,2067 @@
+{
+ "nodes": [
+  {
+   "id": "fe9d8198-b092-47da-af3e-4d139968a892",
+   "name": "3M10Y利差",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "克利夫兰联储曲线模型2026年9月基于3M10Y利差给出衰退概率读数为11.4%，且其记录显示2022年末至2024年末的收益率曲线倒挂是历史上第三次显著的假阳性（未在一年内伴随衰退）\n纽约联储Probit模型基于10年-3个月利差（3M10Y利差）生成衰退概率预测\n3M10Y利差T10Y3M为0.896%(2026-09),其持续陡峭是10年期收益率高位企稳情景的形态确认信号"
+  },
+  {
+   "id": "fd8f8a71-29e6-4251-8361-7f82144a81ed",
+   "name": "美国劳工统计局（BLS）",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "其数据决定通胀是否沿SEP的2027年PCE 2.4%路径回落"
+  },
+  {
+   "id": "fbbffa96-a76d-4bad-8a63-0293095858ea",
+   "name": "BPC",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "BPC估计若美国国会不行动,将于2027年冬末至仲夏间再度触及债务上限(2025年7月法案已将上限提高5.0万亿美元至41.1万亿美元),非常规措施与现金约可再维持6–9个月(X日或在2027年底至2028年)。\nThe Bipartisan Policy Center published 'When Will We Reach the Debt Limit (Again)?' analyzing debt limit constraints affecting Treasury risk pricing."
+  },
+  {
+   "id": "fade10cd-60d4-4c67-a827-861f06913b01",
+   "name": "Bank for International Settlements",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The Bank for International Settlements provides the BIS CBPOL series, Central bank policy rates for the United States, Monthly, End of period (tier 1, fetched).\nThe Bank for International Settlements reports the U.S. central bank policy rate (monthly, end of period) at 3.875% for 2026-09."
+  },
+  {
+   "id": "f86b3092-a1eb-451d-994e-04f66b3a4f05",
+   "name": "Holland & Knight",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Holland & Knight published analysis (October 2026) on Congress facing converging year-end deadlines beyond the midterms, including the CR funding government only through 2026-12-11"
+  },
+  {
+   "id": "f71cb1cb-aad2-45bb-91d5-922523b8419d",
+   "name": "Brian Smith",
+   "labels": [
+    "Person"
+   ],
+   "summary": "Brian Smith serves as Deputy Assistant Secretary for Federal Finance at the U.S. Department of the Treasury and issued the Quarterly Refunding Statement."
+  },
+  {
+   "id": "f635aa3b-e896-462b-8554-0bae56c04eee",
+   "name": "平滑衰退概率序列",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "高盛于2026年6月22日将美国未来12个月衰退概率从25%下调至15%，理由是伊朗和平协议、能源价格下跌与劳动力市场改善\n摩根大通全球研究在2026年展望中给出2026年美国及全球衰退概率为35%\n摩根大通全球研究在2026年展望中对2026年美国及全球衰退概率给出35%，并预计通胀粘性持续\n纽约联储DSGE模型（2026年3月）预测未来四个季度衰退概率为35.8%（四季增长低于-1%的定义；数字未核实）\n纽约联储曲线Probit模型（数据至2026年9月）对2027年年度均值衰退概率给出0.15的读数（模型外推；数字未核实）\n克利夫兰联储曲线模型2026年9月30日对未来一年的衰退概率读数为11.4%（数字未核实）\nPolymarket预测市场“2026年底前美国衰退”合约当前人群概率为9%\n平滑美国衰退概率2026年8月为0.62%，处于近5年区间（0.02%–2.32%）下沿附近；若升破2.32%（2024-01的5年高点），将增强收益率“回落走低”情景\n平滑衰退概率RECPROUSM156N为0.62%(2026-08),五年高点2.32%(2024-01),若升破2.32%则构成衰退兑现信号、指向10年期收益率回落走低\nFRED publishes the Smoothed U.S. Recession Probabilities series (RECPROUSM15"
+  },
+  {
+   "id": "f5606ce5-8d34-44d5-a2e3-3a7e85974cde",
+   "name": "BondSavvy",
+   "labels": [
+    "ForecastSource"
+   ],
+   "summary": "BondSavvy解读2026年9月SEP点阵图称18个点中绝大多数参与者预计2027年底目标区间为4.00%–4.25%或4.25%–4.50%、3位预计降息,且较3月点阵图(当时预计2026–2027年合计降息50bp)大幅转鹰\nBondSavvy解读9月SEP点阵图称多数参与者预计2027年底目标区间落在4.00%–4.50%"
+  },
+  {
+   "id": "f51f00aa-c0ea-4c26-9f2f-eb9aca233908",
+   "name": "美国央行政策利率 (CBPOL)",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "CBPOL为BIS口径美国央行政策利率:2026年9月升至3.875%(9月加息25个基点后的区间中值),3个月期收益率锚定于该政策利率附近。最新圆点标记值低于一年前。期货市场定价到2027年9月累计再加息约65.5个基点(约2–3次),2027年9月会后隐含利率4.53%;最近路径确认节点为2026年10月28日会议(维持概率90.6%)。\nThe Bank for International Settlements provides the BIS CBPOL series, Central bank policy rates for the United States, Monthly, End of period (tier 1, fetched).\nStreetStats publishes a Fed Funds Rate forecast for 2026-2031.\nThe Bank of Japan published scheduled dates of monetary policy meetings in 2027 (document m_ref260731a.pdf).\nThe Bank for International Settlements reports the U.S. central bank policy rate (monthly, end"
+  },
+  {
+   "id": "f2f735c3-31b1-43da-8446-3b1986c8de77",
+   "name": "纽约联储（ACM模型团队）",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "其FEDS Notes指出资产负债表合意稳态规模仍是开放问题；FRED的THREEFYTP10为Kim–Wright模型而非ACM\n纽约联储于每个交易日纽约时间下午3:30前后采集收盘买方报价,经单调凸样条插值得到各恒定期限收益率\nThe Federal Reserve Bank of New York publishes a PDF on the Probability of US Recession Predicted by Treasury Spread (source S29)."
+  },
+  {
+   "id": "ed2ea2d2-e634-4bc0-889d-89abc8738390",
+   "name": "10年期JGB",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "市场押注BOJ加快加息是10年期JGB收益率2026年9月1日盘中触及3.005%(1996年9月以来首次升破3%)的驱动因素之一。\n高市早苗政府的财政扩张引发债务可持续性疑虑,是推高JGB收益率的驱动因素之一。\n以美国10年期国债收益率2026年9月月均4.989%对10年期JGB约3%推算，未经汇率对冲的美日利差已收窄至200bp以内，日本机构投资者对本国债券的相对吸引力上升，10年期JGB与美国国债竞争投资者需求\nBOJ加息预期推动日本10年期JGB于2026年9月1日盘中触及3%、为1996年以来首次升破3%"
+  },
+  {
+   "id": "eba20d16-1a18-4041-b805-dff05d6fa21c",
+   "name": "FRN 浮动利率票据",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "美国财政部指引未来至少几个季度维持名义附息券与FRN拍卖规模不变"
+  },
+  {
+   "id": "e6a2833e-164f-46e9-bad2-68a4ee195264",
+   "name": "StreetStats",
+   "labels": [
+    "ForecastSource"
+   ],
+   "summary": "StreetStats综合模型(合成ACM、Christensen–Rudebusch与Kim–Wright)报告10年期期限溢价0.92%、5年期0.53%、2年期0.31%(截至2026年10月22日)\nStreetStats基于月度与SOFR期货的汇总显示隐含利率2027年1月约4.1%、2027年10月约4.6%并在此后多年维持\nStreetStats publishes U.S. Treasury term premiums and rolling returns data for T-Bills, Treasury Notes and Treasury Bonds.\nStreetStats publishes a Fed Funds Rate forecast for 2026-2031."
+  },
+  {
+   "id": "de0b10ed-20c9-4d2b-be09-8a717ab48f29",
+   "name": "SIFMA",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "据SIFMA统计：2026年前9个月美国国债发行24.6万亿美元(同比+10.2%)，9月末存量31.8万亿(同比+7.1%)"
+  },
+  {
+   "id": "d7f01c03-913a-4393-948b-f4829bb86963",
+   "name": "30年期国债",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "2026年8月5日季度再融资声明中，美国财政部发行30年期国债250亿美元"
+  },
+  {
+   "id": "cedb9234-50b0-4b1b-8d52-033d9acdb40f",
+   "name": "美国国会",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "2025年调解法案增赤4.7万亿、更高关税减赤3.0万亿（CBO分解）；2026年初曾发生DHS部分停摆\nBPC估计若美国国会不行动,将于2027年冬末至仲夏间再度触及债务上限(2025年7月法案已将上限提高5.0万亿美元至41.1万亿美元),非常规措施与现金约可再维持6–9个月(X日或在2027年底至2028年)。\n现行持续决议(CR)仅维持政府资金至2026年12月11日,国会拨款行动约束财政部资金与债务上限处理\nHolland & Knight published analysis (October 2026) on Congress facing converging year-end deadlines beyond the midterms, including the CR funding government only through 2026-12-11"
+  },
+  {
+   "id": "ce3d8aad-f1eb-4bb4-ac6d-3dd24c3c3e4b",
+   "name": "中国国家外汇管理局",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "中国大陆持仓2026年8月为590.7（十亿美元），自1月695.3累计减约1046亿美元，同比降约1090亿，处多年低点"
+  },
+  {
+   "id": "cb9bb7d4-1f9e-441f-99c1-d15f48d7bd50",
+   "name": "TGA 财政部一般账户",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "美国财政部预计TGA于2026年10月下旬达到约1.05万亿美元(±500亿)的峰值"
+  },
+  {
+   "id": "cb30af4e-f95a-431b-ba14-aaa29227d47a",
+   "name": "Goldman Sachs",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The Wall Street Journal live coverage reports Goldman Sachs cutting its U.S. recession forecast (source S26)."
+  },
+  {
+   "id": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "美国10年期国债收益率",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "美联储政策路径与缩表(QT)是10年期国债收益率的核心驱动因素;2026年9月加息后政策利率区间中值为3.875%\n过去12个月10年期收益率的大幅上行几乎全部由实际利率驱动,10年期TIPS实际收益率为2.638%(2026-09)\nKim–Wright期限溢价为0.96%(2026-09),创近5年新高,推动10年期收益率上行\n过去12个月盈亏平衡通胀不升反降,未推动10年期收益率上行\n衰退概率仅为0.62%(2026-08),曲线保持正斜率,抑制10年期收益率趋势性下行\n财政赤字与债务存量高企令国债供给压力持续,抑制10年期收益率下行\nFOMC会议与SEP点阵图是监测10年期收益率走向的关键,点阵图转向降息将确认收益率回落情景\n摩根大通策略团队记录10年期收益率于2026年10月7日盘中触及5.35%,为2002年以来最高;9月单月上行50个基点,位列1962年以来前10%的月度波动\n密歇根一年期通胀预期与10年期盈亏平衡通胀是监测10年期收益率的关键指标\nMOVE指数隐含波动是监测10年期国债收益率的指标之一\nACM期限溢价更新是监测10年期收益率的要点,期限溢价升破近5年高点将提高收益率上行概率\nTIC境外持仓(中国大陆已降至多年低点)显示境外官方需求走弱,是10年期收益率上行的助推因素\nKim–Wright期限溢价从上年同期0.462%升至2026年9月的0.96%,一"
+  },
+  {
+   "id": "c30fd86d-dc00-40b1-a107-51e097f79031",
+   "name": "Federal Reserve Board",
+   "labels": [
+    "Government"
+   ],
+   "summary": "The Federal Reserve Board publishes the FOMC statement (September 16, 2026 press release, source S32) and FOMC meeting calendars and tentative meeting schedules (sources S39, S40).\nThe Federal Reserve Board publishes a FEDS Note titled 'The Central Bank Balance-Sheet Trilemma' (January 14, 2026, source S36) bearing on balance-sheet policy and term premiums."
+  },
+  {
+   "id": "c28e3ced-922f-4cf3-8933-9af92177eb92",
+   "name": "2s10s利差",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "2s10s利差当前为正斜率且走陡,远高于近五年倒挂低点-0.93%(2023-07)。形态与'扩张延续、政策偏紧'的中后周期组合相符,长端上行几乎全部由实际利率与期限溢价推动,构成'熊陡'。情景判别:若2s10s跌破0%即触发阈值,通常为衰退定价领先信号,将增强'回落走低'(30%)情景证据;若曲线在政策利率上行中继续熊陡则支持'再度上行'(25%)。克利夫兰联储记录显示2022年末至2024年末的倒挂是历史上第三次显著'假阳性'(未在一年内伴随衰退),曲线信号本周期可靠性下降。\n2s10s利差2026年9月月均+0.338%、2026年10月23日日度+0.31%；若2s10s再度倒挂（5年区间下沿-0.93%，2023-07），将增强美国10年期国债收益率“回落走低”情景\n2s10s利差T10Y2Y为0.338%(2026-09),五年低点−0.93%,若重返倒挂则预示紧缩见效、中期指向10年期收益率回落走低"
+  },
+  {
+   "id": "b3f9eab3-d715-44c5-b311-5ae76f750fdd",
+   "name": "CME FedWatch",
+   "labels": [
+    "ForecastSource"
+   ],
+   "summary": "CME FedWatch 2026-10-26数据显示市场对2026-10-28 FOMC会议定价为维持375–400bp区间概率90.6%、加息至400–425bp概率9.4%、降息概率0.0%;一个月前(2026-09-25)10月会议加息概率曾达64.2%,现已大幅回落\nCME FedWatch(2026-10-26)显示10月28日FOMC会议维持3.75%–4.00%利率区间的概率为90.6%、加息至4.00%–4.25%的概率为9.4%、降息概率0.0%,该政策路径影响10年期国债收益率定价\nCME Group FedWatch provides market-implied probabilities for upcoming FOMC rate decisions (source S34)."
+  },
+  {
+   "id": "b30b6059-4420-4c7b-b09d-ff23eafee7ad",
+   "name": "盈亏平衡通胀",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "过去12个月盈亏平衡通胀不升反降,未推动10年期收益率上行\nFRED发布美国十年期盈亏平衡通胀率(T10YIE)官方数据，最新值低于一年前\n若T10YIE跌破约2.0%且实际利率同步回落，将支持10年期收益率回落走低情景\nFRED发布美国十年期盈亏平衡通胀率(T10YIE)官方数据，最新值低于一年前\n若T10YIE跌破约2.0%且实际利率同步回落，将支持10年期收益率回落走低情景\n盈亏平衡通胀T10YIE最新值2.351%(2026-09,五年区间2.11%–2.88%),若持续升向2.88%上沿将触发通胀脱锚重定价、指向再度上行情景\nFRED publishes the T10YIE series, the 10-Year Breakeven Inflation Rate for the United States (tier 1, fetched).\nFRED reports the 10-Year Breakeven Inflation Rate at 2.351% for 2026-09 (monthly mean of daily data), with latest daily value 2.34% on 2026-10-23."
+  },
+  {
+   "id": "ae596805-2d45-4c7e-9ff2-189772ac6c39",
+   "name": "克利夫兰联储",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "克利夫兰联储曲线模型2026年9月基于3M10Y利差给出衰退概率读数为11.4%，且其记录显示2022年末至2024年末的收益率曲线倒挂是历史上第三次显著的假阳性（未在一年内伴随衰退）\n克利夫兰联储曲线模型2026年9月30日对未来一年的衰退概率读数为11.4%（数字未核实）\n克利夫兰联储运营其收益率曲线模型，该模型记录显示2022年末至2024年末的曲线倒挂是历史上第三次显著“假阳性”\n克利夫兰联储运营其收益率曲线模型，该模型记录显示2022年末至2024年末的曲线倒挂是历史上第三次显著“假阳性”"
+  },
+  {
+   "id": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "name": "FRED DGS10",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "FRED/Treasury的DGS10月均序列显示2026年9月10年期国债收益率月均为4.989%，较2025年9月的4.12%上升0.869个百分点，最新日度值为4.96%（2026-10-22）\n摩根士丹利预计美联储到2027年12月仅加息两次(市场定价约三次),美国10年期国债收益率在12–15个月内回落至4.7%\nFOMC加息路径(2027年9月会后隐含利率4.53%)在期限溢价维持约1%附近的条件下支撑10年期收益率维持在4.75%–5.50%的高位区间\n若通胀快速回落至FOMC 9月SEP的2027年PCE 2.4%路径,将引发降息定价并触发10年期收益率下行重定价\nKim–Wright期限溢价一年内从0.462%(2025-09)升至0.96%(2026-09)接近翻倍,长端收益率由“实际利率+溢价”双轮驱动,若期限溢价因供给与境外需求走弱而扩大将推动收益率升至5.50%–6.50%"
+  },
+  {
+   "id": "a1fb2911-0c69-4e30-9ad5-e65c32ffd7a1",
+   "name": "纽约联储DSGE模型",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "纽约联储DSGE模型（2026年3月）预测未来四个季度衰退概率为35.8%（四季增长低于-1%的定义；数字未核实）\nLiberty Street Economics (New York Fed blog) published the New York Fed DSGE Model forecast for March 2026."
+  },
+  {
+   "id": "a0b44a82-2191-40b9-80cb-9d8f5c80ae44",
+   "name": "嘉信理财",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "嘉信理财2026年年中预测10年期国债收益率处于4%–4.5%区间,该预测已被2026年10月行情证伪,提示卖方分布左尾可能偏厚"
+  },
+  {
+   "id": "a0a5e241-ff8b-4497-8167-6bbfa64f581b",
+   "name": "WSJ经济学家调查",
+   "labels": [
+    "ForecastSource"
+   ],
+   "summary": "WSJ经济学家调查(2026-10-11,71位受访者)预测10年期国债收益率2027年中为4.96%、2027年底为4.78%(7月调查为4.3%/4.26%,大幅上修)\nWSJ经济学家调查(2026-10-11,71位受访者)给出2027年底10年期收益率中值为4.78%,与DGS10结算口径最贴合"
+  },
+  {
+   "id": "a08dcc44-149e-400c-a060-a422dd938670",
+   "name": "财政部TIC表5",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "路透社报道引用TIC数据称中国大陆2026年6月持仓6334亿美元,较5月的6593亿下降4%,同比降幅超过13%。"
+  },
+  {
+   "id": "9d98653b-51f1-4b0f-8475-f1eca4f4c7be",
+   "name": "富国银行投资研究所",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "富国银行投资研究所在2026年10月媒体报道中将10年期国债收益率预测上调至5.25%–5.75%(原为4.50%–5.00%),并预测政策利率4.75%–5.00%;数值未经原始文件核实\nWells Fargo warned that rates could stay higher through 2027 (per Yahoo Finance article, tier 3 source fetched 2026-10-26)"
+  },
+  {
+   "id": "9cc84965-d4db-42af-9c28-f7bce161bfca",
+   "name": "Kim–Wright期限溢价",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "Kim–Wright口径期限溢价从0.462%升至0.96%，推动10年期国债收益率上行，构成熊陡形态\nFRED发布THREEFYTP10序列,即Kim–Wright(2005)模型期限溢价数据(2026年9月读数0.96%,2026年10月16日为0.986%)\nKim–Wright期限溢价一年内从0.462%(2025-09)升至0.96%(2026-09)接近翻倍,长端收益率由“实际利率+溢价”双轮驱动,若期限溢价因供给与境外需求走弱而扩大将推动收益率升至5.50%–6.50%\nKim–Wright期限溢价0.96%(2026-09)创五年区间上沿,期限溢价续创新高被视为触发10年期收益率再度上行的确认信号\n财政部季度再融资声明(2026-11-04)中附息券规模指引影响期限溢价走向:附息券规模上调叠加盈亏平衡升向2.88%将证伪回落走低情景\nKim–Wright期限溢价2026年9月为0.96%(同比+0.499个百分点,创近5年区间0.101%–0.96%的新高),是10年期收益率的驱动成分之一;其回落至0.46%下方将证伪高位企稳情景\n财政部季度再融资声明(2026-11-04)中附息券规模指引影响期限溢价走向:附息券规模上调叠加盈亏平衡升向2.88%将证伪回落走低情景\nKim–Wright期限溢价2026年9月为0.96%(同比+0.499个百分点,创近5年区间0.1"
+  },
+  {
+   "id": "9c539f99-4826-4683-bb3f-7e435dbf0dd7",
+   "name": "Treasury term premia",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "The Federal Reserve Bank of New York publishes Treasury Term Premia data on its research data indicators page.\nStreetStats publishes U.S. Treasury term premiums and rolling returns data for T-Bills, Treasury Notes and Treasury Bonds."
+  },
+  {
+   "id": "9c0033cf-f7d7-4288-91e9-a605e734f6cc",
+   "name": "纽约联储衰退概率",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "衰退概率仅为0.62%(2026-08),曲线保持正斜率,抑制10年期收益率趋势性下行\nThe Federal Reserve Bank of New York publishes a PDF on the Probability of US Recession Predicted by Treasury Spread (source S29)."
+  },
+  {
+   "id": "9805cdca-e997-456a-9959-14e4e28dcb21",
+   "name": "圣路易斯联储",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "圣路易斯联储通过FRED发布DGS10(美国10年期恒定到期收益率)日频数据"
+  },
+  {
+   "id": "95c8e6e1-01a8-4116-8948-67ff8096314b",
+   "name": "主要国债一级交易商",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "在英国等私人托管渠道承接官方需求回落的背景下，承接约8270亿美元票据净供给与不变规模的附息券拍卖"
+  },
+  {
+   "id": "8eda7c9d-cb96-402e-81d2-cf7ceb0132fc",
+   "name": "密歇根一年期通胀预期",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "密歇根一年期通胀预期与10年期盈亏平衡通胀是监测10年期收益率的关键指标\n密歇根1年通胀预期若升破近5年高点5%(2025年6月)，将强化通胀顽固路径并支撑10年期收益率高位\n密歇根1年通胀预期4.6%(2026-09)被视为支持10年期收益率再度上行(5.50%–6.50%)情景的证据\nFRED publishes the University of Michigan Inflation Expectation series (MICH)."
+  },
+  {
+   "id": "8b14b975-9319-4ad1-a781-8101f0c165fa",
+   "name": "MacroMicro",
+   "labels": [
+    "ForecastSource"
+   ],
+   "summary": "MacroMicro转引纽约联储ACM模型10年期期限溢价读数为0.72%(2026年10月21日快照,另见0.73%读数)\nMacroMicro charts US ACM 10Y Treasury Term Premium estimates (source S37)."
+  },
+  {
+   "id": "8a2af74f-3979-415a-a05f-e9c3df6f0b52",
+   "name": "MOVE指数",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "MOVE指数隐含波动是监测10年期国债收益率的指标之一\n据Yahoo Finance快照,MOVE指数2026年10月23日收盘103.31,前收盘106.84,52周高点115.02,年初以来上涨52.60%\n按MOVE指数(2026-10-23收盘103.31)的量级折算,10年期国债收益率年化隐含波动约1个百分点,与情景区间的±1σ先验一致\nMOVE指数升破115点(52周区间上沿115.02点)并伴随拍卖疲弱时,可能触发10年期收益率剧烈重定价(极端突破情景);2026-10-23收盘为103.31点\nYahoo Finance provides charts, data and news coverage of the MOVE Index (^MOVE)."
+  },
+  {
+   "id": "8a1a9838-bbc1-40cc-9909-d437a18873a9",
+   "name": "费城联储",
+   "labels": [
+    "Government"
+   ],
+   "summary": "费城联储发布2026年8月三季度SPF调查(32位预测者),显示未来10年PCE通胀中位数2.20%(较上期−0.02个百分点)、CPI中位数2.30%(−0.10个百分点)"
+  },
+  {
+   "id": "86c2baf0-c5d8-45fb-ba28-492c28262576",
+   "name": "RateProbability",
+   "labels": [
+    "ForecastSource"
+   ],
+   "summary": "RateProbability定价显示2026-12-09 FOMC会议加息概率72.8%(会后隐含利率4.08%),2027年1/3/6/9月会议隐含会后利率分别为4.18%/4.30%/4.49%/4.53%,12个月展望累计加息约65.5个基点(约2–3次加息)\n据RateProbability汇总的期货定价,2026年12月9日会议隐含会后利率4.08%(加息概率72.8%),2027年1月4.18%、3月4.30%、6月4.49%、9月15日会后4.53%,较当前累计+65.5bp(约2–3次加息)"
+  },
+  {
+   "id": "83697341-ef52-4ebb-b3d6-5eb01464f7a4",
+   "name": "TIC境外持仓",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "TIC境外持仓(中国大陆已降至多年低点)显示境外官方需求走弱,是10年期收益率上行的助推因素"
+  },
+  {
+   "id": "804ddb0e-7a1c-4757-971b-45cdcb519d84",
+   "name": "纽约联储10年-3个月利差Probit模型",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "转述称纽约联储基于10年-3个月利差的Probit模型给出2026年约28%、2027年约15%的衰退概率均值（具体数字未从原始页面核实）\n纽约联储Probit模型基于10年-3个月利差（3M10Y利差）生成衰退概率预测\n纽约联储曲线Probit模型（数据至2026年9月）对2027年年度均值衰退概率给出0.15的读数（模型外推；数字未核实）"
+  },
+  {
+   "id": "7f52331d-0c3d-464b-82c7-4eea799c0396",
+   "name": "SOMA",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "美国财政部表示正监测SOMA对票据的购买及私人票据需求增长"
+  },
+  {
+   "id": "7adbdc1a-526e-479b-8a45-457a59a0cc1a",
+   "name": "CRFB",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "CRFB转述CBO基线，10年期收益率假设从2026年4.1%升至2031年起4.4%，赤字路径2025年5.8%升至2028年6.0%"
+  },
+  {
+   "id": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "美国财政部",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "2026年8月5日再融资发行1250亿美元；TGA预计2026年10月下旬峰值约1.05万亿美元；高盛估计2026年票据净供给约8270亿美元；SIFMA转述前9个月发行24.6万亿美元（同比+10.2%）\nDGS10的底层为美国财政部恒定到期收益率曲线数据\n财政赤字与债务存量高企令国债供给压力持续,抑制10年期收益率下行\n2026年8月5日季度再融资声明中，美国财政部发行10年期国债420亿美元\n2026年8月5日季度再融资声明中，美国财政部发行3年期国债580亿美元\n2026年8月5日季度再融资声明中，美国财政部发行30年期国债250亿美元\n美国财政部维持TIPS发行规模不变：30年期续发80亿、10年期续发190亿、5年期新发260亿美元\n美国财政部指引未来至少几个季度维持名义附息券与FRN拍卖规模不变\n美国财政部预计TGA于2026年10月下旬达到约1.05万亿美元(±500亿)的峰值\n美国财政部表示正监测SOMA对票据的购买及私人票据需求增长\nCBO于2026年2月基线预测：FY2026赤字1.9万亿美元(占GDP 5.8%)，FY2036升至3.1万亿美元(6.7%)；2026–2035累计赤字23.1万亿美元；公众持有债务2025年底占GDP 99%、2036年达120%；净利息支出2026年1.0万亿美元升至2036年2.1万亿\n高盛估计美国财政部2026年全年票据"
+  },
+  {
+   "id": "73f3fc7e-a9b1-4d10-aeb9-18905173bab8",
+   "name": "穆迪与标普等评级机构",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "历史上2011、2023年债务上限事件后标普与惠誉分别下调评级"
+  },
+  {
+   "id": "71e58723-c376-42f2-b731-1636be392fb5",
+   "name": "2025年调解法案",
+   "labels": [],
+   "summary": "CBO分解2026–2035累计影响：2025年调解法案增赤4.7万亿美元，更高关税减赤3.0万亿，移民相关行政措施增赤0.5万亿美元"
+  },
+  {
+   "id": "71b84ad8-a317-4ce7-adcb-3d3cfcc3a18d",
+   "name": "Chase",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Chase published an article titled 'Could the 10-Year Treasury Yield Reach 5.75% in 2027? Here's What Our JPMorgan Strategists Think' covering the 10-Year Treasury Yield outlook for 2027."
+  },
+  {
+   "id": "702da1c1-be30-498c-8e3c-bf530173626b",
+   "name": "摩根士丹利",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "摩根士丹利预计美联储到2027年12月仅加息两次(市场定价约三次),美国10年期国债收益率在12–15个月内回落至4.7%\n摩根士丹利(2026-10-14)预测10年期国债收益率将在12–15个月内回落至4.7%,假设到2027年12月仅加息两次(市场定价约三次)\n摩根士丹利(2026-10-14)预计10年期收益率在12–15个月内回落至约4.7%,假设到2027年12月仅加息两次(市场定价约三次)\nMorgan Stanley publishes 'Rising Bond Yields 2026: Investment Outlook' covering Treasury yields (source S38)."
+  },
+  {
+   "id": "70032746-6fa6-41db-9e6f-bd16a54a5ef7",
+   "name": "穆迪",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "穆迪于2025年5月16日将美国信用评级降至Aa1,影响其债务风险定价\nMoody's Ratings downgraded the United States sovereign rating to Aa1 from Aaa, a fiscal constraint factor for Treasury pricing"
+  },
+  {
+   "id": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "美联储（FOMC）",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "2026年2–8月利率维持3.625%，9月加息至3.875%；SEP预计2026年PCE 3.7%、2027年2.4%，失业率4.1%；QT已于2025年12月前后结束，总资产企稳于6,753,604百万美元（2026-10-21）\n美联储政策路径与缩表(QT)是10年期国债收益率的核心驱动因素;2026年9月加息后政策利率区间中值为3.875%\nFOMC会议与SEP点阵图是监测10年期收益率走向的关键,点阵图转向降息将确认收益率回落情景\n美联储政策利率3.875%(2026-09,9月加息后的区间中值)影响DGS10走势;会议纪要显示几乎所有决策者支持停止缩表,总资产已企稳\n美联储政策路径与缩表(QT)是10年期国债收益率的核心驱动因素;2026年9月加息后政策利率区间中值为3.875%\nFOMC会议与SEP点阵图是监测10年期收益率走向的关键,点阵图转向降息将确认收益率回落情景\n美联储政策利率3.875%(2026-09,9月加息后的区间中值)影响DGS10走势;会议纪要显示几乎所有决策者支持停止缩表,总资产已企稳\nFOMC加息路径(2027年9月会后隐含利率4.53%)在期限溢价维持约1%附近的条件下支撑10年期收益率维持在4.75%–5.50%的高位区间\nFOMC发布9月SEP,PCE中值路径为2026年3.7%、2027年2.4%、2028年2.2%,核心PCE 202"
+  },
+  {
+   "id": "6d1b9b86-adeb-4639-9de0-88144b6be8c1",
+   "name": "费城联储SPF调查",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "费城联储发布2026年8月三季度SPF调查(32位预测者),显示未来10年PCE通胀中位数2.20%(较上期−0.02个百分点)、CPI中位数2.30%(−0.10个百分点)\nThe Survey of Professional Forecasters (Third Quarter 2026) provides forecast data used in Federal Reserve system research."
+  },
+  {
+   "id": "6d0d8093-368e-4a47-848d-7be60c6cf116",
+   "name": "Polymarket",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "Polymarket“2026年底前美国衰退”合约的人群概率为9%\nPolymarket设有10年期国债收益率5.3%/5.4%/5.5%/5.7%/6.0%触顶阈值的合约,但抓取页未显示各阈值概率,隐含尾部无法核实\nPolymarket hosts a prediction market contract on US recession by end of 2026 (source S28)."
+  },
+  {
+   "id": "692f1806-29b4-4f9a-bd6c-b9a79461ead6",
+   "name": "10年期减3个月利差",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "10年期减3个月利差2026年9月为+0.896%（上年同期仅+0.055%），日度+0.78%，曲线陡峭正斜率不支持美国10年期国债收益率回落走低情景\nFRED publishes the 10-Year Treasury Constant Maturity Minus 3-Month Treasury Constant Maturity series (T10Y3M)."
+  },
+  {
+   "id": "692b7cd5-4bf3-4c0d-b550-c7e070bed21a",
+   "name": "FOMC 9月SEP",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "若通胀快速回落至FOMC 9月SEP的2027年PCE 2.4%路径,将引发降息定价并触发10年期收益率下行重定价\nFOMC发布9月SEP,PCE中值路径为2026年3.7%、2027年2.4%、2028年2.2%,核心PCE 2026年3.4%、2027年2.5%\nFOMC 2026年9月SEP预测PCE通胀2026年为3.7%、2027年降至2.4%，显示通胀顽固\nFOMC于2027年3月16–17日与6月8–9日举行带SEP的会议,对点阵图进行重估\nBondSavvy解读9月SEP点阵图称多数参与者预计2027年底目标区间落在4.00%–4.50%"
+  },
+  {
+   "id": "651a5794-7a0b-482d-b6d5-95e1ae7357a0",
+   "name": "Person",
+   "labels": [
+    "Person"
+   ],
+   "summary": ""
+  },
+  {
+   "id": "5e154533-e200-41a1-9f59-9ec79c14ad6a",
+   "name": "PCE通胀",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "美联储2026年9月会议一致投票加息25个基点,声明称通胀仍处于高位、加息将支持更及时地回归2%目标;SEP基础PCE通胀中值2026年3.7%、2027年2.4%、2028年2.2%、2029年2.0%,核心PCE 2026年3.4%、2027年2.5%"
+  },
+  {
+   "id": "5c77eef3-c37c-4c69-9b89-81ca77fcc4f5",
+   "name": "PIIE",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "PIIE认为2026年通胀更可能超预期,年底或“超过4%”,理由是关税滞后效应、本财年赤字可能超过GDP的7%、移民收紧与预期上漂。其观点与市场端通胀定价(T10YIE 2.351%、T5YIFR 2.2%)及费城联储SPF长期通胀中位数(2.20%)形成分歧,家庭与PIIE预期明显悲于市场与专业预测者。\nPIIE认为2026年通胀更可能超预期、年底或超过4%，理由是关税滞后效应、本财年赤字可能超过GDP的7%、移民收紧与预期上漂\nPIIE认为2026年通胀年底或超过4%,若2027年通胀停留在3%上方且加息超出市场定价,将强化10年期收益率再度上行情景\nPIIE published analysis on the risk of higher US inflation in 2026, relevant to Treasury financing conditions."
+  },
+  {
+   "id": "5a950c46-391b-445e-ad21-16f845d38b55",
+   "name": "日本银行（BOJ）",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "10年期JGB于2026-09-01触及3.005%为1996年来首次；20年期3.885%、30年期4.18%纪录高位；2027年7月会议安排在两名鹰派委员任期届满前\n牛津经济研究院(2026年8月31日)预测BOJ将于2026年9月、12月及2027年4月加息至1.75%(其新估的名义中性利率,原为1.5%),若日元进一步走弱,2027年7月或加息至2%。\n路透指出BOJ将2027年7月会议安排在两名鹰派委员任期届满之前,该日程安排可能对日本利率终局水平至关重要。\n市场押注BOJ加快加息是10年期JGB收益率2026年9月1日盘中触及3.005%(1996年9月以来首次升破3%)的驱动因素之一。\n2026年7月下旬的美日联合外汇干预效果短暂,反而加大了BOJ加快加息的压力。\nBOJ正常化使10年期JGB约3%与美国10年期4.989%(2026年9月)的未对冲利差收窄至200bp以内,日本机构投资者对本国债券相对吸引力上升,日资对美债需求前景偏弱,构成期限溢价上行的结构性支撑之一。\nBank of Japan policy normalization (release schedule of meetings/outlook reports) competes with the 10-year Treasury yield for investor demand, as BOJ"
+  },
+  {
+   "id": "52389dfe-93c9-40d4-a610-7aa07fede006",
+   "name": "财政部日频CMT",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "美国财政部提供日频CMT数据，显示2026年10月23日10年期为5.00%，9月23日5.11%、10月1日5.24%等多个单日读数≥5.00%"
+  },
+  {
+   "id": "4d85942a-a08f-4443-a1e0-e250b9d8ba4a",
+   "name": "高市早苗",
+   "labels": [
+    "Person"
+   ],
+   "summary": "高市早苗政府的财政扩张引发债务可持续性疑虑,是推高JGB收益率的驱动因素之一。"
+  },
+  {
+   "id": "4aaa9eea-a082-4eed-a109-9c2827de27b3",
+   "name": "美日联合外汇干预",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "2026年7月下旬的美日联合外汇干预效果短暂,反而加大了BOJ加快加息的压力。"
+  },
+  {
+   "id": "48f03859-86bf-4635-8330-2b6ce9acac44",
+   "name": "MUFG",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "MUFG在2026年9月会前将FOMC会议定性为“加息周期的开始、还是重建信誉的机会”,预计美联储跳过10月会议(临近中期选举),并认为市场此后会持续定价1–2次额外加息\nMUFG Research publishes a September 2026 Fed & Rates Call Update analyzing FOMC policy path (source S35)."
+  },
+  {
+   "id": "40ae5a76-f14e-4d0f-aeaf-22dcbafe060b",
+   "name": "鲍威尔及FOMC投票委员",
+   "labels": [
+    "Person"
+   ],
+   "summary": "2026年9月会议12–0一致投票加息；SEP上调2026、2027年增长预测各0.1个百分点至2.3%和2.4%"
+  },
+  {
+   "id": "3c56883b-521c-49c2-aa3a-45ca0b57a503",
+   "name": "国会预算办公室（CBO）",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "2026年2月基线；净利息支出2026年1.0万亿升至2036年2.1万亿\nCBO基线的利率假设隐含美国10年期收益率在2027年前继续上行。\nCBO基线预计实际GDP增速自2027年起放缓至1.8%，并计入生成式AI每年约10个基点的生产率贡献，勾勒美国增长与收益率前景\nCBO基线假设10年期收益率在2027年前逐步上升、此后保持相对稳定,并预测2026财年赤字1.9万亿美元(占GDP的5.8%)\nThe Committee for a Responsible Federal Budget published coverage of CBO's February 2026 Budget and Economic Outlook (fetched).\nThe Congressional Budget Office publishes the Budget and Economic Outlook 2026 to 2036 covering federal fiscal projections relevant to Treasury finances."
+  },
+  {
+   "id": "38ffae45-d1e3-4e76-b416-4c2391adff39",
+   "name": "United States",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Kalshi hosts a prediction market on a US government shutdown occurring by 26 Dec 2026, with odds around 34% per a December 2026 shutdown tracker\nMoody's Ratings downgraded the United States sovereign rating to Aa1 from Aaa, a fiscal constraint factor for Treasury pricing\nFederal News Network published prediction-market-based coverage of how long the US government shutdown will last (March 2026)"
+  },
+  {
+   "id": "38c1e667-4499-461d-8cf9-c55caf2a6b60",
+   "name": "10年期TIPS实际收益率",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "过去12个月10年期收益率的大幅上行几乎全部由实际利率驱动,10年期TIPS实际收益率为2.638%(2026-09)\n美国财政部维持TIPS发行规模不变：30年期续发80亿、10年期续发190亿、5年期新发260亿美元\n10年TIPS实际收益率DFII10为2.638%(2026-09,五年高点),续创新高利好再度上行情景,回落至1.62%(2024-09水平)附近则利好回落走低情景\nFRED publishes the DFII10 series, the Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Inflation-Indexed (tier 1, fetched).\nFRED reports the 10-Year Treasury inflation-indexed (TIPS) yield at 2.638% for 2026-09 (monthly mean of daily data), with latest daily value 2.64% on 2026-10-22."
+  },
+  {
+   "id": "35b428ec-a4f2-4b1c-85b6-34b105cb0cc5",
+   "name": "BOJ",
+   "labels": [
+    "Government"
+   ],
+   "summary": "BOJ加息预期推动日本10年期JGB于2026年9月1日盘中触及3%、为1996年以来首次升破3%\nBOJ加息叠加中日减持美债将放大美国国债期限溢价压力,日本债券市场正常化与美国财政部争夺同类投资者需求"
+  },
+  {
+   "id": "351bac99-5220-4273-86fd-109e9e36830c",
+   "name": "Wall Street Journal",
+   "labels": [
+    "ForecastSource"
+   ],
+   "summary": "The Wall Street Journal published live coverage reporting that Goldman Sachs cut its U.S. recession forecast on 2026-06-22.\nWSJ published an article on why economists think higher bond yields (10-year Treasury) are here to stay."
+  },
+  {
+   "id": "337471fb-3362-4c22-80a8-2c9fc62bd226",
+   "name": "核心PCE通胀",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "美联储2026年9月SEP中值：核心PCE通胀2026年3.4%、2027年2.5%。同期整体PCE中值2026年3.7%、2027年2.4%、2028年2.2%、2029年2.0%。9月加息25个基点即针对核心通胀偏高，声明称通胀仍处于高位；若核心PCE快速向2027年路径回落并引发降息定价，将构成10年期收益率“高位企稳”情景的证伪信号。\nPIIE认为2026年通胀更可能超预期、年底或超过4%，理由是关税滞后效应、本财年赤字可能超过GDP的7%、移民收紧与预期上漂"
+  },
+  {
+   "id": "336ab703-0133-4417-924c-d5ba81d27272",
+   "name": "摩根大通财富管理",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "摩根大通财富管理(2026-10-21)给出2027年底10年期国债收益率观点:基准2027年中约5.25%,牛市情景约4.50%,熊市情景约5.75%,柴油冲击情景5.50%–6.00%\n摩根大通财富管理预测10年期国债收益率基准为2027年年中约5.25%,熊市情景区间5.50%–6.00%\n摩根大通财富管理(2026-10-21)预测10年期收益率2027年中基准约5.25%,牛市情景约4.50%,熊市情景约5.75%,柴油冲击情景5.50%–6.00%"
+  },
+  {
+   "id": "2f14f9a0-2371-423f-8d94-f496d85c3482",
+   "name": "Treasury bills",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "Reuters reported on growth in US Treasury bill issuance and heightened long-term risk (2026-07-23).\nSIFMA provides US Treasury Securities Statistics including data on Treasury bills."
+  },
+  {
+   "id": "28104810-1587-4a02-adec-b60bbd8938f1",
+   "name": "联邦基金期货",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "据RateProbability汇总的期货定价,2026年12月9日会议隐含会后利率4.08%(加息概率72.8%),2027年1月4.18%、3月4.30%、6月4.49%、9月15日会后4.53%,较当前累计+65.5bp(约2–3次加息)\nCME Group supplies 30 Day Federal Funds Futures quotes."
+  },
+  {
+   "id": "27ececff-5cd1-468e-aca9-d908c816f962",
+   "name": "Committee for a Responsible Federal Budget",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "The Committee for a Responsible Federal Budget published coverage of CBO's February 2026 Budget and Economic Outlook (fetched)."
+  },
+  {
+   "id": "276dbb1d-3381-4aa2-8885-430fc8ff64d0",
+   "name": "摩根大通全球研究",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "摩根大通全球研究在2026年展望中对2026年美国及全球衰退概率给出35%，并预计通胀粘性持续\nJ.P. Morgan Global Research publishes a 2026 Market Outlook covering markets including Treasury yields (source S27)."
+  },
+  {
+   "id": "200744c4-5fac-41ab-9275-ae9a6f45e4e9",
+   "name": "3年期国债",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "2026年8月5日季度再融资声明中，美国财政部发行3年期国债580亿美元"
+  },
+  {
+   "id": "1f1dc6a6-a9f4-4cd1-bd3b-7074118fdf60",
+   "name": "FRED (Federal Reserve Economic Data)",
+   "labels": [
+    "ForecastSource"
+   ],
+   "summary": "FRED (St. Louis Fed) publishes the DGS10 series, the Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis (tier 1, fetched).\nFRED publishes the THREEFYTP10 series, the Term Premium on a 10 Year Zero Coupon Bond for the United States (tier 1, fetched).\nFRED publishes the T10YIE series, the 10-Year Breakeven Inflation Rate for the United States (tier 1, fetched).\nFRED publishes the DFII10 series, the Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Inflation-Indexed (tier 1, fetched)."
+  },
+  {
+   "id": "1bf70955-9383-4493-892b-48c6af5f6fc9",
+   "name": "高盛",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "高盛于2026年6月22日将美国未来12个月衰退概率从25%下调至15%，理由是伊朗和平协议、能源价格下跌与劳动力市场改善\n高盛估计美国财政部2026年全年票据净供给约8270亿美元，远高于2025年的约3600亿\n高盛于2026年6月22日将美国未来12个月衰退概率定为15%,该增长评估被用作10年期收益率回落走低情景的监测口径之一\nThe Wall Street Journal published live coverage reporting that Goldman Sachs cut its U.S. recession forecast on 2026-06-22."
+  },
+  {
+   "id": "1bbf0a50-949a-426f-97c2-9fa6cc8b01c8",
+   "name": "Japan's benchmark bond yield",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "Reuters reported that Japan's benchmark bond yield rose to 3% for the first time in 30 years on 2026-09-01."
+  },
+  {
+   "id": "19eea4ed-0358-4729-809f-ebc9184e8a2b",
+   "name": "摩根大通与美国银行利率策略团队",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "记录10月7日盘中5.35%为2002年以来最高、9月单月+50bp位列1962年以来前10%波动；摩根大通全球研究2026年展望给出衰退概率35%\n摩根大通策略团队记录10年期收益率于2026年10月7日盘中触及5.35%,为2002年以来最高;9月单月上行50个基点,位列1962年以来前10%的月度波动\nJPMorgan strategists forecast on whether the 10-Year Treasury Yield could reach 5.75% in 2027, as published in a Chase article."
+  },
+  {
+   "id": "18b68c33-1654-4326-9d83-468e085e5ee5",
+   "name": "ACM期限溢价",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "ACM期限溢价更新是监测10年期收益率的要点,期限溢价升破近5年高点将提高收益率上行概率\nMacroMicro转引数据显示ACM口径期限溢价约为0.72%–0.73%(2026-10-21)\nACM期限溢价升破约1.5%支持10年期收益率再度上行，回落至0.5%下方则支持回落走低\nMacroMicro charts US ACM 10Y Treasury Term Premium estimates (source S37)."
+  },
+  {
+   "id": "1812b4a2-db43-4c57-96b7-904960b2ad12",
+   "name": "10年期TIPS实际收益率",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "2026年9月前的12个月内10年期TIPS实际收益率上升0.889个百分点至2.638%，是10年期国债收益率长端上行的主要驱动因素之一"
+  },
+  {
+   "id": "14b5ef02-9fbe-481d-96f7-97c8a8a92bc7",
+   "name": "FRED",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "FRED (Federal Reserve Economic Data), published by the St. Louis Fed, provides the DGS10 series — the daily 10-year US Treasury constant-maturity market yield used as settlement metric; underlying data from the Treasury CMT curve via NY Fed ~3:30 PM closing bid quotes and spline interpolation. Key readings: DGS10 monthly mean 4.989% (2026-09, +0.869pp YoY) vs 4.12% (2025-09); latest daily 4.96% (2026-10-22). FRED also publishes: THREEFYTP10 (Kim–Wright term premium, 0.96% 2026-09, 0.986% on 2026-10-16), T10YIE breakeven inflation (2.351%, 2026-09), T5YIFR (2.34%, 2026-09), DFII10 10-year TIPS "
+  },
+  {
+   "id": "133308b2-55da-439e-a046-42078f1ab42a",
+   "name": "Quarterly Refunding Statement",
+   "labels": [
+    "TreasuryInstrument"
+   ],
+   "summary": "The U.S. Department of the Treasury publishes the most recent Quarterly Refunding documents, including Brian Smith's Quarterly Refunding Statement.\nThe U.S. Treasury Quarterly Refunding (Treasury policy page) governs auction sizes of the securities underlying the 10-year Treasury yield; the November 2026 refunding statement is a key supply-side signal"
+  },
+  {
+   "id": "12ad00da-56cf-4dc9-b247-61281099430d",
+   "name": "路透",
+   "labels": [
+    "ForecastSource"
+   ],
+   "summary": "路透报道2025年11月19日美联储会议纪要显示“几乎所有”政策制定者支持12月1日停止缩表的计划\n路透社报道财长贝森特短期内将继续以票据作为美国财政部的主要融资工具，货币基金需求或跟不上供给，重票据策略放大利率上行时的滚动再融资风险\nReuters reported on growth in US Treasury bill issuance and heightened long-term risk (2026-07-23).\nReuters reported that Japan's benchmark bond yield rose to 3% for the first time in 30 years on 2026-09-01."
+  },
+  {
+   "id": "126550a0-bdd0-4584-8bb4-9d2d25b29fb0",
+   "name": "T5YIFR 5年5年远期通胀",
+   "labels": [
+    "MacroIndicator"
+   ],
+   "summary": "T5YIFR为FRED 5年5年远期通胀预期序列:2026-09月度2.34%(上年同期2.317%,12个月变化+0.022个百分点),最新日度2.2%(2026-10-23)。读数与T10YIE、费城联储SPF共同显示市场与专业预测者通胀预期锚定在2.2%–2.4%附近,与家庭端密歇根1年通胀预期(4.6%,2026-09)形成对比。\nFRED发布美国五年后五年远期通胀预期(T5YIFR)官方数据，最新值高于一年前、处于图示区间高位；其月均若升破近5年高点2.46%(2023年10月)将指向长期预期脱锚\nT5YIFR月均升破其近5年高点2.46%(2023年10月)将指向长期预期脱锚、支持10年期收益率再度上行\n5年5年远期通胀预期T5YIFR为2.34%(2026-09)、日度2.2%(2026-10-23),若升破2.46%的五年上沿将触发长期预期脱锚警报\nFRED reports the 5-Year, 5-Year Forward Inflation Expectation Rate at 2.34% for 2026-09 (monthly mean of daily data), with latest daily value 2.2% on 2026-10-23."
+  },
+  {
+   "id": "10778bbd-0e39-4c71-9826-136264540a9c",
+   "name": "AAF",
+   "labels": [
+    "Organization"
+   ],
+   "summary": "AAF转述CBO对总统FY2027预算的估算：赤字升至峰值占GDP 6.7%(约2.3万亿美元)，此为总统预算情景而非现行法律基线"
+  },
+  {
+   "id": "0bb8eb49-11e3-4f61-954d-fce8b0ed9069",
+   "name": "Macrotrends",
+   "labels": [
+    "ForecastSource"
+   ],
+   "summary": "Macrotrends汇总称1962年以来10年期收益率均值为5.80%、历史高点15.84%（1981-09-30），当前水平仅高于1962年以来约46%的交易日\nMacrotrends charts the 10 Year Treasury Yield from 1962 to 2026 (source S31)."
+  },
+  {
+   "id": "0b547193-5e67-4bc1-97d6-97f78ab91d8b",
+   "name": "Canada",
+   "labels": [
+    "Government"
+   ],
+   "summary": "Oxford Economics published research on how a trade war flare-up will cost Canada\nMorningstar (Canada edition) reported that trade war escalation deepens uncertainty for the Canadian economy"
+  },
+  {
+   "id": "07728f2c-8b95-499b-a4a9-83728515bf8a",
+   "name": "牛津经济研究院",
+   "labels": [
+    "ForecastSource"
+   ],
+   "summary": "牛津经济研究院(2026年8月31日)预测BOJ将于2026年9月、12月及2027年4月加息至1.75%(其新估的名义中性利率,原为1.5%),若日元进一步走弱,2027年7月或加息至2%。\nOxford Economics published research on how a trade war flare-up will cost Canada"
+  },
+  {
+   "id": "06caf644-56ac-44b0-93d7-54179dd5f5a8",
+   "name": "Organization",
+   "labels": [
+    "Organization"
+   ],
+   "summary": ""
+  }
+ ],
+ "links": [
+  {
+   "source": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "target": "14b5ef02-9fbe-481d-96f7-97c8a8a92bc7",
+   "name": "SUPPLIES",
+   "fact": "FRED提供DGS10存储观测值,2026年9月月均为4.989%。"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "351bac99-5220-4273-86fd-109e9e36830c",
+   "name": "REPORTS_ON",
+   "fact": "WSJ published an article on why economists think higher bond yields (10-year Treasury) are here to stay."
+  },
+  {
+   "source": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "SUPPLIES",
+   "fact": "美国财政部CMT口径数据显示2026年10月23日10年期收益率为5.00%"
+  },
+  {
+   "source": "73f3fc7e-a9b1-4d10-aeb9-18905173bab8",
+   "target": "73f3fc7e-a9b1-4d10-aeb9-18905173bab8",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "穆迪与标普等评级机构 亦称 评级机构"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "8eda7c9d-cb96-402e-81d2-cf7ceb0132fc",
+   "name": "TRIGGERS",
+   "fact": "密歇根1年通胀预期4.6%(2026-09)被视为支持10年期收益率再度上行(5.50%–6.50%)情景的证据"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "8eda7c9d-cb96-402e-81d2-cf7ceb0132fc",
+   "name": "TRIGGERS",
+   "fact": "密歇根1年通胀预期MICH为4.6%(2026-09,五年区间3.4%–5%),若重返5%上沿将预示预期上漂、配合10年期收益率再度上行情景"
+  },
+  {
+   "source": "86c2baf0-c5d8-45fb-ba28-492c28262576",
+   "target": "28104810-1587-4a02-adec-b60bbd8938f1",
+   "name": "REPORTS_ON",
+   "fact": "据RateProbability汇总的期货定价,2026年12月9日会议隐含会后利率4.08%(加息概率72.8%),2027年1月4.18%、3月4.30%、6月4.49%、9月15日会后4.53%,较当前累计+65.5bp(约2–3次加息)"
+  },
+  {
+   "source": "40ae5a76-f14e-4d0f-aeaf-22dcbafe060b",
+   "target": "651a5794-7a0b-482d-b6d5-95e1ae7357a0",
+   "name": "IS_A",
+   "fact": "投票决定政策利率；报告提及现任主席为沃什；- 角色定位: 投票决定政策利率；报告提及现任主席为沃什；- 立场: 委员会对通胀上行意外的容忍度下降（主席为沃什）；- 影响力: high；- 目标/动机: 恢复价格稳定；维护委员会共识；- 约束: 12–0投票显示共识但内部分歧历史不明；- 资源/能力: 投票权与沟通平台；- 软肋/红线: 通胀数据反复将损害信誉；- 言行差异: 一致投票加息与鹰派点阵图显示言行一致；- 已知事实/记忆: 9月由暂停转向加息（simulation_tier=1，salience=0.90）"
+  },
+  {
+   "source": "19eea4ed-0358-4729-809f-ebc9184e8a2b",
+   "target": "06caf644-56ac-44b0-93d7-54179dd5f5a8",
+   "name": "IS_A",
+   "fact": "华尔街主要预测者，影响市场预期形成；- 角色定位: 华尔街主要预测者，影响市场预期形成；- 立场: 摩根大通财富管理：2027年中基准约5.25%，牛市约4.50%、熊市约5.75%、柴油冲击情景5.50%–6.00%；- 影响力: medium；- 目标/动机: 准确的利率预测与客户配置建议；- 资源/能力: 研究影响力、客户资金流；- 软肋/红线: 卖方分布左尾可能偏厚（嘉信4%–4.5%预测已被证伪）；- 言行差异: —；- 已知事实/记忆: 2026年展望已上修（simulation_tier=3，salience=0.55）"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "702da1c1-be30-498c-8e3c-bf530173626b",
+   "name": "REPORTS_ON",
+   "fact": "Morgan Stanley publishes 'Rising Bond Yields 2026: Investment Outlook' covering Treasury yields (source S38)."
+  },
+  {
+   "source": "f86b3092-a1eb-451d-994e-04f66b3a4f05",
+   "target": "cedb9234-50b0-4b1b-8d52-033d9acdb40f",
+   "name": "REPORTS_ON",
+   "fact": "Holland & Knight published analysis (October 2026) on Congress facing converging year-end deadlines beyond the midterms, including the CR funding government only through 2026-12-11"
+  },
+  {
+   "source": "fd8f8a71-29e6-4251-8361-7f82144a81ed",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "SUPPLIES",
+   "fact": "数据决定加息路径重估（sign=+，strength=0.6，valence=directional，polarity=0.30）"
+  },
+  {
+   "source": "95c8e6e1-01a8-4116-8948-67ff8096314b",
+   "target": "95c8e6e1-01a8-4116-8948-67ff8096314b",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "主要国债一级交易商 亦称 一级交易商"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "6d0d8093-368e-4a47-848d-7be60c6cf116",
+   "name": "REPORTS_ON",
+   "fact": "Polymarket hosts a prediction market contract on US recession by end of 2026 (source S28)."
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "INFLUENCES",
+   "fact": "FOMC的SEP基准(2026年PCE通胀中值3.7%、2027年降至2.4%)及2027年3月16–17日与6月8–9日带SEP的会议节点上的点阵图重估将影响10年期国债收益率方向"
+  },
+  {
+   "source": "8b14b975-9319-4ad1-a781-8101f0c165fa",
+   "target": "18b68c33-1654-4326-9d83-468e085e5ee5",
+   "name": "REPORTS_ON",
+   "fact": "MacroMicro转引纽约联储ACM模型10年期期限溢价读数为0.72%(2026年10月21日快照,另见0.73%读数)"
+  },
+  {
+   "source": "f71cb1cb-aad2-45bb-91d5-922523b8419d",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "SUPPORTS",
+   "fact": "Brian Smith serves as Deputy Assistant Secretary for Federal Finance at the U.S. Department of the Treasury and issued the Quarterly Refunding Statement."
+  },
+  {
+   "source": "de0b10ed-20c9-4d2b-be09-8a717ab48f29",
+   "target": "2f14f9a0-2371-423f-8d94-f496d85c3482",
+   "name": "SUPPLIES",
+   "fact": "SIFMA provides US Treasury Securities Statistics including data on Treasury bills."
+  },
+  {
+   "source": "35b428ec-a4f2-4b1c-85b6-34b105cb0cc5",
+   "target": "ed2ea2d2-e634-4bc0-889d-89abc8738390",
+   "name": "INFLUENCES",
+   "fact": "BOJ加息预期推动日本10年期JGB于2026年9月1日盘中触及3%、为1996年以来首次升破3%"
+  },
+  {
+   "source": "f2f735c3-31b1-43da-8446-3b1986c8de77",
+   "target": "f2f735c3-31b1-43da-8446-3b1986c8de77",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "纽约联储（ACM模型团队） 亦称 纽约联储"
+  },
+  {
+   "source": "9cc84965-d4db-42af-9c28-f7bce161bfca",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "Kim–Wright期限溢价从上年同期0.462%升至2026年9月的0.96%,一年内接近翻倍,意味着10年期长端由实际利率+期限溢价双轮驱动,对政策路径弹性下降、对供给与资产负债表操作弹性上升"
+  },
+  {
+   "source": "14b5ef02-9fbe-481d-96f7-97c8a8a92bc7",
+   "target": "f635aa3b-e896-462b-8554-0bae56c04eee",
+   "name": "REPORTS_ON",
+   "fact": "FRED publishes the Smoothed U.S. Recession Probabilities series (RECPROUSM156N)."
+  },
+  {
+   "source": "1bf70955-9383-4493-892b-48c6af5f6fc9",
+   "target": "f635aa3b-e896-462b-8554-0bae56c04eee",
+   "name": "REPORTS_ON",
+   "fact": "高盛于2026年6月22日将美国未来12个月衰退概率从25%下调至15%，理由是伊朗和平协议、能源价格下跌与劳动力市场改善"
+  },
+  {
+   "source": "70032746-6fa6-41db-9e6f-bd16a54a5ef7",
+   "target": "38ffae45-d1e3-4e76-b416-4c2391adff39",
+   "name": "CONSTRAINS",
+   "fact": "Moody's Ratings downgraded the United States sovereign rating to Aa1 from Aaa, a fiscal constraint factor for Treasury pricing"
+  },
+  {
+   "source": "8b14b975-9319-4ad1-a781-8101f0c165fa",
+   "target": "18b68c33-1654-4326-9d83-468e085e5ee5",
+   "name": "REPORTS_ON",
+   "fact": "MacroMicro charts US ACM 10Y Treasury Term Premium estimates (source S37)."
+  },
+  {
+   "source": "ce3d8aad-f1eb-4bb4-ac6d-3dd24c3c3e4b",
+   "target": "ce3d8aad-f1eb-4bb4-ac6d-3dd24c3c3e4b",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "中国国家外汇管理局 亦称 外管局"
+  },
+  {
+   "source": "fbbffa96-a76d-4bad-8a63-0293095858ea",
+   "target": "cedb9234-50b0-4b1b-8d52-033d9acdb40f",
+   "name": "REPORTS_ON",
+   "fact": "BPC估计若美国国会不行动,将于2027年冬末至仲夏间再度触及债务上限(2025年7月法案已将上限提高5.0万亿美元至41.1万亿美元),非常规措施与现金约可再维持6–9个月(X日或在2027年底至2028年)。"
+  },
+  {
+   "source": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "target": "38c1e667-4499-461d-8cf9-c55caf2a6b60",
+   "name": "SUPPLIES",
+   "fact": "美国财政部维持TIPS发行规模不变：30年期续发80亿、10年期续发190亿、5年期新发260亿美元"
+  },
+  {
+   "source": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "target": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "name": "INFLUENCES",
+   "fact": "FOMC加息路径(2027年9月会后隐含利率4.53%)在期限溢价维持约1%附近的条件下支撑10年期收益率维持在4.75%–5.50%的高位区间"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "f635aa3b-e896-462b-8554-0bae56c04eee",
+   "name": "TRIGGERS",
+   "fact": "平滑美国衰退概率处于低位0.62%(2026-08),压低了10年期收益率回落走低情景的权重"
+  },
+  {
+   "source": "b3f9eab3-d715-44c5-b311-5ae76f750fdd",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "REPORTS_ON",
+   "fact": "CME Group FedWatch provides market-implied probabilities for upcoming FOMC rate decisions (source S34)."
+  },
+  {
+   "source": "12ad00da-56cf-4dc9-b247-61281099430d",
+   "target": "1bbf0a50-949a-426f-97c2-9fa6cc8b01c8",
+   "name": "REPORTS_ON",
+   "fact": "Reuters reported that Japan's benchmark bond yield rose to 3% for the first time in 30 years on 2026-09-01."
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "14b5ef02-9fbe-481d-96f7-97c8a8a92bc7",
+   "name": "REPORTS_ON",
+   "fact": "FRED reports the 10-Year Treasury Constant Maturity market yield at 4.989% for 2026-09 (monthly mean of daily data), with latest daily value 4.96% on 2026-10-22."
+  },
+  {
+   "source": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "SUPPLIES",
+   "fact": "2026年8月5日季度再融资声明中，美国财政部发行10年期国债420亿美元"
+  },
+  {
+   "source": "38c1e667-4499-461d-8cf9-c55caf2a6b60",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "过去12个月10年期收益率的大幅上行几乎全部由实际利率驱动,10年期TIPS实际收益率为2.638%(2026-09)"
+  },
+  {
+   "source": "1f1dc6a6-a9f4-4cd1-bd3b-7074118fdf60",
+   "target": "b30b6059-4420-4c7b-b09d-ff23eafee7ad",
+   "name": "SUPPLIES",
+   "fact": "FRED publishes the T10YIE series, the 10-Year Breakeven Inflation Rate for the United States (tier 1, fetched)."
+  },
+  {
+   "source": "f635aa3b-e896-462b-8554-0bae56c04eee",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "平滑美国衰退概率2026年8月为0.62%，处于近5年区间（0.02%–2.32%）下沿附近；若升破2.32%（2024-01的5年高点），将增强收益率“回落走低”情景"
+  },
+  {
+   "source": "40ae5a76-f14e-4d0f-aeaf-22dcbafe060b",
+   "target": "40ae5a76-f14e-4d0f-aeaf-22dcbafe060b",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "鲍威尔及FOMC投票委员 亦称 FOMC投票委员"
+  },
+  {
+   "source": "cedb9234-50b0-4b1b-8d52-033d9acdb40f",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "CONSTRAINS",
+   "fact": "现行持续决议(CR)仅维持政府资金至2026年12月11日,国会拨款行动约束财政部资金与债务上限处理"
+  },
+  {
+   "source": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "SUPPLIES",
+   "fact": "DGS10的底层为美国财政部恒定到期收益率曲线数据"
+  },
+  {
+   "source": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "target": "702da1c1-be30-498c-8e3c-bf530173626b",
+   "name": "REPORTS_ON",
+   "fact": "摩根士丹利(2026-10-14)预计10年期收益率在12–15个月内回落至约4.7%,假设到2027年12月仅加息两次(市场定价约三次)"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "9cc84965-d4db-42af-9c28-f7bce161bfca",
+   "name": "TRIGGERS",
+   "fact": "Kim–Wright期限溢价0.96%(2026-09)创五年区间上沿,期限溢价续创新高被视为触发10年期收益率再度上行的确认信号"
+  },
+  {
+   "source": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "target": "200744c4-5fac-41ab-9275-ae9a6f45e4e9",
+   "name": "SUPPLIES",
+   "fact": "2026年8月5日季度再融资声明中，美国财政部发行3年期国债580亿美元"
+  },
+  {
+   "source": "14b5ef02-9fbe-481d-96f7-97c8a8a92bc7",
+   "target": "b30b6059-4420-4c7b-b09d-ff23eafee7ad",
+   "name": "SUPPLIES",
+   "fact": "FRED发布美国十年期盈亏平衡通胀率(T10YIE)官方数据，最新值低于一年前"
+  },
+  {
+   "source": "a1fb2911-0c69-4e30-9ad5-e65c32ffd7a1",
+   "target": "f635aa3b-e896-462b-8554-0bae56c04eee",
+   "name": "REPORTS_ON",
+   "fact": "纽约联储DSGE模型（2026年3月）预测未来四个季度衰退概率为35.8%（四季增长低于-1%的定义；数字未核实）"
+  },
+  {
+   "source": "3c56883b-521c-49c2-aa3a-45ca0b57a503",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "REPORTS_ON",
+   "fact": "CBO利率假设：10年期收益率至2027年前逐步上升，此后保持相对稳定；CRFB转述路径为2026年4.1%升至2031年起4.4%"
+  },
+  {
+   "source": "ae596805-2d45-4c7e-9ff2-189772ac6c39",
+   "target": "ae596805-2d45-4c7e-9ff2-189772ac6c39",
+   "name": "SUPPORTS",
+   "fact": "克利夫兰联储运营其收益率曲线模型，该模型记录显示2022年末至2024年末的曲线倒挂是历史上第三次显著“假阳性”"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "6d0d8093-368e-4a47-848d-7be60c6cf116",
+   "name": "REPORTS_ON",
+   "fact": "Polymarket设有10年期国债收益率5.3%/5.4%/5.5%/5.7%/6.0%触顶阈值的合约,但抓取页未显示各阈值概率,隐含尾部无法核实"
+  },
+  {
+   "source": "73f3fc7e-a9b1-4d10-aeb9-18905173bab8",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "INFLUENCES",
+   "fact": "穆迪将美国降至Aa1（sign=-，strength=0.4，valence=adversarial，polarity=-0.40）"
+  },
+  {
+   "source": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "INFLUENCES",
+   "fact": "FOMC会议与SEP点阵图是监测10年期收益率走向的关键,点阵图转向降息将确认收益率回落情景"
+  },
+  {
+   "source": "fade10cd-60d4-4c67-a827-861f06913b01",
+   "target": "f51f00aa-c0ea-4c26-9f2f-eb9aca233908",
+   "name": "REPORTS_ON",
+   "fact": "The Bank for International Settlements reports the U.S. central bank policy rate (monthly, end of period) at 3.875% for 2026-09."
+  },
+  {
+   "source": "276dbb1d-3381-4aa2-8885-430fc8ff64d0",
+   "target": "f635aa3b-e896-462b-8554-0bae56c04eee",
+   "name": "REPORTS_ON",
+   "fact": "摩根大通全球研究在2026年展望中对2026年美国及全球衰退概率给出35%，并预计通胀粘性持续"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "8a2af74f-3979-415a-a05f-e9c3df6f0b52",
+   "name": "TRIGGERS",
+   "fact": "MOVE指数近期约103.31点(2026-10-23收盘),52周区间上沿115.02点,若升破115并伴随拍卖疲弱需警惕10年期收益率极端突破情景"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "9cc84965-d4db-42af-9c28-f7bce161bfca",
+   "name": "TRIGGERS",
+   "fact": "Kim–Wright期限溢价THREEFYTP10为0.96%(2026-09,五年区间0.101%–0.96%上沿),站稳1.00%上方意味着供给溢价主导、指向再度上行,回落至0.46%(2025-09)下方则支持回落走低"
+  },
+  {
+   "source": "14b5ef02-9fbe-481d-96f7-97c8a8a92bc7",
+   "target": "b30b6059-4420-4c7b-b09d-ff23eafee7ad",
+   "name": "REPORTS_ON",
+   "fact": "FRED reports the 10-Year Breakeven Inflation Rate at 2.351% for 2026-09 (monthly mean of daily data), with latest daily value 2.34% on 2026-10-23."
+  },
+  {
+   "source": "351bac99-5220-4273-86fd-109e9e36830c",
+   "target": "1bf70955-9383-4493-892b-48c6af5f6fc9",
+   "name": "REPORTS_ON",
+   "fact": "The Wall Street Journal published live coverage reporting that Goldman Sachs cut its U.S. recession forecast on 2026-06-22."
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "133308b2-55da-439e-a046-42078f1ab42a",
+   "name": "SUPPLIES",
+   "fact": "The U.S. Treasury Quarterly Refunding (Treasury policy page) governs auction sizes of the securities underlying the 10-year Treasury yield; the November 2026 refunding statement is a key supply-side signal"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "38c1e667-4499-461d-8cf9-c55caf2a6b60",
+   "name": "TRIGGERS",
+   "fact": "10年TIPS实际收益率DFII10为2.638%(2026-09,五年高点),续创新高利好再度上行情景,回落至1.62%(2024-09水平)附近则利好回落走低情景"
+  },
+  {
+   "source": "40ae5a76-f14e-4d0f-aeaf-22dcbafe060b",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "INFLUENCES",
+   "fact": "沃什担任美联储主席,市场解读9月SEP上调2026、2027年增长预测各0.1个百分点至2.3%和2.4%为其领导下的委员会对通胀上行意外的容忍度下降"
+  },
+  {
+   "source": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "SUPPLIES",
+   "fact": "美联储2026年9月FOMC会议以12–0一致投票上调利率,声明确认维持银行体系充足储备,SEP将2026、2027年增长预测各上调0.1个百分点至2.3%和2.4%"
+  },
+  {
+   "source": "48f03859-86bf-4635-8330-2b6ce9acac44",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "REPORTS_ON",
+   "fact": "MUFG Research publishes a September 2026 Fed & Rates Call Update analyzing FOMC policy path (source S35)."
+  },
+  {
+   "source": "de0b10ed-20c9-4d2b-be09-8a717ab48f29",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "SUPPLIES",
+   "fact": "据SIFMA统计：2026年前9个月美国国债发行24.6万亿美元(同比+10.2%)，9月末存量31.8万亿(同比+7.1%)"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "8a2af74f-3979-415a-a05f-e9c3df6f0b52",
+   "name": "TRIGGERS",
+   "fact": "按MOVE指数(2026-10-23收盘103.31)的量级折算,10年期国债收益率年化隐含波动约1个百分点,与情景区间的±1σ先验一致"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "9cc84965-d4db-42af-9c28-f7bce161bfca",
+   "name": "TRIGGERS",
+   "fact": "Kim–Wright口径期限溢价从0.462%升至0.96%，推动10年期国债收益率上行，构成熊陡形态"
+  },
+  {
+   "source": "fbbffa96-a76d-4bad-8a63-0293095858ea",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "CONSTRAINS",
+   "fact": "BPC估计债务上限将于2027年冬末至仲夏之间再度触及,非常规措施与现金约可再维持6–9个月,构成财政部融资空间的尾部约束"
+  },
+  {
+   "source": "ae596805-2d45-4c7e-9ff2-189772ac6c39",
+   "target": "fe9d8198-b092-47da-af3e-4d139968a892",
+   "name": "REPORTS_ON",
+   "fact": "克利夫兰联储曲线模型2026年9月基于3M10Y利差给出衰退概率读数为11.4%，且其记录显示2022年末至2024年末的收益率曲线倒挂是历史上第三次显著的假阳性（未在一年内伴随衰退）"
+  },
+  {
+   "source": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "INFLUENCES",
+   "fact": "政策利率与储备管理购买（监测SOMA票据购买）影响发行环境（strength=0.6，valence=neutral，polarity=0.00）"
+  },
+  {
+   "source": "1bf70955-9383-4493-892b-48c6af5f6fc9",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "SUPPLIES",
+   "fact": "高盛估计美国财政部2026年全年票据净供给约8270亿美元，远高于2025年的约3600亿"
+  },
+  {
+   "source": "5a950c46-391b-445e-ad21-16f845d38b55",
+   "target": "f51f00aa-c0ea-4c26-9f2f-eb9aca233908",
+   "name": "REPORTS_ON",
+   "fact": "The Bank of Japan published scheduled dates of monetary policy meetings in 2027 (document m_ref260731a.pdf)."
+  },
+  {
+   "source": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "target": "5e154533-e200-41a1-9f59-9ec79c14ad6a",
+   "name": "INFLUENCES",
+   "fact": "美联储2026年9月会议一致投票加息25个基点,声明称通胀仍处于高位、加息将支持更及时地回归2%目标;SEP基础PCE通胀中值2026年3.7%、2027年2.4%、2028年2.2%、2029年2.0%,核心PCE 2026年3.4%、2027年2.5%"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "a0a5e241-ff8b-4497-8167-6bbfa64f581b",
+   "name": "REPORTS_ON",
+   "fact": "WSJ经济学家调查(2026-10-11,71位受访者)预测10年期国债收益率2027年中为4.96%、2027年底为4.78%(7月调查为4.3%/4.26%,大幅上修)"
+  },
+  {
+   "source": "14b5ef02-9fbe-481d-96f7-97c8a8a92bc7",
+   "target": "9cc84965-d4db-42af-9c28-f7bce161bfca",
+   "name": "REPORTS_ON",
+   "fact": "FRED发布THREEFYTP10序列,即Kim–Wright(2005)模型期限溢价数据(2026年9月读数0.96%,2026年10月16日为0.986%)"
+  },
+  {
+   "source": "5a950c46-391b-445e-ad21-16f845d38b55",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "COMPETES_WITH",
+   "fact": "BOJ正常化使10年期JGB约3%与美国10年期4.989%(2026年9月)的未对冲利差收窄至200bp以内,日本机构投资者对本国债券相对吸引力上升,日资对美债需求前景偏弱,构成期限溢价上行的结构性支撑之一。"
+  },
+  {
+   "source": "ce3d8aad-f1eb-4bb4-ac6d-3dd24c3c3e4b",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "CUSTOMER_OF",
+   "fact": "TIC显示2026年8月持仓590.7（十亿美元）多年低点、同比减约1090亿美元（sign=-，strength=0.6，valence=transactional，polarity=-0.30）"
+  },
+  {
+   "source": "3c56883b-521c-49c2-aa3a-45ca0b57a503",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "REPORTS_ON",
+   "fact": "The Congressional Budget Office publishes the Budget and Economic Outlook 2026 to 2036 covering federal fiscal projections relevant to Treasury finances."
+  },
+  {
+   "source": "f5606ce5-8d34-44d5-a2e3-3a7e85974cde",
+   "target": "692b7cd5-4bf3-4c0d-b550-c7e070bed21a",
+   "name": "REPORTS_ON",
+   "fact": "BondSavvy解读9月SEP点阵图称多数参与者预计2027年底目标区间落在4.00%–4.50%"
+  },
+  {
+   "source": "6d1b9b86-adeb-4639-9de0-88144b6be8c1",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "SUPPORTS",
+   "fact": "The Survey of Professional Forecasters (Third Quarter 2026) provides forecast data used in Federal Reserve system research."
+  },
+  {
+   "source": "e6a2833e-164f-46e9-bad2-68a4ee195264",
+   "target": "f51f00aa-c0ea-4c26-9f2f-eb9aca233908",
+   "name": "REPORTS_ON",
+   "fact": "StreetStats publishes a Fed Funds Rate forecast for 2026-2031."
+  },
+  {
+   "source": "7adbdc1a-526e-479b-8a45-457a59a0cc1a",
+   "target": "3c56883b-521c-49c2-aa3a-45ca0b57a503",
+   "name": "SUPPLIES",
+   "fact": "CRFB转述CBO基线，10年期收益率假设从2026年4.1%升至2031年起4.4%，赤字路径2025年5.8%升至2028年6.0%"
+  },
+  {
+   "source": "12ad00da-56cf-4dc9-b247-61281099430d",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "REPORTS_ON",
+   "fact": "路透社报道财长贝森特短期内将继续以票据作为美国财政部的主要融资工具，货币基金需求或跟不上供给，重票据策略放大利率上行时的滚动再融资风险"
+  },
+  {
+   "source": "b30b6059-4420-4c7b-b09d-ff23eafee7ad",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "若T10YIE跌破约2.0%且实际利率同步回落，将支持10年期收益率回落走低情景"
+  },
+  {
+   "source": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "INFLUENCES",
+   "fact": "美联储政策路径与缩表(QT)是10年期国债收益率的核心驱动因素;2026年9月加息后政策利率区间中值为3.875%"
+  },
+  {
+   "source": "b3f9eab3-d715-44c5-b311-5ae76f750fdd",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "REPORTS_ON",
+   "fact": "CME FedWatch 2026-10-26数据显示市场对2026-10-28 FOMC会议定价为维持375–400bp区间概率90.6%、加息至400–425bp概率9.4%、降息概率0.0%;一个月前(2026-09-25)10月会议加息概率曾达64.2%,现已大幅回落"
+  },
+  {
+   "source": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "target": "52389dfe-93c9-40d4-a610-7aa07fede006",
+   "name": "SUPPLIES",
+   "fact": "美国财政部提供日频CMT数据，显示2026年10月23日10年期为5.00%，9月23日5.11%、10月1日5.24%等多个单日读数≥5.00%"
+  },
+  {
+   "source": "804ddb0e-7a1c-4757-971b-45cdcb519d84",
+   "target": "fe9d8198-b092-47da-af3e-4d139968a892",
+   "name": "TRIGGERS",
+   "fact": "纽约联储Probit模型基于10年-3个月利差（3M10Y利差）生成衰退概率预测"
+  },
+  {
+   "source": "702da1c1-be30-498c-8e3c-bf530173626b",
+   "target": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "name": "REPORTS_ON",
+   "fact": "摩根士丹利预计美联储到2027年12月仅加息两次(市场定价约三次),美国10年期国债收益率在12–15个月内回落至4.7%"
+  },
+  {
+   "source": "692f1806-29b4-4f9a-bd6c-b9a79461ead6",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "10年期减3个月利差2026年9月为+0.896%（上年同期仅+0.055%），日度+0.78%，曲线陡峭正斜率不支持美国10年期国债收益率回落走低情景"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "9d98653b-51f1-4b0f-8475-f1eca4f4c7be",
+   "name": "REPORTS_ON",
+   "fact": "Wells Fargo warned that rates (10-year Treasury yield) could stay higher through 2027, as covered by Yahoo Finance."
+  },
+  {
+   "source": "12ad00da-56cf-4dc9-b247-61281099430d",
+   "target": "5a950c46-391b-445e-ad21-16f845d38b55",
+   "name": "REPORTS_ON",
+   "fact": "路透指出BOJ将2027年7月会议安排在两名鹰派委员任期届满之前,该日程安排可能对日本利率终局水平至关重要。"
+  },
+  {
+   "source": "de0b10ed-20c9-4d2b-be09-8a717ab48f29",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "REPORTS_ON",
+   "fact": "SIFMA统计显示2026年前9个月美国国债发行24.6万亿美元(同比+10.2%),9月末存量31.8万亿美元(同比+7.1%)。"
+  },
+  {
+   "source": "126550a0-bdd0-4584-8bb4-9d2d25b29fb0",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "T5YIFR月均升破其近5年高点2.46%(2023年10月)将指向长期预期脱锚、支持10年期收益率再度上行"
+  },
+  {
+   "source": "14b5ef02-9fbe-481d-96f7-97c8a8a92bc7",
+   "target": "126550a0-bdd0-4584-8bb4-9d2d25b29fb0",
+   "name": "SUPPLIES",
+   "fact": "FRED发布美国五年后五年远期通胀预期(T5YIFR)官方数据，最新值高于一年前、处于图示区间高位；其月均若升破近5年高点2.46%(2023年10月)将指向长期预期脱锚"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "a0b44a82-2191-40b9-80cb-9d8f5c80ae44",
+   "name": "REPORTS_ON",
+   "fact": "嘉信理财2026年年中预测10年期国债收益率处于4%–4.5%区间,该预测已被2026年10月行情证伪,提示卖方分布左尾可能偏厚"
+  },
+  {
+   "source": "5a950c46-391b-445e-ad21-16f845d38b55",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "COMPETES_WITH",
+   "fact": "JGB 10年触3%，美日利差收窄至200bp内，日本机构需求回流本国（sign=-，strength=0.6，valence=adversarial，polarity=-0.40）"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "0bb8eb49-11e3-4f61-954d-fce8b0ed9069",
+   "name": "REPORTS_ON",
+   "fact": "Macrotrends charts the 10 Year Treasury Yield from 1962 to 2026 (source S31)."
+  },
+  {
+   "source": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "target": "336ab703-0133-4417-924c-d5ba81d27272",
+   "name": "REPORTS_ON",
+   "fact": "摩根大通财富管理(2026-10-21)预测10年期收益率2027年中基准约5.25%,牛市情景约4.50%,熊市情景约5.75%,柴油冲击情景5.50%–6.00%"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "276dbb1d-3381-4aa2-8885-430fc8ff64d0",
+   "name": "REPORTS_ON",
+   "fact": "J.P. Morgan Global Research publishes a 2026 Market Outlook covering markets including Treasury yields (source S27)."
+  },
+  {
+   "source": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "target": "9cc84965-d4db-42af-9c28-f7bce161bfca",
+   "name": "INFLUENCES",
+   "fact": "财政部季度再融资声明(2026-11-04)中附息券规模指引影响期限溢价走向:附息券规模上调叠加盈亏平衡升向2.88%将证伪回落走低情景"
+  },
+  {
+   "source": "70032746-6fa6-41db-9e6f-bd16a54a5ef7",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "INFLUENCES",
+   "fact": "穆迪于2025年5月16日将美国信用评级降至Aa1,影响其债务风险定价"
+  },
+  {
+   "source": "9cc84965-d4db-42af-9c28-f7bce161bfca",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "Kim–Wright期限溢价为0.96%(2026-09),创近5年新高,推动10年期收益率上行"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "3c56883b-521c-49c2-aa3a-45ca0b57a503",
+   "name": "REPORTS_ON",
+   "fact": "CBO基线假设10年期收益率在2027年前逐步上升、此后保持相对稳定,并预测2026财年赤字1.9万亿美元(占GDP的5.8%)"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "b3f9eab3-d715-44c5-b311-5ae76f750fdd",
+   "name": "REPORTS_ON",
+   "fact": "CME FedWatch(2026-10-26)显示10月28日FOMC会议维持3.75%–4.00%利率区间的概率为90.6%、加息至4.00%–4.25%的概率为9.4%、降息概率0.0%,该政策路径影响10年期国债收益率定价"
+  },
+  {
+   "source": "12ad00da-56cf-4dc9-b247-61281099430d",
+   "target": "a08dcc44-149e-400c-a060-a422dd938670",
+   "name": "REPORTS_ON",
+   "fact": "路透社报道引用TIC数据称中国大陆2026年6月持仓6334亿美元,较5月的6593亿下降4%,同比降幅超过13%。"
+  },
+  {
+   "source": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "INFLUENCES",
+   "fact": "美联储2026年9月加息(政策利率升至3.875%)后,10年期收益率2026年9月达4.989%,可分解为实际利率2.638%+盈亏平衡2.351%;储备管理购买若再投资偏向长债将对10年期期限溢价构成边际压制,仅滚动短债则近于中性"
+  },
+  {
+   "source": "b30b6059-4420-4c7b-b09d-ff23eafee7ad",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "过去12个月盈亏平衡通胀不升反降,未推动10年期收益率上行"
+  },
+  {
+   "source": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "target": "f2f735c3-31b1-43da-8446-3b1986c8de77",
+   "name": "SUPPLIES",
+   "fact": "纽约联储于每个交易日纽约时间下午3:30前后采集收盘买方报价,经单调凸样条插值得到各恒定期限收益率"
+  },
+  {
+   "source": "f2f735c3-31b1-43da-8446-3b1986c8de77",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "SUPPORTS",
+   "fact": "FEDS Notes与衰退概率模型服务政策分析（sign=+，strength=0.5，valence=allied，polarity=0.50）"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "f635aa3b-e896-462b-8554-0bae56c04eee",
+   "name": "TRIGGERS",
+   "fact": "平滑衰退概率RECPROUSM156N为0.62%(2026-08),五年高点2.32%(2024-01),若升破2.32%则构成衰退兑现信号、指向10年期收益率回落走低"
+  },
+  {
+   "source": "5e154533-e200-41a1-9f59-9ec79c14ad6a",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "若PCE通胀停留在3%以上而衰退概率维持低位，将强化美国10年期国债收益率“高位企稳”情景"
+  },
+  {
+   "source": "3c56883b-521c-49c2-aa3a-45ca0b57a503",
+   "target": "cedb9234-50b0-4b1b-8d52-033d9acdb40f",
+   "name": "INFLUENCES",
+   "fact": "CBO基线为立法讨论提供成本估算（sign=+，strength=0.4，valence=directional，polarity=0.20）"
+  },
+  {
+   "source": "48f03859-86bf-4635-8330-2b6ce9acac44",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "REPORTS_ON",
+   "fact": "MUFG在2026年9月会前将FOMC会议定性为“加息周期的开始、还是重建信誉的机会”,预计美联储跳过10月会议(临近中期选举),并认为市场此后会持续定价1–2次额外加息"
+  },
+  {
+   "source": "18b68c33-1654-4326-9d83-468e085e5ee5",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "ACM期限溢价更新是监测10年期收益率的要点,期限溢价升破近5年高点将提高收益率上行概率"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "9d98653b-51f1-4b0f-8475-f1eca4f4c7be",
+   "name": "REPORTS_ON",
+   "fact": "Wells Fargo warned that rates could stay higher through 2027 (per Yahoo Finance article, tier 3 source fetched 2026-10-26)"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "1812b4a2-db43-4c57-96b7-904960b2ad12",
+   "name": "TRIGGERS",
+   "fact": "2026年9月前的12个月内10年期TIPS实际收益率上升0.889个百分点至2.638%，是10年期国债收益率长端上行的主要驱动因素之一"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "INFLUENCES",
+   "fact": "美联储政策利率3.875%(2026-09)及期货定价到2027年9月会议累计再加息约65.5bp(2–3次)的路径直接影响10年期国债收益率定价"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "5c77eef3-c37c-4c69-9b89-81ca77fcc4f5",
+   "name": "TRIGGERS",
+   "fact": "PIIE认为2026年通胀年底或超过4%,若2027年通胀停留在3%上方且加息超出市场定价,将强化10年期收益率再度上行情景"
+  },
+  {
+   "source": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "target": "95c8e6e1-01a8-4116-8948-67ff8096314b",
+   "name": "SUPPLIES",
+   "fact": "再融资声明与拍卖结构（sign=+，strength=0.8，valence=transactional，polarity=0.30）"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "19eea4ed-0358-4729-809f-ebc9184e8a2b",
+   "name": "REPORTS_ON",
+   "fact": "JPMorgan strategists forecast on whether the 10-Year Treasury Yield could reach 5.75% in 2027, as published in a Chase article."
+  },
+  {
+   "source": "692b7cd5-4bf3-4c0d-b550-c7e070bed21a",
+   "target": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "name": "TRIGGERS",
+   "fact": "若通胀快速回落至FOMC 9月SEP的2027年PCE 2.4%路径,将引发降息定价并触发10年期收益率下行重定价"
+  },
+  {
+   "source": "8eda7c9d-cb96-402e-81d2-cf7ceb0132fc",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "密歇根一年期通胀预期与10年期盈亏平衡通胀是监测10年期收益率的关键指标"
+  },
+  {
+   "source": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "target": "9cc84965-d4db-42af-9c28-f7bce161bfca",
+   "name": "INFLUENCES",
+   "fact": "Kim–Wright期限溢价2026年9月为0.96%(同比+0.499个百分点,创近5年区间0.101%–0.96%的新高),是10年期收益率的驱动成分之一;其回落至0.46%下方将证伪高位企稳情景"
+  },
+  {
+   "source": "f2f735c3-31b1-43da-8446-3b1986c8de77",
+   "target": "804ddb0e-7a1c-4757-971b-45cdcb519d84",
+   "name": "REPORTS_ON",
+   "fact": "转述称纽约联储基于10年-3个月利差的Probit模型给出2026年约28%、2027年约15%的衰退概率均值（具体数字未从原始页面核实）"
+  },
+  {
+   "source": "14b5ef02-9fbe-481d-96f7-97c8a8a92bc7",
+   "target": "126550a0-bdd0-4584-8bb4-9d2d25b29fb0",
+   "name": "REPORTS_ON",
+   "fact": "FRED reports the 5-Year, 5-Year Forward Inflation Expectation Rate at 2.34% for 2026-09 (monthly mean of daily data), with latest daily value 2.2% on 2026-10-23."
+  },
+  {
+   "source": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "INFLUENCES",
+   "fact": "FOMC会议影响10年期收益率定价:2026-10-28会议维持利率在375–400bp的概率为90.6%;2027年3月16–17日与6月8–9日为带SEP的会议"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "336ab703-0133-4417-924c-d5ba81d27272",
+   "name": "REPORTS_ON",
+   "fact": "摩根大通财富管理(2026-10-21)给出2027年底10年期国债收益率观点:基准2027年中约5.25%,牛市情景约4.50%,熊市情景约5.75%,柴油冲击情景5.50%–6.00%"
+  },
+  {
+   "source": "c28e3ced-922f-4cf3-8933-9af92177eb92",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "2s10s利差2026年9月月均+0.338%、2026年10月23日日度+0.31%；若2s10s再度倒挂（5年区间下沿-0.93%，2023-07），将增强美国10年期国债收益率“回落走低”情景"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "ed2ea2d2-e634-4bc0-889d-89abc8738390",
+   "name": "TRIGGERS",
+   "fact": "日本10年期JGB收益率自1996年9月以来首次触及3%,境外需求走弱被认为是推高美国10年期国债收益率的机制之一"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "336ab703-0133-4417-924c-d5ba81d27272",
+   "name": "REPORTS_ON",
+   "fact": "摩根大通财富管理预测10年期国债收益率基准为2027年年中约5.25%,熊市情景区间5.50%–6.00%"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "b30b6059-4420-4c7b-b09d-ff23eafee7ad",
+   "name": "TRIGGERS",
+   "fact": "盈亏平衡通胀T10YIE最新值2.351%(2026-09,五年区间2.11%–2.88%),若持续升向2.88%上沿将触发通胀脱锚重定价、指向再度上行情景"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "CONSTRAINS",
+   "fact": "联邦公共债务总额已达40,444,342,709,389.15美元(2026-10-22)且高盛估计2026年票据净供给约8270亿美元(远高于2025年的约3600亿),财政供给压力约束10年期收益率易上难下"
+  },
+  {
+   "source": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "INFLUENCES",
+   "fact": "美联储政策利率3.875%(2026-09,9月加息后的区间中值)影响DGS10走势;会议纪要显示几乎所有决策者支持停止缩表,总资产已企稳"
+  },
+  {
+   "source": "12ad00da-56cf-4dc9-b247-61281099430d",
+   "target": "2f14f9a0-2371-423f-8d94-f496d85c3482",
+   "name": "REPORTS_ON",
+   "fact": "Reuters reported on growth in US Treasury bill issuance and heightened long-term risk (2026-07-23)."
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "6d0d8093-368e-4a47-848d-7be60c6cf116",
+   "name": "REPORTS_ON",
+   "fact": "Polymarket设有“2027年前10年期高点”阈值合约(5.3%/5.4%/5.5%/5.7%/6.0%),但抓取页未显示各阈值概率"
+  },
+  {
+   "source": "07728f2c-8b95-499b-a4a9-83728515bf8a",
+   "target": "5a950c46-391b-445e-ad21-16f845d38b55",
+   "name": "REPORTS_ON",
+   "fact": "Oxford Economics published analysis stating the BoJ will likely hike higher and faster."
+  },
+  {
+   "source": "07728f2c-8b95-499b-a4a9-83728515bf8a",
+   "target": "0b547193-5e67-4bc1-97d6-97f78ab91d8b",
+   "name": "REPORTS_ON",
+   "fact": "Oxford Economics published research on how a trade war flare-up will cost Canada"
+  },
+  {
+   "source": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "SUPPORTS",
+   "fact": "The Federal Reserve publishes FOMC meeting calendars and information, and announced the FOMC's tentative meeting schedule for 2027 (press release dated 2025-09-05)."
+  },
+  {
+   "source": "8a2af74f-3979-415a-a05f-e9c3df6f0b52",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "MOVE指数隐含波动是监测10年期国债收益率的指标之一"
+  },
+  {
+   "source": "6d0d8093-368e-4a47-848d-7be60c6cf116",
+   "target": "f635aa3b-e896-462b-8554-0bae56c04eee",
+   "name": "REPORTS_ON",
+   "fact": "Polymarket预测市场“2026年底前美国衰退”合约当前人群概率为9%"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "cb30af4e-f95a-431b-ba14-aaa29227d47a",
+   "name": "REPORTS_ON",
+   "fact": "The Wall Street Journal live coverage reports Goldman Sachs cutting its U.S. recession forecast (source S26)."
+  },
+  {
+   "source": "ae596805-2d45-4c7e-9ff2-189772ac6c39",
+   "target": "f635aa3b-e896-462b-8554-0bae56c04eee",
+   "name": "REPORTS_ON",
+   "fact": "克利夫兰联储曲线模型2026年9月30日对未来一年的衰退概率读数为11.4%（数字未核实）"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "fbbffa96-a76d-4bad-8a63-0293095858ea",
+   "name": "CONSTRAINS",
+   "fact": "The Bipartisan Policy Center published 'When Will We Reach the Debt Limit (Again)?' analyzing debt limit constraints affecting Treasury risk pricing."
+  },
+  {
+   "source": "9cc84965-d4db-42af-9c28-f7bce161bfca",
+   "target": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "name": "TRIGGERS",
+   "fact": "Kim–Wright期限溢价一年内从0.462%(2025-09)升至0.96%(2026-09)接近翻倍,长端收益率由“实际利率+溢价”双轮驱动,若期限溢价因供给与境外需求走弱而扩大将推动收益率升至5.50%–6.50%"
+  },
+  {
+   "source": "f2f735c3-31b1-43da-8446-3b1986c8de77",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "REPORTS_ON",
+   "fact": "纽约联储FEDS Notes(2026年1月14日)指出美联储资产负债表合意稳态规模仍是开放问题,经济学界与政策制定者之间无共识"
+  },
+  {
+   "source": "5a950c46-391b-445e-ad21-16f845d38b55",
+   "target": "5a950c46-391b-445e-ad21-16f845d38b55",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "日本银行（BOJ） 亦称 日本央行"
+  },
+  {
+   "source": "9cc84965-d4db-42af-9c28-f7bce161bfca",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "Kim–Wright或ACM期限溢价升破约1.5%支持10年期收益率再度上行，回落至0.5%下方则支持回落走低"
+  },
+  {
+   "source": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "target": "692b7cd5-4bf3-4c0d-b550-c7e070bed21a",
+   "name": "PUBLISHES",
+   "fact": "FOMC发布9月SEP,PCE中值路径为2026年3.7%、2027年2.4%、2028年2.2%,核心PCE 2026年3.4%、2027年2.5%"
+  },
+  {
+   "source": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "CONSTRAINS",
+   "fact": "财政赤字与债务存量高企令国债供给压力持续,抑制10年期收益率下行"
+  },
+  {
+   "source": "5c77eef3-c37c-4c69-9b89-81ca77fcc4f5",
+   "target": "337471fb-3362-4c22-80a8-2c9fc62bd226",
+   "name": "REPORTS_ON",
+   "fact": "PIIE认为2026年通胀更可能超预期、年底或超过4%，理由是关税滞后效应、本财年赤字可能超过GDP的7%、移民收紧与预期上漂"
+  },
+  {
+   "source": "8a1a9838-bbc1-40cc-9909-d437a18873a9",
+   "target": "6d1b9b86-adeb-4639-9de0-88144b6be8c1",
+   "name": "PUBLISHES",
+   "fact": "费城联储发布2026年8月三季度SPF调查(32位预测者),显示未来10年PCE通胀中位数2.20%(较上期−0.02个百分点)、CPI中位数2.30%(−0.10个百分点)"
+  },
+  {
+   "source": "18b68c33-1654-4326-9d83-468e085e5ee5",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "ACM期限溢价升破约1.5%支持10年期收益率再度上行，回落至0.5%下方则支持回落走低"
+  },
+  {
+   "source": "14b5ef02-9fbe-481d-96f7-97c8a8a92bc7",
+   "target": "692f1806-29b4-4f9a-bd6c-b9a79461ead6",
+   "name": "REPORTS_ON",
+   "fact": "FRED publishes the 10-Year Treasury Constant Maturity Minus 3-Month Treasury Constant Maturity series (T10Y3M)."
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "5a950c46-391b-445e-ad21-16f845d38b55",
+   "name": "COMPETES_WITH",
+   "fact": "Bank of Japan policy normalization (release schedule of meetings/outlook reports) competes with the 10-year Treasury yield for investor demand, as BOJ rate hikes pressure Japanese holdings of Treasuries"
+  },
+  {
+   "source": "83697341-ef52-4ebb-b3d6-5eb01464f7a4",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "TIC境外持仓(中国大陆已降至多年低点)显示境外官方需求走弱,是10年期收益率上行的助推因素"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "name": "REPORTS_ON",
+   "fact": "FRED/Treasury的DGS10月均序列显示2026年9月10年期国债收益率月均为4.989%，较2025年9月的4.12%上升0.869个百分点，最新日度值为4.96%（2026-10-22）"
+  },
+  {
+   "source": "f2f735c3-31b1-43da-8446-3b1986c8de77",
+   "target": "9c0033cf-f7d7-4288-91e9-a605e734f6cc",
+   "name": "REPORTS_ON",
+   "fact": "The Federal Reserve Bank of New York publishes a PDF on the Probability of US Recession Predicted by Treasury Spread (source S29)."
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "702da1c1-be30-498c-8e3c-bf530173626b",
+   "name": "REPORTS_ON",
+   "fact": "摩根士丹利(2026-10-14)预测10年期国债收益率将在12–15个月内回落至4.7%,假设到2027年12月仅加息两次(市场定价约三次)"
+  },
+  {
+   "source": "cedb9234-50b0-4b1b-8d52-033d9acdb40f",
+   "target": "cedb9234-50b0-4b1b-8d52-033d9acdb40f",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "美国国会 亦称 国会"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "5c77eef3-c37c-4c69-9b89-81ca77fcc4f5",
+   "name": "REPORTS_ON",
+   "fact": "PIIE认为2026年通胀更可能超预期、年底或超过4%,该判断若兑现将证伪10年期收益率回落走低情景"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "TRIGGERS",
+   "fact": "美国财政部2026年11月4日再融资声明若上调附息券规模,是供给端最强单一信号、直接利好10年期收益率再度上行;维持不变则支持高位企稳"
+  },
+  {
+   "source": "692b7cd5-4bf3-4c0d-b550-c7e070bed21a",
+   "target": "5e154533-e200-41a1-9f59-9ec79c14ad6a",
+   "name": "REPORTS_ON",
+   "fact": "FOMC 2026年9月SEP预测PCE通胀2026年为3.7%、2027年降至2.4%，显示通胀顽固"
+  },
+  {
+   "source": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "target": "7f52331d-0c3d-464b-82c7-4eea799c0396",
+   "name": "MONITORS",
+   "fact": "美国财政部表示正监测SOMA对票据的购买及私人票据需求增长"
+  },
+  {
+   "source": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "target": "133308b2-55da-439e-a046-42078f1ab42a",
+   "name": "SUPPLIES",
+   "fact": "The U.S. Department of the Treasury publishes the most recent Quarterly Refunding documents, including Brian Smith's Quarterly Refunding Statement."
+  },
+  {
+   "source": "8b14b975-9319-4ad1-a781-8101f0c165fa",
+   "target": "9cc84965-d4db-42af-9c28-f7bce161bfca",
+   "name": "REPORTS_ON",
+   "fact": "MacroMicro转引ACM口径10年期期限溢价为0.72%–0.73%(2026-10-21快照),与Kim–Wright口径读数形成对照(该数字未经原始数据文件核实)"
+  },
+  {
+   "source": "8b14b975-9319-4ad1-a781-8101f0c165fa",
+   "target": "18b68c33-1654-4326-9d83-468e085e5ee5",
+   "name": "REPORTS_ON",
+   "fact": "MacroMicro转引数据显示ACM口径期限溢价约为0.72%–0.73%(2026-10-21)"
+  },
+  {
+   "source": "1f1dc6a6-a9f4-4cd1-bd3b-7074118fdf60",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "SUPPLIES",
+   "fact": "FRED (St. Louis Fed) publishes the DGS10 series, the Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis (tier 1, fetched)."
+  },
+  {
+   "source": "3c56883b-521c-49c2-aa3a-45ca0b57a503",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "SUPPLIES",
+   "fact": "CBO于2026年2月基线预测：FY2026赤字1.9万亿美元(占GDP 5.8%)，FY2036升至3.1万亿美元(6.7%)；2026–2035累计赤字23.1万亿美元；公众持有债务2025年底占GDP 99%、2036年达120%；净利息支出2026年1.0万亿美元升至2036年2.1万亿"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "1bf70955-9383-4493-892b-48c6af5f6fc9",
+   "name": "REPORTS_ON",
+   "fact": "高盛于2026年6月22日将美国未来12个月衰退概率定为15%,该增长评估被用作10年期收益率回落走低情景的监测口径之一"
+  },
+  {
+   "source": "fade10cd-60d4-4c67-a827-861f06913b01",
+   "target": "f51f00aa-c0ea-4c26-9f2f-eb9aca233908",
+   "name": "SUPPLIES",
+   "fact": "The Bank for International Settlements provides the BIS CBPOL series, Central bank policy rates for the United States, Monthly, End of period (tier 1, fetched)."
+  },
+  {
+   "source": "12ad00da-56cf-4dc9-b247-61281099430d",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "REPORTS_ON",
+   "fact": "路透报道2025年11月19日美联储会议纪要显示“几乎所有”政策制定者支持12月1日停止缩表的计划"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "126550a0-bdd0-4584-8bb4-9d2d25b29fb0",
+   "name": "TRIGGERS",
+   "fact": "5年5年远期通胀预期T5YIFR为2.34%(2026-09)、日度2.2%(2026-10-23),若升破2.46%的五年上沿将触发长期预期脱锚警报"
+  },
+  {
+   "source": "4aaa9eea-a082-4eed-a109-9c2827de27b3",
+   "target": "5a950c46-391b-445e-ad21-16f845d38b55",
+   "name": "INFLUENCES",
+   "fact": "2026年7月下旬的美日联合外汇干预效果短暂,反而加大了BOJ加快加息的压力。"
+  },
+  {
+   "source": "5a950c46-391b-445e-ad21-16f845d38b55",
+   "target": "ed2ea2d2-e634-4bc0-889d-89abc8738390",
+   "name": "INFLUENCES",
+   "fact": "市场押注BOJ加快加息是10年期JGB收益率2026年9月1日盘中触及3.005%(1996年9月以来首次升破3%)的驱动因素之一。"
+  },
+  {
+   "source": "27ececff-5cd1-468e-aca9-d908c816f962",
+   "target": "3c56883b-521c-49c2-aa3a-45ca0b57a503",
+   "name": "REPORTS_ON",
+   "fact": "The Committee for a Responsible Federal Budget published coverage of CBO's February 2026 Budget and Economic Outlook (fetched)."
+  },
+  {
+   "source": "5a950c46-391b-445e-ad21-16f845d38b55",
+   "target": "5a950c46-391b-445e-ad21-16f845d38b55",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "日本银行（BOJ） 亦称 BOJ"
+  },
+  {
+   "source": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "target": "692b7cd5-4bf3-4c0d-b550-c7e070bed21a",
+   "name": "INFLUENCES",
+   "fact": "FOMC于2027年3月16–17日与6月8–9日举行带SEP的会议,对点阵图进行重估"
+  },
+  {
+   "source": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "target": "eba20d16-1a18-4041-b805-dff05d6fa21c",
+   "name": "SUPPLIES",
+   "fact": "美国财政部指引未来至少几个季度维持名义附息券与FRN拍卖规模不变"
+  },
+  {
+   "source": "07728f2c-8b95-499b-a4a9-83728515bf8a",
+   "target": "5a950c46-391b-445e-ad21-16f845d38b55",
+   "name": "REPORTS_ON",
+   "fact": "牛津经济研究院(2026年8月31日)预测BOJ将于2026年9月、12月及2027年4月加息至1.75%(其新估的名义中性利率,原为1.5%),若日元进一步走弱,2027年7月或加息至2%。"
+  },
+  {
+   "source": "86c2baf0-c5d8-45fb-ba28-492c28262576",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "REPORTS_ON",
+   "fact": "RateProbability定价显示2026-12-09 FOMC会议加息概率72.8%(会后隐含利率4.08%),2027年1/3/6/9月会议隐含会后利率分别为4.18%/4.30%/4.49%/4.53%,12个月展望累计加息约65.5个基点(约2–3次加息)"
+  },
+  {
+   "source": "8eda7c9d-cb96-402e-81d2-cf7ceb0132fc",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "密歇根1年通胀预期若升破近5年高点5%(2025年6月)，将强化通胀顽固路径并支撑10年期收益率高位"
+  },
+  {
+   "source": "804ddb0e-7a1c-4757-971b-45cdcb519d84",
+   "target": "f635aa3b-e896-462b-8554-0bae56c04eee",
+   "name": "REPORTS_ON",
+   "fact": "纽约联储曲线Probit模型（数据至2026年9月）对2027年年度均值衰退概率给出0.15的读数（模型外推；数字未核实）"
+  },
+  {
+   "source": "3c56883b-521c-49c2-aa3a-45ca0b57a503",
+   "target": "71e58723-c376-42f2-b731-1636be392fb5",
+   "name": "REPORTS_ON",
+   "fact": "CBO分解2026–2035累计影响：2025年调解法案增赤4.7万亿美元，更高关税减赤3.0万亿，移民相关行政措施增赤0.5万亿美元"
+  },
+  {
+   "source": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "美联储（FOMC） 亦称 FOMC"
+  },
+  {
+   "source": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "美国财政部 亦称 财政部"
+  },
+  {
+   "source": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "target": "cb9bb7d4-1f9e-441f-99c1-d15f48d7bd50",
+   "name": "MANAGES",
+   "fact": "美国财政部预计TGA于2026年10月下旬达到约1.05万亿美元(±500亿)的峰值"
+  },
+  {
+   "source": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "target": "d7f01c03-913a-4393-948b-f4829bb86963",
+   "name": "SUPPLIES",
+   "fact": "2026年8月5日季度再融资声明中，美国财政部发行30年期国债250亿美元"
+  },
+  {
+   "source": "35b428ec-a4f2-4b1c-85b6-34b105cb0cc5",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "COMPETES_WITH",
+   "fact": "BOJ加息叠加中日减持美债将放大美国国债期限溢价压力,日本债券市场正常化与美国财政部争夺同类投资者需求"
+  },
+  {
+   "source": "cedb9234-50b0-4b1b-8d52-033d9acdb40f",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "REGULATES",
+   "fact": "2025年7月法案上调上限5万亿至41.1万亿美元；持续决议维持资金至2026-12-11（strength=0.8，valence=neutral，polarity=0.00）"
+  },
+  {
+   "source": "ed2ea2d2-e634-4bc0-889d-89abc8738390",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "COMPETES_WITH",
+   "fact": "以美国10年期国债收益率2026年9月月均4.989%对10年期JGB约3%推算，未经汇率对冲的美日利差已收窄至200bp以内，日本机构投资者对本国债券的相对吸引力上升，10年期JGB与美国国债竞争投资者需求"
+  },
+  {
+   "source": "19eea4ed-0358-4729-809f-ebc9184e8a2b",
+   "target": "f635aa3b-e896-462b-8554-0bae56c04eee",
+   "name": "REPORTS_ON",
+   "fact": "摩根大通全球研究在2026年展望中给出2026年美国及全球衰退概率为35%"
+  },
+  {
+   "source": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "target": "9805cdca-e997-456a-9959-14e4e28dcb21",
+   "name": "SUPPLIES",
+   "fact": "圣路易斯联储通过FRED发布DGS10(美国10年期恒定到期收益率)日频数据"
+  },
+  {
+   "source": "c30fd86d-dc00-40b1-a107-51e097f79031",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "SUPPLIES",
+   "fact": "The Federal Reserve Board publishes the FOMC statement (September 16, 2026 press release, source S32) and FOMC meeting calendars and tentative meeting schedules (sources S39, S40)."
+  },
+  {
+   "source": "19eea4ed-0358-4729-809f-ebc9184e8a2b",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "REPORTS_ON",
+   "fact": "摩根大通策略团队记录10年期收益率于2026年10月7日盘中触及5.35%,为2002年以来最高;9月单月上行50个基点,位列1962年以来前10%的月度波动"
+  },
+  {
+   "source": "3c56883b-521c-49c2-aa3a-45ca0b57a503",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "REPORTS_ON",
+   "fact": "CBO基线的利率假设隐含美国10年期收益率在2027年前继续上行。"
+  },
+  {
+   "source": "5c77eef3-c37c-4c69-9b89-81ca77fcc4f5",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "REPORTS_ON",
+   "fact": "PIIE published analysis on the risk of higher US inflation in 2026, relevant to Treasury financing conditions."
+  },
+  {
+   "source": "1f1dc6a6-a9f4-4cd1-bd3b-7074118fdf60",
+   "target": "38c1e667-4499-461d-8cf9-c55caf2a6b60",
+   "name": "SUPPLIES",
+   "fact": "FRED publishes the DFII10 series, the Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Inflation-Indexed (tier 1, fetched)."
+  },
+  {
+   "source": "e6a2833e-164f-46e9-bad2-68a4ee195264",
+   "target": "18b68c33-1654-4326-9d83-468e085e5ee5",
+   "name": "REPORTS_ON",
+   "fact": "StreetStats综合模型(合成ACM、Christensen–Rudebusch与Kim–Wright)报告10年期期限溢价0.92%、5年期0.53%、2年期0.31%(截至2026年10月22日)"
+  },
+  {
+   "source": "e6a2833e-164f-46e9-bad2-68a4ee195264",
+   "target": "9c539f99-4826-4683-bb3f-7e435dbf0dd7",
+   "name": "REPORTS_ON",
+   "fact": "StreetStats publishes U.S. Treasury term premiums and rolling returns data for T-Bills, Treasury Notes and Treasury Bonds."
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "71b84ad8-a317-4ce7-adcb-3d3cfcc3a18d",
+   "name": "REPORTS_ON",
+   "fact": "Chase published an article titled 'Could the 10-Year Treasury Yield Reach 5.75% in 2027? Here's What Our JPMorgan Strategists Think' covering the 10-Year Treasury Yield outlook for 2027."
+  },
+  {
+   "source": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "美联储（FOMC） 亦称 Fed"
+  },
+  {
+   "source": "1bf70955-9383-4493-892b-48c6af5f6fc9",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "SUPPLIES",
+   "fact": "高盛估计2026年全年美国国债票据净供给约8270亿美元,远高于2025年的约3600亿美元。"
+  },
+  {
+   "source": "35b428ec-a4f2-4b1c-85b6-34b105cb0cc5",
+   "target": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "name": "INFLUENCES",
+   "fact": "BOJ会议(2026-10-29–30及2027年1月21–22、4月27–28、7月21–22、10月28–29日,1/4/7/10月会后发布展望报告)影响日本资金回流,进而影响10年期收益率"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "c28e3ced-922f-4cf3-8933-9af92177eb92",
+   "name": "TRIGGERS",
+   "fact": "2s10s利差T10Y2Y为0.338%(2026-09),五年低点−0.93%,若重返倒挂则预示紧缩见效、中期指向10年期收益率回落走低"
+  },
+  {
+   "source": "14b5ef02-9fbe-481d-96f7-97c8a8a92bc7",
+   "target": "8eda7c9d-cb96-402e-81d2-cf7ceb0132fc",
+   "name": "REPORTS_ON",
+   "fact": "FRED publishes the University of Michigan Inflation Expectation series (MICH)."
+  },
+  {
+   "source": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "target": "a0a5e241-ff8b-4497-8167-6bbfa64f581b",
+   "name": "REPORTS_ON",
+   "fact": "WSJ经济学家调查(2026-10-11,71位受访者)给出2027年底10年期收益率中值为4.78%,与DGS10结算口径最贴合"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "SUPPLIES",
+   "fact": "The U.S. Department of the Treasury provides daily Treasury yield curve rates data, including the year 2000 daily rates CSV (source S30)."
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "9d98653b-51f1-4b0f-8475-f1eca4f4c7be",
+   "name": "REPORTS_ON",
+   "fact": "富国银行投资研究所在2026年10月媒体报道中将10年期国债收益率预测上调至5.25%–5.75%(原为4.50%–5.00%),并预测政策利率4.75%–5.00%;数值未经原始文件核实"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "74ba2785-f74f-4287-b1a3-8c10d82f782b",
+   "name": "SUPPLIES",
+   "fact": "The U.S. Department of the Treasury publishes the most recent quarterly refunding documents relevant to Treasury yields."
+  },
+  {
+   "source": "f2f735c3-31b1-43da-8446-3b1986c8de77",
+   "target": "9c539f99-4826-4683-bb3f-7e435dbf0dd7",
+   "name": "SUPPLIES",
+   "fact": "The Federal Reserve Bank of New York publishes Treasury Term Premia data on its research data indicators page."
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "0bb8eb49-11e3-4f61-954d-fce8b0ed9069",
+   "name": "REPORTS_ON",
+   "fact": "Macrotrends汇总称1962年以来10年期收益率均值为5.80%、历史高点15.84%（1981-09-30），当前水平仅高于1962年以来约46%的交易日"
+  },
+  {
+   "source": "3c56883b-521c-49c2-aa3a-45ca0b57a503",
+   "target": "3c56883b-521c-49c2-aa3a-45ca0b57a503",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "国会预算办公室（CBO） 亦称 CBO"
+  },
+  {
+   "source": "9c0033cf-f7d7-4288-91e9-a605e734f6cc",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "TRIGGERS",
+   "fact": "衰退概率仅为0.62%(2026-08),曲线保持正斜率,抑制10年期收益率趋势性下行"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "c30fd86d-dc00-40b1-a107-51e097f79031",
+   "name": "SUPPLIES",
+   "fact": "The Federal Reserve Board publishes a FEDS Note titled 'The Central Bank Balance-Sheet Trilemma' (January 14, 2026, source S36) bearing on balance-sheet policy and term premiums."
+  },
+  {
+   "source": "19eea4ed-0358-4729-809f-ebc9184e8a2b",
+   "target": "19eea4ed-0358-4729-809f-ebc9184e8a2b",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "摩根大通与美国银行利率策略团队 亦称 JPM策略团队"
+  },
+  {
+   "source": "3c56883b-521c-49c2-aa3a-45ca0b57a503",
+   "target": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "name": "REPORTS_ON",
+   "fact": "CBO基线预计实际GDP增速自2027年起放缓至1.8%，并计入生成式AI每年约10个基点的生产率贡献，勾勒美国增长与收益率前景"
+  },
+  {
+   "source": "a77e2468-7762-4762-b39c-1456a0a1e85d",
+   "target": "8a2af74f-3979-415a-a05f-e9c3df6f0b52",
+   "name": "TRIGGERS",
+   "fact": "MOVE指数升破115点(52周区间上沿115.02点)并伴随拍卖疲弱时,可能触发10年期收益率剧烈重定价(极端突破情景);2026-10-23收盘为103.31点"
+  },
+  {
+   "source": "cb0d6ca9-fae8-4e10-a966-342486afb120",
+   "target": "fe9d8198-b092-47da-af3e-4d139968a892",
+   "name": "TRIGGERS",
+   "fact": "3M10Y利差T10Y3M为0.896%(2026-09),其持续陡峭是10年期收益率高位企稳情景的形态确认信号"
+  },
+  {
+   "source": "f5606ce5-8d34-44d5-a2e3-3a7e85974cde",
+   "target": "6dbb6ecd-dd33-498c-95cd-cfe7b56bec7f",
+   "name": "REPORTS_ON",
+   "fact": "BondSavvy解读2026年9月SEP点阵图称18个点中绝大多数参与者预计2027年底目标区间为4.00%–4.25%或4.25%–4.50%、3位预计降息,且较3月点阵图(当时预计2026–2027年合计降息50bp)大幅转鹰"
+  },
+  {
+   "source": "10778bbd-0e39-4c71-9826-136264540a9c",
+   "target": "3c56883b-521c-49c2-aa3a-45ca0b57a503",
+   "name": "SUPPLIES",
+   "fact": "AAF转述CBO对总统FY2027预算的估算：赤字升至峰值占GDP 6.7%(约2.3万亿美元)，此为总统预算情景而非现行法律基线"
+  },
+  {
+   "source": "4d85942a-a08f-4443-a1e0-e250b9d8ba4a",
+   "target": "ed2ea2d2-e634-4bc0-889d-89abc8738390",
+   "name": "INFLUENCES",
+   "fact": "高市早苗政府的财政扩张引发债务可持续性疑虑,是推高JGB收益率的驱动因素之一。"
+  },
+  {
+   "source": "14b5ef02-9fbe-481d-96f7-97c8a8a92bc7",
+   "target": "38c1e667-4499-461d-8cf9-c55caf2a6b60",
+   "name": "REPORTS_ON",
+   "fact": "FRED reports the 10-Year Treasury inflation-indexed (TIPS) yield at 2.638% for 2026-09 (monthly mean of daily data), with latest daily value 2.64% on 2026-10-22."
+  },
+  {
+   "source": "fd8f8a71-29e6-4251-8361-7f82144a81ed",
+   "target": "fd8f8a71-29e6-4251-8361-7f82144a81ed",
+   "name": "ALSO_KNOWN_AS",
+   "fact": "美国劳工统计局（BLS） 亦称 BLS"
+  }
+ ],
+ "graph_id": "mirofish_fb5ad55b23ce4888"
+}

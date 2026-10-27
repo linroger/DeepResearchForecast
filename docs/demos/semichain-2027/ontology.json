@@ -1,0 +1,765 @@
+{
+ "entity_types": [
+  {
+   "name": "Organization",
+   "description": "Fallback for semiconductor-chain organizations not fitting a specific domain type",
+   "attributes": [
+    {
+     "name": "full_name",
+     "type": "text",
+     "description": "Official registered name"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence on forecast outcome"
+    },
+    {
+     "name": "sector",
+     "type": "text",
+     "description": "Primary sector of activity"
+    }
+   ],
+   "examples": [
+    "Intel",
+    "Micron Technology"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 2,
+   "role_class": "stakeholder",
+   "selection_rule": "Any real company/org in the semiconductor chain that cannot be classified into the specific domain actor types below.",
+   "anti_examples": [
+    "TrendForce (data provider, source)",
+    "Reuters (media)"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "adjust capacity plans",
+    "sign LTAs",
+    "shift wafer allocation"
+   ]
+  },
+  {
+   "name": "Government",
+   "description": "Sovereign government bodies setting export controls, trade policy, and licensing",
+   "attributes": [
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "Country or legal jurisdiction"
+    },
+    {
+     "name": "policy_instrument",
+     "type": "text",
+     "description": "Main lever type (export control, entity list, licensing)"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence on chain tightness"
+    }
+   ],
+   "examples": [
+    "US Department of Commerce / BIS",
+    "China MOFCOM"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "arbiter",
+   "selection_rule": "Government ministries/agencies whose export-control or trade decisions causally affect semiconductor supply through 2027.",
+   "anti_examples": [
+    "Federal Reserve (macro, not chain actor)",
+    "IEA (research org/source)"
+   ],
+   "agency_class": "sovereign_government",
+   "levers": [
+    "extend or lapse export-control suspensions",
+    "add entities to lists",
+    "impose licensing on critical minerals",
+    "negotiate truce extensions"
+   ]
+  },
+  {
+   "name": "ChipDesigner",
+   "description": "Fabless accelerator/ASIC designers driving the AI bill-of-materials pull",
+   "attributes": [
+    {
+     "name": "sector",
+     "type": "text",
+     "description": "e.g. GPU/AI accelerator, ASIC"
+    },
+    {
+     "name": "cowos_share_estimate",
+     "type": "text",
+     "description": "Estimated share of 2026 CoWoS wafers held"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low demand-pull influence"
+    }
+   ],
+   "examples": [
+    "NVIDIA",
+    "Broadcom",
+    "AMD"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Fabless firms whose GPU/ASIC roadmaps determine HBM bits and packaging lanes demanded before end-2027.",
+   "anti_examples": [
+    "TSMC (has fabs)",
+    "Counterpoint Research (source)"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "redesign package (8-Hi vs 12-Hi HBM)",
+    "lock multibillion-dollar capacity reservations",
+    "allocate orders across foundries/OSATs",
+    "shift roadmap timing"
+   ]
+  },
+  {
+   "name": "FoundryOperator",
+   "description": "Wafer foundries operating leading-edge or mature logic nodes and advanced packaging",
+   "attributes": [
+    {
+     "name": "node_focus",
+     "type": "text",
+     "description": "Leading-edge (N3/N2/2nm) or mature (28nm+) focus"
+    },
+    {
+     "name": "packaging_capacity",
+     "type": "text",
+     "description": "Advanced packaging (CoWoS/SoIC) wpm estimates if known"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "HQ/domicile jurisdiction"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence on bottleneck severity"
+    }
+   ],
+   "examples": [
+    "TSMC",
+    "Samsung Electronics",
+    "SMIC"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Companies operating logic wafer fabs, including those with in-house advanced packaging lines.",
+   "anti_examples": [
+    "SK Hynix (memory maker)",
+    "ASE (OSAT only)"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "raise capex guidance",
+    "expand CoWoS/SoIC wpm",
+    "prioritize node allocation",
+    "qualify 2nm customers"
+   ]
+  },
+  {
+   "name": "MemoryManufacturer",
+   "description": "DRAM/HBM/NAND producers allocating wafers between HBM and mainstream memory",
+   "attributes": [
+    {
+     "name": "hbm_share",
+     "type": "text",
+     "description": "Latest quarterly HBM revenue share"
+    },
+    {
+     "name": "hbm_wpm_estimate",
+     "type": "text",
+     "description": "Estimated HBM wafer starts per month"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence on HBM bottleneck"
+    }
+   ],
+   "examples": [
+    "SK Hynix",
+    "Samsung Electronics",
+    "Micron Technology"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Producers of HBM/DRAM/NAND whose wafer-allocation decisions set memory tightness through 2027.",
+   "anti_examples": [
+    "NVIDIA (customer)",
+    "CXMT (insufficient evidence of causal role, keep only if instantiated)"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "shift DRAM wafers to HBM lines",
+    "sign 2027 sold-out LTAs",
+    "raise contract prices",
+    "build inventory or run it down"
+   ]
+  },
+  {
+   "name": "EquipmentSupplier",
+   "description": "Semiconductor equipment (litho, etch, deposition) suppliers gating all ramps",
+   "attributes": [
+    {
+     "name": "tool_category",
+     "type": "text",
+     "description": "EUV/High-NA litho, etch/deposition, test"
+    },
+    {
+     "name": "single_source_flag",
+     "type": "text",
+     "description": "yes/no whether sole source for its capability"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence on capacity ramps"
+    }
+   ],
+   "examples": [
+    "ASML",
+    "Applied Materials",
+    "Tokyo Electron"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "stakeholder",
+   "selection_rule": "Toolmakers whose shipment and install throughput gates node and packaging ramps through 2027.",
+   "anti_examples": [
+    "SEMI (industry association/source of data)",
+    "Intel (tool buyer)"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "allocate scarce 2027-28 tool supply",
+    "raise capacity plan (+30%)",
+    "sequence High-NA deliveries",
+    "reiterate or drop shortfall statements"
+   ]
+  },
+  {
+   "name": "MaterialSubstrateSupplier",
+   "description": "Suppliers of substrates, wafers, photoresist, films and specialty materials",
+   "attributes": [
+    {
+     "name": "material_type",
+     "type": "text",
+     "description": "ABF/BT substrate, 300mm wafer, photoresist, film, gases"
+    },
+    {
+     "name": "capacity_share",
+     "type": "text",
+     "description": "Estimated share of high-end segment capacity"
+    },
+    {
+     "name": "expansion_timing",
+     "type": "text",
+     "description": "Dated ramp timing of announced expansions"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence on bottleneck"
+    }
+   ],
+   "examples": [
+    "IBIDEN",
+    "Unimicron",
+    "Shin-Etsu Chemical",
+    "SUMCO",
+    "GlobalWafers",
+    "Ajinomoto"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "stakeholder",
+   "selection_rule": "Material/substrate/wafer suppliers whose concentration and dated expansions determine 2027 substrate and wafer tightness.",
+   "anti_examples": [
+    "TrendForce (source)",
+    "Amkor (services, OSAT)"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "commit or delay capex",
+    "raise prices",
+    "sign LTAs with customers",
+    "extend equipment lead times"
+   ]
+  },
+  {
+   "name": "OSATProvider",
+   "description": "Outsourced assembly and test providers absorbing packaging overflow",
+   "attributes": [
+    {
+     "name": "advanced_packaging_focus",
+     "type": "text",
+     "description": "CoWoS-equivalent / test / optical engine focus"
+    },
+    {
+     "name": "expansion_timing",
+     "type": "text",
+     "description": "Dated capacity expansion milestones"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence on packaging bottleneck relief"
+    }
+   ],
+   "examples": [
+    "ASE Technology",
+    "Amkor",
+    "KYEC",
+    "SPIL"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 2,
+   "role_class": "intermediary",
+   "selection_rule": "Back-end assembly/test companies whose 2027-28 expansion timing sets packaging overflow relief.",
+   "anti_examples": [
+    "TSMC (front-end foundry)",
+    "NVIDIA (customer)"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "expand US packaging/test campuses",
+    "accept reservation advances",
+    "ramp CoWoS-equivalent lines"
+   ]
+  },
+  {
+   "name": "SupplyChainSegment",
+   "description": "Trackable chain segment whose bottleneck status is the forecast target",
+   "attributes": [
+    {
+     "name": "segment_kind",
+     "type": "text",
+     "description": "packaging / HBM / logic / substrate / equipment / materials / memory / mature / OSAT"
+    },
+    {
+     "name": "baseline_lead_time",
+     "type": "text",
+     "description": "Reported lead time as of late Oct 2026"
+    },
+    {
+     "name": "baseline_utilization",
+     "type": "text",
+     "description": "Utilization or supply-demand gap estimate"
+    },
+    {
+     "name": "bottleneck_probability",
+     "type": "text",
+     "description": "Forecast P of binding constraint before end-2027"
+    }
+   ],
+   "examples": [
+    "CoWoS/SoIC advanced packaging",
+    "HBM (HBM3E/HBM4)",
+    "ABF substrates",
+    "EUV/High-NA lithography tools",
+    "Conventional DRAM",
+    "300mm silicon wafers"
+   ],
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "A named segment of the semiconductor supply chain being tracked as a candidate bottleneck, not a company.",
+   "anti_examples": [
+    "TSMC (a company)",
+    "'AI demand' (abstract concept)"
+   ]
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "SUPPLIES",
+   "description": "Source delivers wafers, tools, materials, or memory to target",
+   "source_targets": [
+    {
+     "source": "EquipmentSupplier",
+     "target": "FoundryOperator"
+    },
+    {
+     "source": "MaterialSubstrateSupplier",
+     "target": "FoundryOperator"
+    },
+    {
+     "source": "MemoryManufacturer",
+     "target": "ChipDesigner"
+    },
+    {
+     "source": "MaterialSubstrateSupplier",
+     "target": "ChipDesigner"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low supply dependence"
+    },
+    {
+     "name": "single_source",
+     "type": "text",
+     "description": "yes/no if source is sole/primary supplier"
+    },
+    {
+     "name": "lead_time_weeks",
+     "type": "text",
+     "description": "Current delivery lead time"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "Source supplies goods/capacity to target (e.g., ASML supplies TSMC)."
+  },
+  {
+   "name": "CUSTOMER_OF",
+   "description": "Source buys foundry/packaging/OSAT capacity from target",
+   "source_targets": [
+    {
+     "source": "ChipDesigner",
+     "target": "FoundryOperator"
+    },
+    {
+     "source": "ChipDesigner",
+     "target": "OSATProvider"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "capacity_share_held",
+     "type": "text",
+     "description": "Share of target's constrained capacity reserved"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/neutral/negative relationship tone"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Relationship start if known"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "Source is a customer buying capacity from target (e.g., NVIDIA customer of TSMC)."
+  },
+  {
+   "name": "DEPENDS_ON",
+   "description": "Source's ramp or output depends on target's tools, materials, or capacity",
+   "source_targets": [
+    {
+     "source": "FoundryOperator",
+     "target": "EquipmentSupplier"
+    },
+    {
+     "source": "FoundryOperator",
+     "target": "MaterialSubstrateSupplier"
+    },
+    {
+     "source": "OSATProvider",
+     "target": "EquipmentSupplier"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low criticality"
+    },
+    {
+     "name": "substitutability",
+     "type": "text",
+     "description": "none/low/high alternative sources"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Time lag between constraint and impact"
+    }
+   ],
+   "family": "dependency",
+   "valence": "directional",
+   "direction_semantics": "Source depends on target for a critical input (e.g., TSMC depends on ASML)."
+  },
+  {
+   "name": "PARTNERS_WITH",
+   "description": "Capacity reservation, joint investment, or strategic supply partnership",
+   "source_targets": [
+    {
+     "source": "ChipDesigner",
+     "target": "MaterialSubstrateSupplier"
+    },
+    {
+     "source": "ChipDesigner",
+     "target": "OSATProvider"
+    },
+    {
+     "source": "FoundryOperator",
+     "target": "OSATProvider"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "reservation_value",
+     "type": "text",
+     "description": "Dollar value of reservation/advance if disclosed"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/neutral"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Partnership announcement date"
+    }
+   ],
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "Source and target are strategic capacity partners (e.g., NVIDIA partners with IBIDEN)."
+  },
+  {
+   "name": "COMPETES_WITH",
+   "description": "Competition for capacity, share, or qualification in the same segment",
+   "source_targets": [
+    {
+     "source": "MemoryManufacturer",
+     "target": "MemoryManufacturer"
+    },
+    {
+     "source": "FoundryOperator",
+     "target": "FoundryOperator"
+    },
+    {
+     "source": "ChipDesigner",
+     "target": "ChipDesigner"
+    },
+    {
+     "source": "MaterialSubstrateSupplier",
+     "target": "MaterialSubstrateSupplier"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low rivalry intensity"
+    },
+    {
+     "name": "contested_ground",
+     "type": "text",
+     "description": "Segment where competition occurs (HBM4, 2nm, CoWoS lanes)"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "Symmetric rivalry: both parties compete for the same customers/capacity."
+  },
+  {
+   "name": "REGULATES",
+   "description": "Source exercises export-control, entity-list, or licensing authority over target",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "FoundryOperator"
+    },
+    {
+     "source": "Government",
+     "target": "EquipmentSupplier"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "instrument",
+     "type": "text",
+     "description": "Entity list, licensing, affiliates rule, critical-mineral controls"
+    },
+    {
+     "name": "expiry_date",
+     "type": "text",
+     "description": "Dated lapse/suspension deadline if any"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low restrictiveness"
+    }
+   ],
+   "family": "governance",
+   "valence": "directional",
+   "direction_semantics": "Source regulator constrains target's exports/sales (e.g., BIS regulates SMIC)."
+  },
+  {
+   "name": "OPPOSES",
+   "description": "Inter-state trade-control confrontation or retaliatory measure",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "instrument",
+     "type": "text",
+     "description": "Rare-earth controls, Affiliates Rule, truce"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low escalation level"
+    },
+    {
+     "name": "expiry_date",
+     "type": "text",
+     "description": "Pause or truce lapse date"
+    }
+   ],
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "Source applies adversarial trade measures against target (e.g., MOFCOM opposes BIS)."
+  },
+  {
+   "name": "OWNS_CAPACITY",
+   "description": "Source owns or controls constrained capacity in a segment",
+   "source_targets": [
+    {
+     "source": "FoundryOperator",
+     "target": "SupplyChainSegment"
+    },
+    {
+     "source": "MemoryManufacturer",
+     "target": "SupplyChainSegment"
+    },
+    {
+     "source": "EquipmentSupplier",
+     "target": "SupplyChainSegment"
+    },
+    {
+     "source": "MaterialSubstrateSupplier",
+     "target": "SupplyChainSegment"
+    },
+    {
+     "source": "OSATProvider",
+     "target": "SupplyChainSegment"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "capacity_share",
+     "type": "text",
+     "description": "Share of segment capacity owned"
+    },
+    {
+     "name": "ramp_timing",
+     "type": "text",
+     "description": "Dated expansion milestones"
+    },
+    {
+     "name": "beneficiary_flag",
+     "type": "text",
+     "description": "Whether owner benefits from the bottleneck"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "Source owns/controls capacity within the target segment (e.g., TSMC owns CoWoS capacity)."
+  },
+  {
+   "name": "CONSTRAINS",
+   "description": "Causal edge: source limits ramp or demand fulfillment in target segment",
+   "source_targets": [
+    {
+     "source": "EquipmentSupplier",
+     "target": "SupplyChainSegment"
+    },
+    {
+     "source": "MaterialSubstrateSupplier",
+     "target": "SupplyChainSegment"
+    },
+    {
+     "source": "Government",
+     "target": "SupplyChainSegment"
+    },
+    {
+     "source": "ChipDesigner",
+     "target": "SupplyChainSegment"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "tightening/loosening effect on segment"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Delay before constraint binds (e.g., 30-month tool lead times)"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low severity of constraint"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "Source's actions causally tighten or loosen the target segment (e.g., ASML constrains leading-edge logic; NVIDIA's BOM pull constrains HBM)."
+  },
+  {
+   "name": "BENEFITS_FROM",
+   "description": "Source gains pricing/overflow benefit from a tight segment",
+   "source_targets": [
+    {
+     "source": "OSATProvider",
+     "target": "SupplyChainSegment"
+    },
+    {
+     "source": "MemoryManufacturer",
+     "target": "SupplyChainSegment"
+    },
+    {
+     "source": "Organization",
+     "target": "SupplyChainSegment"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "benefit_type",
+     "type": "text",
+     "description": "overflow orders, pricing power, share gains"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low magnitude of benefit"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "Source captures economic benefit from the target segment's tightness (e.g., ASE benefits from CoWoS overflow)."
+  }
+ ],
+ "analysis_summary": "预测问题聚焦2026年10月至2027年底全球半导体供应链各环节是否成为约束性瓶颈及严重程度。角色阵容以18个组织/政府为主体，核心决策者包括：需求端(NVIDIA/Broadcom的BOM拉动)、供给端(TSMC的CoWoS、SK Hynix/三星/美光的HBM晶圆分配)、单点设备与材料(ASML、信越、IBIDEN)，以及两个政府(BIS/MOFCOM)的出口管制悬崖(2026年11月9-10日到期)。本体保留Organization/Government种子类型，新增按产业链角色细分的6个能动类型(ChipDesigner/FoundryOperator/MemoryManufacturer/EquipmentSupplier/MaterialSubstrateSupplier/OSATProvider)和一个被追踪客体SupplyChainSegment(瓶颈环节)。关系覆盖实证关系(CUSTOMER_OF/SUPPLIES/DEPENDS_ON/PARTNERS_WITH/COMPETES_WITH/REGULATES/OPPOSES)，并新增OWNS_CAPACITY(产能归属)、CONSTRAINS(因果传导，带sign/lag/strength)与BENEFITS_FROM(受益方)三条预测高价值边，用于把'冲击如何传导到各环节瓶颈'结构化。TrendForce/SEMI等数据源不作为能动实体。"
+}

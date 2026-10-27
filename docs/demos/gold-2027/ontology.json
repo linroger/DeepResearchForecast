@@ -1,0 +1,658 @@
+{
+ "entity_types": [
+  {
+   "name": "Government",
+   "description": "Sovereign monetary/fiscal authorities and national administrations moving gold",
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Any sovereign government body, central bank, ministry or national administration whose policy or reserve actions causally affect the gold price",
+   "anti_examples": [
+    "World Gold Council (data publisher)",
+    "LBMA (benchmark administrator)",
+    "IMF (data institution, unless acting as policy actor)"
+   ],
+   "agency_class": "sovereign_government",
+   "levers": [
+    "buy/sell official gold reserves",
+    "set policy rate (Fed funds, LPR)",
+    "impose or lift tariffs and sanctions",
+    "conduct debt issuance (TIPS supply)",
+    "repatriate custodial gold"
+   ],
+   "attributes": [
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "Country or economic area the authority governs"
+    },
+    {
+     "name": "policy_stance",
+     "type": "text",
+     "description": "Monetary/fiscal stance (hawkish/dovish/neutral) and gold stance (buyer/seller/holder)"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "Impact on gold price: high/medium/low"
+    }
+   ],
+   "examples": [
+    "Federal Reserve (FOMC)",
+    "People's Bank of China",
+    "National Bank of Poland",
+    "Central Bank of Turkey",
+    "Central Bank of Russia",
+    "Reserve Bank of India",
+    "US Treasury",
+    "US President and administration",
+    "Czech National Bank"
+   ]
+  },
+  {
+   "name": "Organization",
+   "description": "Market institutions: data publishers, benchmark administrators, ETFs, banks",
+   "archetype": "actor",
+   "simulation_tier": 2,
+   "role_class": "stakeholder",
+   "selection_rule": "A named non-governmental organization (data provider, ETF issuer, bank, exchange) with a distinct role in the gold market; mark data/news publishers as tier-3 in attributes",
+   "anti_examples": [
+    "abstract narratives like 'de-dollarization'",
+    "pure price series without an institutional actor"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "publish demand/supply/positioning data",
+    "administer benchmark auctions",
+    "issue/closedown ETF units",
+    "publish price targets and scenario research"
+   ],
+   "attributes": [
+    {
+     "name": "sector",
+     "type": "text",
+     "description": "data_provider / benchmark_administrator / etf_issuer / investment_bank / industry_body"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "high/medium/low influence on gold price formation"
+    },
+    {
+     "name": "simulation_tier_hint",
+     "type": "text",
+     "description": "3 for passive data/news publishers (WGC, CFTC, IMF, CGA); 1-2 for market participants"
+    }
+   ],
+   "examples": [
+    "World Gold Council",
+    "LBMA",
+    "SPDR Gold Shares (GLD)",
+    "Goldman Sachs",
+    "J.P. Morgan Research",
+    "CFTC",
+    "IMF",
+    "China Gold Association"
+   ]
+  },
+  {
+   "name": "Other",
+   "description": "Trader blocs and position-taking collectives in gold futures markets",
+   "archetype": "collective",
+   "simulation_tier": 2,
+   "role_class": "intermediary",
+   "selection_rule": "Aggregated trader categories or unattributed market blocs whose positioning moves the price but which are not single institutions",
+   "anti_examples": [
+    "individual named traders",
+    "'risk sentiment' as an abstraction"
+   ],
+   "agency_class": "financial_institution",
+   "levers": [
+    "add/trim net long futures positions",
+    "roll exposure between contract months",
+    "liquidate into price shocks"
+   ],
+   "attributes": [
+    {
+     "name": "current_position",
+     "type": "text",
+     "description": "Latest positioning (e.g. net long contracts, direction of weekly change)"
+    },
+    {
+     "name": "horizon_bias",
+     "type": "text",
+     "description": "front-loaded / balanced / far-dated conviction"
+    }
+   ],
+   "examples": [
+    "COMEX gold managed-money traders"
+   ]
+  },
+  {
+   "name": "Platform",
+   "description": "Prediction-market and trading platforms pricing event outcomes",
+   "archetype": "actor",
+   "simulation_tier": 3,
+   "role_class": "amplifier",
+   "selection_rule": "Electronic market/prediction platforms where participants price macro outcomes relevant to gold",
+   "anti_examples": [
+    "static data portals like FRED",
+    "news aggregators"
+   ],
+   "agency_class": "financial_institution",
+   "levers": [
+    "list and resolve event contracts",
+    "reprice implied probabilities"
+   ],
+   "attributes": [
+    {
+     "name": "market_type",
+     "type": "text",
+     "description": "prediction_market / derivatives_exchange"
+    },
+    {
+     "name": "key_contract",
+     "type": "text",
+     "description": "Flagship contract relevant to gold macro (e.g. US recession by end-2027)"
+    }
+   ],
+   "examples": [
+    "Polymarket traders"
+   ]
+  },
+  {
+   "name": "GoldInstrument",
+   "description": "Tradeable/priceable gold objects: spot benchmark, ETFs, futures",
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "The specific price-bearing instruments the forecast resolves on or cross-checks against",
+   "anti_examples": [
+    "'gold demand' as an abstraction",
+    "silver or copper markets (cross-checks only)"
+   ],
+   "attributes": [
+    {
+     "name": "instrument_type",
+     "type": "text",
+     "description": "spot_benchmark / etf / futures / option"
+    },
+    {
+     "name": "price_level",
+     "type": "text",
+     "description": "Latest observed price or settlement (USD/ozt)"
+    },
+    {
+     "name": "resolving_role",
+     "type": "text",
+     "description": "Whether this is the resolving instrument, a flow proxy or a horizon anchor"
+    }
+   ],
+   "examples": [
+    "LBMA Gold Price (USD/ozt, PM auction)",
+    "COMEX gold futures GCZ7",
+    "COMEX gold futures GCZ6",
+    "COMEX spot gold"
+   ]
+  },
+  {
+   "name": "MacroSignal",
+   "description": "Trackable macro indicators driving gold: real yields, CPI, dollar, rates odds",
+   "archetype": "signal",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Concrete, time-stamped numeric series used as signposts (TIPS yield, CPI, DXY, breakevens, Fed odds)",
+   "anti_examples": [
+    "'inflation expectations' as a vague theme",
+    "unnamed analyst commentary"
+   ],
+   "attributes": [
+    {
+     "name": "series_id",
+     "type": "text",
+     "description": "Standard series identifier (e.g. FRED:DFII10, FRED:T10YIE)"
+    },
+    {
+     "name": "latest_value",
+     "type": "text",
+     "description": "Latest observed value and observation period"
+    },
+    {
+     "name": "thresholds",
+     "type": "text",
+     "description": "Scenario-discriminating thresholds tied to this signal"
+    }
+   ],
+   "examples": [
+    "10-year TIPS real yield (DFII10)",
+    "US CPI YoY",
+    "10-year breakeven inflation",
+    "Nominal Broad US Dollar Index (DTWEXBGS)",
+    "Fed funds futures implied odds"
+   ]
+  },
+  {
+   "name": "MarketEvent",
+   "description": "Dated catalysts: FOMC meetings, elections, data releases, conflicts",
+   "archetype": "event",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Specific dated events on the 2026-2027 calendar that can shift gold's price or premia",
+   "anti_examples": [
+    "'geopolitical risk' as a general concept",
+    "undated background news"
+   ],
+   "attributes": [
+    {
+     "name": "event_date",
+     "type": "text",
+     "description": "Scheduled or actual date"
+    },
+    {
+     "name": "event_type",
+     "type": "text",
+     "description": "fomc / election / data_release / geopolitical_conflict"
+    },
+    {
+     "name": "discriminates_scenario",
+     "type": "text",
+     "description": "Which scenario (Base/Bull/Bear/Range) the event's outcome separates"
+    }
+   ],
+   "examples": [
+    "28 October 2026 FOMC",
+    "9 December 2026 FOMC + SEP",
+    "US midterm elections 3 Nov 2026",
+    "France presidential rounds Apr-May 2027",
+    "Iran war (April 2026)",
+    "WGC Gold Demand Trends Q3 2026"
+   ]
+  },
+  {
+   "name": "GoldSupplier",
+   "description": "Mine producers and recyclers supplying physical gold to the market",
+   "archetype": "actor",
+   "simulation_tier": 2,
+   "role_class": "stakeholder",
+   "selection_rule": "Named mining companies or supplier groups whose output changes physical supply",
+   "anti_examples": [
+    "'mine production' as an abstract aggregate",
+    "ETFs (financial, not physical suppliers)"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "ramp up new mines",
+    "defer or release scrap supply",
+    "de-hedge or re-hedge forward books"
+   ],
+   "attributes": [
+    {
+     "name": "output_trend",
+     "type": "text",
+     "description": "Direction and scale of y/y output change"
+    },
+    {
+     "name": "region",
+     "type": "text",
+     "description": "Primary mining jurisdiction"
+    }
+   ],
+   "examples": [
+    "Agnico Eagle (Detour Lake)",
+    "Gold Fields (Salares Norte)",
+    "Newmont (Ahafo North)",
+    "West African Resources (Kiaka)"
+   ]
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "INFLUENCES",
+   "description": "Source's policy or actions shape target's behavior or price outcomes",
+   "family": "influence",
+   "valence": "directional",
+   "direction_semantics": "source exerts influence over target (e.g. Fed policy shapes ETF flows or trader positioning)",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Other"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Organization",
+     "target": "Government"
+    },
+    {
+     "source": "Government",
+     "target": "GoldInstrument"
+    },
+    {
+     "source": "MacroSignal",
+     "target": "GoldInstrument"
+    },
+    {
+     "source": "MarketEvent",
+     "target": "GoldInstrument"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low influence magnitude"
+    },
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "Direction of current influence on gold: supportive/oppressive/neutral"
+    },
+    {
+     "name": "channel",
+     "type": "text",
+     "description": "Transmission channel (real yields, risk premium, flows)"
+    }
+   ]
+  },
+  {
+   "name": "COMPETES_WITH",
+   "description": "Strategic rivalry between monetary powers or competing forecasters",
+   "family": "antagonism",
+   "valence": "adversarial",
+   "direction_semantics": "source competes with or rivals target (e.g. PBoC vs US administration; JPM vs Polymarket pricing)",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Platform"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "domain",
+     "type": "text",
+     "description": "Arena of competition: reserve-currency dominance / forecast credibility"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ]
+  },
+  {
+   "name": "SANCTIONS",
+   "description": "Imposition of sanctions constraining target's gold flows",
+   "family": "governance",
+   "valence": "adversarial",
+   "direction_semantics": "source sanctions target (e.g. US administration sanctions Russia's central bank)",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Government"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "When sanctions took effect"
+    },
+    {
+     "name": "impact_on_gold_flows",
+     "type": "text",
+     "description": "Effect on official-sector buying/selling (e.g. forced liquidation)"
+    }
+   ]
+  },
+  {
+   "name": "CUSTOMER_OF",
+   "description": "Source consumes data/services published by target",
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "source is a customer/consumer of target's data or services",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "service",
+     "type": "text",
+     "description": "Data or service consumed (demand surveys, reserve statistics)"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low dependence"
+    }
+   ]
+  },
+  {
+   "name": "SUPPLIES",
+   "description": "Source supplies physical or positional gold exposure to target",
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "source supplies gold (physical or via market) to target (e.g. Turkey's CB sales reaching traders; miners supplying market)",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Other"
+    },
+    {
+     "source": "GoldSupplier",
+     "target": "GoldInstrument"
+    },
+    {
+     "source": "Other",
+     "target": "GoldInstrument"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "volume",
+     "type": "text",
+     "description": "Quantity supplied (tonnes or contracts) where known"
+    },
+    {
+     "name": "direction",
+     "type": "text",
+     "description": "net supply / net withdrawal"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Period of the flow"
+    }
+   ]
+  },
+  {
+   "name": "PARTNERS_WITH",
+   "description": "Cooperative institutional or data relationships",
+   "family": "alignment",
+   "valence": "allied",
+   "direction_semantics": "source cooperates or aligns institutionally with target",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/neutral"
+    },
+    {
+     "name": "purpose",
+     "type": "text",
+     "description": "e.g. reserve diversification coordination, data/benchmark partnership"
+    }
+   ]
+  },
+  {
+   "name": "DEPENDS_ON",
+   "description": "Source's forecasts or operations rely on target's policy or data",
+   "family": "dependency",
+   "valence": "directional",
+   "direction_semantics": "source depends on target (e.g. bank forecasts depend on Fed path; GLD depends on LBMA benchmark)",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "Government"
+    },
+    {
+     "source": "Organization",
+     "target": "Organization"
+    },
+    {
+     "source": "Other",
+     "target": "GoldInstrument"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "nature",
+     "type": "text",
+     "description": "policy-path dependency / benchmark dependency"
+    }
+   ]
+  },
+  {
+   "name": "ACCUMULATES",
+   "description": "Source buys, holds or liquidates gold reserves/holdings",
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "source accumulates (or, with negative volume, sells) the gold instrument/reserves",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "GoldInstrument"
+    },
+    {
+     "source": "Organization",
+     "target": "GoldInstrument"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "net_tonnes",
+     "type": "text",
+     "description": "Net purchases/sales in tonnes YTD or per period"
+    },
+    {
+     "name": "target_holdings",
+     "type": "text",
+     "description": "Stated target or current holdings (e.g. Poland 700t target)"
+    },
+    {
+     "name": "direction",
+     "type": "text",
+     "description": "buying / selling / holding"
+    }
+   ]
+  },
+  {
+   "name": "CAUSES",
+   "description": "Causal transmission from a signal or policy to price/flow outcomes",
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source causes or transmits a shock to target (e.g. real-yield rise causes gold price pressure)",
+   "source_targets": [
+    {
+     "source": "MacroSignal",
+     "target": "GoldInstrument"
+    },
+    {
+     "source": "Government",
+     "target": "MacroSignal"
+    },
+    {
+     "source": "MarketEvent",
+     "target": "GoldInstrument"
+    },
+    {
+     "source": "MarketEvent",
+     "target": "MacroSignal"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "positive/negative effect on gold price"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low (e.g. Goldman's ~$120/oz per 50bp sensitivity)"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Transmission lag (immediate / months)"
+    }
+   ]
+  },
+  {
+   "name": "TRIGGERS",
+   "description": "An event triggers a policy action, flow shift or scenario branch",
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "source event triggers target action or outcome (e.g. Iran war triggering Turkish gold sales; recession triggering Fed easing)",
+   "source_targets": [
+    {
+     "source": "MarketEvent",
+     "target": "Government"
+    },
+    {
+     "source": "MarketEvent",
+     "target": "Other"
+    },
+    {
+     "source": "MarketEvent",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "Direction for gold: bullish/bearish"
+    },
+    {
+     "name": "probability",
+     "type": "text",
+     "description": "Market-implied or estimated probability where available"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Delay before the triggered action"
+    }
+   ]
+  }
+ ],
+ "analysis_summary": "该预测问题是黄金价格预测（2027年12月31日LBMA/COMEX现货收盘价），核心张力在于：鹰派美联储与创纪录高位的实际利率（10年期TIPS 2.638%）对阵异常坚实的实物需求底线（央行购金Q2创纪录289吨、ETF持仓创纪录4256吨）。本体保留了actor阵容的种子类型（Government×9、Organization×7、Other、Platform），并新增4个领域类型：GoldInstrument（LBMA基准/COMEX期货/GLD等标的客体）、MacroSignal（实际收益率、CPI、美元指数、Fed概率等可追踪信号）、MarketEvent（FOMC会议、选举日历、伊朗战争等催化剂）和GoldSupplier（矿山供应方）。关系在保留7条实证边（INFLUENCES、COMPETES_WITH、SANCTIONS、CUSTOMER_OF、SUPPLIES、PARTNERS_WITH、DEPENDS_ON）基础上新增3条高判别力边：ACCUMULATES（官方部门购金/售金流，带净吨位与目标属性）、CAUSES（宏观信号→价格的因果传导，带sign/strength/lag，如高盛~$120/oz per 50bp敏感性）、TRIGGERS（事件→政策/仓位行动，带概率与时滞）。数据发布方（WGC、CFTC、IMF、CGA）按Organization标注为tier-3被动信息源，不作为能动决策主体，除非其行动直接推动结局。"
+}

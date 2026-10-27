@@ -1,0 +1,92 @@
+{
+ "pipeline_id": "pipe_a7a6b75468b2",
+ "report_id": "report_213f3e2bcc79",
+ "simulation_id": "sim_95c108c2d83c",
+ "graph_id": "mirofish_620d7d94ea334b26",
+ "status": "completed",
+ "prompt": "Forecast which segments of the global semiconductor supply chain become genuine capacity or capability bottlenecks from now through December 31, 2027, and how severe each bottleneck becomes. Establish the baseline first (as of late October 2026): current utilization, lead times, and pricing across the chain - leading-edge logic foundry (TSMC N3/N2 and Samsung 2nm qualification), advanced packaging (CoWoS/CoWoS-L and SoIC capacity, substrate supply), HBM (HBM3E/HBM4 bits and wafer allocation at SK Hynix, Samsung, Micron), NAND/DRAM mainstream nodes, mature-node foundry (28nm+ at SMIC, UMC, GlobalFoundries), 300mm wafers, ABF substrates and BT substrates, EUV/High-NA lithography tool deliveries and install throughput, etch/deposition tools, photoresist and specialty gases, EDA licenses and leading-edge IP, and back-end test and OSAT capacity.\n\nResearch and weigh the principal drivers, per segment: AI accelerator demand growth and its bill-of-materials pull (HBM bits per GPU, packaging lanes per wafer, wafer starts); announced capacity additions with realistic ramp timing and equipment lead times; single-source concentration risk (ASML High-NA, Shin-Etsu/SJS photoresist, IBIDEN/Unimicron substrates, and where one supplier or one fab represents most of capacity); export-control and entity-list restrictions (US rules on China, China's rare-earth and gallium/germanium export controls) and their propagation through the chain; and labor/cleanroom/construction constraints on new fabs.\n\nDeliverables: a ranked list of the 4-6 segments most likely to be bottlenecks at some point before end-2027, each with a probability of becoming a binding constraint (demand above available capacity), an expected duration, a severity rating (price/lead-time/allocation impact), and the named companies that own the constrained capacity and who benefits; 3-5 mutually exclusive scenarios for the overall 2027 chain tightness (including at least one status-quo/oversupply-elsewhere scenario); and at least 12 binary forecasts with concrete, verifiable thresholds (lead-time weeks, capacity in wafers-per-month or units, price changes, named tool shipment counts, dated qualification events), each with a probability and resolution criteria anchored to verifiable sources (company earnings, SEMI, TrendForce, official filings).",
+ "created_at": "2026-10-24T17:52:11.722851+00:00",
+ "mode": "full",
+ "rounds": 14,
+ "personas": 11,
+ "has_actors": true,
+ "research_log": {
+  "line_count": 345,
+  "source_count": 1,
+  "complete": true,
+  "event_fidelity": "summarized_progress_events"
+ },
+ "dossier_assets": [
+  "research-charts/data_fred_caputlg3344s_e06131c33577e0cf.png",
+  "research-charts/data_fred_impgsc1_554266cb0a529cbf.png",
+  "research-charts/data_fred_expgsc1_ab7cc7ffefd6a55e.png",
+  "research-charts/data_fred_ipg3344s_ac27e02afe5546e1.png",
+  "research-charts/timeline.png",
+  "research-charts/timeline.html",
+  "research-charts/quant_metrics.png",
+  "research-charts/quant_metrics.html",
+  "research-charts/metric_trajectories.png",
+  "research-charts/metric_trajectories.html"
+ ],
+ "report_assets": [
+  "charts/binary_forecast_dotplot.png",
+  "charts/official_indicators.png",
+  "charts/official_series_abrccrffefdqappe.png",
+  "charts/official_series_ekqlnlcnnprrekcf.png",
+  "charts/metric_trajectories.png",
+  "charts/regional_comparison.png",
+  "charts/quantitative_claims.png",
+  "charts/scenario_probabilities.png",
+  "charts/timeline_lanes.png",
+  "charts/worldstate_trajectory.png",
+  "charts/world_variables.png"
+ ],
+ "dossier_languages": {
+  "en": "dossier.md",
+  "zh": "dossier.zh.md"
+ },
+ "report_languages": {
+  "en": "report.md"
+ },
+ "artifact_sha256": {
+  "research_log.txt": "2f6f1a9cb70c57f9ab7e136a8c1805fd8fd5d43968eb8b2fc710751ecad9330a",
+  "dossier.md": "a3f0886a0a6d7b50b9795c2ba0ac35c07d31d05a1617d654afd8e5ba4183e061",
+  "dossier.zh.md": "c5192937e709993d943f63d7c46bbf08aa2986e7d34d912697a96e98f063ac3f",
+  "actors.json": "9c411e459726790b469e28ebd2460f2bd223652cf4de464ea9e31272602d5f81",
+  "sources.json": "2fe92395f5e837cedc94f7d502006368f4aeead12a7acdb3ba05f0d015674824",
+  "ontology.json": "fe92e79518c9e79ae38eb33aa314a0f43032d3d73c022374262d37d75413867e",
+  "graph.json": "c7568bc080a44c63e6abb05863a97cfd7a2a23f803b7b675bbc5bec58ac94e52",
+  "forum.json": "db9426332aab41ca2cf27ac9fc657f40b9e29342acc6ba75cb9589331edc1d0b",
+  "report.md": "006d96763373ae5f11d58513148d6e1ee101581f963b0aa22659ede4a55e45f4",
+  "research-charts/data_fred_caputlg3344s_e06131c33577e0cf.png": "5588b57b7bb1680ffe4055ac4991198db133a27be3f49876aa92f593e69ed2fe",
+  "research-charts/data_fred_impgsc1_554266cb0a529cbf.png": "6e95050f502416a0f1725f83522a9ab2981e64c37d3a6a197964bde8de53ab9a",
+  "research-charts/data_fred_expgsc1_ab7cc7ffefd6a55e.png": "d109528b38e44df8979c2303b085b5bd335062b0ff228830c0b30db4bc71d799",
+  "research-charts/data_fred_ipg3344s_ac27e02afe5546e1.png": "209085fb1eb5c3016192848d39a26e088967ef107c0c7930734919838a5792b2",
+  "research-charts/timeline.png": "fe904e7fa43a4c4a348ce5a8e69ce1ec43a3ecb66c4c20c9c8521578e57b1094",
+  "research-charts/timeline.html": "fd201761b340bd5e4ca83283d33a7c9af03f3a27661f6281385ef76e82ee25b1",
+  "research-charts/quant_metrics.png": "ff3eeebc846c796397e3a3aeaef761bdc4cab6a1f4af646d96b6a569aa76df0a",
+  "research-charts/quant_metrics.html": "672eb3823ba236df886c8d3e6dc7611817a02c77a265362bac3a71a2e6a59c64",
+  "research-charts/metric_trajectories.png": "b4d6a67d2a6679012dcd943f67c1744db046006169a0604a74a55be8a4cf0da4",
+  "research-charts/metric_trajectories.html": "f31e5c7ad26babc57c79fab54166537303587da669bd0a67dc7eef1b843ab5c5",
+  "charts/binary_forecast_dotplot.png": "f481994ca8ff066fcefad3ef2fed5f1b079f2b2bc2b4d5b54733e61dbf3df50a",
+  "charts/official_indicators.png": "ebc75a5f7c60958396c865e50c408b3a3697800f9cb564ba3268d09bac6a07d2",
+  "charts/official_series_abrccrffefdqappe.png": "16da2e67632a21b2d38778d7e5fb1c39a0867f1ba46a61405f72a948cf9d1254",
+  "charts/official_series_ekqlnlcnnprrekcf.png": "9a6568d8a8701ef219ee1a5d96368d2f17281be6df68aaa30f12f428a6108db3",
+  "charts/metric_trajectories.png": "f743a552cc7f5a8ff3c55856d1f09a1fb920e666e09dca544be55dfc9a3ece60",
+  "charts/regional_comparison.png": "5708f338829283b19cb27607225cde2439d4c1c0cd1a67a406d0f65bb9fa2502",
+  "charts/quantitative_claims.png": "d9034d7e10b5bbcb6c6ea965d6c41c6c31a06f509c9a23e355b5b802d13853a0",
+  "charts/scenario_probabilities.png": "1b93b3e95b87784e99be53e8d7eb1fbd32266c0d75703706d15cf5effa56f08f",
+  "charts/timeline_lanes.png": "9b8f3b433648234430598f5efca456a95076e72ce7a48b53db19f80b8eaffb9c",
+  "charts/worldstate_trajectory.png": "0fb6147b1deb20ff93e42fe158c1a5ecd95505c9079f28acaa1bbe4a15ae0a54",
+  "charts/world_variables.png": "81381b9141bbbcb2829153e9340c0bdb6ba4ea104980c0d7076912fc7f6e1be8"
+ },
+ "publication": {
+  "hard_passed": true,
+  "publish_passed": true,
+  "scenario_contract_valid": true,
+  "citation_coverage": 0.728,
+  "semantic_citations_passed": true,
+  "markdown_sha256": "edfc3d62577a8ed71ce205eaeab4beffd87e634c3463fef85f824988fbb1d7b5",
+  "forecast_sha256": "af5393308305884a22179dc86281180d7502333886f267c4fd374f5425f66751"
+ }
+}

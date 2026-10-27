@@ -1,0 +1,632 @@
+{
+ "entity_types": [
+  {
+   "name": "Organization",
+   "description": "Corporate actors: miners, smelters, traders, consultancies driving copper supply decisions",
+   "attributes": [
+    {
+     "name": "sector",
+     "type": "text",
+     "description": "Industry segment: mining, smelting, trading, consulting"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "High/medium/low influence on end-2027 copper price"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "Headquarter country/region"
+    }
+   ],
+   "examples": [
+    "Antofagasta plc",
+    "Ivanhoe Mines",
+    "Teck Resources",
+    "Jiangxi Copper",
+    "First Quantum Minerals",
+    "Codelco"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Any named firm whose production, guidance, benchmark negotiation or trading decisions causally move copper supply or price",
+   "anti_examples": [
+    "Reuters",
+    "Goldman Sachs Research (forecast only)",
+    "FRED data series"
+   ],
+   "agency_class": "firm",
+   "levers": [
+    "revise production guidance",
+    "schedule smelter maintenance",
+    "settle TC/RC benchmark",
+    "commit capex to Phase 4",
+    "sign restart agreement"
+   ]
+  },
+  {
+   "name": "Government",
+   "description": "National governments and state bodies with policy levers over mines, tariffs and stockpiles",
+   "attributes": [
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "Country/jurisdiction"
+    },
+    {
+     "name": "policy_lever",
+     "type": "text",
+     "description": "Main lever: mine approval, tariff setting, stockpiling, capacity policy"
+    },
+    {
+     "name": "influence_tier",
+     "type": "text",
+     "description": "High/medium/low influence on forecast outcome"
+    }
+   ],
+   "examples": [
+    "Government of Panama",
+    "China State Reserve Bureau",
+    "Government of China (NDRC/MIIT)",
+    "US Commerce/USTR"
+   ],
+   "archetype": "actor",
+   "simulation_tier": 1,
+   "role_class": "arbiter",
+   "selection_rule": "Sovereign state bodies whose approvals, tariffs or reserve operations causally affect copper supply/price",
+   "anti_examples": [
+    "ICSG (intergovernmental data body, model as InternationalBody)",
+    "Cochilco (forecast source)"
+   ],
+   "agency_class": "sovereign_government",
+   "levers": [
+    "approve/deny mine restart",
+    "impose or sunset Section 232 tariffs",
+    "tender or auction state reserves",
+    "enforce scrap-tax crackdown",
+    "suspend sulphuric-acid exports"
+   ]
+  },
+  {
+   "name": "SmelterGroup",
+   "description": "Smelter coalitions and refined-copper producers holding the concentrate constraint",
+   "attributes": [
+    {
+     "name": "capacity_kt",
+     "type": "text",
+     "description": "Approximate refined capacity in kt/yr"
+    },
+    {
+     "name": "cut_compliance",
+     "type": "text",
+     "description": "Compliance with pledged output cuts: high/partial/none"
+    },
+    {
+     "name": "jurisdiction",
+     "type": "text",
+     "description": "Main operating country"
+    }
+   ],
+   "examples": [
+    "CSPT (China Smelters Purchase Team)",
+    "Chinese smelter maintenance cohort (seven smelters)"
+   ],
+   "archetype": "collective",
+   "simulation_tier": 1,
+   "role_class": "principal",
+   "selection_rule": "Coalitions of smelters coordinating output or benchmark negotiation, not individual firms (those are Organization)",
+   "anti_examples": [
+    "Jiangxi Copper as a single company",
+    "ICSG"
+   ],
+   "agency_class": "industry_coalition",
+   "levers": [
+    "pledge coordinated output cuts",
+    "schedule collective maintenance",
+    "negotiate annual TC/RC benchmark",
+    "shift to index-linked pricing"
+   ]
+  },
+  {
+   "name": "MineProject",
+   "description": "Named mines and ramp projects contributing dated kt/yr supply increments",
+   "attributes": [
+    {
+     "name": "capacity_kt_yr",
+     "type": "text",
+     "description": "Nameplate or guided capacity in kt/yr"
+    },
+    {
+     "name": "status",
+     "type": "text",
+     "description": "Producing/ramping/closed/restart-negotiation"
+    },
+    {
+     "name": "guidance_2027",
+     "type": "text",
+     "description": "2027 production guidance if published"
+    }
+   ],
+   "examples": [
+    "Cobre Panama",
+    "Kamoa-Kakula",
+    "Quebrada Blanca 2",
+    "Mirador Phase II",
+    "El Teniente"
+   ],
+   "archetype": "asset_object",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Specific named mine sites/projects whose increments are cited in kt/yr supply forecasts",
+   "anti_examples": [
+    "'Chilean supply' as an aggregate",
+    "abstract concepts like ore-grade decline"
+   ]
+  },
+  {
+   "name": "ExchangeMarket",
+   "description": "Metals exchanges where copper prices, stocks and spreads are formed",
+   "attributes": [
+    {
+     "name": "region",
+     "type": "text",
+     "description": "Trading jurisdiction"
+    },
+    {
+     "name": "stock_level_t",
+     "type": "text",
+     "description": "Latest warehouse stock in tonnes"
+    },
+    {
+     "name": "contract_role",
+     "type": "text",
+     "description": "Price-discovery role: global benchmark or dislocated tariff market"
+    }
+   ],
+   "examples": [
+    "LME",
+    "COMEX (CME)"
+   ],
+   "archetype": "institution_rule",
+   "simulation_tier": 2,
+   "role_class": "intermediary",
+   "selection_rule": "Trading venues whose settlements, stocks or spreads define the forecast statistic",
+   "anti_examples": [
+    "FRED data series",
+    "SMM index (a signal, not a venue)"
+   ]
+  },
+  {
+   "name": "TradePolicyInstrument",
+   "description": "Tariff and trade-policy instruments shaping copper flows and the COMEX-LME arb",
+   "attributes": [
+    {
+     "name": "rate",
+     "type": "text",
+     "description": "Tariff rate structure"
+    },
+    {
+     "name": "effective_date",
+     "type": "text",
+     "description": "Effective date"
+    },
+    {
+     "name": "expiry_date",
+     "type": "text",
+     "description": "Sunset/expiry date if any"
+    }
+   ],
+   "examples": [
+    "Section 232 copper tariffs (Proclamation 10962)",
+    "Annex III floating-tariff framework"
+   ],
+   "archetype": "institution_rule",
+   "simulation_tier": 2,
+   "role_class": "arbiter",
+   "selection_rule": "Concrete legal instruments with dates/rates that dislocate copper trade flows",
+   "anti_examples": [
+    "'tariff risk' as a concept",
+    "general trade policy debate"
+   ]
+  },
+  {
+   "name": "MarketIndicator",
+   "description": "Trackable price/stock/TC indicators used as forecast signposts",
+   "attributes": [
+    {
+     "name": "publisher",
+     "type": "text",
+     "description": "Publishing entity"
+    },
+    {
+     "name": "latest_value",
+     "type": "text",
+     "description": "Most recent verifiable print"
+    },
+    {
+     "name": "as_of_date",
+     "type": "text",
+     "description": "Date of latest print"
+    }
+   ],
+   "examples": [
+    "SMM Imported Copper Concentrate Index",
+    "LME cash settlement",
+    "LME cash-3M spread",
+    "COMEX-LME spread",
+    "ICSG refined balance"
+   ],
+   "archetype": "signal",
+   "simulation_tier": 4,
+   "role_class": "stakeholder",
+   "selection_rule": "Named quantitative series with defined thresholds discriminating scenarios",
+   "anti_examples": [
+    "'market sentiment'",
+    "unnamed analyst views"
+   ]
+  },
+  {
+   "name": "ForecastingSource",
+   "description": "Banks, consultancies and data agencies publishing forecasts and data used as reference class",
+   "attributes": [
+    {
+     "name": "latest_forecast",
+     "type": "text",
+     "description": "Most recent published forecast value"
+    },
+    {
+     "name": "vintage",
+     "type": "text",
+     "description": "Publication date of forecast"
+    },
+    {
+     "name": "credibility_tier",
+     "type": "text",
+     "description": "Tier 1/2/3 evidence tier"
+    }
+   ],
+   "examples": [
+    "Goldman Sachs Research",
+    "ICSG",
+    "Wood Mackenzie",
+    "CRU",
+    "Cochilco",
+    "Benchmark Mineral Intelligence"
+   ],
+   "archetype": "source",
+   "simulation_tier": 3,
+   "role_class": "amplifier",
+   "selection_rule": "Entities publishing price/balance forecasts or market data that anchor expectations; passive information sources",
+   "anti_examples": [
+    "Antofagasta (an actor firm)",
+    "LME (a venue)"
+   ]
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "REGULATES",
+   "description": "Government regulates, approves or taxes an organization, project or policy instrument",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "Organization"
+    },
+    {
+     "source": "Government",
+     "target": "MineProject"
+    },
+    {
+     "source": "Government",
+     "target": "ExchangeMarket"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low enforcement intensity"
+    },
+    {
+     "name": "stance",
+     "type": "text",
+     "description": "supportive/hostile/neutral"
+    }
+   ],
+   "family": "governance",
+   "valence": "directional",
+   "direction_semantics": "Source government holds approval/tax authority over target firm, project or venue"
+  },
+  {
+   "name": "OPERATES",
+   "description": "An organization owns or operates a mine project",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "MineProject"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "ownership_share",
+     "type": "text",
+     "description": "Equity stake if known"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Ownership start"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "Source company operates target mine/project and controls its output decisions"
+  },
+  {
+   "name": "SUPPLIES",
+   "description": "Mine projects or smelter groups supply concentrate/refined copper to the market chain",
+   "source_targets": [
+    {
+     "source": "MineProject",
+     "target": "SmelterGroup"
+    },
+    {
+     "source": "MineProject",
+     "target": "Organization"
+    },
+    {
+     "source": "SmelterGroup",
+     "target": "ExchangeMarket"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "volume_kt",
+     "type": "text",
+     "description": "Annual supplied volume in kt"
+    },
+    {
+     "name": "tc_terms",
+     "type": "text",
+     "description": "Applicable TC/RC terms"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "Source supplies concentrate or refined metal to target"
+  },
+  {
+   "name": "NEGOTIATES_BENCHMARK_WITH",
+   "description": "Annual TC/RC benchmark negotiation between miners and smelters",
+   "source_targets": [
+    {
+     "source": "Organization",
+     "target": "SmelterGroup"
+    },
+    {
+     "source": "SmelterGroup",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "last_settlement",
+     "type": "text",
+     "description": "Last agreed benchmark level"
+    },
+    {
+     "name": "negotiation_window",
+     "type": "text",
+     "description": "Next scheduled talks date"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "Source and target are counterparties in the annual TC/RC settlement"
+  },
+  {
+   "name": "DEPENDS_ON",
+   "description": "Smelter refined output depends on concentrate supply from mines/projects",
+   "source_targets": [
+    {
+     "source": "SmelterGroup",
+     "target": "MineProject"
+    },
+    {
+     "source": "ExchangeMarket",
+     "target": "TradePolicyInstrument"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low dependence"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Transmission lag"
+    }
+   ],
+   "family": "dependency",
+   "valence": "directional",
+   "direction_semantics": "Source's output/flows are constrained by target's availability"
+  },
+  {
+   "name": "CONSTRAINS",
+   "description": "Policy instruments or concentrate scarcity constrain market outcomes",
+   "source_targets": [
+    {
+     "source": "TradePolicyInstrument",
+     "target": "ExchangeMarket"
+    },
+    {
+     "source": "MarketIndicator",
+     "target": "SmelterGroup"
+    },
+    {
+     "source": "MineProject",
+     "target": "ExchangeMarket"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "positive/negative price impact"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Months until effect on settlement"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "Source restricts or caps target's flows/output, transmitting to price"
+  },
+  {
+   "name": "CAUSES",
+   "description": "Causal transmission from indicators/policies to the price statistic",
+   "source_targets": [
+    {
+     "source": "MarketIndicator",
+     "target": "MarketIndicator"
+    },
+    {
+     "source": "TradePolicyInstrument",
+     "target": "MarketIndicator"
+    },
+    {
+     "source": "Government",
+     "target": "MarketIndicator"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sign",
+     "type": "text",
+     "description": "Direction of price/level effect"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    },
+    {
+     "name": "lag",
+     "type": "text",
+     "description": "Expected transmission lag in months"
+    }
+   ],
+   "family": "causal",
+   "valence": "directional",
+   "direction_semantics": "Source change causes target indicator/price movement"
+  },
+  {
+   "name": "INFLUENCES",
+   "description": "Actors or sources influence market expectations and price formation",
+   "source_targets": [
+    {
+     "source": "ForecastingSource",
+     "target": "MarketIndicator"
+    },
+    {
+     "source": "Government",
+     "target": "ExchangeMarket"
+    },
+    {
+     "source": "Organization",
+     "target": "ExchangeMarket"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "sentiment",
+     "type": "text",
+     "description": "positive/negative/neutral toward higher prices"
+    },
+    {
+     "name": "strength",
+     "type": "text",
+     "description": "high/medium/low"
+    }
+   ],
+   "family": "influence",
+   "valence": "directional",
+   "direction_semantics": "Source shapes expectations or flows at target market/indicator"
+  },
+  {
+   "name": "PUBLISHES",
+   "description": "Forecasting sources publish indicators and forecasts",
+   "source_targets": [
+    {
+     "source": "ForecastingSource",
+     "target": "MarketIndicator"
+    },
+    {
+     "source": "ExchangeMarket",
+     "target": "MarketIndicator"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "frequency",
+     "type": "text",
+     "description": "Publication cadence"
+    },
+    {
+     "name": "as_of_date",
+     "type": "text",
+     "description": "Latest release date"
+    }
+   ],
+   "family": "information",
+   "valence": "neutral",
+   "direction_semantics": "Source publishes/assesses target indicator or forecast"
+  },
+  {
+   "name": "STOCKPILES_AT",
+   "description": "State stockpiling bodies accumulate or release metal via warehouses/markets",
+   "source_targets": [
+    {
+     "source": "Government",
+     "target": "ExchangeMarket"
+    },
+    {
+     "source": "Government",
+     "target": "Organization"
+    }
+   ],
+   "attributes": [
+    {
+     "name": "action_type",
+     "type": "text",
+     "description": "tender/purchase/auction release"
+    },
+    {
+     "name": "volume_t",
+     "type": "text",
+     "description": "Volume in tonnes if known"
+    },
+    {
+     "name": "since_date",
+     "type": "text",
+     "description": "Program start date"
+    }
+   ],
+   "family": "economic",
+   "valence": "transactional",
+   "direction_semantics": "Source stockpiler buys into or releases from target market/supplier"
+  }
+ ],
+ "analysis_summary": "该预测问题为LME铜现金结算价（2027-12-31，P10/P50/P90），核心机制是精矿短缺驱动的挤压与中国冶炼产能、矿山增量、美国232关税与库存分布之间的博弈。角色阵容以企业（矿商/冶炼厂）与政府（中国、巴拿马、美国）为主，因此保留Organization与Government，并增设SmelterGroup（CSPT等协调集团）、MineProject（可量化的kt/yr增量客体）、ExchangeMarket（LME/COMEX）、TradePolicyInstrument（232/Annex III）、MarketIndicator（TC/RC、库存、价差等信号）、ForecastingSource（银行/ICSG/CRU等被动信息源，tier 3）。边覆盖监管、运营、供应、基准谈判、依赖、约束、因果传导、影响、发布与收储十类，其中CONSTRAINS/CAUSES携带sign/lag/strength属性以刻画冲击向结算价的传导路径，服务多智能体推演。"
+}

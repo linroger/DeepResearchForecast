@@ -1,0 +1,82 @@
+{
+ "pipeline_id": "pipe_11402e5d4825",
+ "report_id": "report_d9c1e6492722",
+ "simulation_id": "sim_1014ad0ba541",
+ "graph_id": "mirofish_fb5ad55b23ce4888",
+ "status": "completed",
+ "prompt": "预测截至 2027 年 12 月 31 日的美国 10 年期国债收益率。 设定基准：2026 年 10 月下旬的当前收益率、收益率曲线形态，以及 2024–2026 年的波动区间。 研究并权衡核心驱动因素：美联储政策路径与缩表（QT）/ 资产负债表政策；通胀预期与期限溢价估算；美债发行结构与财政赤字前景；境外官方需求（日本、中国）；衰退概率；同等幅度收益率变动对应的历史基准水平。",
+ "created_at": "2026-10-26T06:23:00.192318+00:00",
+ "mode": "full",
+ "rounds": 14,
+ "personas": 6,
+ "has_actors": true,
+ "research_log": {
+  "line_count": 466,
+  "source_count": 1,
+  "complete": true,
+  "event_fidelity": "summarized_progress_events"
+ },
+ "dossier_assets": [
+  "research-charts/data_fred_dgs10_53b12b38e251b1e1.png",
+  "research-charts/data_fred_t10y2y_6b8edf335bbec73a.png",
+  "research-charts/data_bis_ws_cbpol_m_us_eae44f753af36114.png",
+  "research-charts/data_fred_walcl_8bc7255ad0f83329.png",
+  "research-charts/data_fred_t10yie_047417073b32645e.png",
+  "research-charts/data_fred_t5yifr_4e1ed899f76d560f.png",
+  "research-charts/data_fred_fyfsgda188s_4ca505887626eab4.png",
+  "research-charts/data_fred_dfii10_7a0359873a7b1187.png",
+  "research-charts/timeline.png",
+  "research-charts/timeline.html"
+ ],
+ "report_assets": [
+  "charts/binary_forecast_dotplot.png",
+  "charts/official_indicators.png",
+  "charts/official_indicators_more.png",
+  "charts/official_series_pnblmbnsemplblel.png",
+  "charts/scenario_probabilities.png",
+  "charts/metric_trajectories.png",
+  "charts/timeline_lanes.png"
+ ],
+ "dossier_languages": {
+  "zh": "dossier.md"
+ },
+ "report_languages": {
+  "zh": "report.md"
+ },
+ "artifact_sha256": {
+  "research_log.txt": "5c972055be8396010d7fb45f6600108f51a7d5882be4d6c2c5a80a94245486db",
+  "dossier.md": "9d09df1cb0f4d846352e63001c050f60d41e78cb695814ffc54a81643c11deb4",
+  "actors.json": "5b6eab6be7815bea88c0f849899f1b289e20b5ead0d378eb8967c605b8fd253d",
+  "sources.json": "4bc7962ee07a5c3ca7f8c99224912ac12d45bdc391090154ae9377e29e4a5795",
+  "ontology.json": "f21bc103ad1bbb6dda9b043d5eecd379a5d59f3704ff1798cc69c59462514d8b",
+  "graph.json": "6cc3b99dbaa3d444332de1af90e2a22d6c384597b6670c26ecbe346eda59c17c",
+  "forum.json": "374bcb0e51bc8050cf3e7d821f344fdd41744b3d4463c1066febbad1706aa705",
+  "report.md": "b3eda33ddb6071b638780b76eea27760ab0317e3b39e07361a7afa84d7ea0583",
+  "research-charts/data_fred_dgs10_53b12b38e251b1e1.png": "1219eab9298dd3bb19378af14d1e13fcb5d352aebbdeb2e513906706a10fbd3c",
+  "research-charts/data_fred_t10y2y_6b8edf335bbec73a.png": "ac0a01da461a9031e0a03f238ea5fb1398c3d17e9e8b1ae363ceeb159d8ea6e6",
+  "research-charts/data_bis_ws_cbpol_m_us_eae44f753af36114.png": "ab90e89984460cdbe453aecdd486a5bcb2c2c1aea0d124023ca5366258e054d5",
+  "research-charts/data_fred_walcl_8bc7255ad0f83329.png": "380724cfcc1448e4c476a9f899f41513819aa442c193c222f4a6ae9f12c10381",
+  "research-charts/data_fred_t10yie_047417073b32645e.png": "ffd1da5f9dd0c91bedcf7172bff93d5932b03781851c871dc00c317a33296fb3",
+  "research-charts/data_fred_t5yifr_4e1ed899f76d560f.png": "01c21e5d02594329dd9bd3a670227d405d51ac34caa94da0d7737b86367721cf",
+  "research-charts/data_fred_fyfsgda188s_4ca505887626eab4.png": "a0643ebfa83ed51d6782c52c88b6834b7e29736be272380b9e22d42ff4038f9f",
+  "research-charts/data_fred_dfii10_7a0359873a7b1187.png": "ec458cbdbd75d64efef08228d17404f3eb69d827bf65d46f22adcd107b09cd89",
+  "research-charts/timeline.png": "98395b14cca3ea2f5691739b35ca270385036184561c284a0144c82a986b964b",
+  "research-charts/timeline.html": "a3ff06abd63c6986f6b3ea6da3e3cc833e2579d3f320cf7101e776af443132ff",
+  "charts/binary_forecast_dotplot.png": "a3fa7ac8a175ba116037739d41bd78443eb4d480deaf5d9121c5de88ec2945e5",
+  "charts/official_indicators.png": "061a4a83e9a64b4ba25f6e6b8dd128530d6ffe59a8341f2c409149a0110261fd",
+  "charts/official_indicators_more.png": "676c21e6445f0b0c642025eedc82db96934c006afd1e9da5b13d2deff0c1ef1b",
+  "charts/official_series_pnblmbnsemplblel.png": "8c6b30581b8dd68d0be66da16f517fadffd7e0cf9073ed873cb59214766215e4",
+  "charts/scenario_probabilities.png": "f763e222c698bad11b0c893a22b8241b7fb1ce03cd6f02397353cfdc77db53cb",
+  "charts/metric_trajectories.png": "58812ac937053d7ff322c7d5a221be7e553ff7421b839fa097485e24719a2800",
+  "charts/timeline_lanes.png": "f51ea9c31d24082af1ea757f63518e404a8b2e58f6c9b283ac14aa95213afa1b"
+ },
+ "publication": {
+  "hard_passed": true,
+  "publish_passed": true,
+  "scenario_contract_valid": true,
+  "citation_coverage": 0.439,
+  "semantic_citations_passed": true,
+  "markdown_sha256": "2e68d54537e90235745f218c37abc4d983ff11289df66d5f6a1a37368a0b37d9",
+  "forecast_sha256": "5db45f33ef0a827639089e41652d0c9c68c1a96f9e686237cfa43bfc7af3c6d6"
+ }
+}
