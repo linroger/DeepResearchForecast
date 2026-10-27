@@ -44,7 +44,10 @@ matplotlib>=3.7.0
 # 官方 Model Context Protocol Python SDK（FastMCP）。app/mcp/{kg_server,sim_server}.py 以
 # stdio 传输把 KG 检索与模拟采访暴露给 deer-flow 2.0 harness。仅这两台 MCP 服务器进程需要它；
 # 主后端不 import 本包（构建/列工具在 build_server 内懒导入），故缺失时只影响 MCP 暴露、不影响主流程。
-mcp>=1.10.0
+mcp>=1.30.0,<2
+# Official FMP MCP client transport and discovered-schema validation.
+httpx>=0.28,<1
+jsonschema>=4.20,<5
 # ITEM-16：交互式 HTML 图表族（plotly.js 内联、离线自包含）。可选依赖：未安装时 HTML 族
 # 自动跳过（见 report_visualizer.py 的 PLOTLY_AVAILABLE 标志），PNG/Mermaid 族不受影响。
 plotly>=5.18.0

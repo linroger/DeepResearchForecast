@@ -90,7 +90,46 @@ def _generation_fingerprints(handoff):
         result["news_market_context.json"] = hashlib.sha256(
             _contained_bytes(Path(handoff), "news_market_context.json", limit=2_000_000)
         ).hexdigest()
+    # FMP is vendor evidence, not an official-data series. Bind its complete
+    # captured bytes nonetheless: source rows alone cannot prove the generation.
+    for name, raw in fmp_capture_artifacts(handoff).items():
+        result[name] = hashlib.sha256(raw).hexdigest()
     return result
+
+
+def research_has_fmp(handoff, files=None):
+    """Detect declarations even when capture files were removed; never admit evidence."""
+    if (any(str(name).startswith("fmp/") or name == "fmp_research_binding.json" for name in (files or {}))
+            or any(os.path.lexists(Path(handoff) / name) for name in ("fmp", "fmp_research_binding.json"))):
+        return True
+    try:
+        contract = json.loads(_contained_bytes(Path(handoff), "research_contract_manifest.json"))
+        declared = contract.get("files", {}) if isinstance(contract, dict) else {}
+        if any(str(name).startswith("fmp/") or name == "fmp_research_binding.json" for name in declared):
+            return True
+    except (FileNotFoundError, ValueError, TypeError):
+        pass
+    try:
+        sources = json.loads(_contained_bytes(Path(handoff), "sources.json"))
+    except (FileNotFoundError, ValueError):
+        return False
+    return isinstance(sources, list) and any(isinstance(row, dict) and (
+        row.get("provider") == "fmp" or "fmp_capture" in row
+        or str(row.get("source_origin", "")).startswith("fmp_")) for row in sources)
+
+
+def fmp_capture_artifacts(handoff):
+    """Read validated FMP evidence without credentials, clients, or provider I/O."""
+    artifacts = bridge_module("fmp_research").capture_artifacts(handoff)
+    if not artifacts and research_has_fmp(handoff):
+        raise ValueError("Declared FMP captures are missing")
+    for name, raw in artifacts.items():
+        if (name != "fmp_research_binding.json" and not name.startswith("fmp/")) or any(
+                part in {"", ".", ".."} for part in name.split("/")):
+            raise ValueError("Invalid FMP capture artifact path")
+        if _contained_bytes(Path(handoff), name) != raw:
+            raise ValueError("FMP capture changed during generation read")
+    return artifacts
 
 
 def _simulation_directory(simulation_id):
@@ -234,6 +273,18 @@ def simulation_research_binding(simulation_id):
         return {"status": "invalid"}
 
 
+def research_binding_has_fmp(simulation_id):
+    """Read only a persisted declaration; invalid/missing payloads remain inadmissible."""
+    try:
+        directory = _simulation_directory(simulation_id)
+        binding = json.loads(_contained_bytes(directory, _BINDING_FILE, limit=65536))
+        files = binding.get("files") if isinstance(binding, dict) else None
+        return isinstance(files, dict) and any(
+            name.startswith("fmp/") or name == "fmp_research_binding.json" for name in files)
+    except (OSError, TypeError, ValueError):
+        return False
+
+
 def research_binding_has_news_context(simulation_id):
     """Whether a binding declares the new optional proof, without accepting it.
 
@@ -284,6 +335,13 @@ def read_bound_research_core(simulation_id):
             raise ValueError("Core research binding is malformed")
 
         def read_core(handoff):
+            if research_has_fmp(handoff, binding["files"]):
+                expected = {name: digest for name, digest in binding["files"].items()
+                            if name.startswith("fmp/") or name == "fmp_research_binding.json"}
+                actual = {name: hashlib.sha256(raw).hexdigest()
+                          for name, raw in fmp_capture_artifacts(handoff).items()}
+                if expected != actual:
+                    raise ValueError("Core research FMP capture generation changed")
             contents = {}
             for name in _CORE_RESEARCH_FILES:
                 try:

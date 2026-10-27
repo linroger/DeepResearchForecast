@@ -1255,16 +1255,28 @@ def _detect_deerflow_python(deerflow_dir: str) -> list[str]:
     """
     if Config.DEERFLOW_PYTHON and os.path.exists(Config.DEERFLOW_PYTHON):
         return [Config.DEERFLOW_PYTHON]
+    backend = os.path.join(deerflow_dir, "backend")
+    fmp_requirements = os.path.join(deerflow_dir, "requirements-fmp.txt")
     candidates = [
         os.path.join(deerflow_dir, "backend", ".venv", "bin", "python"),
         os.path.join(deerflow_dir, ".venv", "bin", "python"),
     ]
     for c in candidates:
         if os.path.exists(c):
+            if os.path.isfile(fmp_requirements):
+                # Keep consuming the overlay on warm launches: uv --with uses
+                # a separate dependency layer, not a persistent base-venv install.
+                if c == candidates[0]:
+                    return ["uv", "run", "--project", backend, "--no-sync",
+                            "--with-requirements", fmp_requirements, "python"]
+                return ["uv", "run", "--directory", deerflow_dir, "--no-project", "--python", c,
+                        "--with-requirements", fmp_requirements, "python"]
             return [c]
     # 退回 uv（较慢，且要求 uv 在 PATH）
-    backend = os.path.join(deerflow_dir, "backend")
-    return ["uv", "run", "--project", backend, "python"]
+    command = ["uv", "run", "--project", backend]
+    if os.path.isfile(fmp_requirements):
+        command.extend(["--with-requirements", fmp_requirements])
+    return command + ["python"]
 
 
 def _kill_process_group(proc: Optional[subprocess.Popen], sig: int = signal.SIGKILL) -> None:
@@ -1389,6 +1401,7 @@ _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
     "data_mcp.py", "data_catalog.py", "data_sources.py", "data_tools.py",
     "research_skills.py", "backtest_cutoff.py",
     "news_signals.py", "news_tools.py", "market_intelligence.py",
+    "fmp_mcp.py", "fmp_research.py", "fmp_tools.py",
 )
 
 
@@ -1449,6 +1462,28 @@ def _data_sources_subprocess_env() -> dict[str, str]:
         "DATA_SOURCES_PREFETCH_MAX": str(getattr(Config, "DATA_SOURCES_PREFETCH_MAX", 12)),
         "DATA_SOURCES_CHARTS_MAX": str(getattr(Config, "DATA_SOURCES_CHARTS_MAX", 8)),
     }
+
+
+def _fmp_subprocess_env() -> dict[str, str]:
+    """Forward bounded FMP controls; FMP_API_KEY uses ordinary env inheritance."""
+    enabled = getattr(Config, "FMP_ENABLED", True)
+    if isinstance(enabled, str):
+        enabled = enabled.strip().lower() in {"true", "1", "yes", "on"}
+    out = {"FMP_ENABLED": "true" if enabled else "false"}
+    limits = {
+        "FMP_TIMEOUT_SECONDS": (20, 1, 60),
+        "FMP_MAX_CALLS": (12, 1, 50),
+        "FMP_MAX_RESPONSE_BYTES": (524288, 1, 2097152),
+        "FMP_MAX_TOOL_PAGES": (8, 1, 20),
+        "FMP_MAX_TOOLS": (256, 1, 512),
+    }
+    for name, (default, minimum, maximum) in limits.items():
+        try:
+            value = int(getattr(Config, name, default))
+        except (TypeError, ValueError, OverflowError):
+            value = default
+        out[name] = str(max(minimum, min(maximum, value)))
+    return out
 
 
 # deerflow_bridge/extensions_config.json 是模板：MCP server 的 command / PYTHONPATH 依赖本机
@@ -1623,6 +1658,11 @@ def _sync_deerflow_bridge_if_stale(deerflow_dir: str) -> dict[str, Any]:
             _tool_src = os.path.join(bridge_dir, _tool_mod)
             if os.path.isfile(_tool_src):
                 pairs.append((_tool_src, os.path.join(deerflow_dir, _tool_mod)))
+        # setup.sh provisions this manifest in DeerFlow's own venv. The uv
+        # fallback also consumes the deployed copy when no venv exists yet.
+        _fmp_requirements = os.path.join(bridge_dir, "requirements-fmp.txt")
+        if os.path.isfile(_fmp_requirements):
+            pairs.append((_fmp_requirements, os.path.join(deerflow_dir, "requirements-fmp.txt")))
         # LOOP-009 provider-call admission and middleware-internal model calls
         # must be reproducible from the tracked bridge overlay. ``deer-flow/``
         # is gitignored, so syncing only the root bridge script would leave a
@@ -2479,6 +2519,7 @@ class DeerFlowResearchRunner:
         # 下发，目录与 node 解析为绝对路径（见 _data_sources_subprocess_env）。数据源 API key 不是
         # Config 属性，随 env=dict(os.environ) 原样透传，再由 data_mcp 按每个服务的 env 白名单下发。
         env.update(_data_sources_subprocess_env())
+        env.update(_fmp_subprocess_env())
         env.update(_news_context_subprocess_env(
             budget_lane_id=budget_lane_id, synthesis=bool(synthesis_manifest_path)))
         if max_concurrent_subagents is not None:
@@ -3301,6 +3342,7 @@ _RESEARCH_CONTRACT_FILES = (
     "prediction_markets.json",
     "research_report_judge.json", "research_progress.log", "meta.json",
     "charts.json", "news_market_context.json", "research_assessment.json",
+    "fmp_research_binding.json",
 )
 
 _RESEARCH_JUDGE_DIMS = (
@@ -3705,6 +3747,34 @@ def _copy_research_data(source: str, destination: str) -> None:
             os.close(directory)
 
 
+def _copy_research_fmp(source: str, destination: str) -> None:
+    from .official_data import fmp_capture_artifacts
+    for relative, raw in fmp_capture_artifacts(source).items():
+        path = os.path.join(destination, relative)
+        directory = _research_data_directory(os.path.dirname(path), create=True)
+        try:
+            try:
+                fd = os.open(os.path.basename(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                             0o600, dir_fd=directory)
+            except FileExistsError:
+                if _research_data_read(destination, relative, _RESEARCH_DATA_FILE_LIMIT) != raw:
+                    raise ValueError("FMP capture destination contains different bytes")
+            else:
+                with os.fdopen(fd, "wb") as handle:
+                    handle.write(raw)
+        finally:
+            os.close(directory)
+    fmp_capture_artifacts(destination)
+
+
+def _merge_track_fmp_captures(track_dirs: list[str], destination: str, question: str) -> None:
+    from .official_data import bridge_module, fmp_capture_artifacts
+    store = bridge_module("fmp_research").merge_captures(track_dirs, destination, question)
+    if store is None and fmp_capture_artifacts(destination):
+        raise ValueError("FMP capture from a previous generation cannot survive an empty lane union")
+    fmp_capture_artifacts(destination)
+
+
 def _merge_track_research_data(track_dirs: list[str], handoff_dir: str,
                                sources: list[Any]) -> tuple[list[Any], dict[str, Any]]:
     """L10: publish the union of the lanes' dataset generations into a merged handoff.
@@ -3804,9 +3874,9 @@ def _merge_track_research_data(track_dirs: list[str], handoff_dir: str,
     return merged, audit
 
 
-def _research_data_file_set(root: str) -> set[str]:
+def _research_data_file_set(root: str, tree: str = "data") -> set[str]:
     """Bound enumeration of a published data tree and reject extra symlinks."""
-    data = os.path.join(root, "data")
+    data = os.path.join(root, tree)
     if not os.path.lexists(data):
         return set()
     paths: set[str] = set()
@@ -3814,7 +3884,7 @@ def _research_data_file_set(root: str) -> set[str]:
     directory = _research_data_directory(data)
     stack = []
     try:
-        stack.append(("data", directory, os.scandir(directory)))
+        stack.append((tree, directory, os.scandir(directory)))
     except BaseException:
         os.close(directory)
         raise
@@ -3883,6 +3953,9 @@ def _research_contract_entries(root: str) -> dict[str, dict[str, Any]]:
         }
     for relative, raw in _research_data_artifacts(root).items():
         entries[relative] = {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+    from .official_data import fmp_capture_artifacts
+    for relative, raw in fmp_capture_artifacts(root).items():
+        entries[relative] = {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
     return entries
 
 
@@ -3906,7 +3979,7 @@ def _research_contract_validation_errors(handoff_dir: str) -> list[str]:
                     or os.path.isabs(relative)):
                 errors.append(f"manifest_entry_invalid:{relative!r}")
                 continue
-            if relative.startswith("data/"):
+            if relative.startswith(("data/", "fmp/")) or relative == "fmp_research_binding.json":
                 raw = _research_data_read(root, relative, _RESEARCH_DATA_FILE_LIMIT)
                 if (len(raw) != expected.get("bytes")
                         or hashlib.sha256(raw).hexdigest() != expected.get("sha256")):
@@ -3970,6 +4043,13 @@ def _research_contract_validation_errors(handoff_dir: str) -> list[str]:
         expected_data_files = {rel for rel in entries if rel.startswith("data/")}
         if data_files != expected_data_files or _research_data_file_set(root) != data_files:
             errors.append("data_artifact_set_mismatch")
+        from .official_data import fmp_capture_artifacts
+        fmp_files = set(fmp_capture_artifacts(root))
+        expected_fmp_files = {rel for rel in entries
+                              if rel.startswith("fmp/") or rel == "fmp_research_binding.json"}
+        if (fmp_files != expected_fmp_files or _research_data_file_set(root, "fmp") !=
+                {rel for rel in fmp_files if rel.startswith("fmp/")}):
+            errors.append("fmp_artifact_set_mismatch")
         if os.path.isdir(os.path.join(root, "charts")):
             actual_chart_files = {
                 rel for rel in _research_contract_entries(root)
@@ -4095,6 +4175,8 @@ def _promote_research_contract(
     old_contract_moved = False
     data_installed = False
     old_data_moved = False
+    fmp_installed = False
+    old_fmp_moved = False
     promotion_started = False
     rollback_failed = False
     try:
@@ -4106,6 +4188,7 @@ def _promote_research_contract(
         if os.path.isdir(source_charts):
             shutil.copytree(source_charts, os.path.join(stage, "charts"))
         _copy_research_data(source_dir, stage)
+        _copy_research_fmp(source_dir, stage)
 
         if meta_patch:
             staged_meta_path = os.path.join(stage, "meta.json")
@@ -4144,6 +4227,10 @@ def _promote_research_contract(
         if os.path.lexists(root_data):
             os.replace(root_data, os.path.join(rollback, "data"))
             old_data_moved = True
+        root_fmp = os.path.join(root, "fmp")
+        if os.path.lexists(root_fmp):
+            os.replace(root_fmp, os.path.join(rollback, "fmp"))
+            old_fmp_moved = True
 
         for name in _RESEARCH_CONTRACT_FILES:
             staged = os.path.join(stage, name)
@@ -4158,6 +4245,10 @@ def _promote_research_contract(
         if os.path.isdir(staged_data):
             os.replace(staged_data, root_data)
             data_installed = True
+        staged_fmp = os.path.join(stage, "fmp")
+        if os.path.isdir(staged_fmp):
+            os.replace(staged_fmp, root_fmp)
+            fmp_installed = True
 
         from ..utils.atomic import write_json_atomic
         write_json_atomic(contract_path, manifest)
@@ -4180,6 +4271,8 @@ def _promote_research_contract(
                 shutil.rmtree(os.path.join(root, "charts"), ignore_errors=True)
             if data_installed and os.path.lexists(os.path.join(root, "data")):
                 shutil.rmtree(os.path.join(root, "data"), ignore_errors=True)
+            if fmp_installed and os.path.lexists(os.path.join(root, "fmp")):
+                shutil.rmtree(os.path.join(root, "fmp"), ignore_errors=True)
             for name in moved_old:
                 prior = os.path.join(rollback, name)
                 if os.path.exists(prior):
@@ -4188,6 +4281,8 @@ def _promote_research_contract(
                 os.replace(os.path.join(rollback, "charts"), os.path.join(root, "charts"))
             if old_data_moved and os.path.lexists(os.path.join(rollback, "data")):
                 os.replace(os.path.join(rollback, "data"), os.path.join(root, "data"))
+            if old_fmp_moved and os.path.lexists(os.path.join(rollback, "fmp")):
+                os.replace(os.path.join(rollback, "fmp"), os.path.join(root, "fmp"))
             if old_contract_moved:
                 prior_contract = os.path.join(rollback, _RESEARCH_CONTRACT_FILENAME)
                 if os.path.exists(prior_contract):
@@ -4290,6 +4385,7 @@ def _finalize_research_contract(
         if os.path.isdir(source_charts):
             shutil.copytree(source_charts, os.path.join(final_source, "charts"))
         _copy_research_data(root, final_source)
+        _copy_research_fmp(root, final_source)
 
         from ..utils.atomic import write_json_atomic, write_text_atomic
         staged_report_path = os.path.join(final_source, "research_report.md")
@@ -4494,6 +4590,17 @@ def _load_news_context(handoff_dir: str) -> Optional[dict[str, Any]]:
     return load_context(handoff_dir) or None
 
 
+def _research_requires_context_binding(state: PipelineState, handoff_dir: str,
+                                       consumed_generation: Optional[dict] = None) -> bool:
+    from .official_data import research_binding_has_fmp, research_has_fmp
+    contract = _read_json(_research_contract_path(handoff_dir))
+    contract_files = contract.get("files", {}) if isinstance(contract, dict) else {}
+    return (_research_declares_news_context(state, handoff_dir, consumed_generation)
+            or research_binding_has_fmp(getattr(state, "simulation_id", None))
+            or research_has_fmp(handoff_dir, (consumed_generation or {}).get("files", {}))
+            or research_has_fmp(handoff_dir, contract_files))
+
+
 def _validate_news_context_for_research_start(state: PipelineState,
                                               handoff_dir: str) -> None:
     """Keep acquisition checkpoints distinct from finalized research evidence."""
@@ -4526,6 +4633,8 @@ def _load_research_handoff(handoff_dir: str) -> dict[str, Any]:
     failed. The same short-error guard used by DeerFlowResearchRunner still
     applies, so provider fallback text is never treated as usable research.
     """
+    from .official_data import fmp_capture_artifacts
+    fmp_capture_artifacts(handoff_dir)
     report_path = os.path.join(handoff_dir, "research_report.md")
     report = _read_text(report_path)
     # 与 DeerFlowResearchRunner 的短报告守卫语义一致：LLM 降级/错误文案都是短串，
@@ -8731,7 +8840,7 @@ class PipelineOrchestrator:
         except ResearchBindingConflict:
             raise
         except Exception as _bind_err:  # noqa: BLE001 — old official-only enrichment may degrade
-            if _research_declares_news_context(state, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id), consumed_generation):
+            if _research_requires_context_binding(state, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id), consumed_generation):
                 raise ValueError("News context consumed generation changed before world preparation") from _bind_err
             self._record_official_data_unbound(state, STAGE_PREPARE, _bind_err)
 
@@ -9651,6 +9760,9 @@ class PipelineOrchestrator:
             "communities.json", "entity_merges.json", "graph_prune.json",
             "cast_reconciliation.json",
         }
+        from .official_data import fmp_capture_artifacts
+        fmp_artifacts = fmp_capture_artifacts(source)
+        names.update(fmp_artifacts)
         for tree in ("data", "charts"):
             root = os.path.join(source, tree)
             if not os.path.lexists(root):
@@ -9672,13 +9784,15 @@ class PipelineOrchestrator:
             for name in sorted(names):
                 if not os.path.lexists(os.path.join(source, name)):
                     continue
-                raw = _research_data_read(source, name, 64_000_000)
+                raw = (fmp_artifacts[name] if name in fmp_artifacts
+                       else _research_data_read(source, name, 64_000_000))
                 target = Path(destination, name)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(raw)
                 copied[name] = hashlib.sha256(raw).hexdigest()
             if any(_sha256_file(os.path.join(source, name)) != digest for name, digest in copied.items()):
                 raise ValueError("Parent research changed during fork snapshot")
+            fmp_capture_artifacts(destination)
             def relocate(path):
                 if not isinstance(path, str):
                     return path
@@ -10064,7 +10178,7 @@ class PipelineOrchestrator:
         except ResearchBindingConflict:
             raise
         except Exception as _bind_err:  # noqa: BLE001 — old official-only enrichment may degrade
-            if _research_declares_news_context(state, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id), parent):
+            if _research_requires_context_binding(state, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id), parent):
                 raise ValueError("News context consumed generation changed before world seed") from _bind_err
             reason = f"{type(_bind_err).__name__}: {' '.join(str(_bind_err).split())[:240]}"
             row["official_data_binding"] = {"status": "unavailable", "reason": reason}
@@ -13365,6 +13479,7 @@ class PipelineOrchestrator:
         if _data_merge["series"] or _data_merge["dropped_references"] or _data_merge["unavailable_lanes"]:
             state.options["official_data_merge"] = _data_merge
 
+        _merge_track_fmp_captures(track_dirs, handoff_dir, state.prompt)
         _merge_track_news_context(track_dirs, handoff_dir, merged_sources)
 
         # 落盘合并产物到 handoff_dir（下游/resume 读的正是这些文件）
@@ -13519,7 +13634,7 @@ class PipelineOrchestrator:
                 if _contract_present:
                     _integrity_valid = _validate_research_contract(handoff_dir)
                     if not _integrity_valid:
-                        if _research_declares_news_context(state, handoff_dir):
+                        if _research_requires_context_binding(state, handoff_dir):
                             raise ValueError("Stored news context research contract changed before reuse")
                         logger.warning(
                             "[%s] 研究 contract manifest 校验失败，拒绝复用混合/篡改产物",
@@ -13892,7 +14007,7 @@ class PipelineOrchestrator:
                     _consumed_research_generation = capture_research_generation(
                         handoff_dir, report=report_md, sources=research.get("sources"))
                 except Exception as _capture_err:  # noqa: BLE001 — old official-only enrichment can degrade
-                    if _research_declares_news_context(state, handoff_dir):
+                    if _research_requires_context_binding(state, handoff_dir):
                         raise ValueError("News context consumed-generation capture failed") from _capture_err
                     _consumed_research_generation = None
                     self._record_official_data_unbound(state, STAGE_RESEARCH, _capture_err)
@@ -14424,7 +14539,7 @@ class PipelineOrchestrator:
                             # generation is a provenance violation, not a data outage.
                             raise
                         except Exception as _bind_err:  # noqa: BLE001 — old official-only enrichment may degrade
-                            if _research_declares_news_context(state, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id), _consumed_research_generation):
+                            if _research_requires_context_binding(state, state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id), _consumed_research_generation):
                                 raise ValueError("News context consumed generation changed before preparation") from _bind_err
                             self._record_official_data_unbound(state, STAGE_PREPARE, _bind_err)
                     # XRUN-15: 新模拟 attempt 取代旧 attempt，清掉指向旧 sim/report 目录的

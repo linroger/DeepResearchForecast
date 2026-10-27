@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMP Financial Data and News"
+  short_description: "Retrieve financial data and news via official FMP MCP"
+  default_prompt: "Use $fmp-research to gather dated financial data and news relevant to this analysis."

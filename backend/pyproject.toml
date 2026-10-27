@@ -37,7 +37,10 @@ dependencies = [
     # （仅 mcp 1.x 导出）；mcp 2.x 移除该导出会让 OASIS 依赖检查直接失败。
     # 后端自身的 MCP 服务器只用稳定的 mcp.server.fastmcp 子模块路径，
     # 因此把 mcp 上界锁在 <2，等升级 camel-ai 时再放开。
-    "mcp>=1.24.0,<2",
+    "mcp>=1.30.0,<2",
+    # Explicit FMP client dependencies; do not rely on transitive SDK extras.
+    "httpx>=0.28,<1",
+    "jsonschema>=4.20,<5",
     
     # 文件处理
     "PyMuPDF>=1.24.0",

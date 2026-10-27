@@ -848,6 +848,14 @@ tools:
     group: web
     use: data_tools:data_get_tool
 
+  # Official FMP MCP discovery/calls; availability requires a runtime API key.
+  - name: fmp_search_tools
+    group: web
+    use: fmp_tools:fmp_search_tools_tool
+  - name: fmp_call
+    group: web
+    use: fmp_tools:fmp_call_tool
+
   # Image search tool (uses DuckDuckGo)
   # Use this to find reference images before image generation
   - name: image_search
@@ -1224,6 +1232,11 @@ subagents:
         When available, use `data_search` and `data_get` for official observations; preserve
         exact units, periods, dataset URLs and provisional citations. Search metadata is
         discovery only; keep publisher projections labelled separately from observations.
+        When FMP is enabled, use `fmp_search_tools` to discover official MCP schemas,
+        then `fmp_call` with a discovered tool name and schema-valid arguments for
+        relevant financial data and news. Treat results as vendor evidence; retain
+        periods, currencies, source URLs and retrieval times, and distinguish
+        reported facts from estimates. News snippets require publisher-page verification.
         `read_file` is only for an activated skill or a harness-managed externalized tool
         result; do not browse an arbitrary local corpus. Your evidence comes from pages and
         markets you actually fetch.
@@ -1257,6 +1270,8 @@ subagents:
         - market_compare
         - data_search
         - data_get
+        - fmp_search_tools
+        - fmp_call
         - read_file
         - write_file
       skills:                 # 技能白名单：搜证纪律 + 市场锚点

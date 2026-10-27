@@ -700,6 +700,17 @@ async def cached_fetch(
     （非失败/非哨兵/≥200 字符）才落盘 + 触发 LRU 淘汰。缓存层任何异常都不改变返回结果。
     """
     exact_key = str(url or "").strip()
+    if "drf_fmp_capture=" in exact_key:
+        # Reserved run-local identities are not provider-served web pages. This
+        # path precedes cache/HTTP admission and never falls back on failure.
+        try:
+            if __package__:
+                from .fmp_tools import read_capture
+            else:
+                from fmp_tools import read_capture
+            return read_capture(exact_key)
+        except (ImportError, ValueError, OSError):
+            return "FETCH_FAILED(fmp_capture_corrupt): captured response is unavailable."
     policy_rejection = _source_policy_rejection(exact_key)
     if policy_rejection:
         return _source_policy_result(exact_key, policy_rejection)

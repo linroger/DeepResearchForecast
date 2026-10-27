@@ -1227,6 +1227,12 @@ class _RunState:
             self._data["news_market_context_binding"] = proof
             self.save()
 
+    def bind_fmp(self, proof: Mapping[str, Any], sources: Mapping[str, Any]) -> None:
+        with self._lock:
+            self._data["fmp_research_binding"] = dict(proof)
+            self._data["fmp_source_binding"] = dict(sources)
+            self.save()
+
     def phase(self, name: str) -> dict:
         with self._lock:
             return dict(self._data["phases"].get(name) or {})
@@ -3753,9 +3759,9 @@ def tool_output_sids(name: str, output: str) -> tuple[int | None, list[int]]:
     "[S1] …" in its own references must not make ledger row 1 "shown".
     """
     lines = str(output or "").splitlines()
-    if name == "data_search":
+    if name in ("data_search", "fmp_search_tools"):
         return None, []  # discovery metadata can never allocate a fetched source
-    if name in ("web_fetch", "data_get"):
+    if name in ("web_fetch", "data_get", "fmp_call"):
         match = _ROW_HEADER_RE.match(lines[0]) if lines else None
         return (int(match.group(1)), [int(match.group(1))]) if match else (None, [])
     sids: list[int] = []
@@ -4071,7 +4077,7 @@ class KiqAgent:
         slots = 0
         for index, call in enumerate(calls):
             name = call.get("name")
-            if call.get("error") or name not in ("web_search", "web_fetch", "data_search", "data_get", *rg.CONTEXT_TOOL_METHODS):
+            if call.get("error") or name not in ("web_search", "web_fetch", "data_search", "data_get", "fmp_search_tools", "fmp_call", *rg.CONTEXT_TOOL_METHODS):
                 runnable.append(index)  # answered with a short error by _call_tool
                 continue
             slots += 1
@@ -4106,6 +4112,10 @@ class KiqAgent:
                     self._data_queries.add(key)
                     novel = True
             fetched, sids = tool_output_sids(str(call.get("name")), output)
+            if fetched is not None and call.get("name") == "fmp_call":
+                row = self.engine.ledger.get(fetched)
+                if row and row.get("kind") == "news_snippet":
+                    fetched = None
             if fetched is not None:
                 self._note_read(fetched, read_terms[index])
                 if fetched not in self.fetched:
@@ -4144,7 +4154,7 @@ class KiqAgent:
         its URL, or its ``S<n>`` marker — with the same or a near-same focus
         (:func:`_repeats_read`); otherwise ``call`` is recorded."""
         args = call.get("args") or {}
-        if call.get("name") in ("data_search", "data_get", *rg.CONTEXT_TOOL_METHODS):
+        if call.get("name") in ("data_search", "data_get", "fmp_search_tools", "fmp_call", *rg.CONTEXT_TOOL_METHODS):
             key = (str(call["name"]), json.dumps(args, sort_keys=True))
             if key in queued:
                 return True
@@ -4210,6 +4220,14 @@ class KiqAgent:
                         "or web_fetch with a url (and optionally a focus).")
             args = call.get("args") or {}
             name = call.get("name")
+            if name in ("fmp_search_tools", "fmp_call"):
+                allowed = {row.get("function", {}).get("name") for row in self.agent_tools}
+                if name not in allowed:
+                    return "UNKNOWN_TOOL: FMP is disabled for this run."
+                deadline = rg.Deadline(max(0.0, self.deadline.remaining() - self.grace),
+                                       self.deadline._clock, label="KIQ FMP")
+                return tools.fmp_query(name, query=args.get("query", ""), tool=args.get("tool", ""),
+                                       arguments=args.get("arguments"), agent_id=self.kiq.id, deadline=deadline)
             if name in rg.CONTEXT_TOOL_METHODS:
                 allowed = {row.get("function", {}).get("name") for row in self.agent_tools}
                 if name not in allowed or not callable(getattr(tools, "context_query", None)):
@@ -4246,6 +4264,8 @@ class KiqAgent:
             if self._data_tools():
                 return "UNKNOWN_TOOL: only web_search, web_fetch, data_search and data_get are available."
             return "UNKNOWN_TOOL: only web_search and web_fetch are available."
+        except rg._fmp_api().CaptureIntegrityError as exc:
+            raise _EngineFailure(str(exc)) from None
         except Exception as exc:  # noqa: BLE001 — a tool failure is text for the model
             return f"TOOL_ERROR({type(exc).__name__}): try another source."
 
@@ -5408,9 +5428,106 @@ class _Engine:
         self.context_snapshot: dict = {}
         self._context_prefetched = False
         self._configure_context()
-        self.agent_tools = rg.agent_tools_schema(self.data_enabled, self.context_names)
+        self.fmp_enabled = False
+        self._configure_fmp()
+        self.agent_tools = rg.agent_tools_schema(self.data_enabled, self.context_names, self.fmp_enabled)
         if callable(getattr(self.tools, "context_query", None)):
             self.tools.context_query = self._watch_tool(self.tools.context_query, "context_query")
+
+    def _configure_fmp(self) -> None:
+        api = rg._fmp_api()
+        proof = self.state.snapshot().get("fmp_research_binding")
+        existing = ((self.out_dir / "fmp/captures.json").exists()
+                    or (self.out_dir / "fmp_research_binding.json").exists()
+                    or any(row.get("fmp_capture") for row in self.ledger.rows()))
+        if self.backtest is not None:
+            if existing or proof:
+                raise _EngineFailure("fmp_capture_corrupt: live FMP is inadmissible in backtests")
+            self.meta["fmp_research"] = {"status": "disabled_backtest"}
+            return
+        enabled = api.configured(self.env)
+        if self.resumed and not (existing or proof):
+            self.meta["fmp_research"] = {"status": "stored_only", "reason": "no_prior_capture"}
+            return
+        if not (enabled or existing or proof):
+            self.meta["fmp_research"] = {"status": "disabled"}
+            return
+        try:
+            if existing and not ((self.out_dir / "fmp/captures.json").is_file()
+                                 and (self.out_dir / "fmp_research_binding.json").is_file()):
+                raise api.CaptureIntegrityError("fmp_capture_corrupt: missing captured generation")
+            store = api.CaptureStore(self.out_dir, self.question, env=self.env,
+                                     replay=self.resumed, expected=proof)
+            if existing and not (self.out_dir / "fmp/captures.json").exists():
+                raise api.CaptureIntegrityError("fmp_capture_corrupt: missing captured generation")
+            self.tools.fmp_store = store
+            if proof and self.state.snapshot().get("fmp_source_binding") != self.tools.fmp_source_binding():
+                raise api.CaptureIntegrityError("fmp_capture_corrupt: citation ledger changed")
+            self.tools.restore_fmp()
+            self.tools.fmp_checkpoint = self._checkpoint_fmp
+            self.fmp_enabled = enabled or bool(store.data["captures"])
+            self._checkpoint_fmp()
+            self.tools.fmp_query = self._watch_tool(self.tools.fmp_query, "fmp_query")
+        except api.CaptureIntegrityError as exc:
+            raise _EngineFailure(str(exc)) from None
+
+    def _checkpoint_fmp(self) -> None:
+        store = getattr(self.tools, "fmp_store", None)
+        if store is not None:
+            with store.lock:
+                proof = store.proof()
+                self.state.bind_fmp(proof, self.tools.fmp_source_binding())
+                self.meta["fmp_research"] = {"status": "stored_only" if store.frozen else "enabled",
+                                              **proof, "captures": len(store.data["captures"])}
+
+    def _fmp_text(self, *, discovery: bool = False, shown_sids=None) -> str:
+        store = getattr(self.tools, "fmp_store", None)
+        if store is None:
+            return ""
+        parts = []
+        used = omitted = 0
+        for item, response in store.captures():
+            if item["request"]["operation"] == "discover":
+                if discovery:
+                    block = rg.delimit_untrusted("FMP DISCOVERED TOOLS",
+                                                rg._fmp_api().discovery_projection(response, max_chars=6000, max_tools=5))
+                    if used + len(block) <= 18000:
+                        parts.append(block)
+                        used += len(block)
+                    else:
+                        omitted += 1
+                continue
+            row = self.ledger.find(item["url"])
+            if row is None:
+                continue  # Captured availability failures do not become sources.
+            block = self.tools.render_fmp(row)
+            if used + len(block) > 18000:
+                omitted += 1
+                continue
+            if shown_sids is not None and row["sid"] not in shown_sids:
+                shown_sids.append(row["sid"])
+            parts.append(block)
+            used += len(block)
+        if omitted:
+            parts.append(f"FMP: {omitted} additional captured responses omitted from this prompt; use stored sources.")
+        return "\n".join(parts)
+
+    def _discover_fmp(self, deadline) -> str:
+        if not self.fmp_enabled or not rg._fmp_api().relevant(self.question):
+            return ""
+        for query in ("company financial statements ratios estimates valuation market data",
+                      "company stock financial news press releases"):
+            if self.cancelled or deadline.expired():
+                break
+            self.tools.fmp_query("fmp_search_tools", query=query, agent_id="planner", deadline=deadline)
+        return self._fmp_text(discovery=True)
+
+    def _freeze_fmp(self) -> None:
+        store = getattr(self.tools, "fmp_store", None)
+        if store is not None:
+            store.freeze()
+            store.validate(expected=self.state.snapshot().get("fmp_research_binding"))
+            self._checkpoint_fmp()
 
     def _configure_context(self) -> None:
         """Bind the trusted run directory once; a resumed attempt never reacquires."""
@@ -5770,6 +5887,9 @@ class _Engine:
         freeze = getattr(self.tools, "freeze_context", None)
         if callable(freeze):
             freeze()
+        store = getattr(self.tools, "fmp_store", None)
+        if store is not None:
+            store.freeze()
 
     def _watch_tool(self, tool: Callable[..., str], kind: str) -> Callable[..., str]:
         """``tool`` (a ResearchTools search/fetch) answering
@@ -5779,7 +5899,7 @@ class _Engine:
         def watched(*args: Any, **kwargs: Any) -> str:
             if self.cancelled:
                 return CANCELLED_TOOL_TEXT
-            if (kind.startswith("data_") or kind == "context_query") and "deadline" not in kwargs:
+            if (kind.startswith("data_") or kind in ("context_query", "fmp_query")) and "deadline" not in kwargs:
                 kwargs["deadline"] = self.deadline
             text = tool(*args, **kwargs)
             if kind == "search" and text == rg.MSG_SEARCH_UNAVAILABLE:
@@ -5939,6 +6059,7 @@ class _Engine:
             self.phase_gather()
             self.phase_gap()
             self._seal_context()
+            self._freeze_fmp()
             self.phase_assess()
             self.phase_synthesize()
             self.phase_qa()
@@ -5947,6 +6068,10 @@ class _Engine:
             self.meta.update(status="failed", error=str(failure), finished_at=_iso_now())
             self.log("error", f"v3: {failure}")
             return 2
+        finally:
+            store = getattr(self.tools, "fmp_store", None)
+            if store is not None:
+                store.close()
 
     # ========================================================== official data
     def phase_data(self) -> None:
@@ -6459,6 +6584,7 @@ class _Engine:
         unreachable or out of time (not because its answer was unusable).
         """
         suffix = ":replan" if single_attempt else ""
+        fmp_discovery = self._discover_fmp(deadline)
         if scope is None:
             try:
                 scope = self._plan_json(
@@ -6476,9 +6602,15 @@ class _Engine:
         context = self._context_text()
         if context:
             shared.append(self.delimit("NEWS AND MARKET CONTEXT", context))
+        if fmp_discovery:
+            shared.append(fmp_discovery)
         task = _render(_T_PLAN, min_kiqs=min(4, self.preset.max_kiqs), max_kiqs=self.preset.max_kiqs,
                        min_sections=self.preset.sections_min, max_sections=self.preset.sections_max,
                        language=self.language, actor_cap=self.actor_prompt_cap)
+        if self.fmp_enabled:
+            task += "\n" + rg._fmp_api().GUIDANCE + (
+                "\nAssign financial-data and news evidence needs to relevant KIQ questions/why fields. "
+                "Use the discovered tools' exact names in those instructions; irrelevant topics need no FMP call.")
         if scope:
             scoped = {"restated_question": _collapse(scope.get("restated_question"), 400),
                       "horizon": _collapse(scope.get("horizon"), 120),
@@ -6849,6 +6981,9 @@ class _Engine:
                      "require web_fetch before factual claims; opinions and market quotes stay context only.")
         if getattr(self, "data_enabled", False):
             task += self._kiq_data_text(kiq)
+        if getattr(self, "fmp_enabled", False):
+            task += "\n" + rg._fmp_api().GUIDANCE
+            task += "\n" + self._fmp_text(discovery=True, shown_sids=shown_sids)
         if getattr(self, "skill_library", None) is not None:
             task += self._kiq_skill_text(kiq)
             if self._plan_skills() and _HAZARD_KIQ_RE.search(kiq.question):
@@ -7203,6 +7338,9 @@ class _Engine:
             context = self._context_text()
             if context:
                 raw += "\n\n" + context
+            fmp = self._fmp_text()
+            if fmp:
+                raw += "\n\n" + rg._fmp_api().GUIDANCE + "\n" + fmp
             dropped += lost
             self.meta["digest_dropped_lines"] = dropped
             if dropped:
@@ -7354,6 +7492,7 @@ class _Engine:
 
     def phase_synthesize(self) -> None:
         self._freeze_data()
+        self._freeze_fmp()
         if self.state.is_done("synthesize"):
             synth = self._load_synth()
             if synth is not None:
@@ -8519,6 +8658,12 @@ class _Engine:
                 text = self.tools.page_text(sid)
                 if text:
                     entry["excerpt"] = _collapse(text, EXCERPT_CHARS)
+            if row.get("fmp_capture"):
+                if not self.tools.page_text(sid):
+                    raise _EngineFailure("fmp_capture_corrupt: source cannot be published")
+                entry.update(rg._fmp_api().metadata(row["fmp_capture"]))
+                entry["content_sha256"] = row["content_sha256"]
+                entry["reachable"] = None
             if row.get("dataset"):
                 if not fetched or not self.tools.page_text(sid) or sid in self._invalid_data_sids():
                     raise _EngineFailure("official_data_evidence_corrupt: dataset page cannot be published")

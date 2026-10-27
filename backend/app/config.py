@@ -24,6 +24,15 @@ else:
     load_dotenv(override=True)
 
 
+def _bounded_env_int(name: str, default: int, minimum: int, maximum: int) -> int:
+    """Parse a bounded integer without making malformed settings fatal at startup."""
+    try:
+        value = int(os.environ.get(name, str(default)) or str(default))
+    except (TypeError, ValueError, OverflowError):
+        value = default
+    return max(minimum, min(maximum, value))
+
+
 class Config:
     """Flask配置类"""
     
@@ -1615,6 +1624,15 @@ class Config:
     REDDIT_MAX_REQUESTS = max(0, min(1, int(os.environ.get('REDDIT_MAX_REQUESTS', '1') or '1')))
     MARKET_INTELLIGENCE_ENABLED = os.environ.get('MARKET_INTELLIGENCE_ENABLED', 'true').strip().lower() == 'true'
     MARKET_INTELLIGENCE_MAX_REQUESTS = max(0, min(4, int(os.environ.get('MARKET_INTELLIGENCE_MAX_REQUESTS', '4') or '4')))
+
+    # FMP is vendor research evidence. The client also requires FMP_API_KEY,
+    # which stays in the runtime environment rather than becoming a Config field.
+    FMP_ENABLED = os.environ.get('FMP_ENABLED', 'true').strip().lower() in {'true', '1', 'yes', 'on'}
+    FMP_TIMEOUT_SECONDS = _bounded_env_int('FMP_TIMEOUT_SECONDS', 20, 1, 60)
+    FMP_MAX_CALLS = _bounded_env_int('FMP_MAX_CALLS', 12, 1, 50)
+    FMP_MAX_RESPONSE_BYTES = _bounded_env_int('FMP_MAX_RESPONSE_BYTES', 524288, 1, 2097152)
+    FMP_MAX_TOOL_PAGES = _bounded_env_int('FMP_MAX_TOOL_PAGES', 8, 1, 20)
+    FMP_MAX_TOOLS = _bounded_env_int('FMP_MAX_TOOLS', 256, 1, 512)
 
     PREDICTION_MARKETS_ENABLED = os.environ.get('PREDICTION_MARKETS_ENABLED', 'true').strip().lower() == 'true'
     # 市场快照上限（按成交量降序取头部）。新名 PREDICTION_MARKETS_MAX；旧名 ODDPOOL_MAX_MARKETS 仍读作兜底以平滑迁移。

@@ -1,0 +1,4 @@
+# Official FMP MCP client runtime dependencies (both research engines).
+mcp>=1.30.0,<2
+httpx>=0.28,<1
+jsonschema>=4.20,<5

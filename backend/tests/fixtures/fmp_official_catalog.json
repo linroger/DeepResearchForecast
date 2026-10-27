@@ -1,0 +1,197 @@
+{
+  "source": "https://financialmodelingprep.com/mcp",
+  "observed_on": "2026-10-27",
+  "tools": [
+    {
+      "name": "quote",
+      "title": "Stock Quotes",
+      "description": "Real-time stock quotes: single or batch quotes (full and short), aftermarket quotes/trades, and full-market quotes for all stocks on an exchange, ETFs, mutual funds, crypto, commodities, forex, and indexes.\n\nEndpoints:\n- aftermarket-quote (symbol*): Aftermarket Quote\n- aftermarket-trade (symbol*): Aftermarket Trade\n- batch-aftermarket-quote (symbols*): Batch Aftermarket Quote\n- batch-aftermarket-trade (symbols*): Batch Aftermarket Trade\n- batch-quote (symbols*): Stock Batch Quote\n- batch-quote-short (symbols*): Stock Batch Quote Short\n- full-commodities-quotes: Full Commodities Quotes\n- full-cryptocurrency-quotes: Full Cryptocurrency Quotes\n- full-etf-quotes: ETF Price Quotes\n- full-exchange-quotes (exchange*): Exchange Stock Quotes\n- full-forex-quotes: Full Forex Quote\n- full-index-quotes: Full Index Quotes\n- full-mutualfund-quotes: Mutual Fund Price Quotes\n- quote (symbol*): Stock Quote\n- quote-change (symbol*): Stock Price Change\n- quote-short (symbol*): Stock Quote Short\nParameters marked * are required for that endpoint.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "enum": [
+              "aftermarket-quote",
+              "aftermarket-trade",
+              "batch-aftermarket-quote",
+              "batch-aftermarket-trade",
+              "batch-quote",
+              "batch-quote-short",
+              "full-commodities-quotes",
+              "full-cryptocurrency-quotes",
+              "full-etf-quotes",
+              "full-exchange-quotes",
+              "full-forex-quotes",
+              "full-index-quotes",
+              "full-mutualfund-quotes",
+              "quote",
+              "quote-change",
+              "quote-short"
+            ],
+            "description": "The specific endpoint to call. See tool description for available endpoints."
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "symbols": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "short": {
+            "type": "boolean"
+          },
+          "exchange": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpoint"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "news",
+      "title": "Financial News",
+      "description": "Financial news: general market news, stock-specific news (search by symbols), crypto news, forex news, press releases, and FMP articles. Filter by date range with pagination.\n\nEndpoints:\n- crypto-news: Crypto News\n- fmp-articles: FMP Articles\n- forex-news: Forex News\n- general-news: General News\n- press-releases: Press Releases\n- search-crypto-news (symbols*): Search Crypto News\n- search-forex-news (symbols*): Search Forex News\n- search-press-releases (symbols*): Search Press Releases\n- search-stock-news (symbols*): Search Stock News\n- stock-news: Stock News\nParameters marked * are required for that endpoint.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "enum": [
+              "crypto-news",
+              "fmp-articles",
+              "forex-news",
+              "general-news",
+              "press-releases",
+              "search-crypto-news",
+              "search-forex-news",
+              "search-press-releases",
+              "search-stock-news",
+              "stock-news"
+            ],
+            "description": "The specific endpoint to call. See tool description for available endpoints."
+          },
+          "from_date": {
+            "type": "string"
+          },
+          "to_date": {
+            "type": "string"
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "symbols": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "endpoint"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "statements",
+      "title": "Financial Statements",
+      "description": "Financial statements and ratios: income statements, balance sheets, cash flow statements (standard, as-reported, TTM, growth). Key metrics, financial ratios, scores, enterprise values, owner earnings, and revenue segmentation (geographic and product). Use period=\"annual\" or \"quarter\"; some endpoints also accept \"FY\" and \"Q1\"\u2013\"Q4\".\n\nEndpoints:\n- as-reported-balance-statements (symbol*): As Reported Balance Statements\n- as-reported-cashflow-statements (symbol*): As Reported Cashflow Statements\n- as-reported-financial-statements (symbol*): As Reported Financial Statements\n- as-reported-income-statements (symbol*): As Reported Income Statements\n- balance-sheet-statement (symbol*): Balance Sheet Statement\n- balance-sheet-statement-growth (symbol*): Balance Sheet Statement Growth\n- balance-sheet-statements-ttm (symbol*): balance-sheet-statements-ttm\n- cashflow-statement (symbol*): Cash Flow Statement\n- cashflow-statement-growth (symbol*): Cashflow Statement Growth\n- cashflow-statements-ttm (symbol*): cashflow-statements-ttm\n- enterprise-values (symbol*): Enterprise Values\n- financial-reports-dates (symbol*): financial-reports-dates\n- financial-reports-form-10-k-json (symbol*, year*, period*): Financial Reports Form 10-K JSON\n- financial-reports-form-10-k-xlsx (symbol*, year*, period*): Financial Reports Form 10-K XLSX\n- financial-scores (symbol*): Financial Scores\n- financial-statement-growth (symbol*): Financial Statement Growth\n- income-statement (symbol*): Income Statement\n- income-statement-growth (symbol*): Income Statement Growth\n- income-statements-ttm (symbol*): income-statements-ttm\n- key-metrics (symbol*): Key Metrics\n- key-metrics-ttm (symbol*): Key Metrics TTM\n- latest-financial-statements: latest-financial-statements\n- metrics-ratios (symbol*): Financial Ratios\n- metrics-ratios-ttm (symbol*): Financial Ratios TTM\n- owner-earnings (symbol*): Owner Earnings\n- revenue-geographic-segments (symbol*): Revenue Geographic Segments\n- revenue-product-segmentation (symbol*): Revenue Product Segmentation\nParameters marked * are required for that endpoint.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "enum": [
+              "as-reported-balance-statements",
+              "as-reported-cashflow-statements",
+              "as-reported-financial-statements",
+              "as-reported-income-statements",
+              "balance-sheet-statement",
+              "balance-sheet-statement-growth",
+              "balance-sheet-statements-ttm",
+              "cashflow-statement",
+              "cashflow-statement-growth",
+              "cashflow-statements-ttm",
+              "enterprise-values",
+              "financial-reports-dates",
+              "financial-reports-form-10-k-json",
+              "financial-reports-form-10-k-xlsx",
+              "financial-scores",
+              "financial-statement-growth",
+              "income-statement",
+              "income-statement-growth",
+              "income-statements-ttm",
+              "key-metrics",
+              "key-metrics-ttm",
+              "latest-financial-statements",
+              "metrics-ratios",
+              "metrics-ratios-ttm",
+              "owner-earnings",
+              "revenue-geographic-segments",
+              "revenue-product-segmentation"
+            ],
+            "description": "The specific endpoint to call. See tool description for available endpoints."
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "period": {
+            "type": "string"
+          },
+          "year": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "structure": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpoint"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ]
+}

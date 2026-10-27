@@ -2610,7 +2610,14 @@ class SourceLedger:
             row = self._rows.get(int(sid))
             if row is None:
                 return None
-            row["fetched"] = True
+            if row.get("fmp_capture") and row.get("content_sha256"):
+                if row.get("fetched") != (row["fmp_capture"].get("kind") != "news_snippet"):
+                    raise _fmp_api().CaptureIntegrityError("fmp_capture_corrupt: source trust changed")
+                if (row.get("content_sha256"), row.get("page_path"), row.get("chars")) != (
+                        str(content_sha256), str(page_path), int(chars)):
+                    raise _fmp_api().CaptureIntegrityError("fmp_capture_corrupt: immutable source replacement")
+                return dict(row)
+            row["fetched"] = not (row.get("fmp_capture", {}).get("kind") == "news_snippet")
             row["fetched_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             row["content_sha256"] = str(content_sha256)
             row["chars"] = int(chars)
@@ -2624,6 +2631,22 @@ class SourceLedger:
                 row["backtest"] = dict(backtest)
             self._touch()
             return dict(row)
+
+    def register_fmp(self, item: Mapping[str, Any], *, by: str = "") -> dict:
+        """A distinct source for one captured response, never the mutable MCP URL."""
+        title = "FMP captured MCP response: " + str(item["request"]["payload"]["tool"])
+        with self._lock:
+            row = self.register(item["url"], title, by=by)
+            if row is None:
+                raise _fmp_api().CaptureIntegrityError("fmp_capture_corrupt: invalid source identity")
+            stored = self._rows[row["sid"]]
+            previous = stored.get("fmp_capture")
+            if previous is not None and previous != dict(item):
+                raise _fmp_api().CaptureIntegrityError("fmp_capture_corrupt: ledger identity changed")
+            stored.update(_fmp_api().metadata(dict(item)))
+            stored["via"] = "fmp"
+            self._touch()
+            return dict(stored)
 
     def note_backtest(self, sid: int, detail: Mapping[str, Any]) -> None:
         """Backtest mode: record a search hit's date verdict once (first sighting wins)."""
@@ -3631,12 +3654,18 @@ def context_tool_names(env: Mapping[str, Any]) -> tuple[str, ...]:
 
 
 @lru_cache(maxsize=16)
-def agent_tools_schema(data_enabled: bool, context_names: tuple[str, ...] = ()) -> list[dict]:
+def agent_tools_schema(data_enabled: bool, context_names: tuple[str, ...] = (),
+                       fmp_enabled: bool = False) -> list[dict]:
     """One fixed schema object for the whole run, including retries and forced notes."""
     base = AGENT_TOOLS_WITH_DATA_SCHEMA if data_enabled else AGENT_TOOLS_SCHEMA
-    if not context_names:
+    if not context_names and not fmp_enabled:
         return base
-    return base + [row for row in CONTEXT_TOOLS_SCHEMA if row["function"]["name"] in context_names]
+    return (base + [row for row in CONTEXT_TOOLS_SCHEMA if row["function"]["name"] in context_names]
+            + (_fmp_api().SCHEMAS if fmp_enabled else []))
+
+
+def _fmp_api() -> Any:
+    return importlib.import_module(f"{__package__}.fmp_research" if __package__ else "fmp_research")
 
 
 def _context_api() -> Any:
@@ -3976,7 +4005,7 @@ class ResearchTools:
                  fetch_fn: Callable[[str], str] | None = None,
                  bridge: Any = None, plog: Any = None,
                  limits: ToolLimits | None = None, data_sources: Any = None,
-                 context_client: Any = None, backtest: Any = None,
+                 context_client: Any = None, backtest: Any = None, fmp_store: Any = None,
                  archive_get: Callable[[str, float], str] | None = None) -> None:
         self.ledger = ledger
         self.pages_dir = Path(pages_dir)
@@ -3998,6 +4027,8 @@ class ResearchTools:
         self._agents: dict[str, _AgentCounters] = {}
         self.data_sources = data_sources
         self.context_client = context_client
+        self.fmp_store = fmp_store
+        self.fmp_checkpoint: Callable[[], None] | None = None
         self._context_lock = threading.RLock()
         self._context_cache: dict[tuple[str, str], str] = {}
         self._context_frozen = False
@@ -4024,6 +4055,94 @@ class ResearchTools:
         self._archive_get = archive_get
         # Backtest mode: canonical URL -> dates its search hits carried.
         self._hit_dates: dict[str, list[Any]] = {}
+
+    def fmp_query(self, name: str, *, query: Any = "", tool: Any = "", arguments: Any = None,
+                  agent_id: str, deadline: Deadline | None = None) -> str:
+        """FMP calls share the existing search/fetch quotas and research deadline."""
+        if self.backtest is not None:
+            return "FMP_UNAVAILABLE[disabled]: historical/backtest FMP is unsupported."
+        if self.fmp_store is None:
+            return "FMP_UNAVAILABLE[disabled]: FMP is not configured."
+        if name not in _fmp_api().TOOL_NAMES:
+            return "FMP_UNAVAILABLE[invalid_input]: unknown research tool."
+        if name == "fmp_search_tools":
+            if not isinstance(query, str) or len(query) > MAX_QUERY_CHARS:
+                return "FMP_UNAVAILABLE[invalid_input]: shorten the discovery query."
+            operation, payload, kind = "discover", {"query": query}, "search"
+        else:
+            try:
+                arguments = json.loads(arguments) if isinstance(arguments, str) else arguments
+            except ValueError:
+                return "FMP_UNAVAILABLE[invalid_input]: arguments must be a JSON object."
+            if not isinstance(tool, str) or not tool or not isinstance(arguments, dict):
+                return "FMP_UNAVAILABLE[invalid_input]: use a discovered tool name and argument object."
+            operation, payload, kind = "call", {"tool": tool, "arguments": arguments}, "fetch"
+        absolute = None if deadline is None else time.monotonic() + max(0.0, deadline.remaining())
+        # Admission, source allocation and checkpoint publication are one
+        # serialized transaction. A short caller never queues past its deadline.
+        with self.fmp_store.admission(absolute) as admitted:
+            if not admitted:
+                return "FMP_UNAVAILABLE[timeout]: research_deadline_exhausted."
+            return self._fmp_query_admitted(operation, payload, kind, agent_id, absolute)
+
+    def _fmp_query_admitted(self, operation, payload, kind, agent_id, absolute):
+        result, item = self.fmp_store.request(operation, payload, deadline=absolute,
+                                             reserve=lambda: self._reserve(str(agent_id), kind))
+        if item and operation == "call" and result.get("status", {}).get("state") == "ok":
+            row = self._admit_fmp(item, result, agent_id)
+        else:
+            row = None
+        if self.fmp_checkpoint is not None:
+            self.fmp_checkpoint()
+        if operation == "discover":
+            return delimit_untrusted("FMP DISCOVERED TOOLS", _fmp_api().discovery_projection(result))
+        if not item or result.get("status", {}).get("state") != "ok":
+            return delimit_untrusted("FMP AVAILABILITY", _fmp_api().encoded(result))
+        return self.render_fmp(row)
+
+    def render_fmp(self, row: Mapping[str, Any], *, focus: str = "") -> str:
+        text = self.page_text(row["sid"])
+        rendered = self._render_page(row, text, query_terms(focus), [], cached=True)
+        header, body = rendered.split("\n", 1)
+        item = row["fmp_capture"]
+        note = ("FMP vendor capture; correlation URL is not a public article: " + item["url"]
+                + "\nStored response: " + item["file"] + "; SHA-256 " + item["sha256"])
+        if item.get("kind") == "news_snippet":
+            note += "\nNEWS DISCOVERY ONLY: original publisher page has not been fetched; web_fetch its URL before factual claims."
+        return header + "\n" + note + "\n" + body
+
+    def _admit_fmp(self, item: Mapping[str, Any], result: Mapping[str, Any], agent_id: str) -> dict:
+        row = self.ledger.register_fmp(item, by=agent_id)
+        text = _fmp_api().encoded(result)
+        relative = os.path.relpath(self.fmp_store.root / item["file"], self.ledger.path.parent)
+        row = self.ledger.mark_fetched(row["sid"], content_sha256=item["sha256"], chars=len(text),
+                                      page_path=relative)
+        self.ledger.flush()
+        return row
+
+    def restore_fmp(self) -> None:
+        """Validate captured bytes and their ledger identities before replay."""
+        if self.fmp_store is None:
+            return
+        captures = {item["capture_id"]: (item, result) for item, result in self.fmp_store.captures()}
+        seen = set()
+        for row in self.ledger.rows():
+            item = row.get("fmp_capture")
+            if item and (item.get("capture_id") not in captures
+                         or captures[item["capture_id"]][0] != item
+                         or row.get("url") != item.get("url") or item["capture_id"] in seen
+                         or row.get("fetched") != (item.get("kind") != "news_snippet")):
+                raise _fmp_api().CaptureIntegrityError("fmp_capture_corrupt: ledger capture missing or changed")
+            if item:
+                seen.add(item["capture_id"])
+        for item, result in captures.values():
+            if item["request"]["operation"] == "call" and result.get("status", {}).get("state") == "ok":
+                self._admit_fmp(item, result, "fmp-replay")
+
+    def fmp_source_binding(self) -> dict:
+        """Pin the citation namespace as well as response bytes across resume."""
+        return {str(row["sid"]): _fmp_api().digest(row) for row in self.ledger.rows()
+                if row.get("fmp_capture") or row.get("provider") == "fmp" or row.get("via") == "fmp"}
 
     def freeze_context(self) -> None:
         # Cancellation may run in a signal handler while another thread owns
@@ -4782,6 +4901,14 @@ class ResearchTools:
         """Model-visible, query-focused excerpt of one page."""
         agent_id = str(agent_id or "agent")
         url = str(url or "").strip()
+        if "drf_fmp_capture=" in url:
+            row = self.ledger.find(url)
+            if not row or not row.get("fmp_capture") or self.fmp_store is None:
+                return "FETCH_FAILED(fmp_capture_corrupt): captured FMP evidence is unavailable."
+            text = self.page_text(row["sid"])
+            if text is None:
+                return "FETCH_FAILED(fmp_capture_corrupt): restore the original capture."
+            return self.render_fmp(row, focus=focus or kiq_text)
         # A dataset identity, or the origin page of stored datasets, never
         # falls through to fresh HTTP evidence, even after corruption: one
         # series answers with its pinned page, several with a choice list.
@@ -5076,7 +5203,19 @@ class ResearchTools:
     def page_text(self, sid: int) -> str | None:
         """Full stored text of a fetched source (for number verification)."""
         row = self.ledger.get(sid)
-        if row is None or not row.get("fetched") or not row.get("page_path"):
+        if row is None or not row.get("page_path"):
+            return None
+        if row.get("fmp_capture"):
+            if self.fmp_store is None:
+                raise _fmp_api().CaptureIntegrityError("fmp_capture_corrupt: missing capture store")
+            self.fmp_store.validate()
+            item = self.fmp_store.data["captures"].get(row["fmp_capture"]["capture_id"])
+            if (item != row["fmp_capture"] or item["sha256"] != row.get("content_sha256")
+                    or row.get("url") != item["url"]
+                    or row.get("fetched") != (item.get("kind") != "news_snippet")):
+                raise _fmp_api().CaptureIntegrityError("fmp_capture_corrupt: source proof changed")
+            return _fmp_api().encoded(self.fmp_store._read(self.fmp_store.root / item["file"]))
+        if not row.get("fetched"):
             return None
         if row.get("dataset"):
             with self._data_lock:

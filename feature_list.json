@@ -415,5 +415,17 @@
       "Reject misleading probability-lift claims from diagnostic-only or unequal-cost comparisons."
     ],
     "passes": true
+  },
+  {
+    "id": "feature_fmp_official_research",
+    "category": "research",
+    "description": "Automatically retrieve source-aware financial data and news through the official FMP MCP in v3 and legacy research, with matching reusable Codex skill.",
+    "steps": [
+      "Configure FMP privately and start a relevant research question; discover official tools and retrieve bounded financial/news evidence.",
+      "Verify exact data, dates, vendor/estimate/news semantics and citations survive research, parallel synthesis and saved-run replay.",
+      "Verify missing/denied data, expired deadlines, damaged captures and historical cutoffs do not fabricate evidence or silently reacquire.",
+      "Use the installed Codex skill with the same official client and validate bounded live financial/news calls."
+    ],
+    "passes": true
   }
 ]

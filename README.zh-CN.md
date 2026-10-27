@@ -582,6 +582,14 @@ v3 的时间规划取预设时间与看门狗预算 × 0.85 中较小的一个�
 
 **关闭与不可用模式。** 新运行设置 `DATA_SOURCES_ENABLED=false` 后不加入数据规划／指引与工具，元数据仍记录状态。v3 续跑在 `stored_only` 模式下复用冻结的已捕获数据，不预热或刷新提供方。服务未构建、能力／Key 缺失、超时、配额耗尽或崩溃会留下明确的证据缺口；其他来源与网页研究可继续。无效的已捕获证据会被拒绝，必需证据验证失败时 v3 可停止发布。`SETUP_DATAMCPS=0` 只跳过构建，不关闭检索。`DATA_SOURCES_CHARTS_MAX=0` 关闭研究数据图，`REPORT_DATA_CHARTS=false` 跳过预测报告官方数据图；两者均不关闭落盘数据的写作上下文。渲染器的零上限路径在加载数据及检查 matplotlib 依赖之前执行，返回退出码 2（无数据图），只清理该渲染器拥有的清单行。见[配置](#配置env)。
 
+#### FMP 财务数据与新闻（官方 MCP）
+
+在应用环境中私下配置 `FMP_API_KEY`，即可启用 [FMP 官方 MCP](https://site.financialmodelingprep.com/developer/docs/mcp-server)。新的 v3 与旧版研究运行通过 `fmp_search_tools` 获取实际工具名和参数模式，再用 `fmp_call` 检索与问题相关的财务数据和新闻。金融相关问题会在开场阶段进行有界工具发现，研究智能体会收到按需使用财务与新闻证据的指引，无需手动调用技能，也不使用社区 MCP 服务器。
+
+客户端限制调用时间、次数和响应大小，并明确区分不可用状态。研究层保留提供方数据与日期，保存与问题绑定的证据快照和引用。续跑与报告生成复用已保存的证据，不刷新 FMP。新闻摘要须通过原始发布页面核实后才能支持事实；分析师预测仍标记为预测。FMP 证据与官方统计序列、预测结算、模拟世界事实相互独立，历史回测不调用当前 FMP 快照。`FMP_ENABLED=false` 可关闭新增检索，其他有界设置见 `.env.example`。
+
+同一份 [fmp-research 技能](deerflow_bridge/skills/fmp-research/SKILL.md) 也可供 Codex 使用：运行 `python3 scripts/install_fmp_skill.py` 安装独立副本；安装器不会覆盖已有技能。辅助程序与应用共用同一客户端，从环境或明确指定的私有 dotenv 文件读取 `FMP_API_KEY`。技能安装不等于注册 Codex 原生连接器，也不会重启应用。实际验证范围与实时访问状态见[集成记录](docs/handoff/fmp-research-integration/handoff.md)。
+
 #### 研究方法技能（v3 与旧版）
 
 `deerflow_bridge/skills/` 下的 9 个方法技能，为研究智能体提供本项目常见预测问题类型的领域方法。每个 `SKILL.md` 都有固定的 `Plan`、`Investigate`、`Synthesize`、`Gaps` 四段，由两个引擎注入各自的提示，另附按需读取的参考文件；行业技能另带 21 个行业适配块（半导体、AI 算力与数据中心、电池与储能、电动汽车、电力、油气、生物医药等）。

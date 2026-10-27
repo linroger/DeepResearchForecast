@@ -1,0 +1,84 @@
+{
+  "schema": "fmp-integration-verification/v1",
+  "checked_on": "2026-10-27",
+  "base_commit": "0d4488815c6164eb3f920f928c9e1f9ffc1b63bb",
+  "evidence_root": "/Users/rogerlin/.local/share/DeepResearchForecast/verification/fmp-research-integration",
+  "composed": {
+    "receipt": "composed-03/completed.json",
+    "junit": "composed-03/junit.xml",
+    "passed": 1093,
+    "skipped": 21,
+    "deselected": 2,
+    "seconds": 69.21,
+    "source_drift": [],
+    "shutdown_complete": true,
+    "guarded_children": 10
+  },
+  "skip_reasons": {
+    "optional_deerflow_checkout": 19,
+    "vendored_deerflow_snapshot_absent": 2
+  },
+  "exclusions": [
+    {
+      "test": "test_context_audit_ensemble.py::test_seed_report_receives_scenario_owner_and_actual_baseline_prompt",
+      "reason": "Unchanged report-policy fixture expects raw simulation baseline text in an evidence-report outline; outside the FMP research paths. Initial broad run records the failure; not accepted as a passing check."
+    },
+    {
+      "test": "test_runtime_skill_sync.py::test_session_hook_litter_is_never_deployed",
+      "reason": "Offline guard blocks the test creating a synthetic .claude tree. Guard remains unchanged. Other sync, CLI concurrency and noise-filter checks ran."
+    }
+  ],
+  "client": {
+    "receipt": "client-20261027-05/completed.json",
+    "passed": 96
+  },
+  "runtime": {
+    "receipt": "runtime-20261027-06/completed.json",
+    "passed": 31
+  },
+  "deployment": {
+    "receipt": "deployment-final/completed.json",
+    "passed": 26
+  },
+  "review": {
+    "closure": "review-20261027-five-closure-01/review-closure.json",
+    "findings_closed": 5,
+    "closure_tests": 10
+  },
+  "skill": {
+    "installed": "/Users/rogerlin/.codex/skills/fmp-research",
+    "receipt": "installed-skill.json",
+    "tests": "skill-02/completed.json",
+    "passed": 8,
+    "independent_review": "skill-review/independent-forward-test-20261027T053116Z/closure.md"
+  },
+  "live": {
+    "receipt": "live-01/receipt.json",
+    "discovery_operations": 2,
+    "business_calls": [
+      "quote",
+      "statements",
+      "news"
+    ],
+    "results": "all succeeded; one row each"
+  },
+  "limitations": [
+    "No live paid-model research run or running-app restart.",
+    "Native DeerFlow runtime execution is not established by configuration-carrier tests.",
+    "Endpoint access tested only for the three live capabilities; account-wide entitlements not asserted.",
+    "Counts overlap and must not be summed.",
+    "Guarded offline test boundary is not an OS sandbox. Parent and child logs retain four blocked process probes and eighteen blocked font-discovery reads."
+  ],
+  "guard_activity": {
+    "parent_blocked_processes": [
+      "uname",
+      "unregistered-executable"
+    ],
+    "chart_child_blocked_processes": [
+      "fc-list",
+      "system_profiler"
+    ],
+    "chart_child_blocked_font_reads": 18,
+    "network_attempts_in_offline_gate": 0
+  }
+}

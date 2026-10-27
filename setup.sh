@@ -605,7 +605,7 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
   #     name by search_tools.py, data_sources.py and the v3 engine.
   #     Keep this list in sync with _sync_deerflow_bridge_if_stale in
   #     backend/app/services/pipeline_orchestrator.py (the launch-time drift guard).
-  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py linear_research.py research_gateway.py data_mcp.py data_catalog.py data_sources.py data_tools.py research_skills.py backtest_cutoff.py news_signals.py news_tools.py market_intelligence.py; do
+  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py linear_research.py research_gateway.py data_mcp.py data_catalog.py data_sources.py data_tools.py research_skills.py backtest_cutoff.py news_signals.py news_tools.py market_intelligence.py fmp_mcp.py fmp_research.py fmp_tools.py; do
     if [ -f "$BRIDGE_DIR/$_tool_mod" ]; then
       cp "$BRIDGE_DIR/$_tool_mod" "$DEERFLOW_DIR/$_tool_mod"
       case "$_tool_mod" in
@@ -615,6 +615,8 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
           ok "Installed $_tool_mod (deep-research engine v3)" ;;
         data_mcp.py|data_catalog.py|data_sources.py|data_tools.py)
           ok "Installed $_tool_mod (official-data sources)" ;;
+        fmp_mcp.py|fmp_research.py|fmp_tools.py)
+          ok "Installed $_tool_mod (FMP research evidence)" ;;
         research_skills.py)
           ok "Installed $_tool_mod (research method skills)" ;;
         backtest_cutoff.py)
@@ -624,6 +626,12 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
       esac
     fi
   done
+
+  # The research subprocess uses DeerFlow's isolated environment, so backend
+  # dependencies alone do not provision the FMP client.
+  if [ -f "$BRIDGE_DIR/requirements-fmp.txt" ]; then
+    cp "$BRIDGE_DIR/requirements-fmp.txt" "$DEERFLOW_DIR/requirements-fmp.txt"
+  fi
 
   # (b) Patched model providers: macOS-Keychain OAuth + OAuth-preference for
   #     claude_provider (fixes the 'claude' 401) and credential_loader. The
@@ -737,6 +745,17 @@ if [ -d "$DEERFLOW_DIR/backend" ]; then
     if UV_PROJECT_ENVIRONMENT="$DEERFLOW_DIR/backend/.venv" \
          uv sync --project "$DEERFLOW_DIR/backend" --python 3.12; then
       ok "DeerFlow venv ready ($DEERFLOW_DIR/backend/.venv, Python 3.12)"
+      # Run after uv sync, which can remove packages absent from the vendor's
+      # manifest. This is the same venv selected by the backend research runner.
+      if [ -f "$DEERFLOW_DIR/requirements-fmp.txt" ]; then
+        if uv pip install --python "$DEERFLOW_DIR/backend/.venv/bin/python" \
+             -r "$DEERFLOW_DIR/requirements-fmp.txt"; then
+          ok "FMP client dependencies ready in DeerFlow's research venv"
+        else
+          warn "FMP dependency provisioning failed; FMP research will be unavailable. Retry with:"
+          warn "    uv pip install --python \"$DEERFLOW_DIR/backend/.venv/bin/python\" -r \"$DEERFLOW_DIR/requirements-fmp.txt\""
+        fi
+      fi
     else
       warn "DeerFlow 'uv sync' failed. The rest of the setup is unaffected;"
       warn "you can retry with:"

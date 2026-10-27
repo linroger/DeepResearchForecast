@@ -199,7 +199,7 @@ def test_concurrent_cli_syncs_serialize_and_end_on_one_verified_bundle(tmp_path)
     (skill / "assets" / "large.bin").write_bytes(b"x" * (4 * 1024 * 1024))
     command = [
         sys.executable,
-        str(HELPER_PATH),
+        str(REPO_ROOT / "backend/tests/fixtures/runtime_skill_sync_cli.py"),
         "--source-root", str(source),
         "--deployed-public-root", str(public),
         "--required-skill", "alpha",

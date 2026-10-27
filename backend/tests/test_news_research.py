@@ -57,6 +57,7 @@ def test_ledger_snippet_fetch_reload_and_final_projection(tmp_path):
     assert row["published_at"] == item["published_at"]
     engine = object.__new__(lr._Engine)
     engine.ledger, engine.tools, engine.bridge = restored, tools, None
+    engine.records = {}  # This fixture has no extracted claim-support records.
     result = engine._source_rows([row["sid"]])[0]
     assert result["source_origin"] == "fetched"
     assert result["kind"] == "news_snippet" and result["retrieved_at"] == item["retrieved_at"]
