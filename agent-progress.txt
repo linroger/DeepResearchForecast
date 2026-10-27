@@ -738,3 +738,5 @@ User approved the agent-backed PDF export integration plan. Parent owns immutabl
 ### 2026-10-27T05:15:21.852181+00:00 — codex/research-pdf-export
 
 Completed feature_agent_research_pdf_export. BothoriginalPDFbuttons nowstartscoped persistentagent jobs usingthepackagedskill andselectedsource/language. Finalacceptance:266backendcases,445frontendcases/build,31browserguardcases,8actualbrowsercases;2liveGLM/Flashsamplespassedwith4calls each;38-pageforecast/30-pagedossier nativeoutputs retainedall68reviewedpagepixels. Scopedlint,envdriftandlock/wheel checks pass. Onlycommit/pushremains; no mainmerge/shareddeployment. See docs/handoff/research-pdf-export/verification.md.
+
+2026-10-27T05:25:21.499886+00:00: Delivered feature_agent_research_pdf_export in commit 772b47cc2eafd8818cd20cfede55106a54297e51 on legacy/codex/research-pdf-export. All required feature acceptance is complete; source review and future merge/deployment instructions are in the topic handoff.

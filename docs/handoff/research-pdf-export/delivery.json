@@ -1,0 +1,14 @@
+{
+  "schema": "research-pdf-delivery/v1",
+  "recorded_at": "2026-10-27T05:25:21.499886+00:00",
+  "branch": "codex/research-pdf-export",
+  "base_commit": "033e191fe78fcd7cf81dfc117e3264f3dc02f133",
+  "implementation_commit": "772b47cc2eafd8818cd20cfede55106a54297e51",
+  "remote": "legacy",
+  "repository": "https://github.com/linroger/DeepResearchForecast",
+  "branch_url": "https://github.com/linroger/DeepResearchForecast/tree/codex/research-pdf-export",
+  "pushed": true,
+  "merged_to_main": false,
+  "shared_deployment": false,
+  "verification": "verification.md"
+}
