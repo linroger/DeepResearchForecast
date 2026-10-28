@@ -322,6 +322,9 @@ class ScriptedMarkets:
         self.requested.append(list(ids))
         return {
             mid: {"market_id": "unrelated-market" if self.wrong_identity else mid,
+                  "closed": (mid == "synthetic-market-a" or self.conflict
+                             or (self.dual_anchor and mid == "synthetic-market-c")
+                             or (self.settle_second and mid == "synthetic-market-b")),
                   "resolved": (mid == "synthetic-market-a" or self.conflict
                                or (self.dual_anchor and mid == "synthetic-market-c")
                                or (self.settle_second and mid == "synthetic-market-b")),
@@ -430,17 +433,19 @@ def _monitor(report_id, *, conflict=False):
     return result
 
 
-def _tracks(*, scenario=0):
+def _tracks(*, scenario=0, near=False):
     from app.services import forecast_ledger
 
     summary = forecast_ledger.production_track_record()
     tracks = summary["tracks"]
     expected = {
         "scenario": (1, scenario, 0.18 if scenario else None),
-        "market_binary": (2, 1, 0.49),
+        "market_binary": (1 if near else 2, 1, 0.49),
         "official_data_binary": (2, 1, 0.09),
         "unanchored_binary": (6, 0, None),
     }
+    if near:
+        expected["market_binary_near"] = (1, 0, None)
     for kind, (total, resolved, brier) in expected.items():
         track = tracks[kind]
         assert track["n_forecasts"] == total, (kind, track)
@@ -727,7 +732,10 @@ def test_monitor_aggregates_exclude_near_match_and_unknown_outcomes(tmp_path, mo
     )
     assert result["resolved_count"] == 2
     assert result["newly_recorded_count"] == 2
-    assert result["native_records_appended"] == 3
+    # Near candidates are journal-only: they cannot enter the legacy exact-market
+    # score file. This unproved near candidate remains rejected below; the valid
+    # exact market and official-data controls still append and score normally.
+    assert result["native_records_appended"] == 2
     assert result["market_brier"]["n_resolved"] == 1
     assert result["market_brier"]["mean_brier"] == pytest.approx(0.49)
     assert result["data_brier"]["n_resolved"] == 1
@@ -738,7 +746,9 @@ def test_monitor_aggregates_exclude_near_match_and_unknown_outcomes(tmp_path, mo
                for key in ("market_brier", "data_brier", "calibration"))
     assert {row["forecast_id"] for row in result["resolution_records"]} == {"F1"}
     assert {row["forecast_id"] for row in result["data_resolution_records"]} == {"F3"}
-    assert any(row["forecast_id"] == "F2" and row["reason"] == "market_not_exact"
+    # A terminal near market now reaches the exact source-contract proof gate;
+    # the self-hash alone is insufficient to resolve the forecast's proposition.
+    assert any(row["forecast_id"] == "F2" and row["reason"] == "market_settlement_identity_missing"
                for row in result["forecast_feedback"]["rejected"])
     assert any(row["forecast_id"] == "F4" and row["status"] == "manual"
                for row in result["data_resolution_status"])
@@ -749,10 +759,10 @@ def test_monitor_aggregates_exclude_near_match_and_unknown_outcomes(tmp_path, mo
     assert "| F2 | synthetic-market-b | Yes |" not in markdown
     assert "| F4 | fred:FEDFUNDS | manual |" in markdown
     assert Path(result["monitor_report_path"]).read_text(encoding="utf-8") == markdown
-    # The native legacy rows intentionally contain both market candidates;
-    # only the admitted typed record may drive the public aggregate.
-    assert forecast_ledger.market_brier_summary()["n_resolved"] == 2
-    assert _tracks()["tracks"]["market_binary"]["n_resolved"] == 1
+    # Near candidates no longer contaminate the legacy exact-market score file.
+    # Both legacy observation and immutable public score retain the exact control.
+    assert forecast_ledger.market_brier_summary()["n_resolved"] == 1
+    assert _tracks(near=True)["tracks"]["market_binary"]["n_resolved"] == 1
 
 
 class InterruptedPublication(BaseException):

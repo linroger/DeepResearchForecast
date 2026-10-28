@@ -49,6 +49,7 @@ from ..services.pipeline_orchestrator import (
 )
 from ..services.world_simulation.contracts import WorldError
 from ..services.backtest_mode import BacktestRequestError
+from ..services.target_pipeline import TargetPipelineError, normalize_target_options
 from ..services.report_agent import ReportManager
 from ..services import forecast_feedback, forecast_ledger
 from ..utils.atomic import write_json_atomic
@@ -132,7 +133,8 @@ def v1_run():
             model = model.lower()
 
         # 起飞前体检（与 SPA 路由同一套，杜绝漂移）
-        preflight_errors = preflight_pipeline(mode=mode, model=model)
+        target = normalize_target_options(data.get("forecast_authority"), data.get("target_simulation"))
+        preflight_errors = preflight_pipeline(mode="research_only" if target else mode, model=model)
         if preflight_errors:
             return jsonify({
                 "success": False,
@@ -149,7 +151,8 @@ def v1_run():
             language=language,
             model=model,
             **{key: data[key] for key in
-               ('simulation_engine', 'world_spec', 'world_policy_spec', 'backtest') if key in data},
+               ('simulation_engine', 'world_spec', 'world_policy_spec', 'backtest',
+                'forecast_authority', 'target_simulation') if key in data},
         )
         return _ok({
             "pipeline_id": state.pipeline_id,
@@ -157,6 +160,8 @@ def v1_run():
             "mode": state.mode,
             "status": state.status,
         })
+    except TargetPipelineError as error:
+        return _err(str(error), 400)
     except BacktestRequestError as error:
         return _err(f"backtest 请求无效（invalid backtest request）: {error}", 400)
     except WorldError as error:
@@ -403,3 +408,24 @@ def v1_resolve(report_id: str):
     except Exception as e:
         logger.error(f"[v1] 判定预测失败: {e}", exc_info=True)
         return _err(str(e), 500)
+
+
+@sdk_bp.route('/resolve-binary/<report_id>', methods=['POST'])
+def v1_resolve_binary(report_id: str):
+    """Record evidence-backed manual settlement against a frozen binary contract."""
+    from datetime import datetime, timezone
+    from ..services.forecast_feedback import ForecastFeedbackError, resolve_published_binary
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return _err("Expected a JSON object", 400)
+    try:
+        row = resolve_published_binary(
+            report_id, body.get("forecast_id"), outcome=body.get("outcome"),
+            evidence=body.get("evidence"), contract_sha256=body.get("contract_sha256"),
+            resolved_at=body.get("resolved_at") or datetime.now(timezone.utc).isoformat())
+        return _ok(row)
+    except ForecastFeedbackError as error:
+        code = getattr(error, "code", "invalid_resolution")
+        status = (404 if code in {"unpublished_report", "unknown_forecast"}
+                  else 409 if code in {"publication_conflict", "outcome_conflict"} else 422)
+        return jsonify({"success": False, "error": str(error), "code": code}), status

@@ -85,7 +85,6 @@ import hashlib
 import inspect
 import json
 import logging
-import multiprocessing
 import random
 import re
 import shutil
@@ -94,7 +93,6 @@ import sqlite3
 import threading
 import time
 import uuid
-import warnings
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 
@@ -201,8 +199,6 @@ from action_logger import SimulationLogManager, PlatformActionLogger
 from app.utils.oasis_llm import create_oasis_model, get_oasis_semaphore
 
 try:
-    from camel.models import ModelFactory
-    from camel.types import ModelPlatformType
     import oasis
     from oasis import (
         ActionType,
@@ -3378,6 +3374,14 @@ _INBAND_EVOLUTIONS: Dict[str, "_InbandWorldEvolution"] = {}
 _INBAND_TRAJ_WRITTEN: Dict[str, bool] = {}
 
 
+def _persisted_share_policy(seed: Dict[str, Any]) -> Dict[str, Any]:
+    """Only sealed seed policy opts in; old saves never inherit new environment defaults."""
+    if seed.get("share_prior") is None and seed.get("share_source") is None:
+        return {}
+    return {key: seed[key] for key in ("share_prior", "share_source", "scenario_predicates",
+                                       "target_node_id", "share_source_reason") if key in seed}
+
+
 class _InbandWorldEvolution:
     """日历模式的轮内世界演化——双平台共享的单一 WorldState（spec §4/§6）。
 
@@ -3414,7 +3418,10 @@ class _InbandWorldEvolution:
             self._conv_eps = float(os.environ.get("SIM_CONVERGENCE_EPS", "0.02") or "0.02")
         except ValueError:
             self._conv_eps = 0.02
-        self._ws = WorldState(self._scenarios, self._seed.get("base_rates"), inertia=self._inertia)
+        self._share_policy = _persisted_share_policy(self._seed)
+        self._ws = (WorldState(self._scenarios, self._seed.get("base_rates"), inertia=self._inertia,
+                               **self._share_policy) if self._share_policy else
+                    WorldState(self._scenarios, self._seed.get("base_rates"), inertia=self._inertia))
         self._base_shares = dict(self._ws.shares)  # 不变的种子先验（喂 elicit，绝不喂演化份额）
         agent_configs = config.get("agent_configs")
         self._activation = self._dc._activation_weight_map(agent_configs)
@@ -3634,8 +3641,17 @@ class _InbandWorldEvolution:
             entropy_days = (self._dc._period_days(period)
                             if (self._entropy_on and period) else None)
             prev_shares = dict(self._ws.shares)
-            self._ws.step(commitments, inertia=eff_inertia, entropy_mix_days=entropy_days,
-                          round_status=round_status)
+            if self._share_policy and self._ws.share_source != "votes":
+                # This path has no trusted world actors, adjudicated moves or
+                # target projection. Do not promote elicited power/weights.
+                self._ws.step_from_source(commitments, weight_by_agent={}, resolutions={},
+                                          target_values={}, target_reason="world_model_unavailable",
+                                          inertia=eff_inertia, entropy_mix_days=entropy_days,
+                                          round_status=round_status)
+                round_status = self._ws.round_statuses[-1]
+            else:
+                self._ws.step(commitments, inertia=eff_inertia, entropy_mix_days=entropy_days,
+                              round_status=round_status)
             out = self._ws.outcome()
             leader = out.get("leader")
             # leader_move：只取方向（up/down/flat），份额数值绝不进 agent 可见文本
@@ -3775,12 +3791,20 @@ _WORLD_TRAJ_WRITTEN: Dict[str, bool] = {}
 WORLD_STATE_FILE = "world_state.json"
 WORLD_HISTORY_FILE = "world_state_history.jsonl"
 WORLD_ACTIONS_FILE = "world_actions.jsonl"
+ARBITER_RAW_FILE = "arbiter_raw.jsonl"
 
 
 def _world_model_enabled(config: Dict[str, Any]) -> bool:
     """World mode is presence-keyed on the sealed ``world_model`` block plus the flag."""
     return (isinstance(config, dict) and isinstance(config.get("world_model"), dict)
             and _flag_true("SIM_WORLD_MODEL", "true"))
+
+
+def _world_arbiter_repair() -> str:
+    repair = _cfg_flag("SIM_WORLD_ARBITER_REPAIR", "field").strip().lower()
+    if repair not in ("field", "round"):
+        raise ValueError("SIM_WORLD_ARBITER_REPAIR must be field or round")
+    return repair
 
 
 def _append_jsonl(path: str, row: Dict[str, Any]) -> None:
@@ -3816,6 +3840,7 @@ class _ReflexiveWorldCoordinator:
                            if str(x).strip()]
         settings = self._block.get("settings") if isinstance(self._block.get("settings"), dict) else {}
         self._arbiter_on = _flag_true("SIM_WORLD_ARBITER", "true") and settings.get("arbiter_enabled", True) is not False
+        self._arbiter_repair = _world_arbiter_repair()
         try:
             self._barrier_timeout = float(_cfg_flag("SIM_WORLD_BARRIER_TIMEOUT_S", "1800") or 1800)
         except (TypeError, ValueError):
@@ -3862,7 +3887,10 @@ class _ReflexiveWorldCoordinator:
         if self._horizon_defaulted is None:
             self._horizon_defaulted = self._seed.get("horizon_defaulted")
         self._as_of_date = str(self._tc.get("as_of_date") or self._seed.get("as_of_date") or "") or None
-        self._ws = (WorldState(self._scenarios, self._seed.get("base_rates"), inertia=self._inertia)
+        self._share_policy = _persisted_share_policy(self._seed)
+        self._ws = ((WorldState(self._scenarios, self._seed.get("base_rates"), inertia=self._inertia,
+                                **self._share_policy) if self._share_policy else
+                     WorldState(self._scenarios, self._seed.get("base_rates"), inertia=self._inertia))
                     if self._scenarios else None)
         initial_outcome = self._ws.outcome() if self._ws is not None else {}
         self._period_by_round: Dict[int, Dict[str, Any]] = {}
@@ -3879,6 +3907,9 @@ class _ReflexiveWorldCoordinator:
         self._digest = ""
         self._recent_discourse = ""
         self._private_decision_rows: Dict[int, Dict[str, Any]] = {}
+        self._arbiter_records: Dict[Tuple[int, int], Dict[str, Any]] = {}
+        self._arbiter_records_dirty = False
+        self._arbiter_restore_failed = False
         saved_convergence: Dict[str, Any] = {}
         state_path = os.path.join(simulation_dir, WORLD_STATE_FILE)
         if os.path.exists(state_path):
@@ -3914,6 +3945,10 @@ class _ReflexiveWorldCoordinator:
             self._world.settings.setdefault("max_change_ratio", ratio)
             self._brief = self._world.render_public_brief(upto_round=0, previous=None)
             self._digest = ""
+        self._restore_arbiter_records()
+        if self._share_policy and self._ws is not None and self._ws.share_source != "votes":
+            self._power = {aid: actor.outcome_power for aid, actor in self._world.actors.items()
+                           if actor.outcome_power is not None}
         if self._ws is not None and self._world.scenario_shares:
             try:
                 shares = {str(k): float(v) for k, v in (self._world.scenario_shares or {}).items()
@@ -3966,6 +4001,11 @@ class _ReflexiveWorldCoordinator:
                 if type(at) is int and 1 <= at <= self._resumed_round:
                     self._converged_at = at
                     self._ws.converged_at = at
+                share_update = saved_convergence.get("share_update")
+                if (self._share_policy and isinstance(share_update, dict)
+                        and share_update.get("source") == self._ws.share_source
+                        and isinstance(share_update.get("reason"), str)):
+                    self._ws.last_share_update = dict(share_update)
             else:
                 # Legacy checkpoints lack convergence state. Recompute only from
                 # known adjacent committed projections; missing rounds stay missing.
@@ -4017,6 +4057,72 @@ class _ReflexiveWorldCoordinator:
                 self._paths = []
                 log_info(f"reflexive world: world paths unavailable ({_paths_err}); running one path")
 
+    def _restore_arbiter_records(self) -> None:
+        """Restore committed receipts; replace abandoned rounds when they are run again."""
+        try:
+            # Decode one row at a time so an interrupted multibyte tail cannot
+            # discard valid preceding receipts or disable world-mode resume.
+            with open(os.path.join(self._dir, ARBITER_RAW_FILE), "rb") as handle:
+                for line in handle:
+                    try:
+                        row = json.loads(line)
+                    except (ValueError, UnicodeError):
+                        continue
+                    if (not isinstance(row, dict)
+                            or row.get("config_hash") != self._config_fingerprint
+                            or row.get("simulation_id") != str(self._config.get("simulation_id") or "")):
+                        continue
+                    rnd, path = row.get("round"), row.get("path")
+                    if (type(rnd) is int and 0 < rnd <= self._resumed_round
+                            and type(path) is int and path >= 0):
+                        self._arbiter_records[(rnd, path)] = row
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            self._arbiter_restore_failed = True
+            self._log(f"reflexive world: could not read arbiter receipts ({type(exc).__name__})")
+
+    def _write_arbiter_records(self, rnd: int, period: Optional[Dict[str, Any]],
+                                record: Dict[str, Any], sibling_records: List[Dict[str, Any]]) -> None:
+        """Persist replay inputs inside the caller's protected artifact-write boundary."""
+        if self._arbiter_restore_failed:
+            raise OSError("arbiter receipts unreadable; refusing to overwrite existing evidence")
+        records = [(0, record)] + [(path["path"], sibling)
+                                   for path, sibling in zip(self._paths, sibling_records)]
+        pending = dict(self._arbiter_records)
+        for path, row in records:
+            key = (rnd, path)
+            if key in pending:
+                continue
+            pending[key] = {
+                "schema_version": "arbiter-raw/v1",
+                "simulation_id": str(self._config.get("simulation_id") or ""),
+                "config_hash": self._config_fingerprint,
+                "round": rnd, "path": path, "period": period,
+                "arbiter_status": row.get("arbiter_status") or "failed",
+                "arbiter_problems": row.get("arbiter_problems") or [],
+                "arbiter_problem_details": row.get("arbiter_problem_details") or [],
+                "arbiter_repair": row.get("arbiter_repair") or self._arbiter_repair,
+                "arbiter_raw": row.get("arbiter_raw"),
+                "arbiter_validated": row.get("arbiter_validated") or {},
+                "arbiter_attempts": row.get("arbiter_attempts") or [],
+            }
+        if len(pending) != len(self._arbiter_records):
+            self._arbiter_records = pending
+            self._arbiter_records_dirty = True
+        self._flush_arbiter_records()
+
+    def _flush_arbiter_records(self) -> None:
+        """Retain retryable batches and fence every checkpoint behind durable evidence."""
+        from app.utils.atomic import write_text_atomic
+        if self._arbiter_restore_failed:
+            raise OSError("arbiter receipts unreadable; refusing checkpoint advancement")
+        if self._arbiter_records_dirty:
+            write_text_atomic(os.path.join(self._dir, ARBITER_RAW_FILE),
+                              "".join(json.dumps(self._arbiter_records[key], ensure_ascii=False) + "\n"
+                                      for key in sorted(self._arbiter_records)))
+            self._arbiter_records_dirty = False
+
     def _restore_committed_trajectory(self, row0: Dict[str, Any]) -> None:
         """Recover round projections without letting an older finalization roll back the checkpoint.
 
@@ -4057,6 +4163,8 @@ class _ReflexiveWorldCoordinator:
                         period = row.get("period") or self._period_for(rr - 1) or {}
                         rows[rr] = {**rows.get(rr, {}), "round": rr, "shares": dict(row["shares"]),
                                     "round_status": row.get("scenario_round_status") or "missing",
+                                    **{k: row[k] for k in ("share_prior", "share_source", "share_source_reason",
+                                                          "share_update_reason", "share_update") if k in row},
                                     **{k: period[k] for k in ("period_start", "period_end", "label") if period.get(k)}}
             # A crash can leave a trailing history row beyond the atomic world
             # checkpoint. Above filtering excludes it; the checkpoint owns the head.
@@ -4102,6 +4210,9 @@ class _ReflexiveWorldCoordinator:
                         decision = {"round": row["round"], "agent_id": aid, "scenario": row["scenario"],
                                     "magnitude": round(max(0.1, float(row.get("magnitude") or 0)), 3),
                                     "confidence": round(float(row.get("scenario_confidence") or 0), 3)}
+                        if self._share_policy and self._ws.share_source != "votes":
+                            decision["magnitude"] = float(row.get("magnitude") or 0)
+                            decision["confidence"] = float(row.get("scenario_confidence") or 0)
                         if aid in self._power:
                             decision["outcome_power"] = self._power[aid]
                         if row.get("period_end"):
@@ -4126,7 +4237,8 @@ class _ReflexiveWorldCoordinator:
                                  targets=row.get("targets") or [], magnitude=row.get("magnitude") or 0,
                                  public_statement=row.get("public_statement") or "",
                                  private_rationale=row.get("private_rationale") or "",
-                                 commitment=row.get("commitment"), status=row.get("status") or "invalid")
+                                 commitment=row.get("commitment"), deliveries=row.get("deliveries") or [],
+                                 status=row.get("status") or "invalid")
         note = decision_memory_note(decision, self._world._period_label_for_round(row["round"]))
         if len(note) > 1800:
             note = note[:1800] + " [private move memory truncated]"
@@ -4195,7 +4307,9 @@ class _ReflexiveWorldCoordinator:
                 world = WorldModel.from_dict(self._world.to_dict())
             ws = None
             if self._ws is not None:
-                ws = WorldState(self._scenarios, self._seed.get("base_rates"), inertia=self._inertia)
+                ws = (WorldState(self._scenarios, self._seed.get("base_rates"), inertia=self._inertia,
+                                 **self._share_policy) if self._share_policy else
+                      WorldState(self._scenarios, self._seed.get("base_rates"), inertia=self._inertia))
                 shares = row.get("shares") if row and isinstance(row.get("shares"), dict) else self._ws.shares
                 history = row.get("history") if row and isinstance(row.get("history"), list) else self._ws.history
                 statuses = (row.get("round_statuses") if row and isinstance(row.get("round_statuses"), list)
@@ -4203,6 +4317,11 @@ class _ReflexiveWorldCoordinator:
                 ws.shares = {s: float(shares.get(s, 0.0) or 0.0) for s in ws.scenarios}
                 ws.history = [dict(h) for h in history if isinstance(h, dict)] or [dict(ws.shares)]
                 ws.round_statuses = [str(s) for s in statuses]
+                share_update = row.get("share_update") if row else None
+                if (self._share_policy and isinstance(share_update, dict)
+                        and share_update.get("source") == ws.share_source
+                        and isinstance(share_update.get("reason"), str)):
+                    ws.last_share_update = dict(share_update)
                 world.scenario_shares = dict(ws.shares)
             self._paths.append({"path": i, "world": world, "ws": ws,
                                 "arbiter_failed": int((row or {}).get("arbiter_failed_rounds") or 0)})
@@ -4471,6 +4590,8 @@ class _ReflexiveWorldCoordinator:
             self._write_world_state()
         except Exception as _e:  # noqa: BLE001
             self._log(f"reflexive world: final world_state.json write failed: {_e}")
+            self._finalized = False
+            return  # Do not publish a newer trajectory without its durable checkpoint/evidence.
         if self._ws is None or self._stepped <= 0:
             return
         try:
@@ -4506,6 +4627,52 @@ class _ReflexiveWorldCoordinator:
             self._log(f"reflexive world: trajectory write failed (isolated): {_e}")
 
     # ------------------------------------------------------------------ commit
+    def _evaluate_share_target(self, world: Any, rnd: int, rng: Any, record: Dict[str, Any]) -> None:
+        """Evaluate once after world mutations; expose only the kernel's public projection."""
+        if not (getattr(world, "target_projection", None)
+                or (self._share_policy and self._ws is not None and self._ws.share_source == "predicates")):
+            return
+        try:
+            world.evaluate_target_projection(rnd, rng=rng)
+            status = world.target_projection_status
+            record["target_projection_status"] = status
+            record["target_projection_reason"] = world.target_projection_reason
+            record["target_values"] = world.public_target_values() if status == "ready" else {}
+        except Exception as exc:  # noqa: BLE001 — unavailable projections freeze the reducer
+            record.update(target_values={}, target_projection_status="unavailable",
+                          target_projection_reason=f"target_projection_error:{type(exc).__name__}")
+            self._log(f"reflexive world: target projection unavailable in round {rnd} ({type(exc).__name__})")
+
+    def _step_policy_shares(self, ws: Any, world: Any, rows: List[Dict[str, Any]], rnd: int,
+                            record: Dict[str, Any], inertia: float, entropy_days: Optional[int],
+                            round_status: str) -> None:
+        """Source-aware shares use declared power and current committed discretionary resolutions."""
+        from app.services.worldstate import ROUND_STATUS_FAILED, ROUND_STATUS_INFEASIBLE, ROUND_STATUS_MISSING
+        powers = {aid: actor.outcome_power for aid, actor in world.actors.items()
+                  if actor.outcome_power is not None}
+        resolutions = {}
+        arbiter_status = record.get("arbiter_status")
+        if arbiter_status in ("applied", "applied_partial"):
+            for aid, actor in world.actors.items():
+                action = actor.last_action or {}
+                if (action.get("round") == rnd
+                        and not str(action.get("option_id") or "").startswith("fulfill:")
+                        and action.get("resolution") in ("success", "partial", "blocked", "failed", "pending")):
+                    resolutions[aid] = action["resolution"]
+        elif arbiter_status == "failed":
+            round_status = ROUND_STATUS_FAILED
+        elif arbiter_status == "invalid":
+            round_status = ROUND_STATUS_INFEASIBLE
+        elif round_status not in (ROUND_STATUS_FAILED, ROUND_STATUS_INFEASIBLE):
+            round_status = ROUND_STATUS_MISSING
+        # Missing resolutions already freeze power shares; retain the reason's
+        # validity class so provider failures cannot become ordinary silence.
+        # A valid target still overrides actor status inside the predicate reducer.
+        ws.step_from_source(rows, weight_by_agent=powers, resolutions=resolutions,
+                            target_values=record.get("target_values") or {},
+                            target_reason=record.get("target_projection_reason") or "target_projection_unavailable",
+                            inertia=inertia, entropy_mix_days=entropy_days, round_status=round_status)
+
     async def _try_commit(self, flush_upto: Optional[int] = None, flush_all: bool = False) -> None:
         async with self._lock:
             while True:
@@ -4534,7 +4701,7 @@ class _ReflexiveWorldCoordinator:
     async def _commit_round(self, round_num: int, buf: Dict[str, Any]) -> None:
         from app.services.world_update import run_world_round
         from app.services.worldstate import (
-            ROUND_STATUS_ABSTAINED, ROUND_STATUS_COMMITTED, ROUND_STATUS_MISSING, ROUND_STATUS_SILENT,
+            ROUND_STATUS_ABSTAINED, ROUND_STATUS_COMMITTED, ROUND_STATUS_FAILED, ROUND_STATUS_MISSING, ROUND_STATUS_SILENT,
             commitment_mass, commitments_from_decisions, pressure_commitments,
         )
         rnd = round_num + 1
@@ -4550,7 +4717,7 @@ class _ReflexiveWorldCoordinator:
             primary = asyncio.to_thread(
                 run_world_round, self._world, rnd, period, decisions, buf.get("events") or [],
                 llm=self._llm, rng=rng, scenarios=self._scenarios, arbiter_enabled=self._arbiter_on,
-                language=self._language)
+                language=self._language, arbiter_repair=self._arbiter_repair)
             if self._paths:
                 # WORLD PATHS: the siblings' updates run alongside path 0's — K arbiter calls at most
                 results = await asyncio.gather(
@@ -4562,6 +4729,7 @@ class _ReflexiveWorldCoordinator:
                 record = results[0]
             else:
                 record = await primary
+            self._evaluate_share_target(self._world, rnd, rng, record)
             self._brief = self._world.render_public_brief(upto_round=rnd, previous=before)
             self._digest = str(record.get("digest") or "")
         except Exception as _e:  # noqa: BLE001 — the barrier must still release
@@ -4570,7 +4738,9 @@ class _ReflexiveWorldCoordinator:
                 self._world.commit_round(rnd)
             except Exception:  # noqa: BLE001
                 pass
-            record = {"round": rnd, "arbiter_status": "failed", "error": str(_e)[:200], "digest": self._digest,
+            record = {**record, "round": rnd, "arbiter_status": "failed", "error": str(_e)[:200],
+                      "arbiter_problems": list(record.get("arbiter_problems") or []) + [f"round error: {type(_e).__name__}"],
+                      "digest": self._digest,
                       "decisions": {"total": len(decisions)}, "diff": {}, "headline": f"{label}: update failed"}
         # scenario-share WorldState (unchanged downstream contract)
         shares_row: Dict[str, Any] = {}
@@ -4585,14 +4755,23 @@ class _ReflexiveWorldCoordinator:
                     if getattr(d, "scenario", None) == "abstain":
                         abstained += 1
                         continue
-                    row = d.scenario_commitment(self._power.get(d.agent_id))
+                    row = (d.scenario_commitment() if self._share_policy and self._ws.share_source != "votes"
+                           else d.scenario_commitment(self._power.get(d.agent_id)))
                     if row is not None:
+                        if self._share_policy and self._ws.share_source != "votes":
+                            # The legacy vote projection floors magnitude at 0.1;
+                            # resolved-power shares must preserve zero/small moves.
+                            row["magnitude"] = d.magnitude
+                            row["confidence"] = d.scenario_confidence
                         rows.append(row)
-                conv = commitments_from_decisions(rows)
-                if conv:
+                policy_step = bool(self._share_policy and self._ws.share_source != "votes")
+                conv = commitments_from_decisions(rows) if not policy_step else []
+                if conv or (policy_step and rows):
                     round_status = ROUND_STATUS_COMMITTED
                 elif abstained:
                     round_status = ROUND_STATUS_ABSTAINED
+                elif policy_step and any(getattr(d, "status", None) == "failed" for d in decisions):
+                    round_status = ROUND_STATUS_FAILED
                 elif decisions:
                     round_status = ROUND_STATUS_SILENT
                 else:
@@ -4601,16 +4780,23 @@ class _ReflexiveWorldCoordinator:
                 entropy_days = self._dc._period_days(period) if (self._entropy_on and period) else None
                 prev_shares = dict(self._ws.shares)
                 # WORLD CHANNEL: the world's own movement (arbiter scenario_pressure) leans the step;
-                # only an applied arbiter counts, and the round status stays the actors'
+                # fully or partially applied arbiters count; the round status stays the actors'
                 actor_mass = commitment_mass(conv)
                 world_rows = (pressure_commitments(record.get("scenario_pressure"), prev_shares, actor_mass,
                                                    weight_ratio=self._pressure_weight)
-                              if record.get("arbiter_status") == "applied" else [])
-                self._ws.step(conv + world_rows, inertia=eff_inertia, entropy_mix_days=entropy_days,
-                              round_status=round_status)
+                              if not policy_step and record.get("arbiter_status") in ("applied", "applied_partial") else [])
+                actor_round_status = round_status
+                if policy_step:
+                    self._step_policy_shares(self._ws, self._world, rows, rnd, record,
+                                             eff_inertia, entropy_days, actor_round_status)
+                    round_status = self._ws.round_statuses[-1]
+                else:
+                    self._ws.step(conv + world_rows, inertia=eff_inertia, entropy_mix_days=entropy_days,
+                                  round_status=round_status)
                 self._world.scenario_shares = dict(self._ws.shares)
                 path_shares = self._step_sibling_shares(sibling_records, conv, actor_mass, eff_inertia,
-                                                        entropy_days, round_status) if self._paths else None
+                                                        entropy_days, actor_round_status,
+                                                        decisions=rows, rnd=rnd) if self._paths else None
                 out = self._ws.outcome()
                 leader = out.get("leader")
                 for row in rows:
@@ -4660,6 +4846,7 @@ class _ReflexiveWorldCoordinator:
         self._committed_done.add(round_num)
         # artifacts
         try:
+            self._write_arbiter_records(rnd, period, record, sibling_records)
             history_row = {
                 "round": rnd, "period": period, "period_label": label,
                 "config_hash": self._config_fingerprint,
@@ -4675,6 +4862,7 @@ class _ReflexiveWorldCoordinator:
                 },
                 "behaviour": record.get("behaviour") if isinstance(record.get("behaviour"), dict) else {},
                 "arbiter_status": record.get("arbiter_status"),
+                "arbiter_repair": record.get("arbiter_repair") or self._arbiter_repair,
                 "arbiter_problems": record.get("arbiter_problems") or [],
                 "arbiter": record.get("arbiter") or {},
                 "narrative": record.get("narrative") or "",
@@ -4682,6 +4870,9 @@ class _ReflexiveWorldCoordinator:
                 "scenario_pressure": record.get("scenario_pressure") or {},
                 "scenario_round_status": round_status,
                 "headline": record.get("headline") or "",
+                **({k: v for k, v in self._ws.outcome().items()
+                    if k in ("share_prior", "share_source", "share_source_reason", "share_update_reason", "share_update")}
+                   if self._share_policy and self._ws is not None else {}),
                 **shares_row,
             }
             if record.get("error"):
@@ -4720,26 +4911,30 @@ class _ReflexiveWorldCoordinator:
         from app.services.world_paths import path_rng
         from app.services.world_update import run_world_round
         try:
+            rng = path_rng(self._seed_value, path["path"], rnd)
             async with self._path_sem:
                 record = await asyncio.to_thread(
                     run_world_round, path["world"], rnd, period, decisions, events, llm=self._llm,
-                    rng=path_rng(self._seed_value, path["path"], rnd), scenarios=self._scenarios,
+                    rng=rng, scenarios=self._scenarios,
                     arbiter_enabled=self._arbiter_on, language=self._language,
-                    arbiter_temperature=self._path_temperature)
+                    arbiter_temperature=self._path_temperature, arbiter_repair=self._arbiter_repair)
+            self._evaluate_share_target(path["world"], rnd, rng, record)
         except Exception as _e:  # noqa: BLE001
             self._log(f"reflexive world: path {path['path']} update failed in round {rnd} (that path freezes): {_e}")
             try:
                 path["world"].commit_round(rnd)
             except Exception:  # noqa: BLE001
                 pass
-            record = {"arbiter_status": "failed", "scenario_pressure": {}}
+            record = {"arbiter_status": "failed", "scenario_pressure": {},
+                      "arbiter_problems": [f"round error: {type(_e).__name__}"]}
         if record.get("arbiter_status") in ("failed", "invalid"):
             path["arbiter_failed"] = int(path.get("arbiter_failed") or 0) + 1
         return record
 
     def _step_sibling_shares(self, sibling_records: List[Dict[str, Any]], conv: List[Dict[str, Any]],
                              actor_mass: float, inertia: float, entropy_days: Optional[int],
-                             round_status: str) -> Optional[List[Dict[str, float]]]:
+                             round_status: str, *, decisions: Optional[List[Dict[str, Any]]] = None,
+                             rnd: int = 0) -> Optional[List[Dict[str, float]]]:
         """WORLD PATHS: step every sibling's scenario shares with the actors' commitments (shared) plus its
         own world channel (its arbiter's pressure, when applied).  Returns the shares of all K paths, path 0
         first; None when a sibling fails (logged; path 0 is never affected)."""
@@ -4750,10 +4945,14 @@ class _ReflexiveWorldCoordinator:
                 pws = path.get("ws")
                 if pws is None:
                     continue
-                world_rows = (pressure_commitments(prec.get("scenario_pressure"), dict(pws.shares), actor_mass,
-                                                   weight_ratio=self._pressure_weight)
-                              if prec.get("arbiter_status") == "applied" else [])
-                pws.step(conv + world_rows, inertia=inertia, entropy_mix_days=entropy_days, round_status=round_status)
+                if self._share_policy and pws.share_source != "votes":
+                    self._step_policy_shares(pws, path["world"], decisions or [], rnd, prec,
+                                             inertia, entropy_days, round_status)
+                else:
+                    world_rows = (pressure_commitments(prec.get("scenario_pressure"), dict(pws.shares), actor_mass,
+                                                       weight_ratio=self._pressure_weight)
+                                  if prec.get("arbiter_status") in ("applied", "applied_partial") else [])
+                    pws.step(conv + world_rows, inertia=inertia, entropy_mix_days=entropy_days, round_status=round_status)
                 path["world"].scenario_shares = dict(pws.shares)
                 shares.append(dict(pws.shares))
             return shares
@@ -4773,6 +4972,7 @@ class _ReflexiveWorldCoordinator:
 
     def _write_paths(self) -> None:
         """WORLD PATHS: the siblings' committed state, for resume and inspection (``world_paths.json``)."""
+        self._flush_arbiter_records()
         from app.services.world_paths import WORLD_PATHS_FILE, WORLD_PATHS_VERSION
         from app.utils.atomic import write_json_atomic
         payload: Dict[str, Any] = {
@@ -4783,6 +4983,8 @@ class _ReflexiveWorldCoordinator:
                        "shares": dict(p["ws"].shares) if p.get("ws") is not None else {},
                        "history": list(p["ws"].history) if p.get("ws") is not None else [],
                        "round_statuses": list(p["ws"].round_statuses) if p.get("ws") is not None else [],
+                       **({"share_update": dict(p["ws"].last_share_update)}
+                          if self._share_policy and p.get("ws") is not None else {}),
                        "world": p["world"].to_dict()} for p in self._paths],
         }
         if self._paths_restarted_at:
@@ -4857,6 +5059,7 @@ class _ReflexiveWorldCoordinator:
 
     def _write_world_state(self, headline: str = "") -> None:
         from app.utils.atomic import write_json_atomic
+        self._flush_arbiter_records()
         payload = {
             "schema_version": "world-state-file/v1",
             "simulation_id": str(self._config.get("simulation_id") or ""),
@@ -4865,7 +5068,9 @@ class _ReflexiveWorldCoordinator:
             "public_discourse_round": self._max_round,
             **({"scenario_convergence": {"round": self._max_round, "ewma_delta": self._ws._ewma_delta,
                                          "last_delta": self._ws._last_delta, "stable_streak": self._stable_streak,
-                                         "converged_at": self._converged_at}} if self._ws is not None else {}),
+                                         "converged_at": self._converged_at,
+                                         **({"share_update": dict(self._ws.last_share_update)}
+                                            if self._share_policy else {})}} if self._ws is not None else {}),
             "committed_round": self._max_round,
             "brief": self._brief,
             "digest": self._digest,
@@ -4879,9 +5084,12 @@ class _ReflexiveWorldCoordinator:
 def _get_world_coordinator(config: Dict[str, Any], simulation_dir: str, expected_platforms: int,
                            log_info, *, resume: bool = True) -> Optional[_ReflexiveWorldCoordinator]:
     """Shared coordinator per sim dir; None when world mode is off or construction fails."""
+    if not _world_model_enabled(config):
+        return None
+    # Invalid explicit policy must escape the degrade-safe constructor boundary,
+    # before a fresh run removes artifacts or a cached coordinator is returned.
+    _world_arbiter_repair()
     try:
-        if not _world_model_enabled(config):
-            return None
         key = os.path.abspath(simulation_dir)
         coord = _WORLD_COORDINATORS.get(key)
         if coord is not None and coord._config_fingerprint != _config_hash(config):
@@ -4890,7 +5098,7 @@ def _get_world_coordinator(config: Dict[str, Any], simulation_dir: str, expected
             if not resume:
                 # The platform rejected/has no checkpoint. Its freshly reset DB
                 # must not be paired with a completed world from the previous run.
-                for name in (WORLD_STATE_FILE, WORLD_HISTORY_FILE, WORLD_ACTIONS_FILE,
+                for name in (WORLD_STATE_FILE, WORLD_HISTORY_FILE, WORLD_ACTIONS_FILE, ARBITER_RAW_FILE,
                              "world_digest.jsonl", "world_state_trajectory.json", "decisions.jsonl", "world_paths.json"):
                     path = os.path.join(simulation_dir, name)
                     if os.path.lexists(path):
@@ -7323,7 +7531,7 @@ async def main():
     minutes_per_round = time_config.get('minutes_per_round', 60)
     config_total_rounds = (total_hours * 60) // minutes_per_round
     
-    log_manager.info(f"模拟参数:")
+    log_manager.info("模拟参数:")
     log_manager.info(f"  - 总模拟时长: {total_hours}小时")
     log_manager.info(f"  - 每轮时间: {minutes_per_round}分钟")
     log_manager.info(f"  - 配置总轮数: {config_total_rounds}")
@@ -7349,9 +7557,9 @@ async def main():
         )
 
     log_manager.info("日志结构:")
-    log_manager.info(f"  - 主日志: simulation.log")
-    log_manager.info(f"  - Twitter动作: twitter/actions.jsonl")
-    log_manager.info(f"  - Reddit动作: reddit/actions.jsonl")
+    log_manager.info("  - 主日志: simulation.log")
+    log_manager.info("  - Twitter动作: twitter/actions.jsonl")
+    log_manager.info("  - Reddit动作: reddit/actions.jsonl")
     log_manager.info("=" * 60)
     
     start_time = datetime.now()
@@ -7539,8 +7747,8 @@ async def main():
         log_manager.info("[Reddit] 环境已关闭")
     
     log_manager.info("=" * 60)
-    log_manager.info(f"全部完成!")
-    log_manager.info(f"日志文件:")
+    log_manager.info("全部完成!")
+    log_manager.info("日志文件:")
     log_manager.info(f"  - {os.path.join(simulation_dir, 'simulation.log')}")
     log_manager.info(f"  - {os.path.join(simulation_dir, 'twitter', 'actions.jsonl')}")
     log_manager.info(f"  - {os.path.join(simulation_dir, 'reddit', 'actions.jsonl')}")

@@ -3834,7 +3834,8 @@ class KiqAgent:
 
     # ------------------------------------------------------------------ run
     def run(self) -> AgentOutcome:
-        messages = rg.build_messages(ENGINE_CORE, [self.engine.brief], self.task)
+        messages = rg.build_messages(getattr(self.engine, "prompt_core", ENGINE_CORE),
+                                     [self.engine.brief], self.task)
         try:
             notes = self._loop(messages)
             fallback = None if notes else (self.final_issue or "no_final_text")
@@ -5273,6 +5274,17 @@ class _Engine:
         identity = {"question_sha256": _sha256(" ".join(self.question.split())),
                     "depth": self.preset.depth, "model": self.model_name,
                     "language": self.language, "engine_version": ENGINE_VERSION}
+        self.target_mode = getattr(args, "forecast_authority", None) == "target-first-v1"
+        self.prompt_core = (re.sub(
+            r"^- The canonical scenario frame in the brief .*?$",
+            "- In target-first-v1, the initial assessment is an immutable prior. Evidence may change "
+            "posterior probabilities through an explicit update ledger; do not lock them to the planner frame.",
+            ENGINE_CORE, flags=re.MULTILINE) if self.target_mode else ENGINE_CORE)
+        if self.target_mode:
+            # Explicit opt-in changes reuse identity; old saved/default runs
+            # retain their exact identity and never adopt typed authority.
+            identity["forecast_authority"] = "target-first-v1"
+            identity["target_research_version"] = 1
         if self.backtest is not None:
             # Another cutoff is another run: never resume pages read under it.
             identity["backtest"] = self.backtest.tag
@@ -5281,7 +5293,8 @@ class _Engine:
             self.out_dir, identity, self._write_internal, reporter)
         for sub in ("kiq", "sections", "gap", "extract"):
             (self.work / sub).mkdir(exist_ok=True)
-        self.ledger = rg.SourceLedger(self.work / "sources_ledger.json", bridge=bridge)
+        self.ledger = rg.SourceLedger(self.work / "sources_ledger.json", bridge=bridge,
+                                      **({"capture_evidence": True} if self.target_mode else {}))
         data_total, data_per_agent = {"quick": (24, 3), "standard": (50, 4), "deep": (90, 5)}[self.preset.depth]
         def data_cap(name: str, default: int, maximum: int) -> int:
             try:
@@ -5815,7 +5828,8 @@ class _Engine:
                   deadline: rg.Deadline | None) -> dict:
         """JSON call whose repair note only ever lands in the last message."""
         def builder(note: str | None) -> list:
-            return rg.build_messages(ENGINE_CORE, shared, f"{task}\n\n{note}" if note else task)
+            return rg.build_messages(getattr(self, "prompt_core", ENGINE_CORE), shared,
+                                     f"{task}\n\n{note}" if note else task)
 
         return self.gateway.json(builder, label=label, deadline=deadline, required_keys=required)
 
@@ -5886,6 +5900,12 @@ class _Engine:
             self.phase_context()
             self.phase_plan()
             self.replan_after_outage()
+            if self.target_mode:
+                try:
+                    from .target_research import execute_target
+                except ImportError:  # standalone synced bridge
+                    from target_research import execute_target
+                return execute_target(self)
             self.phase_data()
             self.load_followups()
             self.phase_gather()
@@ -6394,7 +6414,7 @@ class _Engine:
         attempt (no transient retries, no JSON repair retry)."""
         if not single_attempt:
             return self.json_call(shared, task, label=label, required=required, deadline=deadline)
-        result = self.gateway.invoke(rg.build_messages(ENGINE_CORE, shared, task), kind="json", label=label,
+        result = self.gateway.invoke(rg.build_messages(getattr(self, "prompt_core", ENGINE_CORE), shared, task), kind="json", label=label,
                                      deadline=deadline, max_attempts=1)
         parsed = rg.parse_json_object(result.text, required)
         if parsed is None:
@@ -6620,7 +6640,7 @@ class _Engine:
         seeds = self._run_seeds(kiqs)
         abort = threading.Event()
         if len(kiqs) >= 2:
-            self.gateway.prime(rg.build_messages(ENGINE_CORE, [self.brief], PRIME_TASK), kind="agent",
+            self.gateway.prime(rg.build_messages(getattr(self, "prompt_core", ENGINE_CORE), [self.brief], PRIME_TASK), kind="agent",
                                label="gather:prime", tools=self.agent_tools, deadline=deadline)
         grace = self._final_notes_grace(deadline)
         def investigate(kiq: Kiq) -> str:
@@ -6724,6 +6744,11 @@ class _Engine:
             "id": kiq.id, "question": kiq.question, "kind": kiq.kind, "round": kiq.round, **parts,
             "sources": sources, "stats": stats, "finished_at": _iso_now(),
         }
+        if getattr(self, "target_mode", False):
+            # A sibling KIQ can fail or the process can stop before gather_kiqs
+            # returns. Pin consumed source identity before this record becomes
+            # individually reusable, not only at the round checkpoint.
+            self.target_pin_sources()
         self.ledger.flush()  # every source the record cites is on disk before the record
         self._write_internal(self.work / "kiq" / f"{kiq.id}.md", notes_md + "\n")
         self.write_json(self.work / "kiq" / f"{kiq.id}.json", record)

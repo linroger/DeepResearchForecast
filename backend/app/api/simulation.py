@@ -13,11 +13,111 @@ from ..config import Config
 from ..services.zep_entity_reader import ZepEntityReader
 from ..services.oasis_profile_generator import OasisProfileGenerator
 from ..services.simulation_manager import SimulationManager, SimulationStatus
-from ..services.simulation_runner import SimulationRunner, RunnerStatus
+from ..services.simulation_runner import SimulationRunner
 from ..utils.logger import get_logger
 from ..models.project import ProjectManager
 
 logger = get_logger('mirofish.api.simulation')
+
+
+@simulation_bp.before_request
+def _reject_target_legacy_route():
+    """A target run never acquires OASIS workers, profiles or social APIs."""
+    if request.endpoint == 'simulation.get_target_simulation':
+        return None
+    values = request.view_args or {}
+    body = request.get_json(silent=True) if request.is_json else {}
+    body = body if isinstance(body, dict) else {}
+    sim_id = values.get('simulation_id') or values.get('sim_id') or body.get('simulation_id')
+    graph_id = values.get('graph_id') or body.get('graph_id') or ''
+    target = (body.get('forecast_authority') == 'target-first-v1' or
+              body.get('simulation_engine') == 'target-first-v1' or
+              isinstance(graph_id, str) and graph_id.startswith('target_graph_'))
+    if isinstance(sim_id, str) and re.fullmatch(r'sim_[A-Za-z0-9_-]{1,100}', sim_id):
+        root = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, sim_id)
+        target = target or any(os.path.lexists(os.path.join(root, name)) for name in (
+            'target_input.json', 'target_case.json', 'target_simulation.json'))
+    if target:
+        return jsonify(success=False, code='target_simulation_route_required',
+                       error='Target simulations use the read-only target endpoint with pipeline_id'), 409
+
+
+@simulation_bp.route('/<simulation_id>/target', methods=['GET'])
+def get_target_simulation(simulation_id):
+    """Read case-bound target diagnostics; never start or repair a simulation."""
+    from werkzeug.exceptions import BadRequest, Conflict, NotFound
+    from .graph import _target_id, _target_artifact, _target_pipeline, _target_case
+    from ..services.official_data import bridge_module
+    fc = bridge_module('forecast_case')
+    try:
+        _target_id(simulation_id, 'sim_')
+        pipeline_id = request.args.get('pipeline_id')
+        owner = _target_pipeline(pipeline_id)
+        if owner.get('simulation_id') != simulation_id:
+            raise Conflict('Simulation does not match its pipeline owner')
+        case, digest = _target_case(pipeline_id, owner)
+        root = Config.OASIS_SIMULATION_DATA_DIR
+        stored_case = fc.validate_case(_target_artifact(pipeline_id, 'target_case', root, simulation_id, 'target_case.json'))
+        if fc.case_hash(stored_case) != digest:
+            raise Conflict('Simulation case does not match its pipeline case')
+        inputs = _target_artifact(pipeline_id, 'target_input', root, simulation_id, 'target_input.json')
+        simulation = _target_artifact(pipeline_id, 'target_simulation', root, simulation_id, 'target_simulation.json')
+        expected_inputs = {
+            'schemaVersion': 'target-input/v1', 'pipelineId': pipeline_id,
+            'caseHash': digest, 'simulation': owner['options'].get('target_simulation'),
+            'structure': fc.simulation_projection(case), 'simulationWeight': 0.0,
+            'decisionBudget': owner['options'].get('target_decision_budget_v1', {'max_calls': 128}),
+        }
+        if inputs != expected_inputs:
+            raise Conflict('Target input differs from its pipeline, case or pinned settings')
+        if simulation.get('caseId') != case['caseId'] or simulation.get('caseHash') != digest:
+            raise Conflict('Target simulation case identity or hash mismatch')
+        if 'decisionBudget' in simulation:
+            budget = simulation['decisionBudget']
+            if (not isinstance(budget, dict) or
+                    budget.get('maximumRequests') != inputs['decisionBudget']['max_calls']):
+                raise Conflict('Target result decision budget differs from its pinned input')
+        if (simulation.get('schemaVersion') != 'target-simulation/v1' or
+                type(simulation.get('simulationWeight')) not in (int, float) or
+                simulation['simulationWeight'] != 0 or
+                not isinstance(simulation.get('paths'), list) or
+                not isinstance(simulation.get('targetSummary'), dict)):
+            raise Conflict('Invalid target simulation diagnostics or forecast weight')
+        settings = inputs['simulation']
+        if (not isinstance(settings, dict) or
+                any(type(settings.get(key)) is not int or not low <= settings[key] <= high
+                    for key, low, high in (('paths', 1, 256), ('periods', 1, 120), ('seed', 0, 2**31 - 1))) or
+                type(simulation.get('seed')) is not int or simulation['seed'] != settings['seed'] or
+                len(simulation['paths']) != settings['paths'] or
+                not isinstance(simulation.get('replay'), dict) or
+                simulation['replay'].get('periods') != settings['periods'] or
+                simulation['replay'].get('seed') != settings['seed']):
+            raise Conflict('Target result differs from its pinned execution settings')
+        path_ids = set()
+        for path in simulation['paths']:
+            if (not isinstance(path, dict) or not isinstance(path.get('pathId'), str) or
+                    path['pathId'] in path_ids or type(path.get('targetValue')) not in (int, float) or
+                    not isinstance(path.get('trajectory'), list) or
+                    len(path['trajectory']) != settings['periods'] + 1):
+                raise Conflict('Invalid target path or period count')
+            path_ids.add(path['pathId'])
+            for period, step in enumerate(path['trajectory']):
+                if (not isinstance(step, dict) or type(step.get('period')) is not int or
+                        step['period'] != period or not isinstance(step.get('values'), dict) or
+                        type(step['values'].get(case['resolution']['targetNodeId'])) not in (int, float)):
+                    raise Conflict('Invalid target trajectory')
+            if path['trajectory'][-1]['values'][case['resolution']['targetNodeId']] != path['targetValue']:
+                raise Conflict('Target terminal value differs from its trajectory')
+        return jsonify(success=True, data={
+            'pipelineId': pipeline_id, 'simulationId': simulation_id,
+            'forecastAuthority': 'target-first-v1', 'caseId': case['caseId'], 'caseHash': digest,
+            'resolution': case['resolution'], 'nodes': case['nodes'], 'mechanisms': case['mechanisms'],
+            'simulation': simulation,
+        })
+    except (BadRequest, Conflict, NotFound) as exc:
+        return jsonify(success=False, error=exc.description), exc.code
+    except ValueError:
+        return jsonify(success=False, error='Invalid target simulation case'), 409
 
 
 # Interview prompt 优化前缀
@@ -209,6 +309,9 @@ def create_simulation():
             }), 404
         
         graph_id = data.get('graph_id') or project.graph_id
+        if isinstance(graph_id, str) and graph_id.startswith('target_graph_'):
+            return jsonify(success=False, code='target_simulation_route_required',
+                           error='Target simulations must be prepared by their owning research pipeline'), 409
         if not graph_id:
             return jsonify({
                 "success": False,
@@ -364,7 +467,6 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
         if status in prepared_statuses and config_generated:
             # 获取文件统计信息
             profiles_file = os.path.join(simulation_dir, "reddit_profiles.json")
-            config_file = os.path.join(simulation_dir, "simulation_config.json")
             
             profiles_count = 0
             if os.path.exists(profiles_file):
@@ -454,7 +556,6 @@ def prepare_simulation():
         }
     """
     import threading
-    import os
     from ..models.task import TaskManager, TaskStatus
     from ..config import Config
     
@@ -1324,7 +1425,7 @@ def get_simulation_config(simulation_id: str):
         if not config:
             return jsonify({
                 "success": False,
-                "error": f"模拟配置不存在，请先调用 /prepare 接口"
+                "error": "模拟配置不存在，请先调用 /prepare 接口"
             }), 404
         
         return jsonify({
@@ -1632,7 +1733,7 @@ def start_simulation():
                         else:
                             return jsonify({
                                 "success": False,
-                                "error": f"模拟正在运行中，请先调用 /stop 接口停止，或使用 force=true 强制重新开始"
+                                "error": "模拟正在运行中，请先调用 /stop 接口停止，或使用 force=true 强制重新开始"
                             }), 400
 
                 # 如果是强制模式，清理运行日志

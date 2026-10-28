@@ -62,6 +62,22 @@ _LABELS: Dict[str, Dict[str, str]] = {
         "ph_failed": "pipeline health failed",
         "quality_pass": "forecast quality gate passed",
         "quality_fail": "forecast quality gate not passed",
+        "quality_grade": "Forecast quality grade",
+        "quality_notes": "Quality notes",
+        "inputs_health": "Input health",
+        "input_markets": "Prediction markets",
+        "input_news": "News",
+        "input_official_data": "Official data",
+        "input_provider": "Provider",
+        "input_fresh": "fresh",
+        "input_stale": "stale",
+        "input_offline": "offline",
+        "input_unknown": "unknown",
+        "input_empty": "empty",
+        "input_disabled": "disabled",
+        "input_as_of": "As of",
+        "input_rows": "Rows",
+        "input_reason": "Reason",
         "coverage": "citation coverage",
         "sim_line": _sp.BRIEF_SIM_LINE_EN,
         "organic": "organic actions",
@@ -101,6 +117,22 @@ _LABELS: Dict[str, Dict[str, str]] = {
         "ph_failed": "管线健康 failed",
         "quality_pass": "预测质量门通过",
         "quality_fail": "预测质量门未通过",
+        "quality_grade": "预测质量等级",
+        "quality_notes": "质量说明",
+        "inputs_health": "输入健康",
+        "input_markets": "预测市场",
+        "input_news": "新闻",
+        "input_official_data": "官方数据",
+        "input_provider": "提供方",
+        "input_fresh": "新鲜",
+        "input_stale": "过期",
+        "input_offline": "离线",
+        "input_unknown": "未知",
+        "input_empty": "无数据",
+        "input_disabled": "已禁用",
+        "input_as_of": "截至",
+        "input_rows": "行数",
+        "input_reason": "原因",
         "coverage": "引用覆盖率",
         "sim_line": _sp.BRIEF_SIM_LINE_ZH,
         "organic": "条有机行为",
@@ -425,6 +457,62 @@ def _load_pinned_simulation_policy(report_dir: str) -> Optional[str]:
     return str(value) if value else None
 
 
+def _quality_annotations(forecast: Optional[Dict[str, Any]]) -> Tuple[Optional[str], List[str]]:
+    """Read the gate's additive fields without grading or translating them.
+
+    Preserve disclosure order and full text, folding whitespace to keep each
+    disclosure on one Markdown line. Malformed optional fields are omitted.
+    """
+    if not isinstance(forecast, dict):
+        return None, []
+    quality = forecast.get("quality")
+    quality = quality if isinstance(quality, dict) else {}
+    published = forecast.get("publication")
+    if not isinstance(published, dict):
+        published = forecast.get("publication_quality")
+    published = published if isinstance(published, dict) else {}
+    # Journal projections retain publication (keys ending _quality are excluded).
+    # The older publication_quality alias is only a secondary fallback. Canonical quality
+    # wins, including an explicit empty disclosures list after a clean re-audit.
+    grade = quality.get("grade", published.get("grade"))
+    if not isinstance(grade, str) or grade not in {"A", "B", "C"}:
+        grade = None
+    disclosures = quality.get("disclosures", published.get("disclosures"))
+    notes = [" ".join(note.split()) for note in disclosures
+             if isinstance(note, str) and note.strip()] if isinstance(disclosures, list) else []
+    return grade, notes
+
+
+def _inputs_health_display(forecast: Optional[Dict[str, Any]],
+                           L: Dict[str, str]) -> Tuple[str, str]:
+    """Render only the consumed snapshot; never fetch or recompute freshness.
+
+    An absent block preserves legacy output. Once supplied, missing or malformed
+    source entries are explicitly unknown, even if other report data look healthy.
+    """
+    if not isinstance(forecast, dict) or "inputs_health" not in forecast:
+        return "", ""
+    snapshot = forecast["inputs_health"]
+    snapshot = snapshot if isinstance(snapshot, dict) else {}
+    summaries, lines = [], []
+    for source in ("markets", "news", "official_data", "provider"):
+        entry = snapshot.get(source)
+        entry = entry if isinstance(entry, dict) else {}
+        status = entry.get("status")
+        if not isinstance(status, str) or status not in {
+                "fresh", "stale", "offline", "unknown", "empty", "disabled"}:
+            status = "unknown"
+        label, display_status = L[f"input_{source}"], L[f"input_{status}"]
+        as_of, rows, reason = entry.get("as_of"), entry.get("rows"), entry.get("reason")
+        as_of = " ".join(as_of.split()) if isinstance(as_of, str) and as_of.strip() else L["input_unknown"]
+        rows = str(rows) if type(rows) is int and rows >= 0 else L["input_unknown"]
+        reason = " ".join(reason.split()) if isinstance(reason, str) and reason.strip() else L["input_unknown"]
+        summaries.append(f"{label} {display_status}")
+        lines.append(f"- **{label}:** {display_status}; **{L['input_as_of']}:** {as_of}; "
+                     f"**{L['input_rows']}:** {rows}; **{L['input_reason']}:** {reason}")
+    return f"{L['inputs_health']}: " + L["detail_sep"].join(summaries), "\n".join(lines)
+
+
 def _build_honesty_note(forecast: Optional[Dict[str, Any]], report_dir: str,
                         L: Dict[str, str]) -> str:
     """拼一行诚实声明：pipeline_health 状态（若可得）+ forecast 质量门通过与否 + 引用覆盖率 +
@@ -457,7 +545,13 @@ def _build_honesty_note(forecast: Optional[Dict[str, Any]], report_dir: str,
     if isinstance(forecast, dict):
         q = forecast.get("quality") if isinstance(forecast.get("quality"), dict) else {}
         bq = forecast.get("binary_quality") if isinstance(forecast.get("binary_quality"), dict) else {}
-        passed = bool(q.get("passed")) and bool(bq.get("passed")) if (q or bq) else None
+        grade, disclosures = _quality_annotations(forecast)
+        if grade or disclosures:
+            # F1: the publish gate owns passed; binary_quality is diagnostic.
+            # No additive fields means the legacy result stays byte-identical.
+            passed = bool(q["passed"]) if "passed" in q else None
+        else:
+            passed = bool(q.get("passed")) and bool(bq.get("passed")) if (q or bq) else None
         if passed is True:
             parts.append(L["quality_pass"])
         elif passed is False:
@@ -469,6 +563,12 @@ def _build_honesty_note(forecast: Optional[Dict[str, Any]], report_dir: str,
             if cov is not None:
                 seg += f" ({L['coverage']} {cov * 100:.0f}%)"
             parts.append(seg)
+        if grade:
+            parts.append(f"{L['quality_grade']}: {grade}")
+
+    inputs_summary, _ = _inputs_health_display(forecast, L)
+    if inputs_summary:
+        parts.append(inputs_summary)
 
     if not parts:
         return ""
@@ -906,10 +1006,20 @@ class ExecBriefBuilder:
         parts.append(_build_watch_block(fc, L, rows=_official_rows(report_dir)) if fc else L["no_data"])
         parts.append("")
 
+        _, inputs_block = _inputs_health_display(fc, L)
+        if inputs_block:
+            parts.extend([f"## {L['inputs_health']}", "", inputs_block, ""])
+
         # 一行诚实声明
         honesty = _build_honesty_note(fc if fc else None, report_dir, L)
         if honesty:
             parts.append(f"> **{L['honesty']}:** {honesty}")
+            parts.append("")
+
+        _, disclosures = _quality_annotations(fc)
+        if disclosures:
+            parts.extend([f"## {L['quality_notes']}", ""])
+            parts.extend(f"- {note}" for note in disclosures)
             parts.append("")
 
         parts.append(f"_{L['gen_note']}_")
@@ -990,6 +1100,18 @@ class ExecBriefBuilder:
                      f"({summary['latest']['period']})" for summary in summaries[:3]]
             lines.append(f"**{L['indicators']}:** " + "; ".join(facts))
             lines.append("")
+
+        grade, disclosures = _quality_annotations(fc)
+        if grade:
+            lines.extend([f"**{L['quality_grade']}:** {grade}", ""])
+        if disclosures:
+            lines.extend([f"## {L['quality_notes']}", ""])
+            lines.extend(f"- {note}" for note in disclosures)
+            lines.append("")
+
+        _, inputs_block = _inputs_health_display(fc, L)
+        if inputs_block:
+            lines.extend([f"## {L['inputs_health']}", "", inputs_block, ""])
 
         # 链接路径（相对 API 路径，便于分享/嵌入）
         base = f"/api/report/{report_id}"

@@ -34,6 +34,7 @@ raises (a failure degrades to a smaller block).
 from __future__ import annotations
 
 import calendar
+from copy import deepcopy
 import math
 import re
 from datetime import date
@@ -303,12 +304,12 @@ def derive_v3_red_lines(actor: Optional[Dict[str, Any]], limit: int = MAX_RED_LI
     return _dedupe(out, limit)
 
 
-def _declared_outcome_power(actor: Optional[Dict[str, Any]], cfg: Dict[str, Any]) -> Optional[float]:
+def _declared_outcome_power(actor: Optional[Dict[str, Any]], cfg: Dict[str, Any], *, strict: bool = False) -> Optional[float]:
     """Only an explicitly declared power counts (I-3); visibility is never reused."""
     for source in (cfg, actor or {}):
         if not isinstance(source, dict):
             continue
-        for key in ("outcome_power", "power"):
+        for key in (("outcome_power",) if strict else ("outcome_power", "power")):
             raw = source.get(key)
             if isinstance(raw, bool) or raw is None:
                 continue
@@ -1069,6 +1070,8 @@ def build_world_model_seed(
     max_change_ratio: float = 0.5,
     barrier_timeout_s: float = 1800.0,
     pressure_weight: Optional[float] = None,
+    forecast_case: Optional[Dict[str, Any]] = None,
+    share_source: Optional[str] = None,
 ) -> Dict[str, Any]:
     """The sealed ``world_model`` block.  Degrades to a smaller block, never raises.
 
@@ -1117,6 +1120,43 @@ def build_world_model_seed(
                                                                  max_variables=max_variables)
     except Exception:  # noqa: BLE001
         block["state_variables"] = []
+
+    # A supplied typed identity takes precedence over incidental dossier facts.
+    # The kernel owns propagation; this adapter never evaluates expressions or
+    # substitutes a convenient quantitative row for the settlement target.
+    if forecast_case is not None:
+        from deerflow_bridge.forecast_case import simulation_projection
+        try:
+            projection = simulation_projection(forecast_case)
+            target = projection["resolution"]["targetNodeId"]
+            writers = {m["outputNodeId"]: m for m in projection["mechanisms"]}
+            if target not in writers:
+                block["target_projection_reason"] = "missing_target_identity"
+            elif next(n for n in projection["nodes"] if n["nodeId"] == target).get("visibility") != "public":
+                block["target_projection_reason"] = "private_target_unavailable"
+            else:
+                typed_variables = []
+                for node in sorted(projection["nodes"], key=lambda n: n["nodeId"] != target):
+                    # Private nodes are retained only in the kernel projection,
+                    # never in legacy actor-visible variables or their briefs.
+                    if node.get("visibility") != "public":
+                        continue
+                    variable = {"id": node["nodeId"], "name": node["nodeId"], "kind": "numeric",
+                                "value": node["value"], "unit": node["units"], "as_of": node["vintage"],
+                                "provenance": "research", "rationale": "Typed structural input; not an assessment."}
+                    if node["nodeId"] in writers:
+                        mechanism = writers[node["nodeId"]]
+                        variable.update(read_only=True, identity={
+                            "mechanismId": mechanism["mechanismId"], "kind": mechanism["kind"],
+                            "inputs": list(mechanism["inputNodeIds"]), "parameters": deepcopy(mechanism["parameters"])})
+                    typed_variables.append(variable)
+                # Do not apply the incidental-fact cap to a resolution DAG: it
+                # would silently remove identity inputs. The case bounds size.
+                block["state_variables"] = typed_variables
+                block["target_projection"] = projection
+                block["target_projection_reason"] = "typed_identity_pending_kernel_propagation"
+        except (ValueError, KeyError, TypeError, StopIteration):
+            block["target_projection_reason"] = "invalid_forecast_case"
 
     # actors ------------------------------------------------------------------------------
     packs = actor_context_packs if isinstance(actor_context_packs, dict) else {}
@@ -1173,7 +1213,8 @@ def build_world_model_seed(
                     "collective" if agency == "public_collective" else "actor"),
                 "capacity_per_round": default_capacity(agency),
                 "outcome_power": _declared_outcome_power(actor, cfg if isinstance(cfg, dict) else {
-                    "outcome_power": _cfg_get(cfg, "outcome_power")}),
+                    "outcome_power": _cfg_get(cfg, "outcome_power")},
+                    strict=forecast_case is not None or share_source in {"auto", "power_votes", "predicates"}),
                 "posture": _clean(_cfg_get(cfg, "stance", ""), 60),
                 "documented_plans": plans,
                 "red_lines": red_lines,

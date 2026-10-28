@@ -39,7 +39,7 @@ from ..utils.actors import (
 from ..utils.dates import parse_as_of
 from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
-from .zep_entity_reader import EntityNode, ZepEntityReader
+from .zep_entity_reader import EntityNode
 from .actor_context import (
     ACTOR_CONTEXT_VERSION,
     ACTOR_INTELLIGENCE_VERSION,
@@ -2208,6 +2208,7 @@ class SimulationConfigGenerator:
             max_change_ratio=float(getattr(Config, "SIM_WORLD_MAX_CHANGE_RATIO", 0.5) or 0.5),
             barrier_timeout_s=float(getattr(Config, "SIM_WORLD_BARRIER_TIMEOUT_S", 1800) or 1800),
             pressure_weight=self._backtest_pressure_weight(simulation_id),
+            share_source=getattr(Config, "SIM_SHARE_SOURCE", "auto"),
         )
         if not block.get("actors"):
             return None

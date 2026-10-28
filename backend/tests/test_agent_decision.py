@@ -75,6 +75,7 @@ def test_catalog_covers_every_class_with_hold_available():
 
 # ----------------------------------------------------------------------------- option menu
 def test_option_menu_priorities_and_capacity_filter():
+    """Old plans bypassed exhausted budgets; C11 filters plans like every paid move."""
     world = _world()
     alpha = world.actors[0]
     menu = ad.build_option_menu(alpha, world, 1)
@@ -87,15 +88,17 @@ def test_option_menu_priorities_and_capacity_filter():
     # capacity exhausted → only zero-cost moves (hold) remain affordable
     alpha.capacity_used = alpha.capacity_per_round
     menu2 = ad.build_option_menu(alpha, world, 1)
-    assert all(o["cost"] <= 0 or o["id"].startswith("plan_") for o in menu2)
+    assert all(o["cost"] == 0 for o in menu2)
     assert menu2[-1]["id"] == ad.HOLD_OPTION_ID
 
 
 def test_option_menu_adds_response_options_to_moves_aimed_at_actor():
+    """Old raw strike cost 3 was trusted; C11 requires the union's canonical cost-2 move."""
     world = _world()
     world.register_decisions(1, [{
         "agent_id": 1, "actor_name": "Beta Union",
-        "option": {"id": "strike_action", "label": "Call a strike", "kind": "coercive", "cost": 3},
+        "option": next(t.to_option(label="Call a strike")
+                       for t in ad.catalog_for("labor_union") if t.id == "strike_action"),
         "targets": ["Alpha Systems"], "magnitude": 0.9, "status": "ok",
     }])
     world.commit_round(1)
@@ -254,6 +257,7 @@ def test_parse_tolerates_label_echo_and_fills_statement():
 
 
 def test_elicit_decision_with_fake_llm_and_failure():
+    """Old caller system text passed through; C11 builds the actor's JSON-only brief."""
     world = _world()
     menu = _menu(world)
     llm = FakeLLMClient(json_responses=[{"option_id": "plan_1", "public_statement": "Go.",
@@ -261,7 +265,11 @@ def test_elicit_decision_with_fake_llm_and_failure():
     d = ad.elicit_decision(llm, system_message="ROLE BRIEF", user_prompt="decide", actor=world.actors[0], world=world,
                            options=menu, scenarios=world.scenarios, round_num=1)
     assert d.ok and d.scenario == "Permit delayed"
-    assert llm.calls[0]["messages"][0] == {"role": "system", "content": "ROLE BRIEF"}
+    system = llm.calls[0]["messages"][0]
+    assert system["role"] == "system"
+    assert system["content"].startswith(ad.DECISION_SYSTEM_PROMPT)
+    assert "Alpha Systems" in system["content"] and "Shape the permit timetable" in system["content"]
+    assert "ROLE BRIEF" not in system["content"] and "tool calling" not in system["content"].lower()
 
     class Boom:
         def chat_json(self, **kwargs):

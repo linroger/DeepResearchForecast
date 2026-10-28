@@ -38,13 +38,7 @@ from ..utils.logger import get_logger
 from ..utils.telemetry import LLMCache, LLMMeter, set_run_context, get_run_context
 from . import translation_dates as _tdates
 from . import translation_quantities as _tq
-from .zep_tools import (
-    ZepToolsService, 
-    SearchResult, 
-    InsightForgeResult, 
-    PanoramaResult,
-    InterviewResult
-)
+from .zep_tools import ZepToolsService
 
 logger = get_logger('mirofish.report_agent')
 
@@ -117,6 +111,10 @@ def read_report_world(report_dir: str, *, metadata: Optional[dict] = None) -> Op
     reference = metadata.get("world_result_ref")
     names = ("world_result.json", "world_result_manifest.json", "world_result_ref.json")
     present = any((folder / name).exists() or (folder / name).is_symlink() for name in names)
+    if metadata.get("forecast_authority") == "target-first-v1":
+        require(not present and not reference and metadata.get("simulation_engine") != ENGINE,
+                "result_binding_mismatch", "Typed report cannot adopt a world result")
+        return None
     simulation_id = metadata.get("simulation_id")
     current = load_simulation_world(simulation_id) if simulation_id else None
     if not (present or reference or current or metadata.get("simulation_engine") == ENGINE):
@@ -307,12 +305,16 @@ def _sim_prose(markdown: str) -> str:
 
 
 def _insert_sim_bridge(markdown: str, block: str) -> str:
-    """Insert ``block`` exactly once, before the References appendix (else at the end),
+    """Insert ``block`` exactly once, before Quality notes/References (else at the end),
     after removing any bridge already present — idempotent across re-finalization."""
     text = _sim_prose(markdown or "")
     if not block:
         return text
     reference = next((h for h in _REFS_HEADINGS if h in text), None)
+    # Quality notes are another separately audited appendix. Keep the bridge
+    # before that block so reinsertion preserves the final publication order.
+    if _QUALITY_START in text and (reference is None or text.index(_QUALITY_START) < text.index(reference)):
+        reference = _QUALITY_START
     if reference:
         before, after = text.split(reference, 1)
         return before.rstrip() + "\n\n" + block + "\n\n" + reference + after
@@ -649,6 +651,11 @@ def render_sim_bridge(record: Dict[str, Any], *, chinese: bool,
         lines.extend("| " + " | ".join(_bridge_cell(cell) for cell in row) + " |" for row in rows)
     else:
         lines.append(text["shares_none"])
+    from .simulation_record import share_policy_note
+    prior_note = share_policy_note((record.get("overall") or {}).get("shares") or {},
+                                   lang="zh" if chinese else "en")
+    if prior_note:
+        lines.extend(["", prior_note])
     lines.extend(["", text["unchanged"].format(policy=str(policy or "diagnostic_only").strip())])
 
     for chart in chart_rel_paths or []:
@@ -1187,6 +1194,7 @@ class Report:
     translations: Optional[List[Dict[str, Any]]] = None
     simulation_engine: Optional[str] = None
     world_result_ref: Optional[Dict[str, Any]] = None
+    forecast_authority: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d = {
@@ -1217,6 +1225,8 @@ class Report:
         if self.simulation_engine is not None:
             d["simulation_engine"] = self.simulation_engine
             d["world_result_ref"] = self.world_result_ref
+        if self.forecast_authority is not None:
+            d["forecast_authority"] = self.forecast_authority
         return d
 
 
@@ -1791,6 +1801,29 @@ CHAT_OBSERVATION_SUFFIX = "\n\n请简洁回答问题。"
 # ═══════════════════════════════════════════════════════════════
 # 参考来源标题（zh/en）——finalizer 幂等去重、PDF 改写跳过附录、双语切块均按此识别。
 _REFS_HEADINGS = ("## References", "## 参考来源")
+_QUALITY_START = "<!-- report-quality:start -->"
+_QUALITY_END = "<!-- report-quality:end -->"
+_QUALITY_BLOCK = re.compile(re.escape(_QUALITY_START) + r".*?" + re.escape(_QUALITY_END), re.S)
+
+
+def _quality_prose(markdown):
+    """Only exact, separately audited metadata blocks leave the claim denominator."""
+    if _QUALITY_START not in markdown:
+        return markdown
+    return re.sub(r"\n{3,}", "\n\n", _QUALITY_BLOCK.sub("", markdown))
+
+
+def _quality_notes(quality, language="English"):
+    if quality.get("gate_mode") != "grade" or not quality.get("disclosures"):
+        return ""
+    import html
+    zh = str(language).lower() in {"chinese", "zh", "zh-cn", "中文"}
+    title, label = ("质量说明", "质量等级") if zh else ("Quality notes", "Quality grade")
+    lines = [_QUALITY_START, f"## {title}", "", f"{label}: {quality['grade']}.", ""]
+    for item in quality["disclosures"]:
+        safe = html.escape(" ".join(str(item).split()), quote=False).replace("[", "［").replace("]", "］")
+        lines.append("- " + safe)
+    return "\n".join([*lines, _QUALITY_END])
 # 常见 TLD 白名单：末段命中即认为域名完整；未命中但带真实路径的少见 TLD 也放行。
 _COMMON_TLDS = frozenset({
     "com", "org", "net", "gov", "edu", "mil", "int", "io", "ai", "co", "info", "biz",
@@ -2839,6 +2872,11 @@ class ReportAgent:
         official_data: Optional[Dict[str, Any]] = None,
         news_market_context: Optional[Dict[str, Any]] = None,
         report_policy: Optional[Dict[str, Any]] = None,
+        forecast_case: Optional[Dict[str, Any]] = None,
+        target_simulation: Optional[Dict[str, Any]] = None,
+        aggregation_policy: Optional[Dict[str, Any]] = None,
+        saved_estimators: Optional[Dict[str, Any]] = None,
+        target_evidence: Optional[Dict[str, Any]] = None,
     ):
         """
         初始化Report Agent
@@ -2873,6 +2911,19 @@ class ReportAgent:
         # Returning a fresh copy from the property also prevents caller mutation.
         from .ensemble import freeze_report_policy
         self._report_policy = freeze_report_policy(report_policy)
+        self._saved_estimators_json = json.dumps(saved_estimators, ensure_ascii=False,
+                                                sort_keys=True, allow_nan=False)
+        if target_simulation is not None and forecast_case is None:
+            raise ValueError("target_simulation requires a valid forecast_case")
+        self._aggregation_policy = self._pin_aggregation_policy(
+            aggregation_policy, simulation_id, "research" if forecast_case is not None else "spine")
+        if forecast_case is not None:
+            self._init_target_report(graph_id, simulation_id, simulation_requirement,
+                                     forecast_case, target_simulation, scenario_label, base_simulation_id,
+                                     target_evidence, official_data, news_market_context)
+            return
+        if target_evidence is not None or saved_estimators is not None:
+            raise ValueError("target evidence/estimators require a valid forecast_case")
         _context = _news_context._validated_copy(news_market_context)
         self._news_context_sha256 = (_context or {}).get("sha256")
         self._news_market_context_json = (json.dumps(_context, ensure_ascii=False,
@@ -3019,6 +3070,227 @@ class ReportAgent:
             pass
 
         logger.info(f"ReportAgent 初始化完成: graph_id={graph_id}, simulation_id={simulation_id}")
+
+    def _init_target_report(self, graph_id, simulation_id, question, case, simulation,
+                            scenario_label=None, base_simulation_id=None, target_evidence=None,
+                            official_data=None, news_market_context=None):
+        """Admit typed authority before any world-state read or client construction."""
+        from .target_report import build_target_report, canonical_json, _case_api
+        case = _case_api().validate_case(case)
+        if question != case["question"]:
+            raise ValueError("report question differs from forecast case")
+        self.scenario_label = (scenario_label or "").strip()
+        self.base_simulation_id = base_simulation_id or None
+        if target_evidence is None:
+            target_evidence = {"schemaVersion": "target-evidence/v1", "caseHash": _case_api().case_hash(case),
+                               "official_data": official_data, "markets": None,
+                               "news_market_context": news_market_context}
+        evidence = json.loads(canonical_json(target_evidence))
+        if (not isinstance(evidence, dict) or set(evidence) != {"schemaVersion", "caseHash", "official_data", "markets", "news_market_context"}
+                or evidence["schemaVersion"] != "target-evidence/v1" or evidence["caseHash"] != _case_api().case_hash(case)):
+            raise ValueError("target evidence must match the frozen case")
+        if official_data is not None and evidence["official_data"] != official_data:
+            raise ValueError("official data differs from frozen target evidence")
+        if news_market_context is not None and evidence["news_market_context"] != news_market_context:
+            raise ValueError("news context differs from frozen target evidence")
+        context = _news_context._validated_copy(evidence["news_market_context"])
+        self._target_evidence_json = canonical_json(evidence)
+        bundle = build_target_report(case, simulation, official_data=evidence["official_data"], markets=evidence["markets"],
+                                     scenario_label=self.scenario_label,
+                                     base_simulation_id=self.base_simulation_id)
+        self._target_case_json = canonical_json(case)
+        self._target_simulation_json = canonical_json(simulation)
+        self.graph_id, self.simulation_id = graph_id, simulation_id
+        self.simulation_requirement = question
+        self._world_binding = None
+        self.llm = self.zep_tools = None
+        self.tools = []
+        self.sources = case["sources"]
+        self._citation_index = {
+            row["sourceId"]: {**row, "date": row.get("publishedAt"),
+                              "content": row["passage"], "excerpt": row["passage"]}
+            for row in self.sources
+        }
+        self.output_language = "English"  # Deterministic v1 renderer; no automatic translation.
+        self.research_report = "\n".join(row["passage"] for row in case["claims"])
+        self.situation_brief = self._outline_summary = ""
+        self.official_data = evidence["official_data"]
+        self._prediction_markets_health_payload = evidence["markets"]
+        market_payload = evidence["markets"]
+        self._prediction_markets = (market_payload.get("markets") if isinstance(market_payload, dict) else market_payload)
+        self._news_market_context_json = canonical_json(context) if context else None
+        self._news_context_sha256 = (context or {}).get("sha256")
+        self._news_context_block = _news_context.render_context(context, lang="en")
+        if self._news_context_block:
+            bundle["markdown"] = bundle["markdown"].rstrip() + "\n\n" + self._news_context_block + "\n"
+        self._target_bundle_json = canonical_json(bundle)
+        self._forecast_spine = bundle["forecast"]
+        self.report_logger = self.console_logger = None
+        self.set_backtest_policy(None)
+
+    @staticmethod
+    def _pin_aggregation_policy(policy, simulation_id, authority):
+        from .forecast_aggregator import pin_aggregation_policy
+        if policy is None and authority == "spine" and re.fullmatch(r"sim_[A-Za-z0-9_-]+", str(simulation_id or "")):
+            try:
+                owner = _backtest.pipeline_for_simulation(simulation_id)
+            except ValueError:
+                # Old bound dossiers may outlive their pipeline metadata. They
+                # have no recoverable policy: use the fixed zero-shadow default,
+                # never another owner or an environment-selected blend. Present
+                # invalid proofs/options still fail closed.
+                from .official_data import read_bound_research_core
+                from .pipeline_orchestrator import PipelineManager
+                proof = read_bound_research_core(simulation_id)
+                if proof.get("status") != "valid" or PipelineManager.load(proof["pipeline_id"]) is not None:
+                    raise
+                owner = None
+            options = owner.get("options", {}) if owner else {}
+            if "aggregation_policy_v1" in options:
+                policy = options["aggregation_policy_v1"]
+                if policy is None:
+                    raise ValueError("Saved aggregation policy is missing")
+        pinned = pin_aggregation_policy(policy, authority=authority)
+        if pinned["authority"] != authority or pinned["method"] != "identity":
+            raise ValueError("Report aggregation must preserve the pinned authority and zero shadow weights")
+        return pinned
+
+    def _forecast_diagnostics(self, forecast, *, case=None, simulation=None):
+        """Consume stored inputs only; typed reports never pass a model gateway."""
+        from .forecast_tournament import run_forecast_tournament
+        from .forecast_inputs_health import build_inputs_health
+        from .forecast_aggregator import pin_aggregation_policy
+        authority = "research" if case is not None else "spine"
+        policy = getattr(self, "_aggregation_policy", None)
+        if policy is None:
+            policy = pin_aggregation_policy(authority=authority)
+        markets = getattr(self, "_prediction_markets_health_payload", None)
+        if markets is None:
+            markets = getattr(self, "_prediction_markets", None)
+        evidence = {"research_inputs": {"research_report": getattr(self, "research_report", ""),
+                                        "situation_brief": getattr(self, "situation_brief", "")},
+                    "quantitative_rows": getattr(self, "quantitative", None),
+                    "official_data": getattr(self, "official_data", None)}
+        forecast = run_forecast_tournament(forecast, case=case, simulation=simulation,
+                    llm=None if case is not None else getattr(self, "llm", None), policy=policy,
+                    markets=markets, evidence=evidence,
+                    saved_estimators=json.loads(getattr(self, "_saved_estimators_json", "null")))
+        stored_market_health = getattr(self, "_prediction_markets_health_payload", None)
+        market_health = (json.loads(json.dumps(stored_market_health)) if isinstance(stored_market_health, dict)
+                         else {"markets": markets} if markets is not None else None)
+        if market_health is not None and getattr(self, "_markets_stale", False):
+            market_health["status"] = "stale"
+        # Never supply the generation time as a replacement snapshot timestamp.
+        forecast["inputs_health"] = build_inputs_health(
+            markets=market_health, news=self.news_market_context,
+            official_data=getattr(self, "official_data", None), provider=None)
+        return forecast
+
+    def _generate_target_report(self, report_id, progress_callback=None):
+        """Production typed path: exact projections, citations, final audit, metadata."""
+        from .target_report import diagnostic_markdown
+        case = json.loads(self._target_case_json)
+        simulation = json.loads(self._target_simulation_json)
+        bundle = json.loads(self._target_bundle_json)
+        bundle["forecast"] = self._forecast_diagnostics(bundle["forecast"], case=case, simulation=simulation)
+        folder = Path(ReportManager._get_report_folder(report_id))
+        inputs = {"forecast_case.json": case, "target_simulation.json": simulation,
+                  "target_report.json": bundle["record"], "aggregation_policy.json": self._aggregation_policy,
+                  "target_estimators.json": json.loads(self._saved_estimators_json),
+                  "target_evidence.json": json.loads(self._target_evidence_json)}
+        # Existing IDs cannot silently acquire different immutable inputs.
+        if folder.exists():
+            metadata_path = folder / "meta.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.exists() else {}
+            if metadata and metadata.get("forecast_authority") != "target-first-v1":
+                raise ValueError("report ID belongs to another forecast authority")
+            for filename, value in inputs.items():
+                path = folder / filename
+                if path.is_symlink() or (path.exists() and (not path.is_file() or json.loads(path.read_text(encoding="utf-8")) != value)):
+                    raise ValueError("typed report replay input mismatch: " + filename)
+                if not path.exists() and (metadata.get("status") == "completed" or (folder / "final_audit.json").exists()):
+                    raise ValueError("typed report replay companion missing: " + filename)
+            if ReportManager.publication_status(report_id).get("publishable"):
+                return ReportManager.get_report(report_id)
+            if metadata.get("status") == "completed":
+                raise ValueError("completed typed report lost its publication seal")
+        report = Report(report_id=report_id, simulation_id=self.simulation_id,
+                        graph_id=self.graph_id, simulation_requirement=self.simulation_requirement,
+                        status=ReportStatus.GENERATING, created_at=datetime.now(timezone.utc).isoformat(),
+                        forecast_authority="target-first-v1")
+        try:
+            ReportManager._ensure_report_folder(report_id)
+            if self.news_market_context:
+                ReportManager.save_news_market_context(report_id, self.news_market_context)
+            if self.official_data is not None:
+                self._persist_official_data(report_id)
+            for filename, value in inputs.items():
+                write_json_atomic(str(folder / filename), value, allow_nan=False)
+            write_json_atomic(str(folder / "forecast.json"), bundle["forecast"], allow_nan=False)
+            report.markdown_content = _sim_prose(bundle["markdown"])
+            report.outline = ReportOutline(title="Target forecast", summary=case["question"], sections=[])
+            ReportManager.save_report(report)
+            ReportManager.update_progress(report_id, "generating", 50, "Rendering frozen target forecast")
+            if progress_callback:
+                progress_callback("generating", 50, "Rendering frozen target forecast")
+            # The citation finalizer is deterministic and uses only the case's source map.
+            self._finalize_citations(report_id, report)
+            report.markdown_content = _insert_sim_bridge(report.markdown_content,
+                                                        diagnostic_markdown(bundle["record"]))
+            write_text_atomic(str(folder / "full_report.md"), report.markdown_content)
+            self._enforce_final_publish_audit(report_id, report)
+            report.status = ReportStatus.COMPLETED
+            report.completed_at = datetime.now(timezone.utc).isoformat()
+            report.telemetry = {"totals": {"llm_calls": 0, "tool_calls": 0, "tokens": 0}, "sections": []}
+            ReportManager.save_report(report)
+            ReportManager.update_progress(report_id, "completed", 100, "Target forecast complete",
+                                          completed_sections=[], failed_sections=[], forecast_ok=True)
+            if progress_callback:
+                progress_callback("completed", 100, "Target forecast complete")
+        except Exception as exc:
+            report.status, report.completed_at, report.error = ReportStatus.FAILED, None, str(exc)
+            ReportManager.save_report(report)
+            ReportManager.update_progress(report_id, "failed", -1, str(exc), completed_sections=[])
+        return report
+
+    def _audit_target_authority(self, report_id, forecast, markdown):
+        from .target_report import audit_target_report
+        folder = Path(ReportManager._get_report_folder(report_id))
+        try:
+            case = json.loads(self._target_case_json)
+            simulation = json.loads(self._target_simulation_json)
+            record = json.loads(self._target_bundle_json)["record"]
+            audit = audit_target_report(case, simulation, forecast, record,
+                                        official_data=self.official_data,
+                                        markets=json.loads(self._target_evidence_json)["markets"],
+                                        scenario_label=self.scenario_label,
+                                        base_simulation_id=self.base_simulation_id)
+            diagnostic_expected = self._forecast_diagnostics(json.loads(self._target_bundle_json)["forecast"],
+                                                              case=case, simulation=simulation)
+            for key in ("estimators", "aggregation", "key_uncertainties"):
+                if forecast.get(key) != diagnostic_expected.get(key):
+                    audit["issues"].append("frozen estimator projection differs: " + key)
+            def prose(text):
+                chunks = self._split_markdown_h2_sections(_quality_prose(_sim_prose(text)))
+                body = "\n".join(chunk for chunk in chunks
+                                 if chunk.split("\n", 1)[0].strip() not in _REFS_HEADINGS)
+                return re.sub(r"\n\s*\n", "\n\n", body).strip()
+            if prose(markdown) != prose(json.loads(self._target_bundle_json)["markdown"]):
+                audit["issues"].append("typed report body differs from deterministic projection")
+            files = {}
+            for name, value in (("forecast_case.json", case), ("target_simulation.json", simulation),
+                                ("target_report.json", record), ("aggregation_policy.json", self._aggregation_policy),
+                                ("target_estimators.json", json.loads(self._saved_estimators_json)),
+                                ("target_evidence.json", json.loads(self._target_evidence_json))):
+                raw = (folder / name).read_bytes()
+                if json.loads(raw) != value:
+                    audit["issues"].append("typed companion changed: " + name)
+                files[name] = hashlib.sha256(raw).hexdigest()
+            audit["files"] = files
+            audit["valid"] = not audit["issues"]
+            return audit
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            return {"valid": False, "issues": [str(exc)]}
 
     def _verify_world(self, report_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         binding = getattr(self, "_world_binding", None)
@@ -3353,6 +3625,10 @@ class ReportAgent:
         """Final-audit record for the bridge (design §3.3 "Policy behaviour"): under
         diagnostic_only exactly one block whose bytes equal the renderer; none otherwise."""
         expected_block = ""
+        if getattr(self, "_target_bundle_json", None):
+            from .target_report import diagnostic_markdown
+            expected_block = diagnostic_markdown(json.loads(self._target_bundle_json)["record"])
+            return {**self._sim_bridge_audit_block(md, expected_block), "policy": "diagnostic_only"}
         if self._sim_bridge_active():
             chinese = str(getattr(self, "output_language", "")).lower() in {"chinese", "zh", "zh-cn", "中文"}
             expected_block = self._render_sim_bridge_for_report(report_id, chinese=chinese)
@@ -5208,6 +5484,8 @@ class ReportAgent:
                 if os.path.exists(path):
                     with open(path, "r", encoding="utf-8") as f:
                         payload = json.load(f)
+                    self._prediction_markets_health_payload = (
+                        json.loads(json.dumps(payload)) if isinstance(payload, dict) else None)
                     markets = payload.get("markets") if isinstance(payload, dict) else payload
                     rows = [m for m in (markets or []) if isinstance(m, dict)]
                     if rows:
@@ -5291,6 +5569,16 @@ class ReportAgent:
                 max_per_event=max_per_event)
             scored = score_market_relevance(_market_llm, question, candidates)
             markets = [row for row in scored if row.get("relevance_score") is not None]
+            # Retain this actual acquisition receipt, including empty/failure
+            # status. This is not a timestamp synthesized during report rendering.
+            recovered_payload = {"as_of": datetime.now(timezone.utc).isoformat(),
+                                 "source": "report_fallback", "queries": queries,
+                                 "markets": markets,
+                                 "status": {"attempted": True, "candidate_count": len(candidates),
+                                            "selected_count": len(markets),
+                                            "empty_reason": "transport_failure" if getattr(client, "last_error", None)
+                                                            else None if markets else "no_relevant_markets"}}
+            self._prediction_markets_health_payload = recovered_payload
             if markets:
                 logger.info(f"预测市场现抓兜底：{len(markets)} 个活跃市场（queries={queries}）")
                 report_id = str(getattr(self, "_active_report_id", "") or "")
@@ -5300,13 +5588,7 @@ class ReportAgent:
                         write_json_atomic(
                             os.path.join(ReportManager._get_report_folder(report_id),
                                          "prediction_markets_recovered.json"),
-                            {"as_of": datetime.now(timezone.utc).isoformat(),
-                             "source": "report_fallback", "queries": queries,
-                             "markets": markets,
-                             "status": {"attempted": True,
-                                        "candidate_count": len(candidates),
-                                        "selected_count": len(markets),
-                                        "empty_reason": None}},
+                            recovered_payload,
                         )
                     except Exception as persist_error:  # noqa: BLE001 — observability only
                         logger.debug(f"写入报告期预测市场恢复工件失败（忽略）: {persist_error}")
@@ -5621,6 +5903,10 @@ class ReportAgent:
                     anchor_meta={k: sim_anchor.get(k) for k in
                                  ("sim_horizon", "as_of", "span_days", "mode", "coverage")},
                 )
+            from ..utils.actors import research_prior_from_actors
+            research_prior = research_prior_from_actors(getattr(self, "actors", None))
+            if research_prior is not None:
+                official_kwargs["research_prior"] = research_prior
             spine = _fe.derive_forecast_spine(
                 self.llm,
                 central_question=self.simulation_requirement or "",
@@ -5998,6 +6284,7 @@ class ReportAgent:
             # Evaluation output, never production evidence: marked here so the
             # ledger, the resolution monitor and the driver can tell.
             forecast["backtest"] = _backtest.forecast_block(backtest)
+        forecast = self._forecast_diagnostics(forecast)
         fpath = os.path.join(ReportManager._get_report_folder(report_id), "forecast.json")
         write_text_atomic(fpath, json.dumps(forecast, ensure_ascii=False, indent=2))
         self._forecast_spine = forecast  # 最终版（集成阶段读 forecast.json 文件，这里仅保留内存副本）
@@ -6190,7 +6477,8 @@ class ReportAgent:
                     vals.append(json.dumps(value, ensure_ascii=False))
             hay = self._norm_quote_text(" ".join(vals))
             if hay:
-                out.append((f"[S{i}]", hay))
+                tag = s["sourceId"] if getattr(self, "_target_case_json", None) else f"S{i}"
+                out.append((f"[{tag}]", hay))
         return out
 
     _CITATION_MATCH_STOPWORDS = {
@@ -6332,7 +6620,6 @@ class ReportAgent:
         )
 
         text = str(md or "")
-        index_map = self._citation_index_or_fallback()
 
         def _audit_external_claims(value: str) -> Dict[str, Any]:
             body = "\n".join(
@@ -6355,6 +6642,7 @@ class ReportAgent:
         except (TypeError, ValueError):
             threshold = 0.5
         coverage = float(before.get("resolved_coverage", 1.0) or 0.0)
+        grade_mode = str(getattr(Config, "REPORT_PUBLISH_GATE_MODE", "grade")).lower() == "grade"
         if coverage >= threshold:
             return text, {
                 "applied": False,
@@ -6421,7 +6709,7 @@ class ReportAgent:
                     # 在此被当 fabrication 删除。
                     kept.append(fragment)
                     market_claims_preserved += 1
-                elif status == "unverifiable":
+                elif status == "unverifiable" or grade_mode:
                     kept.append(fragment)
                     unverifiable_claims_preserved += 1
                 else:
@@ -6525,7 +6813,8 @@ class ReportAgent:
             "table_cells_cleared": table_cells_cleared,
             "unverifiable_claims_preserved": unverifiable_claims_preserved,
             "market_claims_preserved": market_claims_preserved,
-            "passed": after_coverage >= threshold,
+            "passed": grade_mode or after_coverage >= threshold,
+            "coverage_met": after_coverage >= threshold,
         }
         if repaired != text:
             logger.info(
@@ -7327,7 +7616,7 @@ class ReportAgent:
                     continue   # 悬空/不可解析记号归悬空修复管，此处不动
                 occurrences.append((line_index, match.span(), tag, numeric_line))
         counts: Dict[str, int] = {}
-        for _li, _sp, tag, _num in occurrences:
+        for _li, _span, tag, _num in occurrences:
             counts[tag] = counts.get(tag, 0) + 1
         over_tags = {tag for tag, count in counts.items() if count > cap}
         if not over_tags:
@@ -10982,7 +11271,6 @@ class ReportAgent:
         # prints as the figure caption; a Chinese variant gets the Chinese titles.
         from .report_visualizer import localize_chart_alt_text
         translated_md = localize_chart_alt_text(translated_md, str(tgt_code))
-        folder = ReportManager._get_report_folder(report_id)
         out_path = ReportManager._get_report_translation_path(report_id, tgt_code)
         pdf_path = ReportManager._get_report_pdf_path(report_id, tgt_code)
         citations_path = ReportManager._get_report_citations_path(report_id, tgt_code)
@@ -11776,6 +12064,11 @@ class ReportAgent:
         confidence demotion cannot repair them and publication must stop.
         """
         issues: List[str] = []
+        target = audit.get("target_report")
+        if target is not None and target.get("valid") is not True:
+            issues.extend(target.get("issues") or ["typed report authority audit failed"])
+        if (audit.get("quality_notes") or {}).get("passed") is False:
+            issues.append("Quality disclosures differ from the deterministic publication grade")
         if (audit.get("forecast_track_record") or {}).get("passed") is False:
             issues.append("Forecast track record differs from its frozen ledger snapshot")
         context = audit.get("news_market_context") or {}
@@ -11922,6 +12215,8 @@ class ReportAgent:
             raise RuntimeError("最终只读审计未产生结果，拒绝标记报告为 completed")
         hard = list(audit.get("hard_issues") or [])
         gate = audit.get("publish_gate") or {}
+        if gate.get("enabled") and gate.get("mode", "fail") not in {"grade", "fail"}:
+            raise RuntimeError("Unknown publication gate mode")
         hard.extend(
             issue for issue in (gate.get("hard_issues") or []) if issue not in hard
         )
@@ -11937,6 +12232,7 @@ class ReportAgent:
     def _prepare_forecast_track_record(self, report_id: str, report: "Report") -> None:
         """Freeze past outcomes once, then render them after authored prose stabilizes."""
         if (not getattr(Config, "REPORT_FORECAST_LEDGER", True)
+                or getattr(self, "_target_case_json", None)
                 or getattr(self, "_world_binding", None)
                 # A backtest report stands at its cutoff: today's track record postdates it
                 # (and may hold outcomes resolved after the cutoff), so it gets none.
@@ -11980,6 +12276,25 @@ class ReportAgent:
         try:
             self._prepare_forecast_track_record(report_id, report)
             audit = self._audit_final_published_markdown(report_id, report)
+            # Grade metadata comes from the measured artifact. Insert it before
+            # the final seal, then measure the exact final bytes again. No model
+            # call or probability rewrite is involved in this bounded pass.
+            if (audit.get("publish_gate") or {}).get("mode") == "grade":
+                quality = (self._forecast_spine or {}).get("quality") or {}
+                block = _quality_notes(quality, getattr(self, "output_language", "English"))
+                bare = _quality_prose(report.markdown_content).rstrip()
+                if block:
+                    reference = next((h for h in _REFS_HEADINGS if h in bare), None)
+                    if reference:
+                        pos = bare.index(reference)
+                        bare = bare[:pos].rstrip() + "\n\n" + block + "\n\n" + bare[pos:]
+                    else:
+                        bare += "\n\n" + block
+                candidate = bare + "\n"
+                if candidate != report.markdown_content:
+                    report.markdown_content = candidate
+                    write_text_atomic(ReportManager._get_report_markdown_path(report_id), candidate)
+                    audit = self._audit_final_published_markdown(report_id, report)
             self._require_final_publish_audit(audit)
             return audit
         except Exception as exc:  # noqa: BLE001 — caller must enter the failed-report path
@@ -12037,6 +12352,7 @@ class ReportAgent:
         # below) and then excluded from the prose audits exactly as the world-v1 appendix is.
         sim_bridge_audit = self._audit_sim_bridge(report_id, md)
         audit_md = _sim_prose(audit_md)
+        audit_md = _quality_prose(audit_md)
         from .forecast_track_record import audit_and_strip
         track_forecast_path = os.path.join(folder, "forecast.json")
         try:
@@ -12116,6 +12432,14 @@ class ReportAgent:
         proposition_audit = _audit_propositions(forecast or {})
         market_anchor_audit = _audit_market_anchors(forecast or {})
         scenario_contract_audit = _audit_scenarios(forecast or {})
+        target_audit = None
+        if getattr(self, "_target_case_json", None):
+            target_audit = self._audit_target_authority(report_id, forecast or {}, md)
+            # Typed predicates have already passed the case validator. The legacy
+            # prose parser's 2-5-row vocabulary is not their settlement contract.
+            scenario_contract_audit = {"valid": target_audit["valid"],
+                                       "issue_count": len(target_audit["issues"]),
+                                       "issues": target_audit["issues"], "basis": "typed_predicates"}
         stat_audit = self._audit_stat_plausibility(body)
         lang = getattr(self, "output_language", None) or "English"
         _candidate_cleaned, lint_audit = _rl.lint_report(
@@ -12175,6 +12499,8 @@ class ReportAgent:
         # the report bundle so API readers cannot substitute a valid but different
         # capture after the Markdown audit.
         consumed_context = self.news_market_context
+        if target_audit is not None:
+            audit["target_report"] = target_audit
         try:
             stored_context = ReportManager.load_report_news_market_context(report_id)
             context_valid = stored_context == consumed_context
@@ -12206,6 +12532,19 @@ class ReportAgent:
             if getattr(Config, "REPORT_PUBLISH_GATE", False):
                 forecast = self._apply_publish_gate(forecast)
 
+            expected_notes = _quality_notes(forecast.get("quality") or {}, lang)
+            blocks = _QUALITY_BLOCK.findall(md)
+            audit["quality_notes"] = {
+                "required": bool(expected_notes),
+                "passed": (blocks == [expected_notes] if expected_notes else not blocks)
+                          and md.count(_QUALITY_START) == len(blocks)
+                          and md.count(_QUALITY_END) == len(blocks),
+            }
+            audit["hard_issues"] = self._final_audit_integrity_issues(audit)
+            audit["hard_passed"] = not audit["hard_issues"]
+            if getattr(Config, "REPORT_PUBLISH_GATE", False):
+                forecast = self._apply_publish_gate(forecast)
+
             final_quality = forecast.get("quality") or {}
             audit["publish_gate"] = {
                 "enabled": bool(getattr(Config, "REPORT_PUBLISH_GATE", False)),
@@ -12220,6 +12559,9 @@ class ReportAgent:
                 "citation_coverage_basis": final_quality.get("citation_coverage_basis"),
                 "probability_sum": final_quality.get("probability_sum"),
                 "has_residual_scenario": final_quality.get("has_residual_scenario"),
+                "mode": final_quality.get("gate_mode", "fail"),
+                "grade": final_quality.get("grade"),
+                "disclosures": final_quality.get("disclosures", []),
             }
             # ``audit`` is already referenced by quality.final_audit; adding the
             # compact gate result above therefore persists in both artifacts.
@@ -12899,6 +13241,45 @@ class ReportAgent:
         return None
 
     @staticmethod
+    def _publication_disclosures(forecast, coverage, minimum):
+        """Group epistemic findings into stable, actionable disclosure lines."""
+        disclosures = []
+        if coverage < minimum:
+            disclosures.append(f"Only {coverage:.0%} of quantitative claims have resolved citations "
+                               f"(required coverage: {minimum:.0%}); uncited claims remain uncertain.")
+        bq = forecast.get("binary_quality") or {}
+        findings = [str(item) for item in (bq.get("issues") or bq.get("epistemic_issues") or [])]
+        probabilities = [b["probability"] for b in forecast.get("binary_forecasts", [])
+                         if isinstance(b, dict) and type(b.get("probability")) in (int, float)]
+        if len(probabilities) > 1:
+            mean = sum(probabilities) / len(probabilities)
+            spread = math.sqrt(sum((p - mean) ** 2 for p in probabilities) / len(probabilities))
+            low_sharpness = spread < 0.12
+        else:
+            low_sharpness = False
+        sharpness_words = ("spread too low", "under-committed", "high-conviction", "low sharpness", "midband")
+        if low_sharpness or any(any(term in item.lower() for term in sharpness_words) for item in findings):
+            disclosures.append("Binary probabilities have limited separation; low sharpness reflects uncertainty, not demonstrated miscalibration.")
+        if bq.get("theme_cardinality") == 1 or any("single theme" in item.lower() for item in findings):
+            disclosures.append("The binary forecasts cover a single theme; other drivers may be underrepresented.")
+        fallback = any("scenario" in item.lower() and ("fallback" in item.lower() or "partition" in item.lower())
+                       for item in findings)
+        if fallback or bq.get("scenario_partition_fallback"):
+            disclosures.append("Some binaries were derived from the scenario partition rather than independently assessed.")
+        for item in findings:
+            if (any(term in item.lower() for term in sharpness_words)
+                    or "single theme" in item.lower()
+                    or ("scenario" in item.lower() and ("fallback" in item.lower() or "partition" in item.lower()))):
+                continue
+            if item not in disclosures:
+                disclosures.append(item)
+        if bq.get("passed") is False and not findings:
+            disclosures.append("The binary evidence-quality check reported an unresolved epistemic shortfall.")
+        if ((forecast.get("target_diagnostics") or {}).get("decisionBudget") or {}).get("exhausted"):
+            disclosures.append("The structural simulation exhausted its decision-request budget; later uncached choices held prior settings. Request counts exclude internal provider retries; simulation retains zero forecast weight.")
+        return disclosures
+
+    @staticmethod
     def _apply_publish_gate(forecast: Dict[str, Any]) -> Dict[str, Any]:
         """NEXTSTEPS P2-3: coherence + grounding publish gate.
 
@@ -12910,6 +13291,9 @@ class ReportAgent:
         ``hard_issues`` and must be blocked by the final audit caller. Pure; never raises.
         """
         try:
+            mode = str(getattr(Config, "REPORT_PUBLISH_GATE_MODE", "grade")).strip().lower()
+            if mode not in {"grade", "fail"}:
+                raise ValueError("REPORT_PUBLISH_GATE_MODE must be grade or fail")
             scenarios = forecast.get("scenarios") or []
             audit = forecast.get("citation_audit") or {}
             # Post-citation audits carry ``resolved_coverage``: only markers that
@@ -12948,7 +13332,11 @@ class ReportAgent:
                 )
             if scenarios and abs(prob_sum - 1.0) > 0.05:
                 hard_issues.append(f"情景概率之和 {prob_sum} 偏离 1")
-            if scenarios and not has_residual:
+            typed_audit = ((forecast.get("quality") or {}).get("final_audit") or {}).get("target_report") or {}
+            typed_partition = (forecast.get("authority") == "target-first-v1"
+                               and typed_audit.get("valid") is True
+                               and typed_audit.get("case_hash") == forecast.get("case_hash"))
+            if scenarios and not has_residual and not typed_partition:
                 hard_issues.append("缺少『维持现状/兜底』情景")
             if top >= 0.9 and len(probs) <= 1:
                 epistemic_issues.append("概率分布退化（单情景≥0.9 且无对照情景）")
@@ -12995,6 +13383,19 @@ class ReportAgent:
                 for issue in ReportAgent._final_audit_integrity_issues(_final_audit):
                     if issue not in hard_issues:
                         hard_issues.append(issue)
+            disclosures = ReportAgent._publication_disclosures(forecast, coverage, min_cov)
+            # New scorecards no longer own passed. Their issues are epistemic;
+            # fail mode retains the historical behavior for old scorecards.
+            if mode == "grade":
+                for issue in epistemic_issues:
+                    if (not issue.startswith("定量声明引用覆盖率")
+                            and not issue.startswith("二元预测信心/客观性门未过")
+                            and issue not in disclosures):
+                        disclosures.append(issue)
+                epistemic_issues = list(disclosures)
+            elif "passed" not in bq and bq.get("legacy_passed") is False:
+                epistemic_issues.append("二元预测信心/客观性门未过：" + "；".join(bq["issues"][:2]))
+            grade = "A" if not disclosures else "B" if len(disclosures) == 1 else "C"
             issues = hard_issues + epistemic_issues
             # Preserve the model's pre-publish confidence/rationale exactly once.
             # Every re-audit derives from this baseline, so repeated backfills can
@@ -13027,9 +13428,16 @@ class ReportAgent:
                 "epistemic_issues": epistemic_issues,
                 "hard_passed": not hard_issues,
                 "issues": issues,
-                "passed": not issues,
+                "passed": not hard_issues if mode == "grade" else not issues,
+                "gate_mode": mode,
+                "grade": grade,
+                "disclosures": disclosures,
             })
             forecast["quality"] = quality
+            if mode == "grade":
+                # The publication journal intentionally excludes diagnostic
+                # quality, so retain this small issued disclosure in its snapshot.
+                forecast["publication"] = {"grade": grade, "disclosures": disclosures}
             if epistemic_issues:
                 forecast["confidence"] = levels[max(0, order[_baseline] - 1)]
                 forecast["confidence_rationale"] = (
@@ -15141,6 +15549,8 @@ class ReportAgent:
         # 如果没有传入 report_id，则自动生成
         if not report_id:
             report_id = f"report_{uuid.uuid4().hex[:12]}"
+        if getattr(self, "_target_case_json", None):
+            return self._generate_target_report(report_id, progress_callback)
         if getattr(self, "_world_binding", None):
             self._world_chat_mode = False
             self.tools = self._define_tools()
@@ -16671,6 +17081,16 @@ class ReportManager:
             )
         if list(audit.get("hard_issues") or []):
             result["reasons"].append("final audit contains hard issues")
+        if not lang and (meta.get("forecast_authority") == "target-first-v1" or audit.get("target_report")):
+            target = audit.get("target_report") or {}
+            expected_files = {"forecast_case.json", "target_simulation.json", "target_report.json", "aggregation_policy.json", "target_estimators.json", "target_evidence.json"}
+            files = target.get("files") or {}
+            if target.get("valid") is not True or set(files) != expected_files:
+                result["reasons"].append("typed forecast authority audit missing or invalid")
+            for name in expected_files:
+                if not files.get(name) or files[name] != cls._sha256_file(
+                        os.path.join(cls._get_report_folder(report_id), name)):
+                    result["reasons"].append("typed forecast companion changed: " + name)
         if audit.get("markdown_sha256") != markdown_sha:
             result["reasons"].append("final audit fingerprint does not match Markdown")
         if world and audit.get("world_result_ref") != world["reference"]:
@@ -16694,6 +17114,12 @@ class ReportManager:
             except ValueError:
                 result["reasons"].append("news context artifact is invalid")
         gate = audit.get("publish_gate") or {}
+        if gate.get("grade") in {"A", "B", "C"}:
+            result["grade"] = gate["grade"]
+            result["disclosures"] = list(gate.get("disclosures") or [])
+            result["publication_gate_mode"] = gate.get("mode", "fail")
+        if (audit.get("quality_notes") or {}).get("passed") is False:
+            result["reasons"].append("quality disclosures are missing or inconsistent")
         if gate.get("enabled") and gate.get("passed") is not True:
             result["reasons"].append("professional publication gate did not pass")
         if not lang:
@@ -18367,8 +18793,6 @@ class ReportManager:
         
         从已保存的章节文件组装完整报告，并进行标题清理
         """
-        folder = cls._get_report_folder(report_id)
-        
         # 构建报告头部
         md_content = f"# {outline.title}\n\n"
         md_content += f"> {outline.summary}\n\n"
@@ -18575,10 +18999,12 @@ class ReportManager:
 
     @staticmethod
     def _is_backtest_forecast_file(forecast_path: str) -> bool:
-        """True when forecast.json carries the backtest block (``backtest_mode.forecast_block``)."""
+        """Exclude backtests and explicitly characterized forks from production scoring."""
         try:
+            from .forecast_ledger import is_production_calibration_row
             with open(forecast_path, "r", encoding="utf-8") as f:
-                return _backtest.is_backtest_forecast(json.load(f))
+                forecast = json.load(f)
+                return _backtest.is_backtest_forecast(forecast) or not is_production_calibration_row(forecast)
         except (OSError, ValueError):
             return False
 
@@ -18692,6 +19118,7 @@ class ReportManager:
             translations=data.get('translations'),  # BILINGUAL：从 meta.json 还原双语版本清单
             simulation_engine=data.get('simulation_engine'),
             world_result_ref=data.get('world_result_ref'),
+            forecast_authority=data.get('forecast_authority'),
         )
     
     @classmethod

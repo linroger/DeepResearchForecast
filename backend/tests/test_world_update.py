@@ -11,7 +11,7 @@ kind-name units ("yes boolean") never reaching a brief.
 import random
 
 from app.services import world_update as wu
-from app.services.agent_decision import AgentDecision
+from app.services.agent_decision import AgentDecision, catalog_for
 from app.services.world_model import WorldModel
 from tests.conftest import FakeLLMClient, content_filter_error
 
@@ -39,8 +39,9 @@ _PERIOD = {"label": "2026-Q3", "period_start": "2026-07-02", "period_end": "2026
 
 
 def _decisions():
-    invest = {"id": "invest_capex", "label": "Commit capital: new plant", "kind": "economic", "cost": 3, "lag": 2,
-              "reversibility": "sticky"}
+    """Old fixtures invented investment cost 3; C11 admits the class catalogue's cost and lag."""
+    invest = next(t.to_option(label="Commit capital: new plant")
+                  for t in catalog_for("firm") if t.id == "invest_capex")
     return [
         AgentDecision(0, "Alpha Systems", invest, targets=[], magnitude=0.9,
                       public_statement="We commit $2bn to Aurora this quarter.", scenario="Permit granted",
@@ -54,6 +55,7 @@ def _decisions():
 
 
 def test_deterministic_update_registers_everything():
+    """Old cost-3 fixture was clipped to 2; C11 admits cost-2 investment and charges it exactly."""
     world = _world()
     world.start_round(1, _PERIOD)
     det = wu.deterministic_round_update(world, 1, _PERIOD, _decisions(),
@@ -214,6 +216,7 @@ def test_run_world_round_survives_arbiter_failure_and_disabled():
 
 
 def test_overdue_commitments_lapse_before_new_actions():
+    """Old promises lapsed immediately after due_round; C11 permits one full grace period first."""
     world = _world()
     alpha = world.actors[0]
     alpha.add_commitment("Missed milestone", made_round=1, due_round=1)
@@ -221,6 +224,10 @@ def test_overdue_commitments_lapse_before_new_actions():
     decision = AgentDecision(0, "Alpha Systems", {"id": "public_statement", "label": "Speak", "kind": "communication", "cost": 1},
                              targets=[], magnitude=0.2, public_statement="Act now.", round_num=2)
     det = wu.deterministic_round_update(world, 2, _PERIOD, [decision], [], random.Random(0))
+    assert det["commitments_lapsed"] == [] and alpha.commitments[0]["status"] == "due"
+    world.commit_round(2)
+    world.start_round(3, _PERIOD)
+    det = wu.deterministic_round_update(world, 3, _PERIOD, [], [], random.Random(0))
     assert det["commitments_lapsed"] == ["Alpha Systems: Missed milestone"]
     assert alpha.commitments[0]["status"] == "lapsed"
 
@@ -346,12 +353,13 @@ def test_briefs_never_print_a_kind_name_as_unit():
 
 
 def test_behaviour_metrics_count_moves_that_answer_last_period():
+    """Old firms could use government policy IDs; C11 uses real firm moves to test response metrics."""
     world = _world()
     names = [a.name for a in world.actors.values()]
     world.start_round(1, {"label": "P1"})
     var = next(iter(world.variables.values()))
     var.set_value(99, round_num=1, source="arbiter", cause="shock")
-    world.register_decisions(1, [{"agent_id": list(world.actors)[0], "option": {"id": "impose_measure", "label": "Impose", "kind": "policy", "cost": 1, "lag": 0},
+    world.register_decisions(1, [{"agent_id": list(world.actors)[0], "option": {"id": "price_move", "label": "Raise prices", "kind": "economic", "cost": 1, "lag": 0},
                                  "targets": [names[1]], "magnitude": 0.5, "public_statement": "Imposed.", "status": "ok"}])
     world.commit_round(1)
     assert wu.behaviour_metrics(world, 1, [])["responsive_share"] is None          # no prior period
@@ -360,7 +368,7 @@ def test_behaviour_metrics_count_moves_that_answer_last_period():
     rows = [
         {"agent_id": a1, "actor_name": names[1], "option": {"id": "public_statement", "label": "Say", "kind": "communication", "cost": 1},
          "public_statement": f"After {var.name} jumped we answer {names[0]} in kind.", "private_rationale": "", "status": "ok"},
-        {"agent_id": a0, "actor_name": names[0], "option": {"id": "subsidize", "label": "Subsidise", "kind": "economic", "cost": 2},
+        {"agent_id": a0, "actor_name": names[0], "option": {"id": "invest_capex", "label": "Invest", "kind": "economic", "cost": 2, "lag": 2},
          "public_statement": "A new programme.", "private_rationale": "unrelated", "status": "ok"},
         {"agent_id": a0, "actor_name": names[0], "option": {"id": "hold_position", "label": "Hold", "kind": "wait", "cost": 0},
          "public_statement": "", "status": "ok"},

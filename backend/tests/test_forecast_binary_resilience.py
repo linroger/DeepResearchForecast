@@ -88,7 +88,8 @@ def test_chunked_retry_skips_filtered_chunks_and_merges_rows():
     assert res["recovery"]["primary_error"].startswith("_ContentFilterError")
     assert calls[0][1] == 10 and all(c[1] == 3 for c in calls[1:])                  # per-chunk minimum
     assert len(res["market_comparison"]["comparisons"]) >= 2
-    assert "passed" in res["binary_quality"]
+    # F1 moves the publication verdict out of the binary sharpness scorecard.
+    assert "sharpness" in res["binary_quality"] and "legacy_passed" in res["binary_quality"]
 
 
 def test_non_filter_errors_propagate_and_empty_results_pass_through():

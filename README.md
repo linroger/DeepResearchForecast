@@ -1,3 +1,5 @@
+> Target-first forecasting: [architecture, API, replay and rollout controls](docs/handoff/target-first-forecast/architecture.md). The explicit `target-first-v1` route uses a typed resolution case, mechanism paths and audited report projections; simulation remains a zero-weight diagnostic.
+
 # DeepAgentForecast
 
 **English** | [简体中文](README.zh-CN.md)

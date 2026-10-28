@@ -25,17 +25,21 @@ from __future__ import annotations
 
 import logging
 import math
+import copy
+import json
+import re
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from ..utils.llm_errors import describe_llm_error
 from .agent_decision import LANGUAGE_MISMATCH, AgentDecision
 from .world_model import (FULFILLMENT_PREFIX, MAX_ACTION_RESOLUTIONS, RESPONSE_PREFIXES, WorldModel, _bound_lines, _text, format_value, is_kind_name_unit,
                           normalize_label)
+from .world_text_budgets import STATEMENT_ARBITER_MAX_CHARS, STATEMENT_DIGEST_MAX_CHARS
 
 logger = logging.getLogger(__name__)
 
 WORLD_UPDATE_VERSION = "world-update/v1"
-ARBITER_STATUSES = ("applied", "failed", "invalid", "skipped")
+ARBITER_STATUSES = ("applied", "applied_partial", "failed", "invalid", "skipped")
 RESOLUTION_OUTCOMES = ("success", "partial", "blocked", "pending", "failed")
 PRESSURE_WORDS = ("up", "down", "flat")
 
@@ -78,6 +82,9 @@ def deterministic_round_update(world: WorldModel, round_num: int, period: Option
     lapsed = world.lapse_overdue_commitments(round_num)
     lapsed_offers = world.lapse_expired_interactions(round_num)   # OFFERS: unanswered offers expire first
     action_events = world.register_decisions(round_num, rows)
+    # Canonical cost and timing belong exclusively to kernel admission. Never
+    # rewrite them from raw rows: an omitted field or rejected duplicate can
+    # otherwise replace the admitted action's lag with zero.
     fired = world.fire_due_effects(round_num, rng)
     # EXOGENOUS SHOCKS: rolled after the due effects, so a world without shocks draws exactly as before
     shocks = world.fire_shocks(round_num, rng)
@@ -142,39 +149,53 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
     lines.append("## Moves this period")
     rows = _decision_rows(decisions)
     moved = 0
-    for d in rows:
+    public_rows = []
+    seen_moves = set()
+    for supplied in rows:
+        d = supplied
+        aid = world.resolve_actor(d.get("agent_id"))
+        actor = world.actors.get(aid)
+        action = actor.last_action if actor is not None else None
+        if action and action.get("round") == round_num:
+            if aid in seen_moves:
+                continue
+            seen_moves.add(aid)
+            # Adjudicate what admission recorded, never rejected duplicate text
+            # or omitted raw metadata that the kernel canonically restored.
+            d = {"agent_id": aid, "actor_name": actor.name, "status": action.get("status"),
+                 "targets": action.get("targets", []), "magnitude": action.get("magnitude", 0),
+                 "public_statement": action.get("statement", ""),
+                 "option": {"id": action.get("option_id"), "label": action.get("label"),
+                            "kind": action.get("kind"), "lag": action.get("lag", 0)}}
         if d.get("status") != "ok" or (d.get("option") or {}).get("id") == "hold_position":
             continue
+        public_rows.append(d)
         opt = d.get("option") or {}
         tgt = f" → {', '.join(d.get('targets') or [])}" if d.get("targets") else ""
-        stmt = f' Statement: "{_text(d.get("public_statement"), 240)}"' if d.get("public_statement") else ""
-        aid = world.resolve_actor(d.get("agent_id"))
+        stmt = f' Statement: "{_text(d.get("public_statement"), STATEMENT_ARBITER_MAX_CHARS)}"' if d.get("public_statement") else ""
         record = world.track_record_text(aid) if aid is not None else ""
         lines.append(f"- {d.get('actor_name')}: {opt.get('label')} (kind={opt.get('kind')}, "
                      f"magnitude={d.get('magnitude')}){tgt}.{stmt}"
+                     + (f" Implementation lag: {opt['lag']} period(s); the action's direct effect cannot land "
+                        f"before round {round_num + opt['lag']}." if type(opt.get("lag")) is int and opt["lag"] > 0 else "")
                      + (f" Track record: {record}." if record else ""))
         moved += 1
     if not moved:
         lines.append("- (no actor made a consequential move; the world drifts on its own momentum)")
-    attempts = [(actor, actor.last_action) for actor in world.actors.values()
-                if actor.last_action and actor.last_action.get("round") == round_num
-                and actor.last_action.get("status") == "ok" and actor.last_action.get("commitment_id")]
+    attempts = [(actor, c) for actor in world.actors.values() for c in actor.commitments
+                if (c.get("last_fulfillment_attempt") or {}).get("round") == round_num
+                and (c.get("last_fulfillment_attempt") or {}).get("outcome") == "unverified"]
     if attempts:
         lines.extend(["", "## Specific commitment delivery attempts (not yet fulfilled)",
                       "Assess whether this exact promise was actually delivered in this period. Unrelated actions, "
                       "new agreements, announcements and partial progress are not fulfilment. Use success only "
                       "for full delivery; otherwise use partial, pending, blocked or failed. Return the exact "
                       "commitment_id AND action_round in that actor's resolution, with a concrete delivery rationale."])
-        for actor, action in attempts:
-            lines.append(f"- actor={actor.name}; commitment_id={action['commitment_id']}; action_round={round_num}; "
-                         f"promise={action.get('commitment_description')}; counterparty={', '.join(action.get('targets') or []) or '(self)'}")
-    expectations = [(a.name, e) for a in world.actors.values() for e in a.expectations
-                    if int(e.get("round") or 0) == int(round_num)]
-    if expectations:
-        lines.append("")
-        lines.append("## Expectations in play (what this period's movers expect others to do next)")
-        lines.extend(f"- {name} expects {e.get('about')}: {e.get('reaction')}" for name, e in expectations[:8])
-    stakes = _red_lines_at_stake(world, rows)
+        for actor, commitment in attempts:
+            lines.append(f"- actor={actor.name}; commitment_id={commitment['id']}; action_round={round_num}; "
+                         f"promise={commitment.get('description')}; counterparty="
+                         f"{', '.join(world.delivery_targets(actor.agent_id, commitment)) or '(self)'}")
+    stakes = _red_lines_at_stake(world, public_rows)
     if stakes:
         lines.append("")
         lines.append("## Red lines at stake (documented by each actor; report a crossing only when a move this "
@@ -216,7 +237,11 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         '"delta": <number>, "caused_by": "<cast name>" | null, "rationale": "..."}] — only variables the '
         "moves/events plausibly affect; small, defensible moves; leave the rest untouched. Name caused_by "
         "only when a mover's own move this period sets the new value (an announced tariff, rate, quota or "
-        f"price it states): a stated figure takes effect in full{_clamp_rule(world)}.",
+        "price it states), for every variable kind. Direct implementation effects respect the stated action lag; "
+        "an announcement is not completed implementation. Immediate expectation or market reactions need their "
+        "own distinct rationale and variable. For a move with zero implementation lag, "
+        f"a stated figure takes effect in full{_clamp_rule(world)}. Delayed effects retain the kernel's "
+        "per-period, reversion and cumulative drift bounds when they land.",
         '- "new_variables": [{"name": "...", "value": ..., "unit": "...", "kind": "numeric|categorical|boolean|text", '
         '"rationale": "..."}] — at most 3, only when a move creates a new fact the world must now track.',
         '- "events": [{"description": "...", "kind": "emergent|consequence|resolution", "actors": ["<cast name>"], '
@@ -224,10 +249,14 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         '- "relationship_changes": [{"source": "<cast name>", "target": "<cast name>", "direction": "closer|farther|flat", '
         '"rationale": "..."}].',
         '- "pending_effects": [{"description": "...", "due_periods": 1-12, "variable_id": "<id or null>", '
-        '"new_value": ... OR "delta": ..., "probability": 0-1}] — delayed consequences that land later.',
+        '"new_value": ... OR "delta": ..., "probability": 0-1, "caused_by": "<cast name>" | null}] '
+        '— delayed consequences that land later; identify the actor for direct implementation effects. '
+        'List each effect once, either here or in variable_changes, never both.',
         '- "action_resolutions": [{"actor": "<cast name>", "outcome": "success|partial|blocked|pending|failed", '
         '"rationale": "...", "commitment_id": "<exact id for delivery attempts, otherwise null>", '
-        '"action_round": <current round integer for delivery attempts>}] — exactly one per actor that moved.',
+        '"action_round": <current round integer for delivery attempts>}] — one ordinary resolution per actor '
+        'that moved, plus one separate resolution per listed delivery attempt. Never conflate maintenance '
+        'with the discretionary move; deliveries require their exact commitment_id and action_round.',
         '- "red_line_crossings": [{"actor": "<whose red line>", "by": "<cast name whose move crossed it>", '
         '"red_line": "<the red line as listed>", "rationale": "..."}] — only for a listed red line that a move '
         "this period clearly crossed; usually none.",
@@ -299,13 +328,11 @@ def _red_lines_at_stake(world: WorldModel, rows: List[Dict[str, Any]]) -> List[T
 def _num(value: Any) -> Optional[float]:
     if isinstance(value, bool):
         return None
-    if isinstance(value, (int, float)):
-        out = float(value)
-        return out if math.isfinite(out) else None
     try:
-        out = float(str(value).replace(",", "").replace("%", "").strip())
+        out = (float(value) if isinstance(value, (int, float))
+               else float(str(value).replace(",", "").replace("%", "").strip()))
         return out if math.isfinite(out) else None
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -323,7 +350,7 @@ _BOOL_FALSE_WORDS = {
 }
 
 
-def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str] = ()) -> Tuple[Dict[str, Any], List[str]]:
+def _validate_arbiter_fields(raw: Any, world: WorldModel, scenarios: Sequence[str] = ()) -> Tuple[Dict[str, Any], List[str]]:
     """Bound and type-check the arbiter payload; returns ``(update, problems)``.
 
     Unknown variable ids, unknown actors, bad kinds and oversized lists are
@@ -352,12 +379,15 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
             if var is None:
                 problems.append(f"unknown variable '{vid}'")
                 continue
+            if world.is_derived_variable(var.id):
+                problems.append("write to derived or private target variable rejected")
+                continue
             if var.id in changed_ids:
                 problems.append(f"duplicate change for '{var.id}'")
                 continue
             row: Dict[str, Any] = {"variable_id": var.id, "rationale": _text(ch.get("rationale"), 200)}
             cause = ch.get("caused_by")
-            if cause not in (None, "") and var.kind == "numeric":
+            if cause not in (None, ""):
                 # ANNOUNCED SETTINGS: the kernel lifts the clamp only when this actor's own move
                 # this period stated the figure (WorldModel._announced_by); here it must be cast
                 cause_id = world.resolve_actor(cause)
@@ -402,18 +432,32 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
         for nv in new_vars[:MAX_NEW_VARIABLES]:
             if not isinstance(nv, dict) or not _text(nv.get("name"), 140):
                 continue
+            if world.is_derived_variable(nv.get("name")) or world.is_derived_variable(nv.get("id")):
+                problems.append("creation of derived or private target variable rejected")
+                continue
             raw_kind = _text(nv.get("kind"), 16).casefold()
             kind = raw_kind or "numeric"
             if kind not in ("numeric", "categorical", "boolean", "text"):
                 kind = "text"
             if kind == "numeric" and _num(nv.get("value")) is None:
                 kind = "text"
+            value = nv.get("value")
+            if kind == "numeric":
+                value = _num(value)
+            elif kind == "boolean" and not isinstance(value, bool):
+                word = _text(value, 40).casefold().strip(" .!?。，")
+                if word not in _BOOL_TRUE_WORDS | _BOOL_FALSE_WORDS:
+                    problems.append(f"non-boolean new variable '{_text(nv['name'], 80)}'")
+                    continue
+                value = word in _BOOL_TRUE_WORDS
+            elif kind != "boolean":
+                value = _text(value, 160)
             unit = _text(nv.get("unit"), 24)
             # a unit belongs to numeric facts only; models echo the kind ("boolean", "date")
             # into the unit field, which would otherwise render as "yes boolean"
             if kind != "numeric" or unit.casefold() in (kind, raw_kind) or is_kind_name_unit(unit):
                 unit = ""
-            update["new_variables"].append({"name": _text(nv["name"], 140), "value": nv.get("value"),
+            update["new_variables"].append({"name": _text(nv["name"], 140), "value": value,
                                             "unit": unit, "kind": kind,
                                             "rationale": _text(nv.get("rationale"), 200)})
         if len(new_vars) > MAX_NEW_VARIABLES:
@@ -470,14 +514,21 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
         for fx in effects[:MAX_PENDING_EFFECTS]:
             if not isinstance(fx, dict) or not _text(fx.get("description"), 220):
                 continue
+            if world.is_derived_variable(fx.get("variable_id")):
+                problems.append("pending write to derived or private target variable rejected")
+                continue
             try:
                 due = max(1, min(12, int(fx.get("due_periods", 1) or 1)))
-            except (TypeError, ValueError):
-                due = 1
+            except (TypeError, ValueError, OverflowError):
+                problems.append("pending effect with invalid due_periods")
+                continue
             vid = fx.get("variable_id")
             vid = str(vid) if vid and str(vid) in world.variables else None
             row = {"description": _text(fx["description"], 220), "due_periods": due, "variable_id": vid,
                    "targets": _names(fx.get("targets"))}
+            cause = world.resolve_actor(fx.get("caused_by"))
+            if cause is not None:
+                row["caused_by"] = world.actor_name(cause)
             prob = _num(fx.get("probability"))
             row["probability"] = max(0.0, min(1.0, prob)) if prob is not None else 1.0
             if vid is not None:
@@ -490,6 +541,15 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
                         row["delta"] = dl
                     else:
                         row["variable_id"] = None
+                elif var.kind == "boolean":
+                    value = fx.get("new_value")
+                    if not isinstance(value, bool):
+                        word = _text(value, 40).casefold().strip(" .!?。，")
+                        if word not in _BOOL_TRUE_WORDS | _BOOL_FALSE_WORDS:
+                            problems.append(f"non-boolean pending effect for '{vid}'")
+                            continue
+                        value = word in _BOOL_TRUE_WORDS
+                    row["new_value"] = value
                 else:
                     row["new_value"] = _text(fx.get("new_value"), 160) or None
                     if row["new_value"] is None:
@@ -502,21 +562,22 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
             res = []
         # Duplicates must be detected before filtering malformed outcomes or
         # truncating: conflicting attestations cannot become a single success.
-        counts: Dict[int, int] = {}
+        counts: Dict[Tuple[int, Optional[str]], int] = {}
         for r in res:
             if isinstance(r, dict):
-                _, implicated = world.resolution_actor(r)
-                for aid in implicated:
-                    counts[aid] = counts.get(aid, 0) + 1
+                _, implicated = world.resolution_key(r)
+                for key in implicated:
+                    counts[key] = counts.get(key, 0) + 1
         for r in res:
             if not isinstance(r, dict):
                 continue
-            aid, _ = world.resolution_actor(r)
+            key, _ = world.resolution_key(r)
             outcome = _text(r.get("outcome"), 16).casefold()
-            if aid is None or outcome not in RESOLUTION_OUTCOMES:
+            if key is None or outcome not in RESOLUTION_OUTCOMES:
                 problems.append("resolution with unknown actor or outcome")
                 continue
-            if counts[aid] != 1:
+            aid, cid = key
+            if counts[key] != 1:
                 problems.append("duplicate actor resolutions")
                 continue
             row = {"actor": world.actor_name(aid), "outcome": outcome, "rationale": _text(r.get("rationale"), 200)}
@@ -558,9 +619,67 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
     return update, problems
 
 
+def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str] = ()) -> Tuple[Dict[str, Any], List[str]]:
+    """Repair fields independently while preserving duplicate-resolution guards.
+
+    A malformed field cannot discard valid changes in another field. Resolution
+    rows remain a batch so conflicting attestations cannot be repaired into a
+    false success. Missing/rejected values leave deterministic state untouched.
+    """
+    update, problems = _validate_arbiter_fields({}, world, scenarios)
+    if not isinstance(raw, dict):
+        return update, ["payload is not an object"]
+    for field in update:
+        if field not in raw:
+            continue
+        expected = str if field == "narrative" else dict if field == "scenario_pressure" else list
+        if not isinstance(raw[field], expected):
+            problems.append(f"invalid {field}: expected {expected.__name__}")
+            continue
+        try:
+            validated, rejected = _validate_arbiter_fields({field: raw[field]}, world, scenarios)
+            update[field] = validated[field]
+            problems.extend(rejected)
+        except (TypeError, ValueError, OverflowError, KeyError) as exc:
+            problems.append(f"invalid {field}: {type(exc).__name__}")
+    _defer_action_effects(update, world, problems)
+    return update, problems
+
+
+def _defer_action_effects(update: Dict[str, Any], world: WorldModel, problems: List[str]) -> None:
+    """Enforce a recorded lag on direct, attributed implementation effects."""
+    def remaining(row: Dict[str, Any]) -> int:
+        return world.action_effect_due(row.get("caused_by"), world.round) - world.round
+
+    for effect in update["pending_effects"]:
+        effect["due_periods"] = max(effect["due_periods"], remaining(effect))
+    immediate = []
+    for change in update["variable_changes"]:
+        delay = remaining(change)
+        if not delay:
+            immediate.append(change)
+            continue
+        effect = {"description": change.get("rationale") or "Delayed action implementation",
+                  "due_periods": delay, "variable_id": change["variable_id"],
+                  "probability": 1.0, "caused_by": change["caused_by"]}
+        key = "new_value" if "new_value" in change else "delta"
+        effect[key] = change[key]
+        # Models sometimes repeat the same delayed effect in both channels.
+        if not any(fx.get("variable_id") == effect["variable_id"] and fx.get(key) == effect[key]
+                   and fx.get("caused_by") == effect["caused_by"]
+                   and fx.get("due_periods") == effect["due_periods"]
+                   and fx.get("probability") == effect["probability"]
+                   and (not change.get("rationale") or fx.get("description") == change["rationale"])
+                   for fx in update["pending_effects"]):
+            update["pending_effects"].append(effect)
+        problems.append(f"deferred '{change['variable_id']}' for action lag ({delay} periods)")
+    update["variable_changes"] = immediate
+
+
 def run_arbiter(llm: Any, world: WorldModel, round_num: int, period: Optional[Dict[str, Any]],
                 decisions: Iterable[Any], deterministic: Dict[str, Any], scenarios: Sequence[str], *,
-                language: str = "", temperature: float = 0.3, max_tokens: int = 2200
+                language: str = "", temperature: float = 0.3, max_tokens: int = 2200,
+                repair_mode: str = "field", evidence: Optional[Dict[str, Any]] = None
                 ) -> Tuple[str, Dict[str, Any], List[str]]:
     """One arbiter call → ``(status, validated_update, problems)``; never raises.
 
@@ -571,23 +690,60 @@ def run_arbiter(llm: Any, world: WorldModel, round_num: int, period: Optional[Di
     bounded message snippet and the failover outcome, so ``arbiter_problems`` says why
     the round carries only the deterministic update.
     """
+    if repair_mode not in ("field", "round"):
+        raise ValueError("SIM_WORLD_ARBITER_REPAIR must be field or round")
+    capture = evidence if evidence is not None else {}
     if llm is None:
         return "skipped", {}, ["no llm"]
     prompt = build_arbiter_prompt(world, round_num, period, decisions, deterministic, scenarios, language=language)
     try:
-        raw = llm.chat_json(messages=[{"role": "user", "content": prompt}], temperature=temperature,
-                            max_tokens=max_tokens)
+        messages = [{"role": "user", "content": prompt}]
+        parser = getattr(llm, "_parse_json_response", None)
+        if callable(parser):
+            # Use the provider's normal transport/fallback, but own the JSON
+            # retry: exactly one temperature-zero correction for syntax only.
+            attempts = []
+            for attempt in range(2):
+                response = llm.chat(messages=messages, temperature=temperature if attempt == 0 else 0.0,
+                                    max_tokens=max_tokens, response_format={"type": "json_object"})
+                attempts.append(response)
+                capture.update(raw=response, attempts=attempts)
+                # The shared parser returns None both for JSON null and for a
+                # syntax failure. A parsed null is a bad payload, not a retry.
+                cleaned = re.sub(r"^```(?:json)?\s*\n?", "", response.strip(), flags=re.IGNORECASE)
+                cleaned = re.sub(r"\n?```\s*$", "", cleaned).strip()
+                try:
+                    raw = json.loads(cleaned)
+                    break
+                except json.JSONDecodeError:
+                    pass
+                raw = parser(response)
+                if raw is not None:
+                    break
+            else:
+                return "invalid", {}, ["unparseable JSON after one correction"]
+        else:
+            raw = llm.chat_json(messages=messages, temperature=temperature, max_tokens=max_tokens)
+            capture["raw"] = copy.deepcopy(raw)
     except Exception as exc:  # noqa: BLE001 — a failed arbiter must not break the round
         detail = describe_llm_error(exc, max_chars=ARBITER_ERROR_SNIPPET_CHARS)
         logger.warning("world arbiter failed in round %s (status=failed): %s", round_num, detail)
         return "failed", {}, [f"llm error: {detail}"]
     try:
         update, problems = validate_arbiter_update(raw, world, scenarios)
+        capture["validated"] = copy.deepcopy(update)
     except Exception as exc:  # noqa: BLE001 — malformed payload must not break round commit
         logger.warning("world arbiter validation failed in round %s: %s", round_num, exc)
         return "invalid", {}, [f"validation error: {type(exc).__name__}"]
     if not isinstance(raw, dict):
         return "invalid", update, problems
+    # Kernel timing is mandatory in both policies. A valid effect deferred to
+    # its implementation date is an advisory, not a rejected arbiter field.
+    rejected = [problem for problem in problems if not problem.startswith("deferred '")]
+    if rejected and repair_mode == "round":
+        return "invalid", {}, problems
+    if rejected:
+        return ("applied_partial" if any(update.values()) else "invalid"), update, problems
     return "applied", update, problems
 
 
@@ -609,7 +765,7 @@ def build_round_digest(world: WorldModel, round_num: int, previous: Optional[Dic
         for d in moves[:8]:
             opt = d.get("option") or {}
             tgt = f" (→ {', '.join(d.get('targets') or [])})" if d.get("targets") else ""
-            stmt = f': "{_text(d.get("public_statement"), 2400)}"' if d.get("public_statement") else ""
+            stmt = f': "{_text(d.get("public_statement"), STATEMENT_DIGEST_MAX_CHARS)}"' if d.get("public_statement") else ""
             lines.append(f"- {d.get('actor_name')}: {opt.get('label')}{tgt}{stmt}")
     holders = [d.get("actor_name") for d in rows if d.get("status") == "ok"
                and (d.get("option") or {}).get("id") == "hold_position"]
@@ -709,20 +865,24 @@ def world_update_headline(world: WorldModel, round_num: int, record: Dict[str, A
 def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str, Any]],
                     decisions: Iterable[Any], fired_events: Iterable[Dict[str, Any]], *, llm: Any, rng: Any,
                     scenarios: Sequence[str] = (), arbiter_enabled: bool = True, language: str = "",
-                    arbiter_temperature: float = 0.3) -> Dict[str, Any]:
+                    arbiter_temperature: float = 0.3, arbiter_repair: str = "field") -> Dict[str, Any]:
     """Deterministic update → arbiter → commit → digest.  Returns the round record.
 
     ``arbiter_temperature`` stays at the arbiter's default for the path the agents live in; the
     sibling world paths (``world_paths``) sample it higher, bounded."""
+    if arbiter_repair not in ("field", "round"):
+        raise ValueError("SIM_WORLD_ARBITER_REPAIR must be field or round")
     rows = _decision_rows(decisions)
     before = world.snapshot()
     deterministic = deterministic_round_update(world, round_num, period, rows, fired_events, rng)
     status, update, problems = ("skipped", {}, [])
     arbiter_summary: Dict[str, Any] = {}
+    evidence: Dict[str, Any] = {}
     if arbiter_enabled:
         status, update, problems = run_arbiter(llm, world, round_num, period, rows, deterministic, scenarios,
-                                               language=language, temperature=arbiter_temperature)
-        if status in ("applied", "invalid") and update:
+                                               language=language, temperature=arbiter_temperature,
+                                               repair_mode=arbiter_repair, evidence=evidence)
+        if status in ("applied", "applied_partial") and update:
             try:
                 arbiter_summary = world.apply_arbiter_update(round_num, update)
             except Exception as exc:  # noqa: BLE001 — a kernel bug must not break the loop
@@ -746,6 +906,13 @@ def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str
         "deterministic": deterministic,
         "arbiter_status": status,
         "arbiter_problems": problems[:12],
+        "arbiter_problem_details": [{"code": "effect_deferred" if p.startswith("deferred ") else
+                                     "provider_failure" if p.startswith("llm error:") else "field_rejected",
+                                     "message": p} for p in problems],
+        "arbiter_repair": arbiter_repair,
+        "arbiter_raw": evidence.get("raw"),
+        "arbiter_validated": evidence.get("validated", {}),
+        "arbiter_attempts": evidence.get("attempts", []),
         "arbiter": arbiter_summary,
         "scenario_pressure": dict(update.get("scenario_pressure") or {}) if isinstance(update, dict) else {},
         "narrative": narrative,

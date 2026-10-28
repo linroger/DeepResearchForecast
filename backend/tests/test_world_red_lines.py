@@ -10,7 +10,7 @@ response options.  Facts that moved the same way for several periods are marked 
 """
 
 from app.services import world_update as wu
-from app.services.agent_decision import build_option_menu
+from app.services.agent_decision import build_option_menu, catalog_for
 from app.services.world_model import WorldModel
 
 
@@ -32,20 +32,25 @@ def _world():
 
 
 def _move(agent_id, name, option_id, kind, targets=(), statement=""):
+    """Old naval fixtures borrowed sovereign security powers; C11 uses the international organization's canonical pressure move."""
+    option = next(t.to_option(label=option_id.replace("_", " "))
+                  for t in catalog_for("international_org") if t.id == option_id)
     return {"agent_id": agent_id, "actor_name": name,
-            "option": {"id": option_id, "label": option_id.replace("_", " "), "kind": kind, "cost": 1, "lag": 0},
+            "option": option,
             "targets": list(targets), "magnitude": 0.8, "public_statement": statement, "status": "ok"}
 
 
 def _patrol(world, round_num=1):
     world.start_round(round_num, {"label": f"P{round_num}"})
-    rows = [_move(1, "Naval Coalition", "security_action", "coercive", ["Coastal State"],
+    rows = [_move(1, "Naval Coalition", "escalate_pressure", "coercive", ["Coastal State"],
                   "Escort missions will enter the strait's territorial waters.")]
     world.register_decisions(round_num, rows)
+    assert world.actors[1].last_action["status"] == "ok"
     return rows
 
 
 def test_the_arbiter_sees_the_red_lines_at_stake_and_the_contract():
+    """Old patrol metadata bypassed rights/costs; C11 uses an admitted canonical pressure move."""
     world = _world()
     rows = _patrol(world)
     prompt = wu.build_arbiter_prompt(world, 1, None, rows, {}, ["Open", "Closed"])
@@ -55,6 +60,7 @@ def test_the_arbiter_sees_the_red_lines_at_stake_and_the_contract():
 
 
 def test_a_crossing_that_holds_up_becomes_an_event_aimed_at_the_actor():
+    """Old patrol used unavailable sovereign rights; canonical pressure now precedes the same crossing regression."""
     world = _world()
     _patrol(world)
     update, problems = wu.validate_arbiter_update({"red_line_crossings": [
@@ -79,6 +85,7 @@ def test_a_crossing_that_holds_up_becomes_an_event_aimed_at_the_actor():
 
 
 def test_crossings_that_do_not_hold_up_are_dropped():
+    """Old patrol admission was implicit; C11 first proves a valid move before rejecting unsupported crossings."""
     world = _world()
     _patrol(world)
     update, problems = wu.validate_arbiter_update({"red_line_crossings": [
@@ -102,7 +109,9 @@ def test_red_line_matching_is_about_the_actors_own_text():
 
 
 def test_trends_are_marked_after_two_periods_the_same_way():
+    """Old trend fixture accidentally used default damping; isolate trend formatting with all three controls explicitly off."""
     world = _world()
+    world.settings.update(max_change_ratio=None, reversion_kappa=None, max_drift_ratio=None)
     var = world.variables["tanker_insurance_premium"]
     for rnd, value in ((1, 0.3), (2, 0.45), (3, 0.6)):
         world.start_round(rnd, {"label": f"P{rnd}"})

@@ -5,10 +5,11 @@ Report API路由
 
 import hashlib
 import os
+import re
 import time
 import traceback
 import threading
-from flask import request, jsonify, send_file, send_from_directory, Response
+from flask import request, jsonify, send_file, Response
 
 from . import report_bp
 from ..config import Config
@@ -17,6 +18,7 @@ from ..services import simulation_record_contract as _src
 from ..services.exec_brief import _load_pinned_simulation_policy as _pinned_simulation_policy
 from ..services.pipeline_orchestrator import load_research_dossier_for_simulation
 from ..services.backtest_mode import pipeline_for_simulation
+from ..services.target_pipeline import TargetPipelineError
 from ..services.simulation_manager import SimulationManager
 from ..models.project import ProjectManager
 from ..models.task import TaskManager, TaskStatus
@@ -39,6 +41,9 @@ def _verify_world_report_request():
         elif request.endpoint in {"report.generate_report", "report.chat_with_report_agent"}:
             data = request.get_json(silent=True) or {}
             if data.get("simulation_id"):
+                owner = pipeline_for_simulation(data["simulation_id"])
+                if _target_report_requested(data["simulation_id"], owner):
+                    return None  # Target admission below never reads legacy state.
                 load_simulation_world(data["simulation_id"])
     except (WorldError, OSError, ValueError, KeyError, TypeError):
         return jsonify({"success": False, "error": "World result integrity verification failed",
@@ -387,6 +392,139 @@ def _manual_report_owner_kwargs(owner):
             "base_simulation_id": base_simulation_id}
 
 
+def _target_report_requested(simulation_id, owner):
+    """Recognize damaged target pins too, so they cannot fall back to legacy."""
+    options = (owner or {}).get("options") or {}
+    if (options.get("forecast_authority") == "target-first-v1"
+            or options.get("simulation_engine") == "target-first-v1"
+            or "target_case_binding" in options
+            or str((owner or {}).get("graph_id") or "").startswith("target_graph_")):
+        return True
+    if isinstance(simulation_id, str) and re.fullmatch(r"sim_[A-Za-z0-9_-]{1,100}", simulation_id):
+        return any(os.path.lexists(os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id, name))
+                   for name in ("target_case.json", "target_input.json", "target_simulation.json"))
+    return False
+
+
+def _target_report_inputs(simulation_id, owner):
+    """Freeze validated producer inputs before cache reuse or worker dispatch.
+
+    Regeneration is a consumer of the existing comparison receipt. It never
+    enrolls a new pair, rewrites producer manifests, or substitutes current policy.
+    """
+    if not _target_report_requested(simulation_id, owner):
+        return None
+    from werkzeug.exceptions import HTTPException
+    from .graph import _target_id, _target_pipeline, _target_artifact, _target_read_json
+    from ..services import target_pipeline as tp
+    from ..services.pipeline_orchestrator import PipelineState
+    from ..services.official_data import bridge_module
+    from ..services.forecast_aggregator import pin_aggregation_policy
+    from ..services.forecast_tournament import run_forecast_tournament
+    from ..services.news_market_context import _validated_copy as validate_news_context
+    from ..services.target_report import build_target_report
+    try:
+        _target_id(simulation_id, "sim_")
+        if not owner or owner.get("simulation_id") != simulation_id:
+            raise ValueError("Target simulation owner is missing or mismatched")
+        pipeline_id = owner["pipeline_id"]
+        current = _target_pipeline(pipeline_id)
+        if any(current.get(key) != owner.get(key) for key in
+               ("simulation_id", "graph_id", "prompt", "options", "handoff_dir")):
+            raise ValueError("Target owner changed during admission")
+        state = PipelineState.from_dict(owner)
+        options = state.options
+        if options.get("simulation_engine") != tp.AUTHORITY:
+            raise ValueError("Target authority and engine pins differ")
+        settings = tp.normalize_target_options(tp.AUTHORITY, options.get("target_simulation"))["target_simulation"]
+        if settings != options.get("target_simulation"):
+            raise ValueError("Complete saved target simulation settings are required")
+        binding = options.get("target_case_binding")
+        if not isinstance(binding, dict) or not isinstance(binding.get("caseHash"), str) or not re.fullmatch(
+                r"[a-f0-9]{64}", binding["caseHash"]):
+            raise ValueError("Frozen target caseHash is required")
+        for stage in ("research", "prepare", "run"):
+            if (stage not in state.stages or state.stages[stage].status != "completed"
+                    or not tp.validate_stage(state, stage)):
+                raise ValueError(f"Target {stage} completion or artifact manifest is invalid")
+        fc = bridge_module("forecast_case")
+        root = Config.OASIS_SIMULATION_DATA_DIR
+        case = fc.validate_case(_target_artifact(pipeline_id, "target_case", root,
+                                                simulation_id, "target_case.json"))
+        digest = fc.case_hash(case)
+        if binding != {"authority": tp.AUTHORITY, "caseId": case["caseId"], "caseHash": digest,
+                       "questionHash": tp._digest(state.prompt), "policyVersion": 1}:
+            raise ValueError("Frozen target case binding differs")
+        research_case = fc.validate_case(_target_artifact(pipeline_id, "forecast_case", Config.PIPELINE_DATA_DIR,
+                                                         pipeline_id, "handoff", "forecast_case.json"))
+        if fc.case_hash(research_case) != digest or case["question"].strip() != state.prompt.strip():
+            raise ValueError("Target case differs from the admitted research question or case")
+        inputs = _target_artifact(pipeline_id, "target_input", root, simulation_id, "target_input.json")
+        if inputs != {"schemaVersion": "target-input/v1", "pipelineId": pipeline_id,
+                      "caseHash": digest, "simulation": settings,
+                      "structure": fc.simulation_projection(case), "simulationWeight": 0.0,
+                      "decisionBudget": options.get("target_decision_budget_v1", {"max_calls": 128})}:
+            raise ValueError("Target inputs differ from the frozen case or settings")
+        result = _target_artifact(pipeline_id, "target_simulation", root, simulation_id, "target_simulation.json")
+        target_evidence = _target_artifact(pipeline_id, "target_evidence", Config.PIPELINE_DATA_DIR,
+                                          pipeline_id, "handoff", "target_evidence.json")
+        evidence_digest = options.get("target_evidence_binding")
+        if (not isinstance(evidence_digest, str) or not re.fullmatch(r"[a-f0-9]{64}", evidence_digest)
+                or tp._digest(target_evidence) != evidence_digest):
+            raise ValueError("Frozen target evidence binding differs")
+        if (set(target_evidence) != {"schemaVersion", "caseHash", "official_data", "markets", "news_market_context"}
+                or target_evidence["schemaVersion"] != "target-evidence/v1"
+                or target_evidence["caseHash"] != digest):
+            raise ValueError("Target evidence must match the frozen case")
+        validate_news_context(target_evidence["news_market_context"])
+        bundle = build_target_report(case, result, official_data=target_evidence["official_data"],
+                                     markets=target_evidence["markets"])
+        if options.get("aggregation_policy_v1") is None:
+            raise ValueError("Saved target aggregation policy is required")
+        policy = pin_aggregation_policy(options["aggregation_policy_v1"], authority="research")
+        if policy["authority"] != "research" or policy["method"] != "identity":
+            raise ValueError("Target reports require the saved research identity policy")
+        saved_estimators = _target_artifact(pipeline_id, "target_estimators", Config.PIPELINE_DATA_DIR,
+                                           pipeline_id, "handoff", "target_estimators.json")
+        estimator_digest = options.get("target_estimators_binding")
+        if (not isinstance(estimator_digest, str) or not re.fullmatch(r"[a-f0-9]{64}", estimator_digest)
+                or tp._digest(saved_estimators) != estimator_digest):
+            raise ValueError("Frozen target estimator evidence binding differs")
+        # This public consumer validates case/policy/authority/proposition joins.
+        # The saved envelope path never invokes estimation gateways.
+        run_forecast_tournament(bundle["forecast"], case=case, policy=policy,
+                                saved_estimators=saved_estimators, enabled=False)
+        # Enrollment precedes publication; a failed first report has no report
+        # stage seal yet. Its existing registry receipt still binds these inputs.
+        # A present seal is always enforced, including on failed retries.
+        manifest = _target_read_json(Config.PIPELINE_DATA_DIR, pipeline_id, "handoff", "manifest.json")
+        receipt = (_target_artifact(pipeline_id, "target_comparison", root, simulation_id, "target_comparison.json")
+                   if "target_comparison" in manifest else
+                   _target_read_json(root, simulation_id, "target_comparison.json"))
+        if (receipt.get("schemaVersion") != "target-comparison/v1" or receipt.get("caseId") != case["caseId"]
+                or receipt.get("caseHash") != digest or receipt.get("simulationHash") != tp._digest(result)):
+            raise ValueError("Target comparison receipt differs from the frozen inputs")
+        owner_kwargs = _manual_report_owner_kwargs(owner)
+        if options.get("base_pipeline_id"):
+            if (receipt.get("status") != "diagnostic_fork" or receipt.get("productionEligible") is not False
+                    or receipt.get("basePipelineId") != options["base_pipeline_id"]
+                    or not owner_kwargs["base_simulation_id"]):
+                raise ValueError("Target fork comparison or baseline owner is invalid")
+        else:
+            original = _target_read_json(Config.PIPELINE_DATA_DIR, "_target_comparisons",
+                                         tp._digest(case["caseId"]) + ".json")
+            if receipt != original:
+                raise ValueError("Target comparison differs from its primary enrollment")
+        if state.graph_id != "target_graph_" + pipeline_id:
+            raise ValueError("Target graph identity differs from its owner")
+        return {"graph_id": state.graph_id, "simulation_id": simulation_id,
+                "simulation_requirement": case["question"], "forecast_case": case,
+                "target_simulation": result, "aggregation_policy": policy,
+                "saved_estimators": saved_estimators, "target_evidence": target_evidence, **owner_kwargs}
+    except (HTTPException, OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        raise TargetPipelineError("Target report input integrity verification failed: " + str(exc)) from exc
+
+
 @report_bp.route('/generate', methods=['POST'])
 def generate_report():
     """
@@ -424,19 +562,16 @@ def generate_report():
         
         force_regenerate = data.get('force_regenerate', False)
         
-        # 获取模拟信息
-        manager = SimulationManager()
-        state = manager.get_simulation(simulation_id)
-        
-        if not state:
-            return jsonify({
-                "success": False,
-                "error": f"模拟不存在: {simulation_id}"
-            }), 404
-
         _owner = pipeline_for_simulation(simulation_id)
-        _dossier = load_research_dossier_for_simulation(simulation_id)
-        _owner_kwargs = _manual_report_owner_kwargs(_owner)
+        _target_inputs = _target_report_inputs(simulation_id, _owner)
+        if _target_inputs is None:
+            # Legacy simulations retain their existing state, dossier and project path.
+            manager = SimulationManager()
+            state = manager.get_simulation(simulation_id)
+            if not state:
+                return jsonify({"success": False, "error": f"模拟不存在: {simulation_id}"}), 404
+            _dossier = load_research_dossier_for_simulation(simulation_id)
+            _owner_kwargs = _manual_report_owner_kwargs(_owner)
         
         # 检查是否已有报告
         if not force_regenerate:
@@ -454,22 +589,21 @@ def generate_report():
                     }
                 })
         
-        # 获取项目信息
-        project = ProjectManager.get_project(state.project_id)
-        if not project:
-            return jsonify({
-                "success": False,
-                "error": f"项目不存在: {state.project_id}"
-            }), 404
-        
-        graph_id = state.graph_id or project.graph_id
+        if _target_inputs is not None:
+            graph_id = _target_inputs["graph_id"]
+            simulation_requirement = _target_inputs["simulation_requirement"]
+        else:
+            project = ProjectManager.get_project(state.project_id)
+            if not project:
+                return jsonify({"success": False, "error": f"项目不存在: {state.project_id}"}), 404
+            graph_id = state.graph_id or project.graph_id
+            simulation_requirement = _owner.get("prompt") if _owner else project.simulation_requirement
         if not graph_id:
             return jsonify({
                 "success": False,
                 "error": "缺少图谱ID，请确保已构建图谱"
             }), 400
         
-        simulation_requirement = _owner.get("prompt") if _owner else project.simulation_requirement
         if not simulation_requirement:
             return jsonify({
                 "success": False,
@@ -502,7 +636,7 @@ def generate_report():
                 )
                 
                 # 创建Report Agent（T4.1: best-effort 钉入研究档案，找不到则回退冷图路径）
-                agent = ReportAgent(
+                agent = ReportAgent(**_target_inputs) if _target_inputs is not None else ReportAgent(
                     graph_id=graph_id,
                     simulation_id=simulation_id,
                     simulation_requirement=simulation_requirement,
@@ -539,7 +673,9 @@ def generate_report():
                     report.status == ReportStatus.COMPLETED
                     and ReportManager.is_publishable(report.report_id)
                 )
-                if force_regenerate and publishable:
+                # Target pipeline manifests still own their original report ID.
+                # A manual rendition cannot retire those frozen publication bytes.
+                if force_regenerate and publishable and _target_inputs is None:
                     try:
                         removed = ReportManager.delete_other_reports_for_simulation(
                             simulation_id, keep_report_id=report.report_id
@@ -586,6 +722,8 @@ def generate_report():
             }
         })
         
+    except TargetPipelineError as e:
+        return jsonify(success=False, code="target_report_integrity", error=str(e)), 409
     except Exception as e:
         logger.error(f"启动报告生成任务失败: {str(e)}")
         return jsonify({
@@ -1729,6 +1867,12 @@ def chat_with_report_agent():
                 "success": False,
                 "error": "请提供 message"
             }), 400
+
+        _owner = pipeline_for_simulation(simulation_id)
+        if _target_report_inputs(simulation_id, _owner) is not None:
+            return jsonify(success=False, code="target_report_chat_unsupported",
+                           error="Chat is not supported for structured target reports. Use the frozen report and target diagnostics.",
+                           forecast_authority="target-first-v1"), 409
         
         # 获取模拟和项目信息
         manager = SimulationManager()
@@ -1754,7 +1898,6 @@ def chat_with_report_agent():
                 "error": "缺少图谱ID"
             }), 400
         
-        _owner = pipeline_for_simulation(simulation_id)
         simulation_requirement = (_owner.get("prompt") if _owner else project.simulation_requirement) or ""
         
         # 创建Agent并进行对话（T4.1: best-effort 钉入研究档案）
@@ -1780,6 +1923,8 @@ def chat_with_report_agent():
             "data": result
         })
         
+    except TargetPipelineError as e:
+        return jsonify(success=False, code="target_report_integrity", error=str(e)), 409
     except Exception as e:
         logger.error(f"对话失败: {str(e)}")
         return jsonify({

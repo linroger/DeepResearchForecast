@@ -1,0 +1,649 @@
+{
+  "schema": "reader-signals-semantic-diff/v1",
+  "export": "/private/tmp/drf-target-reader-signals-api-export-20261028T042500Z/pytest-tmp/test_the_panel_fixture_is_what0/world_state.reflexive.actual.json",
+  "fixture": "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/frontend/tests/fixtures/world/world_state.reflexive.json",
+  "old_sha256": "767984c35d7ff39c6fa102771fc852ce8cba6c60b4853088f6b9f8f11c2c9472",
+  "new_sha256": "6821a4bda2f7419e8b81db8efe7253cdffdfb6e684826fc28cdb882e99debcae",
+  "top_level_fields_preserved": true,
+  "removed_object_fields": [],
+  "changes": [
+    {
+      "path": "/actors/0/capacity_per_round",
+      "op": "replace",
+      "old": 2,
+      "new": 3
+    },
+    {
+      "path": "/actors/0/last_action/effective_round",
+      "op": "add",
+      "new": 4
+    },
+    {
+      "path": "/actors/0/last_action/label",
+      "op": "replace",
+      "old": "break alliance",
+      "new": "Withdraw from an alliance or agreement"
+    },
+    {
+      "path": "/actors/0/last_action/lag",
+      "op": "add",
+      "new": 0
+    },
+    {
+      "path": "/actors/0/last_action/reversibility",
+      "op": "replace",
+      "old": "",
+      "new": "sticky"
+    },
+    {
+      "path": "/actors/0/track_record/lapsed",
+      "op": "replace",
+      "old": 0,
+      "new": 1
+    },
+    {
+      "path": "/actors/0/track_record/resolved",
+      "op": "replace",
+      "old": 1,
+      "new": 2
+    },
+    {
+      "path": "/actors/1/capacity_per_round",
+      "op": "replace",
+      "old": 2,
+      "new": 3
+    },
+    {
+      "path": "/actors/1/last_action/effective_round",
+      "op": "add",
+      "new": 5
+    },
+    {
+      "path": "/actors/1/last_action/label",
+      "op": "replace",
+      "old": "accept:i3 1",
+      "new": "Accept United States Government's offer [i3_1] on exactly these terms: Both sides cut tariffs to 10% for 90 days — binds both sides"
+    },
+    {
+      "path": "/actors/1/last_action/lag",
+      "op": "add",
+      "new": 1
+    },
+    {
+      "path": "/actors/1/last_action/reversibility",
+      "op": "replace",
+      "old": "",
+      "new": "sticky"
+    },
+    {
+      "path": "/actors/1/last_action/targets",
+      "op": "replace",
+      "old": [],
+      "new": [
+        "United States Government"
+      ]
+    },
+    {
+      "path": "/brief",
+      "op": "replace",
+      "old": "# WORLD STATE (after 2026-07)\n## Key facts\n- US tariff on Chinese goods: 145%\n## Moves last period\n- China Ministry of Commerce: accept:i3 1 — \"Agreed.\"\n- United States Government: break alliance → China Ministry of Commerce — \"We withdraw from the pause.\"\n## Offers and agreements\n- Agreement [i3_1]: China Ministry of Commerce accepted United States Government's offer — Both sides cut tariffs to 10% for 90 days (both sides' obligations due period 5)\n- Breach [i3_1]: United States Government broke its agreement with China Ministry of Commerce — United States Government withdrew: break alliance → China Ministry of Commerce\n## Track records\n- United States Government: kept 0 of 1 commitments (1 broken); moves 1 succeeded\n- China Ministry of Commerce: moves 1 partly succeeded",
+      "new": "# WORLD STATE (after 2026-07)\n## Key facts\n- US tariff on Chinese goods: 27%\n## Moves last period\n- China Ministry of Commerce: Accept United States Government's offer [i3_1] on exactly these terms: Both sides cut tariffs to 10% for 90 days — binds both sides → United States Government — \"Agreed.\"\n- United States Government: Withdraw from an alliance or agreement → China Ministry of Commerce — \"We withdraw from the pause.\"\n## Consequences and events\n- United States Government's commitment lapsed: Impose or raise a tariff, sanction, export control or restriction (announced)\n## Offers and agreements\n- Agreement [i3_1]: China Ministry of Commerce accepted United States Government's offer — Both sides cut tariffs to 10% for 90 days (both sides' obligations due period 7)\n- Breach [i3_1]: United States Government broke its agreement with China Ministry of Commerce — United States Government withdrew: Withdraw from an alliance or agreement → China Ministry of Commerce\n## Track records\n- United States Government: kept 0 of 2 commitments (1 lapsed, 1 broken); moves 1 succeeded\n- China Ministry of Commerce: moves 1 partly succeeded"
+    },
+    {
+      "path": "/digest",
+      "op": "replace",
+      "old": "Washington walks away.\nMoves:\n- China Ministry of Commerce: accept:i3 1: \"Agreed.\"\n- United States Government: break alliance (→ China Ministry of Commerce): \"We withdraw from the pause.\"\nOffers and agreements:\n- Agreement [i3_1]: China Ministry of Commerce accepted United States Government's offer — Both sides cut tariffs to 10% for 90 days (both sides' obligations due period 5)\n- Breach [i3_1]: United States Government broke its agreement with China Ministry of Commerce — United States Government withdrew: break alliance → China Ministry of Commerce\nAlliances and rivalries:\n- United States Government — China Ministry of Commerce: neutral (closer)",
+      "new": "Washington walks away.\nMoves:\n- China Ministry of Commerce: Accept United States Government's offer [i3_1] on exactly these terms: Both sides cut tariffs to 10% for 90 days — binds both sides (→ United States Government): \"Agreed.\"\n- United States Government: Withdraw from an alliance or agreement (→ China Ministry of Commerce): \"We withdraw from the pause.\"\nEvents and consequences:\n- United States Government's commitment lapsed: Impose or raise a tariff, sanction, export control or restriction (announced)\nOffers and agreements:\n- Agreement [i3_1]: China Ministry of Commerce accepted United States Government's offer — Both sides cut tariffs to 10% for 90 days (both sides' obligations due period 7)\n- Breach [i3_1]: United States Government broke its agreement with China Ministry of Commerce — United States Government withdrew: Withdraw from an alliance or agreement → China Ministry of Commerce\nAlliances and rivalries:\n- United States Government — China Ministry of Commerce: neutral (closer)"
+    },
+    {
+      "path": "/history/0/arbiter_problems",
+      "op": "replace",
+      "old": [],
+      "new": [
+        "deferred 'us_tariff_on_chinese_goods' for action lag (1 periods)"
+      ]
+    },
+    {
+      "path": "/history/0/deterministic/actions/0",
+      "op": "replace",
+      "old": "impose measure → China Ministry of Commerce",
+      "new": "Impose or raise a tariff, sanction, export control or restriction → China Ministry of Commerce"
+    },
+    {
+      "path": "/history/0/diff/variables_changed",
+      "op": "replace",
+      "old": [
+        {
+          "from": 20.0,
+          "id": "us_tariff_on_chinese_goods",
+          "name": "US tariff on Chinese goods",
+          "to": 145.0,
+          "unit": "%"
+        }
+      ],
+      "new": []
+    },
+    {
+      "path": "/history/0/headline",
+      "op": "replace",
+      "old": "2026-04: 1 decisions · 1 facts changed · 0 events · 1 red line crossed · arbiter=applied · The tariff jumps; Beijing calls it a red line.",
+      "new": "2026-04: 1 decisions · 0 facts changed · 0 events · 1 red line crossed · arbiter=applied · The tariff jumps; Beijing calls it a red line."
+    },
+    {
+      "path": "/history/1/deterministic/actions/0",
+      "op": "replace",
+      "old": "impose measure → United States Government",
+      "new": "Counter United States Government's move (United States Government crossed China Ministry of Commerce's red line: No tari…) → United States Government"
+    },
+    {
+      "path": "/history/1/deterministic/effects_fired",
+      "op": "replace",
+      "old": [],
+      "new": [
+        "executive order"
+      ]
+    },
+    {
+      "path": "/history/1/diff/relationships_changed",
+      "op": "replace",
+      "old": [],
+      "new": [
+        {
+          "direction": "farther",
+          "from": "adversarial",
+          "polarity": -0.3925,
+          "source": "United States Government",
+          "target": "China Ministry of Commerce",
+          "to": "adversarial"
+        }
+      ]
+    },
+    {
+      "path": "/history/1/diff/variables_changed",
+      "op": "replace",
+      "old": [],
+      "new": [
+        {
+          "from": 20.0,
+          "id": "us_tariff_on_chinese_goods",
+          "name": "US tariff on Chinese goods",
+          "to": 27.0,
+          "unit": "%"
+        }
+      ]
+    },
+    {
+      "path": "/history/1/headline",
+      "op": "replace",
+      "old": "2026-05: 2 decisions · 0 facts changed · 0 events · arbiter=applied · Retaliation follows.",
+      "new": "2026-05: 2 decisions · 1 facts changed · 0 events · arbiter=applied · Retaliation follows."
+    },
+    {
+      "path": "/history/2/deterministic/actions/0",
+      "op": "replace",
+      "old": "open talks → China Ministry of Commerce",
+      "new": "Open or join negotiations with another actor → China Ministry of Commerce"
+    },
+    {
+      "path": "/history/2/diff/relationships_changed/0/polarity",
+      "op": "replace",
+      "old": -0.136,
+      "new": -0.2785
+    },
+    {
+      "path": "/history/2/diff/relationships_changed/0/to",
+      "op": "replace",
+      "old": "neutral",
+      "new": "adversarial"
+    },
+    {
+      "path": "/history/3/deterministic/actions/0",
+      "op": "replace",
+      "old": "accept:i3 1",
+      "new": "Accept United States Government's offer [i3_1] on exactly these terms: Both sides cut tariffs to 10% for 90 days — binds both sides → United States Government"
+    },
+    {
+      "path": "/history/3/deterministic/actions/1",
+      "op": "replace",
+      "old": "break alliance → China Ministry of Commerce",
+      "new": "Withdraw from an alliance or agreement → China Ministry of Commerce"
+    },
+    {
+      "path": "/history/3/deterministic/breaches/0",
+      "op": "replace",
+      "old": "Breach [i3_1]: United States Government broke its agreement with China Ministry of Commerce — United States Government withdrew: break alliance → China Ministry of Commerce",
+      "new": "Breach [i3_1]: United States Government broke its agreement with China Ministry of Commerce — United States Government withdrew: Withdraw from an alliance or agreement → China Ministry of Commerce"
+    },
+    {
+      "path": "/history/3/deterministic/commitments_lapsed",
+      "op": "replace",
+      "old": [],
+      "new": [
+        "United States Government: Impose or raise a tariff, sanction, export control or restriction (announced)"
+      ]
+    },
+    {
+      "path": "/history/3/deterministic/offers_answered/0",
+      "op": "replace",
+      "old": "Agreement [i3_1]: China Ministry of Commerce accepted United States Government's offer — Both sides cut tariffs to 10% for 90 days (both sides' obligations due period 5)",
+      "new": "Agreement [i3_1]: China Ministry of Commerce accepted United States Government's offer — Both sides cut tariffs to 10% for 90 days (both sides' obligations due period 7)"
+    },
+    {
+      "path": "/history/3/diff/relationships_changed/0/from",
+      "op": "replace",
+      "old": "neutral",
+      "new": "adversarial"
+    },
+    {
+      "path": "/history/3/diff/relationships_changed/0/polarity",
+      "op": "replace",
+      "old": -0.0845,
+      "new": -0.227
+    },
+    {
+      "path": "/recent_events",
+      "op": "replace",
+      "old": [
+        {
+          "action_kind": "policy",
+          "actors": [
+            "United States Government"
+          ],
+          "description": "impose measure → China Ministry of Commerce",
+          "kind": "action",
+          "option_id": "impose_measure",
+          "period_label": "2026-04",
+          "round": 1,
+          "source": "decision",
+          "statement": "Tariffs on Chinese goods rise to 145% from Thursday.",
+          "targets": [
+            "China Ministry of Commerce"
+          ],
+          "variable_ids": []
+        },
+        {
+          "actors": [
+            "United States Government"
+          ],
+          "description": "United States Government crossed China Ministry of Commerce's red line: No tariffs above 100% on Chinese goods — 145% announced",
+          "kind": "red_line",
+          "option_id": "impose_measure",
+          "period_label": "2026-04",
+          "round": 1,
+          "source": "arbiter",
+          "targets": [
+            "China Ministry of Commerce"
+          ],
+          "variable_ids": []
+        },
+        {
+          "action_kind": "policy",
+          "actors": [
+            "China Ministry of Commerce"
+          ],
+          "description": "impose measure → United States Government",
+          "kind": "action",
+          "option_id": "impose_measure",
+          "period_label": "2026-05",
+          "round": 2,
+          "source": "decision",
+          "statement": "Counter-tariffs of 125% take effect.",
+          "targets": [
+            "United States Government"
+          ],
+          "variable_ids": []
+        },
+        {
+          "action_kind": "wait",
+          "actors": [
+            "United States Government"
+          ],
+          "description": "United States Government holds position",
+          "kind": "action",
+          "option_id": "hold_position",
+          "period_label": "2026-05",
+          "round": 2,
+          "source": "decision",
+          "targets": [],
+          "variable_ids": []
+        },
+        {
+          "action_kind": "coalition",
+          "actors": [
+            "United States Government"
+          ],
+          "description": "open talks → China Ministry of Commerce",
+          "kind": "action",
+          "option_id": "open_talks",
+          "period_label": "2026-06",
+          "round": 3,
+          "source": "decision",
+          "statement": "We propose a 90-day pause.",
+          "targets": [
+            "China Ministry of Commerce"
+          ],
+          "variable_ids": []
+        },
+        {
+          "actors": [
+            "United States Government"
+          ],
+          "description": "United States Government made an offer to China Ministry of Commerce [i3_1]: Both sides cut tariffs to 10% for 90 days (answer due by period 5)",
+          "kind": "offer",
+          "option_id": "open_talks",
+          "period_label": "2026-06",
+          "round": 3,
+          "source": "interaction",
+          "targets": [
+            "China Ministry of Commerce"
+          ],
+          "variable_ids": []
+        },
+        {
+          "action_kind": "coalition",
+          "actors": [
+            "China Ministry of Commerce"
+          ],
+          "description": "accept:i3 1",
+          "kind": "action",
+          "option_id": "accept:i3_1",
+          "period_label": "2026-07",
+          "round": 4,
+          "source": "decision",
+          "statement": "Agreed.",
+          "targets": [],
+          "variable_ids": []
+        },
+        {
+          "actors": [
+            "China Ministry of Commerce",
+            "United States Government"
+          ],
+          "description": "Agreement [i3_1]: China Ministry of Commerce accepted United States Government's offer — Both sides cut tariffs to 10% for 90 days (both sides' obligations due period 5)",
+          "kind": "agreement",
+          "option_id": "open_talks",
+          "period_label": "2026-07",
+          "round": 4,
+          "source": "interaction",
+          "statement": "Agreed.",
+          "targets": [
+            "United States Government"
+          ],
+          "variable_ids": []
+        },
+        {
+          "action_kind": "coalition",
+          "actors": [
+            "United States Government"
+          ],
+          "description": "break alliance → China Ministry of Commerce",
+          "kind": "action",
+          "option_id": "break_alliance",
+          "period_label": "2026-07",
+          "round": 4,
+          "source": "decision",
+          "statement": "We withdraw from the pause.",
+          "targets": [
+            "China Ministry of Commerce"
+          ],
+          "variable_ids": []
+        },
+        {
+          "actors": [
+            "United States Government"
+          ],
+          "description": "Breach [i3_1]: United States Government broke its agreement with China Ministry of Commerce — United States Government withdrew: break alliance → China Ministry of Commerce",
+          "kind": "breach",
+          "option_id": "open_talks",
+          "period_label": "2026-07",
+          "round": 4,
+          "source": "interaction",
+          "targets": [
+            "China Ministry of Commerce"
+          ],
+          "variable_ids": []
+        }
+      ],
+      "new": [
+        {
+          "action_kind": "policy",
+          "actors": [
+            "United States Government"
+          ],
+          "description": "Impose or raise a tariff, sanction, export control or restriction → China Ministry of Commerce",
+          "kind": "action",
+          "option_id": "impose_measure",
+          "period_label": "2026-04",
+          "round": 1,
+          "source": "decision",
+          "statement": "Tariffs on Chinese goods rise to 145% from Thursday.",
+          "targets": [
+            "China Ministry of Commerce"
+          ],
+          "variable_ids": []
+        },
+        {
+          "actors": [
+            "United States Government"
+          ],
+          "description": "United States Government crossed China Ministry of Commerce's red line: No tariffs above 100% on Chinese goods — 145% announced",
+          "kind": "red_line",
+          "option_id": "impose_measure",
+          "period_label": "2026-04",
+          "round": 1,
+          "source": "arbiter",
+          "targets": [
+            "China Ministry of Commerce"
+          ],
+          "variable_ids": []
+        },
+        {
+          "action_kind": "coercive",
+          "actors": [
+            "China Ministry of Commerce"
+          ],
+          "description": "Counter United States Government's move (United States Government crossed China Ministry of Commerce's red line: No tari…) → United States Government",
+          "kind": "action",
+          "option_id": "respond_1_counter",
+          "period_label": "2026-05",
+          "round": 2,
+          "source": "decision",
+          "statement": "Counter-tariffs of 125% take effect.",
+          "targets": [
+            "United States Government"
+          ],
+          "variable_ids": []
+        },
+        {
+          "action_kind": "wait",
+          "actors": [
+            "United States Government"
+          ],
+          "description": "United States Government holds position",
+          "kind": "action",
+          "option_id": "hold_position",
+          "period_label": "2026-05",
+          "round": 2,
+          "source": "decision",
+          "targets": [],
+          "variable_ids": []
+        },
+        {
+          "actors": [],
+          "description": "executive order",
+          "kind": "consequence",
+          "period_label": "2026-05",
+          "round": 2,
+          "source": "arbiter",
+          "targets": [],
+          "variable_ids": [
+            "us_tariff_on_chinese_goods"
+          ]
+        },
+        {
+          "action_kind": "coalition",
+          "actors": [
+            "United States Government"
+          ],
+          "description": "Open or join negotiations with another actor → China Ministry of Commerce",
+          "kind": "action",
+          "option_id": "open_talks",
+          "period_label": "2026-06",
+          "round": 3,
+          "source": "decision",
+          "statement": "We propose a 90-day pause.",
+          "targets": [
+            "China Ministry of Commerce"
+          ],
+          "variable_ids": []
+        },
+        {
+          "actors": [
+            "United States Government"
+          ],
+          "description": "United States Government made an offer to China Ministry of Commerce [i3_1]: Both sides cut tariffs to 10% for 90 days (answer due by period 5)",
+          "kind": "offer",
+          "option_id": "open_talks",
+          "period_label": "2026-06",
+          "round": 3,
+          "source": "interaction",
+          "targets": [
+            "China Ministry of Commerce"
+          ],
+          "variable_ids": []
+        },
+        {
+          "actors": [
+            "United States Government"
+          ],
+          "description": "United States Government's commitment lapsed: Impose or raise a tariff, sanction, export control or restriction (announced)",
+          "kind": "consequence",
+          "round": 4,
+          "source": "commitment",
+          "targets": [],
+          "variable_ids": []
+        },
+        {
+          "action_kind": "coalition",
+          "actors": [
+            "China Ministry of Commerce"
+          ],
+          "description": "Accept United States Government's offer [i3_1] on exactly these terms: Both sides cut tariffs to 10% for 90 days — binds both sides → United States Government",
+          "kind": "action",
+          "option_id": "accept:i3_1",
+          "period_label": "2026-07",
+          "round": 4,
+          "source": "decision",
+          "statement": "Agreed.",
+          "targets": [
+            "United States Government"
+          ],
+          "variable_ids": []
+        },
+        {
+          "actors": [
+            "China Ministry of Commerce",
+            "United States Government"
+          ],
+          "description": "Agreement [i3_1]: China Ministry of Commerce accepted United States Government's offer — Both sides cut tariffs to 10% for 90 days (both sides' obligations due period 7)",
+          "kind": "agreement",
+          "option_id": "open_talks",
+          "period_label": "2026-07",
+          "round": 4,
+          "source": "interaction",
+          "statement": "Agreed.",
+          "targets": [
+            "United States Government"
+          ],
+          "variable_ids": []
+        },
+        {
+          "action_kind": "coalition",
+          "actors": [
+            "United States Government"
+          ],
+          "description": "Withdraw from an alliance or agreement → China Ministry of Commerce",
+          "kind": "action",
+          "option_id": "break_alliance",
+          "period_label": "2026-07",
+          "round": 4,
+          "source": "decision",
+          "statement": "We withdraw from the pause.",
+          "targets": [
+            "China Ministry of Commerce"
+          ],
+          "variable_ids": []
+        },
+        {
+          "actors": [
+            "United States Government"
+          ],
+          "description": "Breach [i3_1]: United States Government broke its agreement with China Ministry of Commerce — United States Government withdrew: Withdraw from an alliance or agreement → China Ministry of Commerce",
+          "kind": "breach",
+          "option_id": "open_talks",
+          "period_label": "2026-07",
+          "round": 4,
+          "source": "interaction",
+          "targets": [
+            "China Ministry of Commerce"
+          ],
+          "variable_ids": []
+        }
+      ]
+    },
+    {
+      "path": "/relationships/0/polarity",
+      "op": "replace",
+      "old": -0.0845,
+      "new": -0.227
+    },
+    {
+      "path": "/relationships/0/strength",
+      "op": "replace",
+      "old": 0.4175,
+      "new": 0.459
+    },
+    {
+      "path": "/summary/events",
+      "op": "replace",
+      "old": 10,
+      "new": 12
+    },
+    {
+      "path": "/variables/0/history/1/cause",
+      "op": "replace",
+      "old": "United States Government announced it: executive order",
+      "new": "executive order [damped: step≤50%/轮; 回归锚点κ=0.15; 累计漂移≤35%]"
+    },
+    {
+      "path": "/variables/0/history/1/round",
+      "op": "replace",
+      "old": 1,
+      "new": 2
+    },
+    {
+      "path": "/variables/0/history/1/source",
+      "op": "replace",
+      "old": "action",
+      "new": "effect"
+    },
+    {
+      "path": "/variables/0/history/1/value",
+      "op": "replace",
+      "old": 145.0,
+      "new": 27.0
+    },
+    {
+      "path": "/variables/0/provenance",
+      "op": "replace",
+      "old": "action",
+      "new": "effect"
+    },
+    {
+      "path": "/variables/0/value",
+      "op": "replace",
+      "old": 145.0,
+      "new": 27.0
+    }
+  ]
+}

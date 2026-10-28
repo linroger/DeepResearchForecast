@@ -34,6 +34,7 @@ from ..services.pipeline_orchestrator import (
 from ..services.world_simulation.admission import UNSET
 from ..services.world_simulation.contracts import WorldError
 from ..services.backtest_mode import BacktestRequestError
+from ..services.target_pipeline import TargetPipelineError, normalize_target_options
 from ..services.research_progress import (
     ResearchProgressLimitError,
     merged_research_progress_full,
@@ -105,10 +106,12 @@ def run_pipeline():
         # Preserve omission versus explicit null. start() resolves and revalidates
         # against the current configuration before creating any pipeline state.
         run_options = {key: data[key] for key in
-                       ('simulation_engine', 'world_spec', 'world_policy_spec', 'backtest') if key in data}
+                       ('simulation_engine', 'world_spec', 'world_policy_spec', 'backtest',
+                        'forecast_authority', 'target_simulation') if key in data}
 
         # 起飞前体检：把"研究跑完 40 分钟后才发现 Zep Key 是占位符"这类失败提前到现在
-        preflight_errors = preflight_pipeline(mode=mode, model=model)
+        target = normalize_target_options(data.get("forecast_authority"), data.get("target_simulation"))
+        preflight_errors = preflight_pipeline(mode="research_only" if target else mode, model=model)
         if preflight_errors:
             return jsonify({
                 "success": False,
@@ -135,6 +138,8 @@ def run_pipeline():
                 "status": state.status,
             },
         })
+    except TargetPipelineError as error:
+        return jsonify({"success": False, "error": str(error)}), 400
     except BacktestRequestError as error:
         return jsonify({"success": False, "error": f"Invalid backtest request: {error}"}), 400
     except WorldError as error:
@@ -167,7 +172,7 @@ def resume_pipeline(pipeline_id: str):
         existing = PipelineManager.load(pipeline_id)
         if existing is None:
             return jsonify({"success": False, "error": "管线不存在"}), 404
-        preflight_errors = preflight_pipeline(mode=existing.get("mode") or "full")
+        preflight_errors = preflight_pipeline(mode="research_only" if (existing.get("options") or {}).get("forecast_authority") == "target-first-v1" else existing.get("mode") or "full")
         if preflight_errors:
             return jsonify({
                 "success": False,
@@ -206,7 +211,8 @@ def continue_pipeline(pipeline_id: str):
             return jsonify({"success": False, "error": "管线不存在"}), 404
         # 继续会跑完整管线（建图/模拟/报告），按 full 模式预检配置
         preflight_errors = preflight_pipeline(
-            mode="full", model=(existing.get("options") or {}).get("research_model"))
+            mode="research_only" if (existing.get("options") or {}).get("forecast_authority") == "target-first-v1" else "full",
+            model=(existing.get("options") or {}).get("research_model"))
         if preflight_errors:
             return jsonify({
                 "success": False,
@@ -250,7 +256,7 @@ def fork_scenario(pipeline_id: str):
         overlay = request.get_json(silent=True) or {}
         if not (overlay.get("label") or "").strip():
             return jsonify({"success": False, "error": "缺少情景标签 label"}), 400
-        preflight_errors = preflight_pipeline(mode="full")
+        preflight_errors = preflight_pipeline(mode="research_only" if (existing.get("options") or {}).get("forecast_authority") == "target-first-v1" else "full")
         if preflight_errors:
             return jsonify({
                 "success": False,
@@ -404,7 +410,7 @@ def preflight():
             logger.warning("preflight format=full 降级到精简响应")
 
     simulation = simulation_readiness(mode=mode, simulation_engine=engine)
-    errors = preflight_pipeline(mode=mode, model=model) + simulation["errors"]
+    errors = preflight_pipeline(mode="research_only" if engine == "target-first-v1" else mode, model=model) + simulation["errors"]
     return jsonify({"success": True, "data": {
         **simulation, "ready": not errors, "errors": errors, "mode": mode,
     }})
@@ -759,7 +765,7 @@ def edit_dossier(pipeline_id: str):
     handoff = PipelineManager.resolve_handoff_dir(pipeline_id)
     if not os.path.isdir(handoff):
         return jsonify({"success": False, "error": "管线产物目录不存在"}), 404
-    if research_dossier_is_sealed(handoff):
+    if (data.get("options") or {}).get("forecast_authority") == "target-first-v1" or research_dossier_is_sealed(handoff):
         return jsonify({
             "success": False,
             "sealed": True,

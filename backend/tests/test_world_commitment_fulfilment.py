@@ -149,6 +149,7 @@ def test_accepting_second_offer_does_not_fulfil_first_agreement():
 
 
 def test_bound_delivery_is_only_an_attempt_until_matching_arbiter_success():
+    """Old bound fulfillment spent one unit; saved explicit fulfillment now costs zero, with the same proof gate."""
     world, agreement = _agreement()
     actor = world.actors[0]
     chosen = _obligation(world, 0, agreement)
@@ -158,14 +159,14 @@ def test_bound_delivery_is_only_an_attempt_until_matching_arbiter_success():
         {"actor": "Actor1", "reaction": "Deliver its own audited schedule next period."},
     ])
     assert decision.targets == ["Actor1"]
-    assert decision.option["cost"] == 1
+    assert decision.option["cost"] == 0
     assert decision.option["kind"] == "operational"
     assert decision.option["lag"] == 0
     assert chosen["description"] in decision.option["label"]
     before_count = len(actor.commitments)
     world.register_decisions(3, [decision.to_dict()])
     assert chosen["status"] == other["status"] == "due"
-    assert actor.capacity_used == 1
+    assert actor.capacity_used == 0
     assert actor.last_action["commitment_id"] == chosen["id"]
     assert actor.expectations == [{
         "round": 3, "about": "Actor1", "reaction": "Deliver its own audited schedule next period.",
@@ -263,13 +264,15 @@ def test_arbiter_off_or_failure_keeps_attempt_open(enabled, fail):
     (1, 3, 1, "pending", False),
     (1, 3, 2, "pending", True),
     (1, 3, 3, "pending", True),
-    (1, 3, 4, "pending", False),
+    (1, 3, 4, "pending", True),
+    (1, 3, 5, "pending", False),
     (1, 3, 3, "fulfilled", False),
     (1, 3, 3, "released", False),
     (1, 3, 3, "breached", False),
     (1, 3, 3, "lapsed", False),
 ])
 def test_delivery_menu_respects_creation_deadline_and_closed_states(made, due, current, status, eligible):
+    """Old menus offered fulfillment through due_round; C11 omits it but parses saved IDs through grace1."""
     world = _world()
     promise = world.actors[0].add_commitment("Publish audited accounts", made_round=made, due_round=due)
     promise["status"] = status  # Saved-state input, not manufactured delivery evidence.
@@ -277,14 +280,14 @@ def test_delivery_menu_respects_creation_deadline_and_closed_states(made, due, c
     option_id = f"fulfill:{promise['id']}"
     own = build_option_menu(world.actors[0], world, current)
     foreign = build_option_menu(world.actors[1], world, current)
-    assert (option_id in {o["id"] for o in own}) is eligible
+    assert option_id not in {o["id"] for o in own}
     assert option_id not in {o["id"] for o in foreign}
-    if not eligible:
-        assert not _parse(world, 0, current, option_id).ok
+    assert _parse(world, 0, current, option_id).ok is eligible
     assert not _parse(world, 1, current, option_id).ok
 
 
-def test_delivery_menu_prioritises_promises_and_remains_bounded():
+def test_delivery_menu_leaves_slots_for_moves_and_remains_bounded():
+    """Old delivery slots displaced moves and needed capacity; C11 uses a separate zero-cost list."""
     world, agreement = _agreement()
     world.actors[0].documented_plans = ["Build another plant", "Expand logistics"]
     for i in range(5):
@@ -296,11 +299,13 @@ def test_delivery_menu_prioritises_promises_and_remains_bounded():
     menu = build_option_menu(world.actors[0], world, 3, max_options=4)
     assert len(menu) <= 4
     assert menu[-1]["id"] == "hold_position"
-    assert all(o["id"].startswith("fulfill:") for o in menu[:-1])
-    assert f"fulfill:{_obligation(world, 0, agreement)['id']}" in {o["id"] for o in menu}
+    assert all(not o["id"].startswith("fulfill:") for o in menu)
+    assert menu[0]["id"].startswith("accept:")
     world.actors[0].capacity_used = world.actors[0].capacity_per_round
     assert not any(o["id"].startswith("fulfill:")
                    for o in build_option_menu(world.actors[0], world, 3))
+    promise = _obligation(world, 0, agreement)
+    assert _parse(world, 0, 3, "hold_position", deliveries=[promise["id"]]).ok
 
 
 @pytest.mark.parametrize("damage", [
@@ -428,6 +433,7 @@ def test_known_actor_id_survives_validation_when_display_names_collide():
 
 @pytest.mark.parametrize("targets", [None, [1], ["Unique receiving office"]])
 def test_counterparty_binding_survives_serialization_when_display_names_collide(targets):
+    """Old explicit fulfillment spent one unit; zero-cost compatibility still binds numeric counterparties."""
     world, agreement = _agreement()
     world.actors[1].aliases = ["Unique receiving office"]
     world.actors[2].name = world.actors[1].name
@@ -438,7 +444,7 @@ def test_counterparty_binding_survives_serialization_when_display_names_collide(
     assert row["targets"] == ["Actor1"]  # Human-facing names remain available.
     world.register_decisions(3, [row])
     assert world.actors[0].last_action["status"] == "ok"
-    assert world.actors[0].capacity_used == 1
+    assert world.actors[0].capacity_used == 0
     # The persisted current action must still bind the same numeric counterparty.
     world = WorldModel.from_dict(json.loads(json.dumps(world.to_dict())))
     promise = _obligation(world, 0, agreement)
@@ -485,11 +491,13 @@ def test_ambiguous_duplicate_attestation_cannot_leave_an_apparently_unique_succe
 
 
 def test_exact_option_id_is_required_and_custom_label_cannot_impersonate_delivery():
+    """Old tests read a fulfillment menu slot; C11 retains exact saved-ID parsing without such a slot."""
     world, agreement = _agreement()
     promise = _obligation(world, 0, agreement)
     world.start_round(3, _period(3))
-    option = next(o for o in build_option_menu(world.actors[0], world, 3)
-                  if o["id"] == f"fulfill:{promise['id']}")
+    saved = _parse(world, 0, 3, f"fulfill:{promise['id']}")
+    assert saved.ok
+    option = saved.option
     by_label = _parse(world, 0, 3, option["label"])
     assert by_label.status == "invalid"
     custom = _parse(world, 0, 3, "custom",
@@ -649,6 +657,7 @@ def test_c1_old_unreviewed_attempt_cannot_be_resolved_after_world_advances():
 
 
 def test_c1_saved_decision_round_cannot_be_relabelled_by_registration():
+    """Old stale rows were silent no-ops; C11 records invalid admission without relabelling the attempt."""
     world = _world()
     actor = world.actors[0]
     promise = actor.add_commitment("Deliver schedule", made_round=1, due_round=5)
@@ -657,12 +666,12 @@ def test_c1_saved_decision_round_cannot_be_relabelled_by_registration():
     assert saved_row["round"] == 2
     world.register_decisions(2, [saved_row])
     attempt = copy.deepcopy(promise["last_fulfillment_attempt"])
-    action = copy.deepcopy(actor.last_action)
     world.start_round(3, _period(3))
     assert actor.capacity_used == 0
     world.register_decisions(3, [saved_row])
     assert actor.capacity_used == 0
-    assert actor.last_action == action
+    assert actor.last_action["status"] == "invalid" and actor.last_action["round"] == 3
+    assert actor.last_action["resolution"] is None
     assert promise["last_fulfillment_attempt"] == attempt
     assert promise["status"] == "pending"
     assert _delivery_events(world) == []
@@ -740,6 +749,7 @@ def test_c4_delivery_extras_are_normalized_before_serialization_and_memory():
 
 
 def test_c5_long_pending_list_preserves_own_breach_in_default_private_prompt():
+    """Old debt breached at 4 and only one side broke; C11 breaches both after grace5, visible in brief6."""
     world, agreement = _agreement()
     actor = world.actors[0]
     for index in range(5):
@@ -748,22 +758,24 @@ def test_c5_long_pending_list_preserves_own_breach_in_default_private_prompt():
             made_round=2, due_round=10,
         )
     _advance(world, 3)
-    record = _advance(world, 4)
+    grace = _advance(world, 4)
+    assert grace["deterministic"]["breaches"] == []
+    record = _advance(world, 5)
     assert record["deterministic"]["breaches"]
     assert _obligation(world, 0, agreement)["status"] == "breached"
-    breach = next(e for e in world.events_in_round(4, ("breach",)) if actor.name in e.actors)
+    breach = next(e for e in world.events_in_round(5, ("breach",)) if e.actors[0] == actor.name)
     assert len(actor.pending_commitments()) == 5
     assert sum(len(c["description"]) for c in actor.pending_commitments()) > 900
-    world.start_round(5, _period(5))
+    world.start_round(6, _period(6))
     private_brief = world.render_private_brief(0)  # Main reserves 1300 characters for the richer brief.
     assert len(private_brief) <= 1300
     assert "Your simulated credibility (0–1): 0.35" in private_brief
     assert "Your commitment outcomes last period:" in private_brief
     assert breach.description in private_brief
     prompt = build_decision_prompt(
-        actor, world_clock="# WORLD CLOCK\nperiod-5 — round 5/5",
+        actor, world_clock="# WORLD CLOCK\nperiod-6 — round 6/6",
         public_brief=world.render_public_brief(), private_brief=private_brief,
-        options=build_option_menu(actor, world, 5), scenarios=(),
+        options=build_option_menu(actor, world, 6), scenarios=(),
         cast_names=[a.name for a in world.actors.values()],
     )
     assert private_brief in prompt
@@ -793,6 +805,7 @@ def test_saved_legacy_rows_preserve_closed_statuses_and_allow_unique_open_delive
 
 
 def test_delivery_and_breach_evidence_survive_save_load_without_duplicate_consequences(tmp_path):
+    """Old due-3 debt breached in round 4; C11 preserves it during grace and breaches in round 5."""
     world, agreement = _agreement()
     promise = _obligation(world, 0, agreement)
     counterpart = _obligation(world, 1, agreement)
@@ -818,7 +831,11 @@ def test_delivery_and_breach_evidence_survive_save_load_without_duplicate_conseq
 
     reputation_before_breach = loaded.actors[1].reputation
     relation_before_breach = next(iter(loaded.relationships.values())).polarity
-    record = _advance(loaded, 4)
+    grace = _advance(loaded, 4)
+    assert grace["deterministic"]["commitments_lapsed"] == []
+    assert grace["deterministic"]["breaches"] == []
+    assert _obligation(loaded, 1, loaded.interactions[agreement.id])["status"] == "due"
+    record = _advance(loaded, 5)
     assert record["deterministic"]["commitments_lapsed"]
     assert len(record["deterministic"]["breaches"]) == 1
     assert loaded.interactions[agreement.id].status == "breached"
@@ -830,7 +847,7 @@ def test_delivery_and_breach_evidence_survive_save_load_without_duplicate_conseq
     after_breach = loaded.to_dict()
     saved.write_text(json.dumps(after_breach), encoding="utf-8")
     resumed = WorldModel.from_dict(json.loads(saved.read_text(encoding="utf-8")))
-    next_record = _advance(resumed, 5)
+    next_record = _advance(resumed, 6)
     assert next_record["deterministic"]["breaches"] == []
     assert next_record["deterministic"]["commitments_lapsed"] == []
     assert len([e for e in resumed.events if e.kind == "breach"]) == 1
@@ -840,7 +857,7 @@ def test_delivery_and_breach_evidence_survive_save_load_without_duplicate_conseq
 
 
 class _CalendarDeliveryLLM:
-    """Script only model replies; discover offer/promise IDs from real prompts."""
+    """Old replies found menu fulfillment IDs; saved-ID replies now read the owned private commitment."""
 
     def __init__(self):
         self.provider = "offline"
@@ -869,10 +886,11 @@ class _CalendarDeliveryLLM:
                         "public_statement": "We accept the exchange of audited schedules.",
                         "scenario_commitment": "abstain"}
             if actor == "Actor0" and round_num == 3:
-                option = re.search(r"\[(fulfill:([^\]\s]+))\]", content)
-                assert option, "Delivery must be offered by the real commitment menu."
-                self.commitment_id = option.group(2)
-                return {"option_id": option.group(1),
+                private = content.split("- Your open commitments:", 1)[1].split("# DECIDE YOUR MOVE", 1)[0]
+                commitment = re.search(r"\[([^\]\s]+)\]", private)
+                assert commitment, "The actor must see its own persisted commitment ID."
+                self.commitment_id = commitment.group(1)
+                return {"option_id": f"fulfill:{self.commitment_id}",
                         "public_statement": "We submit our audited schedule to Actor1 for the agreed exchange.",
                         "private_rationale": "Attempt the delivery promised in the accepted agreement.",
                         "commitment": {"description": _EXTRA_PLEDGE, "due_periods": 2},
@@ -884,7 +902,7 @@ class _CalendarDeliveryLLM:
                         "public_statement": "Our annual staff picnic will be held on Friday.",
                         "private_rationale": "Publish an unrelated administrative announcement.",
                         "scenario_commitment": "abstain"}
-            if actor == "Actor0" and round_num == 5:
+            if actor == "Actor0" and round_num == 6:
                 # This response is gated by the actual prompt, not just the round
                 # number. Without persisted breach feedback the actor holds.
                 if (f"Breach [{self.agreement_id}]" in content
@@ -938,15 +956,16 @@ def calendar_harness(tmp_path, monkeypatch):
         *cfg["temporal_config"]["round_dates"],
         {"round": 3, "period_start": "2027-04-01", "period_end": "2027-06-30", "label": "2027-Q2"},
         {"round": 4, "period_start": "2027-07-01", "period_end": "2027-09-30", "label": "2027-Q3"},
+        {"round": 5, "period_start": "2027-10-01", "period_end": "2027-12-31", "label": "2027-Q4"},
     ]
     cfg["temporal_config"].update(
-        n_rounds=5, horizon_date="2027-09-30", horizon_text="Q3 2027",
-        span_days=(date(2027, 9, 30) - date(2026, 7, 11)).days,
+        n_rounds=6, horizon_date="2027-12-31", horizon_text="Q4 2027",
+        span_days=(date(2027, 12, 31) - date(2026, 7, 11)).days,
     )
-    cfg["time_config"]["total_simulation_hours"] = 5
-    cfg["world_model"]["horizon_date"] = "2027-09-30"
-    cfg["world_model"]["question"] = "Will the parties honour the schedule exchange by Q3 2027?"
-    cfg["world_state_seed"]["horizon_date"] = "2027-09-30"
+    cfg["time_config"]["total_simulation_hours"] = 6
+    cfg["world_model"]["horizon_date"] = "2027-12-31"
+    cfg["world_model"]["question"] = "Will the parties honour the schedule exchange by Q4 2027?"
+    cfg["world_state_seed"]["horizon_date"] = "2027-12-31"
     cfg["event_config"]["scheduled_events"] = []
     for actor in cfg["agent_configs"]:
         if actor["agent_id"] in (0, 1):
@@ -968,6 +987,7 @@ def _read_rows(path):
 def test_calendar_loop_delivery_breach_and_next_actor_feedback(
     calendar_harness, tmp_path, monkeypatch, resume_after_delivery,
 ):
+    """Old menu delivery and round-4 breach become saved-ID delivery, grace4, breach5 and feedback6."""
     cfg, sim_dir, envs, llm, rps, run, read_events = calendar_harness
     prior_calls = []
     saved_evidence = None
@@ -1014,9 +1034,9 @@ def test_calendar_loop_delivery_breach_and_next_actor_feedback(
     delivered = next(c for c in actors[0]["commitments"] if c["id"] == llm.commitment_id)
     owed = next(c for c in actors[1]["commitments"] if c["source"] == f"agreement:{agreement['id']}")
 
-    assert state["committed_round"] == 5
-    assert [h["round"] for h in history] == [1, 2, 3, 4, 5]
-    assert [d["round"] for d in digests] == [1, 2, 3, 4, 5]
+    assert state["committed_round"] == 6
+    assert [h["round"] for h in history] == [1, 2, 3, 4, 5, 6]
+    assert [d["round"] for d in digests] == [1, 2, 3, 4, 5, 6]
     assert all(h["arbiter_status"] == "applied" for h in history)
     assert agreement["status"] == "breached"
     assert delivered["status"] == "fulfilled"
@@ -1043,16 +1063,19 @@ def test_calendar_loop_delivery_breach_and_next_actor_feedback(
     round3 = history[2]
     round4 = history[3]
     round5 = history[4]
+    round6 = history[5]
     assert round3["arbiter"]["commitments_fulfilled"]
     assert round3["deterministic"]["breaches"] == []
-    assert len(round4["deterministic"]["commitments_lapsed"]) == 1
-    assert len(round4["deterministic"]["breaches"]) == 1
-    assert "Actor1" in round4["deterministic"]["breaches"][0]
-    assert round5["deterministic"]["breaches"] == []
-    changes = round4["diff"]["relationships_changed"]
+    assert round4["deterministic"]["commitments_lapsed"] == []
+    assert round4["deterministic"]["breaches"] == []
+    assert len(round5["deterministic"]["commitments_lapsed"]) == 1
+    assert len(round5["deterministic"]["breaches"]) == 1
+    assert "Actor1" in round5["deterministic"]["breaches"][0]
+    assert round6["deterministic"]["breaches"] == []
+    changes = round5["diff"]["relationships_changed"]
     assert len(changes) == 1 and changes[0]["direction"] == "farther"
     relation = next(r for r in state["world"]["relationships"] if {r["source"], r["target"]} == {0, 1})
-    assert [entry["round"] for entry in relation["history"]] == [1, 2, 4]
+    assert [entry["round"] for entry in relation["history"]] == [1, 2, 5]
     accepted, breached = relation["history"][-2:]
     assert accepted["to"] == pytest.approx(0.2775)
     assert breached["from"] == accepted["to"]
@@ -1060,23 +1083,23 @@ def test_calendar_loop_delivery_breach_and_next_actor_feedback(
     assert breached["to"] == pytest.approx(breached["from"] - 0.3)
     assert breached["cause"] == "Actor1 breached the agreement with Actor0"
     assert relation["polarity"] == breached["to"] == changes[0]["polarity"]
-    assert relation["last_changed_round"] == 4
-    assert round5["diff"]["relationships_changed"] == []
+    assert relation["last_changed_round"] == 5
+    assert round6["diff"]["relationships_changed"] == []
 
     world = WorldModel.from_dict(state["world"])
     delivery_events = _delivery_events(world)
     breaches = [e for e in state["world"]["events"] if e["kind"] == "breach"]
     assert len(delivery_events) == 1 and delivery_events[0]["round"] == 3
-    assert len(breaches) == 1 and breaches[0]["round"] == 4
+    assert len(breaches) == 1 and breaches[0]["round"] == 5
     assert "Actor1" in breaches[0]["description"]
     assert delivery_events[0]["description"] in digests[2]["digest"]
-    assert breaches[0]["description"] in digests[3]["digest"]
+    assert breaches[0]["description"] in digests[4]["digest"]
 
     action_by_actor_round = {(a["actor_name"], a["round"]): a for a in actions}
     assert len(action_by_actor_round) == len(actions)
     delivery_action = action_by_actor_round[("Actor0", 3)]
     unrelated_action = action_by_actor_round[("Actor1", 3)]
-    response_action = action_by_actor_round[("Actor0", 5)]
+    response_action = action_by_actor_round[("Actor0", 6)]
     assert delivery_action["status"] == "ok"
     assert delivery_action["option"]["id"] == f"fulfill:{llm.commitment_id}"
     assert delivery_action["targets"] == ["Actor1"]
@@ -1090,12 +1113,13 @@ def test_calendar_loop_delivery_breach_and_next_actor_feedback(
 
     decision_calls = [c for c in llm.calls if c["kind"] == "decision"]
     for actor in ("Actor0", "Actor1"):
-        assert [c["round"] for c in decision_calls if c["actor"] == actor] == [1, 2, 3, 4, 5]
-    assert [c["round"] for c in llm.calls if c["kind"] == "arbiter"] == [1, 2, 3, 4, 5]
+        assert [c["round"] for c in decision_calls if c["actor"] == actor] == [1, 2, 3, 4, 5, 6]
+    assert [c["round"] for c in llm.calls if c["kind"] == "arbiter"] == [1, 2, 3, 4, 5, 6]
     delivery_prompt = next(c["content"] for c in decision_calls if c["actor"] == "Actor0" and c["round"] == 3)
-    response_prompt = next(c["content"] for c in decision_calls if c["actor"] == "Actor0" and c["round"] == 5)
-    breacher_prompt = next(c["content"] for c in decision_calls if c["actor"] == "Actor1" and c["round"] == 5)
-    assert f"[fulfill:{llm.commitment_id}]" in delivery_prompt and "DUE NOW" in delivery_prompt
+    response_prompt = next(c["content"] for c in decision_calls if c["actor"] == "Actor0" and c["round"] == 6)
+    breacher_prompt = next(c["content"] for c in decision_calls if c["actor"] == "Actor1" and c["round"] == 6)
+    assert f"[{llm.commitment_id}]" in delivery_prompt and "DUE NOW" in delivery_prompt
+    assert f"[fulfill:{llm.commitment_id}]" not in delivery_prompt
     assert breaches[0]["description"] in response_prompt
     assert "Your commitment outcomes last period:" in response_prompt
     assert "Your simulated credibility (0–1): 0.52" in response_prompt
@@ -1104,7 +1128,7 @@ def test_calendar_loop_delivery_breach_and_next_actor_feedback(
     assert "Your simulated credibility (0–1): 0.35" in breacher_prompt
     assert "Relationships that moved last period: Actor1" in response_prompt
     notes = [text for env in envs for text, _ in env.agent_graph.get_agent(0).memory_notes
-             if text.startswith("# WORLD CLOCK") and "round 5/5" in text]
+             if text.startswith("# WORLD CLOCK") and "round 6/6" in text]
     assert notes and breaches[0]["description"] in notes[0]
     move_notes = [text for env in envs for text, _ in env.agent_graph.get_agent(0).memory_notes
                   if text.startswith("# YOUR MOVE THIS PERIOD")]
@@ -1113,8 +1137,8 @@ def test_calendar_loop_delivery_breach_and_next_actor_feedback(
     assert "You committed to:" not in delivery_notes[0]
     assert all(_EXTRA_PLEDGE not in text and _EXTRA_TERMS not in text for text in move_notes)
     posts = [e for e in platform_events
-             if e.get("action_type") == "CREATE_POST" and e.get("round") == 5
+             if e.get("action_type") == "CREATE_POST" and e.get("round") == 6
              and e.get("agent_name") == "Actor0"]
     assert any("independently verified delivery safeguards" in json.dumps(p["action_args"]) for p in posts)
     updates = [e for e in platform_events if e.get("event_type") == "world_update"]
-    assert [e["round"] for e in updates] == [1, 2, 3, 4, 5]
+    assert [e["round"] for e in updates] == [1, 2, 3, 4, 5, 6]

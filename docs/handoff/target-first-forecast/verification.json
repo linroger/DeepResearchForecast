@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "target-first-verification/v1",
+  "date": "2026-10-28",
+  "baseCommit": "6ab52f7746bf7ec55e9f9921c71ba4ab08e33c01",
+  "branch": "codex/target-first-forecast",
+  "scope": "implementation and controlled offline acceptance",
+  "backend": {
+    "passed": 5199,
+    "failed": 0,
+    "errors": 0,
+    "skipped": [
+      {
+        "test": "tests.test_deerflow_bridge_sync_guard::test_subagent_overlay_preserves_current_vendor_observability",
+        "reason": "vendored deer-flow harness snapshot is not present in this checkout"
+      },
+      {
+        "test": "tests.test_deerflow_bridge_sync_guard::test_subagent_overlay_fails_closed_on_model_inheritance_drift",
+        "reason": "vendored deer-flow harness snapshot is not present in this checkout"
+      }
+    ],
+    "modules": 149,
+    "seconds": 466.27,
+    "frozenFiles": 537,
+    "sourceDrift": [],
+    "guardEvents": {
+      "redirect:app.config": 1,
+      "redirect:app.utils.logger": 1,
+      "redirect:app.services.simulation_manager": 1,
+      "blocked:process:subprocess.Popen": 11,
+      "blocked:external_read": 20,
+      "blocked:network:socket.__new__": 1,
+      "quarantine:oasis_import_cwd": 1,
+      "allowed:guarded_child": 15,
+      "allow:directory_traversal": 177
+    },
+    "registeredChildren": 15,
+    "expectedChildExitCodes": {
+      "0": 14,
+      "143": 1
+    },
+    "shutdownComplete": true,
+    "identityPreserved": true
+  },
+  "frontend": {
+    "passed": 329,
+    "failed": 0,
+    "listenerScenarioExcluded": "running dev server answers on localhost and 127.0.0.1 and on no other interface",
+    "buildExit": 0,
+    "frozenFiles": 95,
+    "sourceDrift": [],
+    "sharedCacheMtimeUnchanged": true
+  },
+  "independentReview": {
+    "CORE1through12": "closed",
+    "productionProbePasses": 8,
+    "coreRegressionPasses": 248,
+    "FBL1": "closed",
+    "libraryFocusedPasses": 62,
+    "libraryComposedPasses": 291,
+    "libraryPeerPasses": 62
+  },
+  "static": {
+    "ruffFE9": "passed",
+    "environmentDrift": "passed; zero missing controls",
+    "setupShellSyntax": "passed",
+    "applicationAst": "passed"
+  },
+  "runtime": {
+    "python": "3.12.6",
+    "node": "22.22.3"
+  },
+  "empiricalAcceptance": {
+    "liveProvidersRun": false,
+    "serviceDeployed": false,
+    "productionSchedulerActivated": false,
+    "simulationForecastWeight": 0.0,
+    "followupIssue": "https://github.com/linroger/DeepResearchForecast/issues/10"
+  },
+  "postGateRecheck": {
+    "path": "backend/app/config.py",
+    "change": "Correct a stale monitor-default comment; Python AST is identical",
+    "affectedPassed": 39,
+    "failed": 0,
+    "proof": "evidence/config-comment-proof.json",
+    "receipt": "evidence/config-comment-recheck-receipt.json",
+    "deliverySources": "evidence/delivery-source-hashes.json"
+  }
+}

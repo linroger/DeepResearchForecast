@@ -1,3 +1,5 @@
+> 目标驱动预测：[架构、API、重放与回滚控制](docs/handoff/target-first-forecast/architecture.md)。显式选择 `target-first-v1` 后，研究、机制模拟和报告共用类型化判定档案；模拟保持零预测权重，作为单独标注的诊断。
+
 # DeepAgentForecast
 
 [English](README.md) | **简体中文**

@@ -1,0 +1,68 @@
+{
+  "scope": "target-first implementation and offline acceptance only",
+  "status": "verified-offline",
+  "checks": [
+    {
+      "id": "typed_case",
+      "description": "Typed target, settlement, evidence and versioned assessment authority",
+      "test_module": "backend/tests/test_forecast_case.py",
+      "passes": true
+    },
+    {
+      "id": "research_producer",
+      "description": "Real engine evidence admission and post-gather parameter binding",
+      "test_module": "backend/tests/test_target_research.py",
+      "passes": true
+    },
+    {
+      "id": "target_runtime",
+      "description": "Seeded mechanism paths, bounded actor rights and private observations",
+      "test_module": "backend/tests/test_target_simulation.py",
+      "passes": true
+    },
+    {
+      "id": "projections_publication",
+      "description": "Actual lifecycle to deterministic graph/report publication",
+      "test_module": "backend/tests/test_target_pipeline.py",
+      "passes": true
+    },
+    {
+      "id": "shadow_estimators",
+      "description": "Frozen independent estimates preserve the probability authority",
+      "test_module": "backend/tests/test_target_estimators_owner.py",
+      "passes": true
+    },
+    {
+      "id": "manual_consumers",
+      "description": "Manual report regeneration reads the same sealed inputs",
+      "test_module": "backend/tests/test_target_report_api.py",
+      "passes": true
+    },
+    {
+      "id": "feedback",
+      "description": "Contract-bound journal settlement and conservative source health",
+      "test_module": "backend/tests/test_target_feedback_extensions.py",
+      "passes": true
+    },
+    {
+      "id": "library",
+      "description": "Source-aware reuse and rejection of unbound outcome learning",
+      "test_module": "backend/tests/test_forecast_library.py",
+      "passes": true
+    },
+    {
+      "id": "legacy_integrity",
+      "description": "Arbiter privacy, field repair, capacity, deadlines and share-source controls",
+      "test_module": "backend/tests/test_target_legacy_integrity.py",
+      "passes": true
+    },
+    {
+      "id": "ui",
+      "description": "Explicit authority selection and owner-bound target diagnostics",
+      "test_module": "frontend/tests/targetFirstUi.test.mjs",
+      "passes": true
+    }
+  ],
+  "separate_empirical_gate": "https://github.com/linroger/DeepResearchForecast/issues/10",
+  "evidence": "verification.json"
+}

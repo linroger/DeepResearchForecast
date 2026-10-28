@@ -142,9 +142,10 @@ def test_cfg_incentives_used_when_seed_has_none():
 
 # ----------------------------------------------------------------------------- decisions
 def test_register_decisions_consumes_capacity_commits_and_nudges():
+    """Old overspending was clipped and failures looked like actions; canonical moves now spend exactly and failures are system events."""
     world = WorldModel.from_seed(_seed(), _agent_configs())
     world.start_round(1, {"label": "2026-Q3", "period_start": "2026-07-02", "period_end": "2026-09-30"})
-    invest = {"id": "invest_capex", "label": "Commit capital", "kind": "economic", "cost": 3, "lag": 2,
+    invest = {"id": "invest_capex", "label": "Commit capital", "kind": "economic", "cost": 2, "lag": 2,
               "reversibility": "sticky"}
     ally = {"id": "form_alliance", "label": "Form alliance", "kind": "coalition", "cost": 2, "lag": 1}
     events = world.register_decisions(1, [
@@ -156,9 +157,9 @@ def test_register_decisions_consumes_capacity_commits_and_nudges():
         _decision(3, "Local Grid Co", {"id": "x", "label": "x", "kind": "communication"}, status="failed"),
     ])
     kinds = [e.kind for e in events]
-    assert kinds.count("action") == 4
+    assert kinds.count("action") == 3 and kinds.count("system") == 1
     alpha = world.actors[0]
-    assert alpha.capacity_used == 2                                  # capped at capacity_per_round
+    assert alpha.capacity_used == 2                                  # full canonical cost, no clipping
     assert alpha.capacity_remaining == 0
     assert alpha.last_action["option_id"] == "invest_capex"
     assert [c["description"] for c in alpha.pending_commitments()] == ["Break ground on Aurora"]
@@ -175,19 +176,24 @@ def test_register_decisions_consumes_capacity_commits_and_nudges():
 
 
 def test_alliance_break_moves_relationship_apart():
+    """Old alliance extras supplied an implicit target; C11 requires the move's explicit target binding."""
     world = WorldModel.from_seed(_seed(), _agent_configs())
     world.start_round(1, None)
     before = world.relationships[(0, 1)].polarity
     world.register_decisions(1, [_decision(0, "Alpha Systems", {"id": "break_alliance", "label": "Break",
                                                                "kind": "coalition", "cost": 2},
+                                           targets=["Beta Union"],
                                            alliance_moves=[{"target": "Beta Union", "move": "break"}])])
     assert world.relationships[(0, 1)].polarity < before
 
 
 # ----------------------------------------------------------------------------- arbiter application
 def test_apply_arbiter_update_clamps_and_records():
+    """Old resolutions credited actors with no move; C11 requires a current admitted action, while numeric damping stays unchanged."""
     world = WorldModel.from_seed(_seed(), _agent_configs())
     world.start_round(1, {"label": "2026-Q3", "period_end": "2026-09-30"})
+    world.register_decisions(1, [_decision(0, "Alpha Systems",
+        {"id": "public_statement", "label": "Financing update", "kind": "communication", "cost": 1, "lag": 0})])
     summary = world.apply_arbiter_update(1, {
         "variable_changes": [
             {"variable_id": "regional_capacity", "new_value": 1000, "rationale": "Aurora announced"},
@@ -217,7 +223,8 @@ def test_apply_arbiter_update_clamps_and_records():
     assert summary["events"] == 1 and summary["effects_added"] == 1 and summary["resolutions"] == 1
     assert world._relationship_between(0, 2).polarity > 0
     assert world.pending_effects[0].due_round == 2
-    assert world.actors[0].last_action is None                      # no decision registered this round
+    assert world.actors[0].last_action["status"] == "ok"
+    assert world.actors[0].last_action["resolution"] == "partial"
 
 
 def test_apply_arbiter_update_no_clamp_when_ratio_disabled():
@@ -253,6 +260,7 @@ def test_fire_due_effects_rolls_probability_with_seeded_rng():
 
 
 def test_commitments_become_due_then_lapse():
+    """Old due-2 promises lapsed at 3; C11 keeps grace3 and lapses at 4."""
     world = WorldModel.from_seed(_seed(), _agent_configs())
     world.start_round(1, None)
     world.actors[0].add_commitment("Break ground", made_round=1, due_round=2)
@@ -260,12 +268,16 @@ def test_commitments_become_due_then_lapse():
     assert world.actors[0].commitments[0]["status"] == "due"
     assert world.lapse_overdue_commitments(2) == []
     world.start_round(3, None)
-    lapsed = world.lapse_overdue_commitments(3)
+    assert world.lapse_overdue_commitments(3) == []
+    assert world.actors[0].commitments[0]["status"] == "due"
+    world.start_round(4, None)
+    lapsed = world.lapse_overdue_commitments(4)
     assert lapsed and lapsed[0]["status"] == "lapsed"
-    assert any("lapsed" in e.description for e in world.events_in_round(3))
+    assert any("lapsed" in e.description for e in world.events_in_round(4))
 
 
 def test_unrelated_action_and_generic_resolution_do_not_fulfil_due_commitment():
+    """Old investment fixture bypassed cost/lag checks; C11 admits the canonical move before proving generic success cannot deliver."""
     world = WorldModel.from_seed(_seed(), _agent_configs())
     world.set_period_labels({1: "2026-Q3", 2: "2026-Q4"})
     world.start_round(1, None)
@@ -275,7 +287,8 @@ def test_unrelated_action_and_generic_resolution_do_not_fulfil_due_commitment():
     world.start_round(2, None)
     assert "due 2026-Q4" in world.render_public_brief(upto_round=1)
     world.register_decisions(2, [_decision(0, "Alpha Systems", {"id": "invest_capex", "label": "Commit capital",
-                                                               "kind": "economic", "cost": 3, "lag": 0})])
+                                                               "kind": "economic", "cost": 2, "lag": 2})])
+    assert world.actors[0].last_action["status"] == "ok"
     world.apply_arbiter_update(2, {"action_resolutions": [{"actor": "Alpha Systems", "outcome": "success"}]})
     assert world.actors[0].commitments[0]["status"] == "due"
     assert "fulfilled_round" not in world.actors[0].commitments[0]
@@ -298,13 +311,14 @@ def test_diff_reports_changed_added_and_relationship_moves():
 
 
 def test_public_brief_shows_facts_moves_consequences_and_no_scenario_shares():
+    """Old cost-3 investment was silently clipped; canonical cost 2 now admits the same published move and pledge."""
     world = WorldModel.from_seed(_seed(), _agent_configs())
     world.scenario_shares = {"Permit granted": 0.63, "Permit delayed": 0.37}
     world.start_round(1, {"label": "2026-Q3", "period_start": "2026-07-02", "period_end": "2026-09-30"})
     before = world.snapshot()
     world.register_scheduled_events(1, [{"date": "2026-09-15", "content": "[2026-09-15] Permit hearing held"}])
     world.register_decisions(1, [_decision(0, "Alpha Systems", {"id": "invest_capex", "label": "Commit capital",
-                                                               "kind": "economic", "cost": 3, "lag": 2},
+                                                               "kind": "economic", "cost": 2, "lag": 2},
                                            statement="We commit to Aurora now.",
                                            commitment={"description": "Break ground", "due_periods": 2})])
     world.apply_arbiter_update(1, {"variable_changes": [{"variable_id": "regional_capacity", "new_value": 150}]})
@@ -321,18 +335,19 @@ def test_public_brief_shows_facts_moves_consequences_and_no_scenario_shares():
 
 
 def test_private_brief_lists_own_commitments_and_moves_aimed_at_actor():
+    """Old over-budget fixtures passed and the title came first; C11 admits canonical costs and protects red lines first."""
     world = WorldModel.from_seed(_seed(), _agent_configs())
     world.start_round(1, {"label": "2026-Q3", "period_end": "2026-09-30"})
     world.register_decisions(1, [
         _decision(1, "Beta Union", {"id": "strike_action", "label": "Call a strike", "kind": "coercive",
-                                    "cost": 3, "lag": 0}, targets=["Alpha Systems"]),
+                                    "cost": 2, "lag": 0}, targets=["Alpha Systems"]),
         _decision(0, "Alpha Systems", {"id": "invest_capex", "label": "Commit capital", "kind": "economic",
-                                       "cost": 3, "lag": 2}, commitment={"description": "Break ground", "due_periods": 1}),
+                                       "cost": 2, "lag": 2}, commitment={"description": "Break ground", "due_periods": 1}),
     ])
     world.commit_round(1)
     world.start_round(2, {"label": "2026-Q4", "period_end": "2026-12-31"})
     note = world.render_private_brief(0, upto_round=1)
-    assert note.startswith("# YOUR SITUATION — Alpha Systems")
+    assert note.startswith("- Your red lines: No unfinanced mandate\n# YOUR SITUATION — Alpha Systems")
     assert "Capacity this period: 2/2" in note
     assert "Break ground" in note and "(DUE NOW)" in note
     assert "Aimed at you last period" in note and "Beta Union: Call a strike" in note
@@ -351,23 +366,27 @@ def test_brief_respects_char_budget_on_line_boundaries():
 
 # ----------------------------------------------------------------------------- persistence
 def test_json_round_trip_preserves_state():
+    """Old two moves silently overspent one period; C11 saves canonical investment and irreversible launch in separate periods."""
     world = WorldModel.from_seed(_seed(), _agent_configs())
     world.start_round(1, {"label": "2026-Q3", "period_end": "2026-09-30"})
     world.register_decisions(1, [
         _decision(0, "Alpha Systems", {"id": "invest_capex", "label": "Commit capital",
-                                       "kind": "economic", "cost": 3, "lag": 2},
+                                       "kind": "economic", "cost": 2, "lag": 2},
                   commitment={"description": "Break ground", "due_periods": 1}),
-        _decision(0, "Alpha Systems", {"id": "product_launch", "label": "Launch", "kind": "operational",
-                                       "cost": 2, "reversibility": "irreversible"}),
     ])
-    world.apply_arbiter_update(1, {"pending_effects": [{"description": "Permit lands", "due_periods": 1}],
-                                   "events": [{"description": "Reaction", "kind": "emergent"}]})
     world.commit_round(1)
+    world.start_round(2, {"label": "2026-Q4", "period_end": "2026-12-31"})
+    world.register_decisions(2, [_decision(0, "Alpha Systems",
+        {"id": "product_launch", "label": "Launch", "kind": "operational",
+         "cost": 2, "lag": 1, "reversibility": "irreversible"})])
+    world.apply_arbiter_update(2, {"pending_effects": [{"description": "Permit lands", "due_periods": 1}],
+                                   "events": [{"description": "Reaction", "kind": "emergent"}]})
+    world.commit_round(2)
     world.scenario_shares = {"Permit granted": 0.6, "Permit delayed": 0.4}
     payload = json.loads(json.dumps(world.to_dict(), ensure_ascii=False))
     clone = WorldModel.from_dict(payload)
     assert clone.snapshot() == world.snapshot()
-    assert clone.committed_round == 1 and clone.round == 1
+    assert clone.committed_round == 2 and clone.round == 2
     assert clone.actors[0].pending_commitments()[0]["description"] == "Break ground"
     assert [fx.description for fx in clone.pending_effects] == ["Permit lands"]
     assert [e.description for e in clone.events] == [e.description for e in world.events]

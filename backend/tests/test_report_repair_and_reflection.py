@@ -131,6 +131,7 @@ def test_repair_citation_backfill_calendar_year_alone_never_matches():
 def test_final_quantitative_grounding_preserves_forecasts_and_removes_false_precision(
     monkeypatch,
 ):
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MODE", "fail")
     monkeypatch.setattr(
         Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", 0.75, raising=False
     )
@@ -170,6 +171,7 @@ def test_final_quantitative_grounding_preserves_forecasts_and_removes_false_prec
 def test_final_quantitative_grounding_repairs_mixed_claims_and_preserves_table_shape(
     monkeypatch,
 ):
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MODE", "fail")
     monkeypatch.setattr(
         Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", 0.75, raising=False
     )
@@ -206,6 +208,7 @@ def test_final_quantitative_grounding_repairs_mixed_claims_and_preserves_table_s
 
 
 def test_final_quantitative_grounding_requires_matching_fence_delimiters(monkeypatch):
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MODE", "fail")
     monkeypatch.setattr(
         Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", 0.75, raising=False
     )
@@ -252,6 +255,7 @@ def test_final_quantitative_grounding_supports_exact_chinese_evidence(monkeypatc
 
 
 def test_chinese_han_adjacent_numeric_mismatch_never_gets_citation(monkeypatch):
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MODE", "fail")
     monkeypatch.setattr(
         Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", 0.75, raising=False
     )
@@ -279,6 +283,7 @@ def test_chinese_han_adjacent_numeric_mismatch_never_gets_citation(monkeypatch):
 def test_final_quantitative_grounding_preserves_cross_language_unverifiable_claim(
     monkeypatch,
 ):
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MODE", "fail")
     monkeypatch.setattr(
         Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", 0.75, raising=False
     )
@@ -305,6 +310,7 @@ def test_final_quantitative_grounding_preserves_cross_language_unverifiable_clai
 
 
 def test_chinese_near_match_does_not_confuse_sales_with_production(monkeypatch):
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MODE", "fail")
     monkeypatch.setattr(
         Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", 0.75, raising=False
     )
@@ -345,6 +351,7 @@ def test_semantic_citation_support_removes_the_complete_multi_digit_tag():
 
 
 def test_table_context_does_not_confuse_sales_with_production(monkeypatch):
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MODE", "fail")
     monkeypatch.setattr(
         Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", 0.75, raising=False
     )
@@ -369,6 +376,7 @@ def test_table_context_does_not_confuse_sales_with_production(monkeypatch):
 
 
 def test_table_header_words_cannot_override_contradictory_row_label(monkeypatch):
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MODE", "fail")
     monkeypatch.setattr(
         Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", 0.75, raising=False
     )
@@ -393,6 +401,7 @@ def test_table_header_words_cannot_override_contradictory_row_label(monkeypatch)
 
 
 def test_table_without_outer_pipes_preserves_shape_and_repairs_cells(monkeypatch):
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MODE", "fail")
     monkeypatch.setattr(
         Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", 0.75, raising=False
     )

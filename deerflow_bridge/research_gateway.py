@@ -62,7 +62,7 @@ import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable, ContextManager, Iterator, Mapping, Sequence, TypeVar
@@ -2374,6 +2374,77 @@ def _fallback_valid_url(url: str) -> bool:
 
 
 _VALID_TIERS = ("S1", "S2", "S3")
+_EVIDENCE_TIERS = ("primary", "secondary", "social", "unknown")
+_PUBLICATION_FIELDS = ("published_at", "published_date", "publishedDate", "publishedAt",
+                       "datePublished", "publication_date", "published", "date")
+_ISO_SOURCE_DATE_RE = re.compile(
+    r"\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:\d{2})?)?")
+# Publication types come only from provider result/envelope metadata, never
+# model tool arguments, titles, snippets, page prose or the legacy S1/S2 tiers.
+_PUBLICATION_TIERS = {
+    "official_dataset": "primary", "official_statistics": "primary",
+    "statistical_release": "primary", "government_report": "primary",
+    "regulatory_filing": "primary", "company_filing": "primary",
+    "newsarticle": "secondary", "news_article": "secondary", "news_snippet": "secondary",
+    "socialmediaposting": "social", "social_post": "social",
+}
+
+
+def _source_iso_date(value: Any) -> str | None:
+    """Retain an explicit ISO calendar date/instant; never infer or substitute."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not _ISO_SOURCE_DATE_RE.fullmatch(value):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if "T" in value and parsed.tzinfo is None:
+        return None  # A local clock time is not a known publication instant.
+    return value
+
+
+def _source_metadata(metadata: Mapping[str, Any] | None) -> dict:
+    """Project provider fields (top-level or ``metadata``), ignoring tier claims.
+
+    ``origin_cluster`` or ``original_origin`` names an explicitly supplied
+    upstream origin; ``original_url`` is canonicalized when supplied instead.
+    A publisher/domain alone does not establish independent reporting: every
+    unresolved source shares the same ``unknown`` cluster.
+    """
+    raw = metadata if isinstance(metadata, Mapping) else {}
+    nested = raw.get("metadata")
+    fields = {**raw, **nested} if isinstance(nested, Mapping) else raw
+    published = next((value for key in _PUBLICATION_FIELDS
+                      if (value := _source_iso_date(fields.get(key))) is not None), None)
+    origin = "unknown"
+    for key in ("origin_cluster", "original_origin", "original_url"):
+        value = fields.get(key)
+        if not isinstance(value, str) or not value.strip() or len(value) > 500:
+            continue
+        value = value.strip()
+        if value.casefold() in ("unknown", "unknown_independence", "none", "null", "n/a"):
+            continue
+        if _fallback_valid_url(value):
+            value = canonical_url(value)
+        elif key == "original_url" or "://" in value:
+            continue
+        # Do not turn removed instructions or truncated text into an identity.
+        clean = _collapse(_clean_web_text(value), 500)
+        if clean and INSTRUCTION_REMOVED not in clean:
+            origin = clean
+            break
+    tier = "unknown"
+    for key in ("publication_type", "source_type", "@type", "kind"):
+        value = fields.get(key)
+        if isinstance(value, str):
+            tier = _PUBLICATION_TIERS.get(value.strip().casefold(), "unknown")
+            if tier != "unknown":
+                break
+    return {"published_at": published, "retrieved_at": _source_iso_date(fields.get("retrieved_at")),
+            "origin_cluster": origin, "evidence_tier": tier}
 
 
 _CONTEXT_EVIDENCE_FIELDS = (
@@ -2448,15 +2519,23 @@ class SourceLedger:
     reloaded from ``path``).  Rows are deduplicated by :func:`canonical_url`.
     Disk writes are atomic and debounced (at most once per second; the engine
     calls :meth:`flush` at phase end).
+
+    ``capture_evidence=True`` opts into target-first provenance and selected
+    passages. The default preserves legacy row shapes and metadata behavior.
     """
 
     FLUSH_INTERVAL_S = 1.0
+    MAX_PASSAGES = 8
+    MAX_PASSAGE_CHARS = 8000
+    MAX_PASSAGES_CHARS = 32000
 
     def __init__(self, path: str | os.PathLike[str], *, bridge: Any = None,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 clock: Callable[[], float] = time.monotonic,
+                 capture_evidence: bool = False) -> None:
         self.path = Path(path)
         self._bridge = bridge
         self._clock = clock
+        self.capture_evidence = capture_evidence
         self._lock = threading.RLock()
         self._rows: dict[int, dict[str, Any]] = {}
         self._by_canonical: dict[str, int] = {}
@@ -2495,6 +2574,14 @@ class SourceLedger:
                 clean["title"] = _clean_title(clean["title"]) or _display_domain(url)
             if clean.get("tier") not in _VALID_TIERS:
                 clean["tier"] = self._tier(url)
+            if self.capture_evidence:
+                clean["published_at"] = _source_iso_date(clean.get("published_at"))
+                clean["retrieved_at"] = (_source_iso_date(clean.get("retrieved_at"))
+                                         or _source_iso_date(clean.get("fetched_at")))
+                clean["origin_cluster"] = _source_metadata(clean)["origin_cluster"]
+                if clean.get("evidence_tier") not in _EVIDENCE_TIERS:
+                    clean["evidence_tier"] = "primary" if clean.get("dataset") else "unknown"
+                clean["passages"] = self._bounded_passages(clean.get("passages"))
             self._rows[sid] = clean
             self._by_canonical.setdefault(canonical, sid)
         if self._rows:
@@ -2530,10 +2617,11 @@ class SourceLedger:
         return _fallback_valid_url(url)
 
     def register(self, url: Any, title: Any = "", snippet: Any = "", via: str = "search",
-                 by: str = "") -> dict | None:
+                 by: str = "", *, metadata: Mapping[str, Any] | None = None) -> dict | None:
         """Register (or find) the row for ``url``; returns a copy, or ``None``
         for an invalid URL.  Empty title/snippet fields are filled by later
-        sightings; every other field keeps its first-seen value."""
+        sightings. When capture is enabled, additive evidence fields accept
+        provider metadata only; legacy fields keep their first-seen values."""
         url = str(url or "").strip()
         if not url or not self.valid_url(url):
             return None
@@ -2554,9 +2642,10 @@ class SourceLedger:
                 if clean_snippet and not row.get("snippet"):
                     row["snippet"] = clean_snippet
                     changed = True
+                changed = self._merge_metadata(row, metadata) or changed
                 if changed:
                     self._touch()
-                return dict(row)
+                return self._copy_row(row)
             sid = self._next_sid
             self._next_sid += 1
             domain = _display_domain(url)
@@ -2575,20 +2664,82 @@ class SourceLedger:
                 "snippet": clean_snippet,
                 "first_seen_by": str(by or ""),
             }
+            if self.capture_evidence:
+                row.update(_source_metadata(metadata), passages=[])
+                row["retrieved_at"] = row["retrieved_at"] or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             self._rows[sid] = row
             self._by_canonical[canonical] = sid
             self._touch()
-            return dict(row)
+            return self._copy_row(row)
+
+    def _copy_row(self, row: Mapping[str, Any]) -> dict:
+        # The new mutable collection must not let consumers mutate the ledger.
+        copied = dict(row)
+        if self.capture_evidence and isinstance(row.get("passages"), list):
+            copied["passages"] = list(row["passages"])
+        return copied
+
+    def _merge_metadata(self, row: dict, metadata: Mapping[str, Any] | None) -> bool:
+        if not self.capture_evidence:
+            return False
+        changed = False
+        for key, value in _source_metadata(metadata).items():
+            if value in (None, "unknown"):
+                continue
+            if (key == "retrieved_at" or row.get(key) in (None, "", "unknown")) and row.get(key) != value:
+                row[key] = value
+                changed = True
+        return changed
+
+    @classmethod
+    def _bounded_passages(cls, passages: Any) -> list[str]:
+        if not isinstance(passages, list):
+            return []
+        kept: list[str] = []
+        total = 0
+        for passage in passages:
+            if not isinstance(passage, str):
+                continue
+            passage = passage[:cls.MAX_PASSAGE_CHARS].strip()
+            if not passage or passage in kept:
+                continue
+            if len(kept) >= cls.MAX_PASSAGES or total + len(passage) > cls.MAX_PASSAGES_CHARS:
+                break
+            kept.append(passage)
+            total += len(passage)
+        return kept
+
+    def note_passage(self, sid: int, passage: str) -> None:
+        """Retain the sanitized, model-visible fetch body, most recent first.
+
+        Exact duplicates are free; at most eight excerpts / 32k characters are
+        kept (8k per excerpt). This is evidence actually shown, not a prefix
+        guessed from a long page. Full pinned bytes remain in ``page_text``.
+        """
+        if not self.capture_evidence:
+            return
+        if not isinstance(passage, str) or not passage.strip() or passage.strip() == INSTRUCTION_REMOVED:
+            return
+        with self._lock:
+            row = self._rows.get(_as_int(sid) or 0)
+            if row is None or not row.get("fetched"):
+                return
+            passages = self._bounded_passages([passage, *row.get("passages", [])])
+            if passages != row.get("passages"):
+                row["passages"] = passages
+                self._touch()
 
     def register_context(self, item: Mapping[str, Any], *, by: str = "") -> dict | None:
         """Keep discovery provenance without treating a snippet as a fetched page."""
-        row = self.register(item.get("url"), item.get("title"), item.get("snippet"), by=by)
+        row = self.register(item.get("url"), item.get("title"), item.get("snippet"), by=by, metadata=item)
         if row is None:
             return None
         with self._lock:
             stored = self._rows[row["sid"]]
             for name in ("provider", "kind", "published_at", "retrieved_at", "publisher",
                          "native_id", "language"):
+                if self.capture_evidence and name in ("published_at", "retrieved_at"):
+                    continue
                 value = item.get(name)
                 if value is None:
                     stored.setdefault(name, None)
@@ -2602,10 +2753,11 @@ class SourceLedger:
                 stored.setdefault("context_evidence_sha256", item.get("evidence_sha256"))
             stored["eligibility"] = {"context_only": True, "anchor": False, "resolution": False}
             self._touch()
-            return dict(stored)
+            return self._copy_row(stored)
 
     def mark_fetched(self, sid: int, *, content_sha256: str, chars: int, page_path: str,
-                     title: str | None = None, backtest: Mapping[str, Any] | None = None) -> dict | None:
+                     title: str | None = None, backtest: Mapping[str, Any] | None = None,
+                     metadata: Mapping[str, Any] | None = None) -> dict | None:
         with self._lock:
             row = self._rows.get(int(sid))
             if row is None:
@@ -2615,6 +2767,10 @@ class SourceLedger:
             row["content_sha256"] = str(content_sha256)
             row["chars"] = int(chars)
             row["page_path"] = str(page_path)
+            if self.capture_evidence:
+                self._merge_metadata(row, metadata)
+                if not row.get("retrieved_at"):
+                    row["retrieved_at"] = row["fetched_at"]
             clean_title = _clean_title(title) if title else ""
             if clean_title:
                 row["title"] = clean_title
@@ -2623,7 +2779,7 @@ class SourceLedger:
                 # archive capture), so a reader can audit what reached the model.
                 row["backtest"] = dict(backtest)
             self._touch()
-            return dict(row)
+            return self._copy_row(row)
 
     def note_backtest(self, sid: int, detail: Mapping[str, Any]) -> None:
         """Backtest mode: record a search hit's date verdict once (first sighting wins)."""
@@ -2649,15 +2805,17 @@ class SourceLedger:
                               (parts.query + "&" if parts.query else "")
                               + "drf_series=" + quote(str(series["series"]), safe=""), ""))
         with self._lock:
-            row = self.register(identity, title, via="data", by=agent_id)
+            row = self.register(identity, title, via="data", by=agent_id, metadata=series)
             if row is None:
                 return None
             stored = self._rows[row["sid"]]
             stored.update(via="data", tier=tier if tier in _VALID_TIERS else "S1",
                           dataset={key: series.get(key, "") for key in
                                    ("series", "provider", "units", "frequency", "slug", "source_url")})
+            if self.capture_evidence:
+                stored["evidence_tier"] = "primary"
             self._touch()
-            return dict(stored)
+            return self._copy_row(stored)
 
     def forget_dataset(self, sid: int) -> bool:
         """Drop a dataset row that was never marked fetched (its evidence write
@@ -2679,17 +2837,17 @@ class SourceLedger:
     def get(self, sid: int) -> dict | None:
         with self._lock:
             row = self._rows.get(_as_int(sid) or 0)
-            return dict(row) if row is not None else None
+            return self._copy_row(row) if row is not None else None
 
     def find(self, url: Any) -> dict | None:
         """Row for ``url`` by canonical identity, or ``None``."""
         with self._lock:
             sid = self._by_canonical.get(canonical_url(url))
-            return dict(self._rows[sid]) if sid is not None else None
+            return self._copy_row(self._rows[sid]) if sid is not None else None
 
     def rows(self) -> list[dict]:
         with self._lock:
-            return [dict(self._rows[sid]) for sid in sorted(self._rows)]
+            return [self._copy_row(self._rows[sid]) for sid in sorted(self._rows)]
 
     def __len__(self) -> int:
         with self._lock:
@@ -3925,6 +4083,41 @@ def _json_object(text: str) -> dict | None:
     return value if isinstance(value, dict) else None
 
 
+def _fetch_payload(raw: Any) -> tuple[str, Mapping[str, Any] | None, Mapping[str, Any] | None]:
+    """Unwrap provider ``content``/``text``/``markdown`` plus metadata.
+
+    Accept a mapping or JSON string, optionally under ``data``. Keep the
+    outer error/control envelope for failure checks; do not cite metadata as
+    page text. Plain-text fetches retain their existing behavior.
+    """
+    text = raw if isinstance(raw, str) else str(raw or "")
+    envelope = raw if isinstance(raw, Mapping) else _json_object(text)
+    if envelope is None:
+        return text, None, None
+    data = envelope.get("data")
+    payload = data if isinstance(data, Mapping) else envelope
+    metadata = {}
+    for layer in (envelope, payload):
+        metadata.update(layer)
+        nested = layer.get("metadata")
+        if isinstance(nested, Mapping):
+            metadata.update(nested)
+    metadata.pop("metadata", None)
+    # Nested provider errors must not become successful fetched evidence.
+    if payload is not envelope and (payload.get("error") or payload.get("status") == "already_available"):
+        envelope = {**envelope, "error": envelope.get("error") or payload.get("error"),
+                    "status": payload.get("status")}
+    for key in ("markdown", "content", "text"):
+        if isinstance(payload.get(key), str):
+            return payload[key], envelope, metadata
+    metadata_fields = (*_PUBLICATION_FIELDS, "retrieved_at", "origin_cluster", "original_origin",
+                       "original_url", "publication_type", "source_type", "@type", "kind", "evidence_tier")
+    if ("metadata" in envelope or isinstance(data, Mapping)
+            or any(key in metadata for key in (*metadata_fields, "markdown", "content", "text"))):
+        text = ""
+    return text, envelope, metadata
+
+
 def _page_title(text: str) -> str:
     for line in text.split("\n"):
         line = line.strip()
@@ -3972,8 +4165,8 @@ class ResearchTools:
     backtest_capable = True
 
     def __init__(self, ledger: SourceLedger, pages_dir: str | os.PathLike[str], *,
-                 search_fn: Callable[[str, int], str] | None = None,
-                 fetch_fn: Callable[[str], str] | None = None,
+                 search_fn: Callable[[str, int], Any] | None = None,
+                 fetch_fn: Callable[[str], Any] | None = None,
                  bridge: Any = None, plog: Any = None,
                  limits: ToolLimits | None = None, data_sources: Any = None,
                  context_client: Any = None, backtest: Any = None,
@@ -4578,7 +4771,14 @@ class ResearchTools:
         # Line 1 is the row header the engine reads; a note never precedes it.
         header = (f"[S{sid}] {row.get('title', '')} — {row.get('domain', '')} (tier 1)"
                   f" — dataset {series.series}, {series.units}, {series.frequency}")
-        body = delimit_untrusted("official dataset", neutralize_citation_markers(page))
+        visible = neutralize_citation_markers(page)
+        body = delimit_untrusted("official dataset", visible)
+        if body and self.ledger.capture_evidence:
+            # data_get and prefetch_data both render through this path after
+            # storage. Capture only the pinned page body actually returned,
+            # excluding generated headers/window notes, before returning it.
+            self.ledger.note_passage(sid, neutralize_instructions(visible).strip())
+            self.ledger.flush()
         return "\n".join(part for part in (header, note, body) if part)
     # ---------------------------------------------------------------- helpers
     def _log(self, kind: str, message: str) -> None:
@@ -4718,7 +4918,8 @@ class ResearchTools:
                 continue
             snippet = _collapse(_clean_web_text(item.get("content") or item.get("snippet") or ""),
                                 SEARCH_SNIPPET_CHARS)
-            row = self.ledger.register(item.get("url"), item.get("title"), snippet, "search", agent_id)
+            row = self.ledger.register(item.get("url"), item.get("title"), snippet, "search", agent_id,
+                                       metadata=item)
             if row is None:
                 continue
             entry = f"[S{row['sid']}] {row['title']} — {row['domain']} ({tier_label(row['tier'])})"
@@ -4917,8 +5118,7 @@ class ResearchTools:
         except Exception as exc:  # noqa: BLE001 — tools never raise into the agent loop
             self._remember_failure(key, type(exc).__name__, transient=True)
             return self._fetch_failed(agent_id, type(exc).__name__)
-        text = raw if isinstance(raw, str) else str(raw or "")
-        envelope = _json_object(text)
+        text, envelope, metadata = _fetch_payload(raw)
         if envelope is not None and envelope.get("error") == "research_budget_exhausted":
             self._failure(agent_id)
             self._log("result", "web_fetch → FETCH_BUDGET_EXHAUSTED (research budget)")
@@ -4944,7 +5144,7 @@ class ResearchTools:
             self._failed_fetches.pop(key, None)
         row = self.ledger.mark_fetched(
             row["sid"], content_sha256=digest, chars=len(stripped), page_path=page_path,
-            title=_page_title(stripped) or None) or row
+            title=_page_title(stripped) or None, metadata=metadata) or row
         return self._render_page(row, stripped, terms, context_terms, cached=False)
 
     def _fetch_as_of(self, url: str, key: str, terms: list[str], context_terms: list[str],
@@ -4961,13 +5161,14 @@ class ResearchTools:
             return self._fetch_failed(agent_id, "source_quality_rejected")
         snapshot, archive_status = bt.lookup_snapshot(url, policy, http_get=self._archive_get)
         text: str | None = None
+        metadata = None
         if snapshot is not None:
             try:
                 raw = self._fetch_fn(snapshot.url)
             except Exception:  # noqa: BLE001 — an unreadable capture falls back to the live page
                 raw = None
-            candidate = raw if isinstance(raw, str) else str(raw or "")
-            if raw is not None and self._failure_reason(candidate, _json_object(candidate)) is None:
+            candidate, envelope, metadata = _fetch_payload(raw)
+            if raw is not None and self._failure_reason(candidate, envelope) is None:
                 text = candidate.strip()
         via = "archive" if text is not None else "live"
         if text is None:
@@ -4976,8 +5177,7 @@ class ResearchTools:
             except Exception as exc:  # noqa: BLE001 — tools never raise into the agent loop
                 self._remember_failure(key, type(exc).__name__, transient=True)
                 return self._fetch_failed(agent_id, type(exc).__name__)
-            candidate = raw if isinstance(raw, str) else str(raw or "")
-            envelope = _json_object(candidate)
+            candidate, envelope, metadata = _fetch_payload(raw)
             if envelope is not None and envelope.get("error") == "research_budget_exhausted":
                 self._failure(agent_id)
                 self._log("result", "web_fetch → FETCH_BUDGET_EXHAUSTED (research budget)")
@@ -4993,6 +5193,7 @@ class ResearchTools:
             with self._lock:
                 spans = list(self._hit_dates.get(canonical_url(url), []))
             spans += bt.page_dates(text)
+            spans += bt.result_dates({"published_at": _source_metadata(metadata)["published_at"]})
             url_span = bt.url_date(url)
             if url_span is not None:
                 spans.append(url_span)
@@ -5025,21 +5226,21 @@ class ResearchTools:
             self._failed_fetches.pop(key, None)
         row = self.ledger.mark_fetched(
             row["sid"], content_sha256=digest, chars=len(text), page_path=page_path,
-            title=_page_title(text) or None, backtest=detail) or row
+            title=_page_title(text) or None, backtest=detail, metadata=metadata) or row
         return self._render_page(row, text, terms, context_terms, cached=False)
 
     @staticmethod
     def _failure_reason(text: str, envelope: Mapping[str, Any] | None) -> str | None:
         stripped = text.strip()
-        if not stripped:
-            return "empty"
-        if stripped.startswith("Error:"):
-            return _slug(stripped[len("Error:"):]) if stripped[len("Error:"):].strip() else "error"
         if envelope is not None:
             if envelope.get("error"):
                 return _slug(envelope.get("error"))
             if envelope.get("status") == "already_available":
                 return "already_available"
+        if not stripped:
+            return "empty"
+        if stripped.startswith("Error:"):
+            return _slug(stripped[len("Error:"):]) if stripped[len("Error:"):].strip() else "error"
         if len(stripped) < FETCH_MIN_CHARS:
             return "too_short"
         if len(stripped) < _BLOCKED_PAGE_MAX_CHARS:
@@ -5066,8 +5267,12 @@ class ResearchTools:
                       "different focus to read other parts.")
         # The precise model-directed filter (D7), not the bridge's legacy
         # sanitizer, which blanks ordinary policy prose ("override the veto").
-        body = (delimit_untrusted(_WEB_EXCERPT_LABEL, neutralize_citation_markers(excerpt))
-                or "(no readable text on this page)")
+        visible = neutralize_citation_markers(excerpt)
+        body = delimit_untrusted(_WEB_EXCERPT_LABEL, visible)
+        if body and self.ledger.capture_evidence:
+            self.ledger.note_passage(row["sid"], neutralize_instructions(visible).strip())
+        if not body:
+            body = "(no readable text on this page)"
         suffix = " (stored copy)" if cached else ""
         self._log("result", f"web_fetch → {kept}/{total} chars [S{row['sid']}]{suffix}")
         return f"{header}\n{body}"
