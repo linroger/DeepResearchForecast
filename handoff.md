@@ -1,4 +1,4 @@
-> First-ten request reconciliation: [current handoff](docs/handoff/first-ten-remedies/handoff.md). This branch verifies and completes the delivered target-first implementation against the supplied acceptance criteria.
+> First-ten request reconciliation: [current handoff](docs/handoff/first-ten-remedies/handoff.md). Completed and remotely delivered on codex/first-ten-remedies;5,306backend checks pass with2knownvendor-skips. The topic handoff records exact scope and empirical limits.
 
 > Target-first forecasting implementation: [current handoff and verification](docs/handoff/target-first-forecast/handoff.md), [architecture and API](docs/handoff/target-first-forecast/architecture.md). Work is isolated on `codex/target-first-forecast`; the original deployment checkout and saved runs are preserved.
 

@@ -22,6 +22,6 @@ Existing issue10, https://github.com/linroger/DeepResearchForecast/issues/10, wa
 - **ZERO-BUDGET (P2):** Admission accepted zero decision requests but the report rejected the resulting budget receipt. The report now accepts this admitted zero-call hold behavior, with a full-pipeline regression.
 - **G1-MIXED-FAILURE (P2):** A successful empty query combined with a transport failure looked empty. The explicit failure now takes precedence as offline; the real collector-to-health regression passes.
 
-All reproduced implementation findings have focused fixes and review closure. Combined final regression and source preservation checks are complete; scoped branch delivery is the remaining session step. Existing issue10 retains the separately authorized empirical work; no issue has been duplicated or silently closed.
+All reproduced implementation findings have focused fixes and review closure. Combined final regression, source preservation and scoped branch delivery are complete; code722866a5 is remote-verified. Existing issue10 retains the separately authorized empirical work; no issue has been duplicated or silently closed.
 
 - **EVAL-ORDER (pre-existing fixture assumption):** The initial broad gate caught a legitimate concurrent terminal-error ordering. Exact original SQLite attempts and budget totals were verified. The test now verifies exact allowed error codes under native, forced slot-first and forced budget-first schedules. All original budget/denominator/replay assertions remain;9focused checks pass. Production budget behavior is unchanged.

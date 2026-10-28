@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "first-ten-remedies-delivery/v1",
+  "status": "code_committed_pushed_and_remote_verified",
+  "verifiedAt": "2026-10-28T06:37:42.719861+00:00",
+  "codeCommit": "722866a54f919623b2c8f579a53f2e0c4c1afbdc",
+  "branch": "codex/first-ten-remedies",
+  "remote": "legacy",
+  "repository": "https://github.com/linroger/DeepResearchForecast",
+  "branchURL": "https://github.com/linroger/DeepResearchForecast/tree/codex/first-ten-remedies",
+  "remoteVerifiedCommit": "722866a54f919623b2c8f579a53f2e0c4c1afbdc",
+  "workingTreeCleanAfterCodeCommit": true,
+  "testedSourceManifest": "final-source-after.json",
+  "sourceFiles": 547,
+  "verification": "verification.json",
+  "backendPassed": 5306,
+  "backendSkipped": 2,
+  "frontendSourceUnchanged": true,
+  "productionDeployment": false,
+  "liveProviderCalls": false,
+  "productionMonitorActivated": false,
+  "empiricalFollowup": "https://github.com/linroger/DeepResearchForecast/issues/10",
+  "closingRecord": "A documentation-only closing commit records delivery; tested application bytes are unchanged."
+}

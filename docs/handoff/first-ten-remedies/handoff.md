@@ -1,8 +1,8 @@
 # First ten remedies handoff
 
 **Last Updated (UTC):** 2026-10-28T05:27:14.533632+00:00
-**Status:** Verified offline; scoped commit/push in progress
-**Current Focus:** Commit and remotely verify the completed source and evidence; retain empirical acceptance limits.
+**Status:** Complete — implementation, offline acceptance and branch delivery
+**Current Focus:** Preserve the verified delivery; use the recorded next-session prompt for a separately authorized follow-up.
 
 ## 1) Request & Context
 The user supplied the 2026-10-27 design and first-ten-remedies plan and requested architecture familiarization and an orchestrated implementation team. This supersedes the generic workflow-packaging request. The deployment checkout has unrelated staged, unstaged and untracked work. The earlier chat Coordinate DRF architecture changes delivered code91cf47e9 and closing docs5b9b9215 this morning. This session starts from that exact clean commit, preserving the original worktree and deployment.
@@ -24,7 +24,7 @@ The existing implementation is the dependency baseline. Three independent specia
 - [x] Locate delivered target-first implementation and create an isolated branch.
 - [x] Map requested slices to implementation and evidence using specialists; acceptance-matrix.md.
 - [x] Repair reproduced gaps and independently review changed bytes; all owner/independent reports close findings.
-- [ ] Freeze, verify, update evidence, commit and push scoped changes.
+- [x] Freeze, verify, update evidence, commit and push scoped changes; code722866a5 is verified on the active remote.
 
 ## 5) Findings, Decisions, Assumptions
 PipelineOrchestrator and pipeline_state.json own current lifecycle; drf2 is not the active route. Target-first-v1 is explicitly admitted and uses a typed case, deterministic graph/mechanisms, frozen research posterior and shadow estimator lanes. Existing acceptance reports5199 backend cases and329 frontend cases; these remain historical until file hashes and focused current checks confirm them. The request's deployment/main base is older than the delivered dependency branch, so this branch starts from5b9b9215. No primary dirt is copied.
@@ -39,7 +39,7 @@ Acceptance follows the real research producer through persisted case, mechanisms
 The final frozen gate passed **5,306 tests, zero failures/errors and two known vendor-snapshot skips** across 159 modules. All 547 source/test hashes were unchanged. Independent review closed the reproduced findings; Ruff F/E9, diff checks and environment documentation pass. The 95 unchanged frontend input hashes match the earlier 329-test/build evidence; no fresh frontend build is claimed.
 
 ## 9) Remaining Work & Next Steps
-Implementation and controlled offline acceptance are complete. Commit/push verification is the remaining delivery step. Provider transport, paid model validation, monitor activation, original-specimen measurements and prospective calibration remain separate gates under issue10.
+Implementation, controlled offline acceptance and scoped branch delivery are complete. There are no open implementation or review findings in this reconciliation. Provider transport, paid model validation, monitor activation, original-specimen measurements and prospective calibration remain separate gates under issue10.
 
 Next-session prompt:
 ```text
@@ -78,3 +78,5 @@ Read docs/handoff/first-ten-remedies/handoff.md, acceptance-matrix.md, verificat
 - 2026-10-28: All4initialbroadfailures have focused closure:88marketfixture checks,128runtime checks and9deterministic accounting checks. The forcedslot-first schedule reproduced the original incorrect assertion before repair. Only4test files changed after the initial broadgate; production source remained identical. Final159module gate now runs on a fresh release snapshot with547hashed files and all cases included.
 
 - 2026-10-28T06:32:12.896603+00:00: Final159module gate passed5306/0failed/2knownskips in473.90s;547hashes unchanged, guard shutdown complete, identity preserved. verification.json and acceptance.json now record scoped offline acceptance. Commit and push follow; no app bytes will change.
+
+- 2026-10-28T06:37:42.719861+00:00: Code commit 722866a54f919623b2c8f579a53f2e0c4c1afbdc pushed and remote-verified on legacy/codex/first-ten-remedies. Worktree was clean after code commit and all547tested hashes still match. This documentation-only closure adds delivery.json; no tested source changed.
