@@ -55,13 +55,17 @@ def validate_predicate(predicate, node_ids):
 
 
 def validate_scenarios(case):
+    """Bind settlement classifiers; legacy reducers prebind their own target."""
     nodes = {node["nodeId"] for node in case["nodes"]}
+    target = case.get("resolution", {}).get("targetNodeId")
     intervals = []
     for scenario in case.get("scenarios", []):
         if scenario["scenarioId"] == "other":
             raise ValueError("scenarioId 'other' is reserved for unmatched outcomes")
         pred = scenario["predicate"]
         validate_predicate(pred, nodes)
+        if target is not None and pred["nodeId"] != target:
+            raise ValueError("settlement scenario predicate must reference the resolution target")
         op = pred["operator"]
         if op == "between":
             interval = (pred["low"], True, pred["high"], True)

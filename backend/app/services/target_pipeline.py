@@ -230,6 +230,60 @@ def decision_provider_readiness():
     return []
 
 
+def preflight_saved_target(data, *, operation="resume"):
+    """Check only work remaining after receipt-verified research reuse.
+
+    None delegates fresh research and legacy runs to their normal preflight.
+    This is read-only: the runner still rechecks every receipt before reuse.
+    """
+    from .pipeline_orchestrator import PipelineState, PipelineManager
+
+    if operation not in {"resume", "continue", "scenario"}:
+        raise ValueError("Unsupported target reuse operation")
+    if (data.get("options") or {}).get("forecast_authority") != AUTHORITY:
+        return None
+    state = PipelineState.from_dict(data)
+    research = state.stages.get("research")
+    completed_research = research is not None and research.status == "completed"
+    fork_proof = state.options.get("target_fork_source")
+    if not completed_research and not fork_proof:
+        return None
+    try:
+        if state.options.get("simulation_engine") != AUTHORITY:
+            raise TargetPipelineError("Target authority and engine pins differ")
+        research_owner = state
+        if not completed_research:
+            # A fork interrupted before resealing already owns admitted parent
+            # inputs. Verify them read-only; copying remains the runner's job.
+            parent = PipelineManager.load(state.options.get("base_pipeline_id"))
+            if not isinstance(parent, dict):
+                raise TargetPipelineError("Target fork parent is unavailable")
+            research_owner = PipelineState.from_dict(parent)
+            if (capture_fork_source(research_owner) != fork_proof
+                    or research_owner.options.get("target_case_binding") != state.options.get("target_case_binding")):
+                raise TargetPipelineError("Target fork parent generation changed")
+        if not validate_stage(research_owner, "research"):
+            raise TargetPipelineError("Completed target research artifacts changed; cannot reuse them")
+        binding = state.options.get("target_case_binding")
+        if not isinstance(binding, dict) or not binding.get("caseHash"):
+            raise TargetPipelineError("Completed target research has no case binding")
+        handoff = Path(research_owner.handoff_dir or PipelineManager.handoff_dir(research_owner.pipeline_id))
+        case = bridge_module("forecast_case").read_case(
+            handoff / "forecast_case.json", expected_hash=binding["caseHash"])
+        if case["question"].strip() != state.prompt.strip():
+            raise TargetPipelineError("Case question does not match admitted pipeline")
+        if operation == "resume" and state.mode == "research_only":
+            return []
+        # A seed fork always runs new paths even when its parent has completed.
+        if operation != "scenario" and _already_complete(state, "run"):
+            return []
+        if any(actor["decisionRule"]["kind"] == "llm" for actor in case["actors"]):
+            return decision_provider_readiness()
+        return []
+    except (ValueError, OSError, KeyError, TypeError):
+        return ["Saved target artifacts or authority are invalid; restore the admitted generation before reuse"]
+
+
 def _method_gateway():
     if decision_provider_readiness():
         return None
@@ -330,6 +384,10 @@ def run_target_pipeline(owner, state):
         state.research_pid = None
         _check_cancel(state)
     case = fc.read_case(case_path)
+    from .target_mechanisms import admit_model
+    # The schema validates shape; production admission must also consume the
+    # dimensional and seed-identity checks before any case is published/reused.
+    admit_model(case)
     if case["question"].strip() != state.prompt.strip():
         raise TargetPipelineError("Case question does not match admitted pipeline")
     case_digest = fc.case_hash(case)
@@ -463,7 +521,8 @@ def run_target_pipeline(owner, state):
             raise TargetPipelineError("Target result case binding differs")
     else:
         result = run_paths(case, **options["target_simulation"],
-                           decision_provider=_decision_provider(owner, state), cancel_check=lambda: _check_cancel(state))
+                           decision_provider=_decision_provider(owner, state), cancel_check=lambda: _check_cancel(state),
+                           model_validation="admission")
         _check_cancel(state)
         result["decisionBudget"] = dict(state.options.get("target_decision_usage") or {})
         write_json_atomic(str(directory / "target_simulation.json"), result)

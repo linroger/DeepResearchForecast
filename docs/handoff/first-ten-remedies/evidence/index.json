@@ -1,0 +1,250 @@
+{
+  "baseline-completed.json": {
+    "source": "/private/tmp/drf-first-ten-baseline-acceptance-20261028/completed.json",
+    "sha256": "273a44faa1f58c2db6f24626718a9dfd62934d37e7ff88ef21179f6e42291c5d"
+  },
+  "baseline-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-baseline-acceptance-20261028/junit.xml",
+    "sha256": "30ea32ee7166ce376e5b9cb55d3de18346182237c714ba686cb0e1401399610f"
+  },
+  "reuse-red-completed.json": {
+    "source": "/private/tmp/drf-first-ten-reuse-red-20261028/completed.json",
+    "sha256": "add6b2aec1f78c0fefdda4b6bf85af798091d846aa3ab714b1fdfe57d7a1dd85"
+  },
+  "reuse-red-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-reuse-red-20261028/junit.xml",
+    "sha256": "bbe7d3106b00485e93f89f7e7af14c29f3dc0d9d5ff630077b9a4d036316b92a"
+  },
+  "reuse-green-completed.json": {
+    "source": "/private/tmp/drf-first-ten-reuse-green-20261028/completed.json",
+    "sha256": "77e57e0308e1553d5bc1f7fc87987421e460652681878cd20f2479757cbf2aa0"
+  },
+  "reuse-green-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-reuse-green-20261028/junit.xml",
+    "sha256": "864ba34ab509b8d8c701055901b897f36997f900578aa7bc2b5ccac7a88587c0"
+  },
+  "reuse-controls-completed.json": {
+    "source": "/private/tmp/drf-first-ten-reuse-controls2-20261028/completed.json",
+    "sha256": "c7bdd6001039a4bfc7ed34ae7e1152a104d2b8e50b69b9d896007ab9a4d5de71"
+  },
+  "reuse-controls-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-reuse-controls2-20261028/junit.xml",
+    "sha256": "50ba7b57175975ea54f365f2c717a9b386c49da502d4e1434ea115d853cf2776"
+  },
+  "estimators-red-completed.json": {
+    "source": "/private/tmp/drf-first-ten-estimators-red-20261028/completed.json",
+    "sha256": "2007c8bd27084fe032a642a5fc061680b8a1427eb21f94ee405fe943b58b24c8"
+  },
+  "estimators-red-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-estimators-red-20261028/junit.xml",
+    "sha256": "f1d489a08a8f25afb25767a8f01861803adf404d4b096cd24950ce5b246b51c4"
+  },
+  "estimators-green-completed.json": {
+    "source": "/private/tmp/drf-first-ten-estimators-green-20261028/completed.json",
+    "sha256": "4102b0b6b515ee5750917a665e94e84cf44a26edca5fb2ab905207ef64ab0aa2"
+  },
+  "estimators-green-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-estimators-green-20261028/junit.xml",
+    "sha256": "31c9fdfad42dc884e6527c752d02878efb54cc818b71bce49d0d718a8778956c"
+  },
+  "model-consumers-red-completed.json": {
+    "source": "/private/tmp/drf-first-ten-model-consumers-red2-20261028/completed.json",
+    "sha256": "dbad8b21c059e137acf0d89b703dd062f09641b0cbe72bb363d7c0ebcf34bc10"
+  },
+  "model-consumers-red-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-model-consumers-red2-20261028/junit.xml",
+    "sha256": "64c825ec912fa7198dfcc0f1107b5357ed565f26e82258545d6865e356b6f155"
+  },
+  "model-consumers-initial-completed.json": {
+    "source": "/private/tmp/drf-first-ten-model-consumers-green-20261028/completed.json",
+    "sha256": "56684ebaef43d9df6c12308ca1b60378a509793feecfd5e3896e605935961b96"
+  },
+  "model-consumers-initial-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-model-consumers-green-20261028/junit.xml",
+    "sha256": "7e9fab9db0832db154fff9ce0e330f1a27ce354ef7834524736cf13440f2b66f"
+  },
+  "fork-resume-red-completed.json": {
+    "source": "/private/tmp/drf-first-ten-fork-resume-red-20261028/completed.json",
+    "sha256": "84d84582438dc08090fef423eb21626e15bac7f0ed93bc913093861955fac535"
+  },
+  "fork-resume-red-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-fork-resume-red-20261028/junit.xml",
+    "sha256": "89b4c857b1a2f15b46304d4499ce70b3df50a79fdd20f9a99d6a3b67f3d5c011"
+  },
+  "fork-resume-green-completed.json": {
+    "source": "/private/tmp/drf-first-ten-fork-resume-green-20261028/completed.json",
+    "sha256": "e3a6be48e52a858898c268067203e517cf8e26ed2a04809c7dc9a73914541763"
+  },
+  "fork-resume-green-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-fork-resume-green-20261028/junit.xml",
+    "sha256": "7fdb4d51544597b9b455bc89d62cea87e07f80689cff9611480987c5897e2176"
+  },
+  "zero-budget-red-completed.json": {
+    "source": "/private/tmp/drf-first-ten-zero-budget-red-20261028/completed.json",
+    "sha256": "ac285e817a816327df36fa3c14698770a0ade1259ea9f9fdd7d3830fbb391f43"
+  },
+  "zero-budget-red-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-zero-budget-red-20261028/junit.xml",
+    "sha256": "208c9600620fffb5c3cd00f427d4d2276e444e35744d864f48b50caca3ba1737"
+  },
+  "parent-focused-completed.json": {
+    "source": "/private/tmp/drf-first-ten-parent-finalfocused-20261028/completed.json",
+    "sha256": "fd4129dc8777cd2de3182dd884867dd43179a607c554a4eec2838893eba9223a"
+  },
+  "parent-focused-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-parent-finalfocused-20261028/junit.xml",
+    "sha256": "a4dcaea8bc498f4e07944d9e92ee06337d4f90db8c5f24e956f7ab66a0222d86"
+  },
+  "receipt-green-completed.json": {
+    "source": "/private/tmp/drf-first-ten-receipt-green-20261028/completed.json",
+    "sha256": "36e642388257a638755e20775f330652b3159c027269a8ecf12b0ec58d81de2f"
+  },
+  "receipt-green-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-receipt-green-20261028/junit.xml",
+    "sha256": "9f473c8714ccfd480a8e72bd5ab56f67c6f16d56034328d3bb0e86ea7190fb19"
+  },
+  "health-final-completed.json": {
+    "source": "/private/tmp/drf-g1-final-20261028-a/completed.json",
+    "sha256": "819b908747283b139ee1ddd876b238f1ddd765f91e51aa6b4cce1fc1d1ac6b3b"
+  },
+  "health-final-junit.xml.gz": {
+    "source": "/private/tmp/drf-g1-final-20261028-a/junit.xml",
+    "sha256": "d24b0bd3d9a46046402372c7d9c2fc78343e04888ea311a26ab8a738e9038288"
+  },
+  "models-focused-completed.json": {
+    "source": "/private/tmp/drf-first-ten-model-admission-green-20261028-01/completed.json",
+    "sha256": "c5bae76b566d9b3804901cca463663a254a8cb5357b94545f6887fea175f67e8"
+  },
+  "models-focused-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-model-admission-green-20261028-01/junit.xml",
+    "sha256": "6f8439ec9968496fe48b5a8ed54db5a237dd67632a3d6d40769be98d4adcb9c9"
+  },
+  "models-compatibility-completed.json": {
+    "source": "/private/tmp/drf-first-ten-model-admission-compat-20261028-01/completed.json",
+    "sha256": "fc64ed3db97cf3146683864068024787999647a1d4dfc3ae5ab5e121e5dab608"
+  },
+  "models-compatibility-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-model-admission-compat-20261028-01/junit.xml",
+    "sha256": "fa3c30c08a5656a8b2a90a9d89b0ce5b23e28835d9602e3d40967feb1c4a1822"
+  },
+  "report-integrated-completed.json": {
+    "source": "/private/tmp/drf-first-ten-report-integration-20261028/completed.json",
+    "sha256": "75bc27cc456e4ed026e5f3a1a383a0bb8f9e5d5a7b93f989469a64640da69d49"
+  },
+  "report-integrated-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-report-integration-20261028/junit.xml",
+    "sha256": "3545f199bc443078fcd598ca680746f4b117d4f46705a8305ebe4c90c512cd8e"
+  },
+  "prior-publication-red-completed.json": {
+    "source": "/private/tmp/drf-first-ten-prior-publication-red-20261028/completed.json",
+    "sha256": "1e2a367e6496287a0912d4902dbddd0ec605314955daba89c6342858d859b42a"
+  },
+  "prior-publication-red-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-prior-publication-red-20261028/junit.xml",
+    "sha256": "fada54ee5c716cf958959c91fce01e092c87314ee8e40cf4f38aac658e263c70"
+  },
+  "prior-publication-green-completed.json": {
+    "source": "/private/tmp/drf-first-ten-prior-publication-green-20261028/completed.json",
+    "sha256": "92131f35c69a468864ce24fb5a15f0084856408d7499f7c047ebb57a5c5070ba"
+  },
+  "prior-publication-green-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-prior-publication-green-20261028/junit.xml",
+    "sha256": "fc3ac250c6e312ce2708db04458af32fc883fb8f5438e50ff3bf0d5d92a0a6ac"
+  },
+  "report-native-final-completed.json": {
+    "source": "/private/tmp/drf-first-ten-native-closure-20261028-01/completed.json",
+    "sha256": "b0b6ba5a1625b3e8bbab8f476f0721c5bf4451ac7bd0b99c35635b77b54b8b3f"
+  },
+  "report-native-final-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-native-closure-20261028-01/junit.xml",
+    "sha256": "f2b64375d8b44c191b85995c8ef076e92dac017adc8f3eac7b0017ff8dd57017"
+  },
+  "prior-independent-completed.json": {
+    "source": "/private/tmp/drf-first-ten-prior-publication-review-20261028-01/completed.json",
+    "sha256": "1dbffa9dd779d1ed003148c34a2b358a6cde2e662f6bbaa3ca497da5f3d7910a"
+  },
+  "prior-independent-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-prior-publication-review-20261028-01/junit.xml",
+    "sha256": "d89edb4b3e73d96a69ac9392280de363eada3c8b7b1534d9acbb2632c63c74e5"
+  },
+  "independent-parent-completed.json": {
+    "source": "/private/tmp/first-ten-independent-review-20261028-09/completed.json",
+    "sha256": "75c44fdd33f90d049b6095af195dc019efa659a371285ae159596b6a35751bc5"
+  },
+  "independent-parent-junit.xml.gz": {
+    "source": "/private/tmp/first-ten-independent-review-20261028-09/junit.xml",
+    "sha256": "5c2e9d9ce40e5c753739f9ef520da90c2371f72bff31cde76aec089c87b1ca47"
+  },
+  "independent-closure-completed.json": {
+    "source": "/private/tmp/first-ten-independent-review-20261028-11/completed.json",
+    "sha256": "2df20361b9d889f51b29e00e37f5a52b9b40091a42b179c0d21b635c0cda7408"
+  },
+  "independent-closure-junit.xml.gz": {
+    "source": "/private/tmp/first-ten-independent-review-20261028-11/junit.xml",
+    "sha256": "60cae392f546a3415cc874d1ba4c8437689df46323973ac0cdbfd71a81db773e"
+  },
+  "independent-prior-closure-completed.json": {
+    "source": "/private/tmp/first-ten-independent-review-20261028-12/completed.json",
+    "sha256": "1ef4159b1229d2e960779b79eb7b51b55b65d28e941af06d780c02afb95e6a0a"
+  },
+  "independent-prior-closure-junit.xml.gz": {
+    "source": "/private/tmp/first-ten-independent-review-20261028-12/junit.xml",
+    "sha256": "961423a08b09ff4c1a784b1548726503597ca040d3286fcb5f1486a5ed913388"
+  },
+  "broad-initial-completed.json": {
+    "source": "/private/tmp/drf-first-ten-broad-final-20261028-01/completed.json",
+    "sha256": "4b78522693339ba821953a67e208965586164dd38bc0b557954d8ed31be69124"
+  },
+  "broad-initial-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-broad-final-20261028-01/junit.xml",
+    "sha256": "a89d42fcb16c6e51b012d1f3f8dfcc7287e300a0747155ae863d91f0a776ce51"
+  },
+  "broad-initial-output.log.gz": {
+    "source": "/private/tmp/drf-first-ten-broad-final-20261028-01.log",
+    "sha256": "95e50b9f02294a99507bec9cc5e24283c3fa48cec84e8e6a036944ca1265866c"
+  },
+  "market-fixtures-final-completed.json": {
+    "source": "/private/tmp/drf-first-ten-market-fixtures-final-20261028-01/completed.json",
+    "sha256": "e4bc288db410c793699f4a769bea1384a25ceb45cb411b05b8028fcd45368ba2"
+  },
+  "market-fixtures-final-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-market-fixtures-final-20261028-01/junit.xml",
+    "sha256": "6d621ad66233df53cf19aea61b69394a583d591a6eb3c993d1e6fbd9ea766a0c"
+  },
+  "linear-fixture-final-completed.json": {
+    "source": "/private/tmp/drf-first-ten-linear-fixture-20261028-01/completed.json",
+    "sha256": "b449c6114f01e50c6723e9c927b5136f53a662cfb60e553194ec2929a782bd7e"
+  },
+  "linear-fixture-final-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-linear-fixture-20261028-01/junit.xml",
+    "sha256": "8840e8bce7b3ea1ee83c54705b327a9c4d36cf8515dc2e8b802afc28f88e1b68"
+  },
+  "eval-order-red-completed.json": {
+    "source": "/private/tmp/first-ten-world-expectation-red-20261028-01/completed.json",
+    "sha256": "034641b9f3674f789246ca16f6b1fd808fc0aad2ffce7b45d6741712258621b6"
+  },
+  "eval-order-red-junit.xml.gz": {
+    "source": "/private/tmp/first-ten-world-expectation-red-20261028-01/junit.xml",
+    "sha256": "257d5cce51c1d1144bf54e2464911a102c0b0f60a4c4a028dafe232e799612fc"
+  },
+  "eval-order-green-completed.json": {
+    "source": "/private/tmp/first-ten-world-expectation-green-20261028-01/completed.json",
+    "sha256": "cedd437311f0794aaa70d23088c2262bf588e3afdf5c3289e442252a47eaae42"
+  },
+  "eval-order-green-junit.xml.gz": {
+    "source": "/private/tmp/first-ten-world-expectation-green-20261028-01/junit.xml",
+    "sha256": "24cf10a6dfdf183dcb91a638e7fd14422a5a437ab938ad9b997da834fffd008d"
+  },
+  "broad-final-completed.json": {
+    "source": "/private/tmp/drf-first-ten-broad-final-20261028-02/completed.json",
+    "sha256": "a2dab34ec1cf1db21aa6af5c119ed7f47c3d311111e2244d80661a349f683d2f"
+  },
+  "broad-final-junit.xml.gz": {
+    "source": "/private/tmp/drf-first-ten-broad-final-20261028-02/junit.xml",
+    "sha256": "c8b63457a8f602fb5c426e1d154a91793252e7dd1117a2b9afdc066c2a473fa5"
+  },
+  "broad-final-output.log.gz": {
+    "source": "/private/tmp/drf-first-ten-broad-final-20261028-02.log",
+    "sha256": "5c57001e12d4d59d34d4cb8fe25ddecdc99dbb444f2cbedd9cbcbe2dfda940da"
+  }
+}

@@ -192,7 +192,9 @@ def test_actual_pipeline_then_manual_replay_preserves_saved_inputs_and_lanes(exe
     original = json.loads((folder / "forecast.json").read_text())
     if native_market:
         assert original["binary_forecasts"][0]["probability"] == 0.6
-        assert original["binary_forecasts"][0]["market_anchor"]["implied_yes_prob"] == 0.73
+        assert "market_anchor" not in original["binary_forecasts"][0]
+        assert original["binary_forecasts"][0]["resolution_contract"]["kind"] == "named_source_event"
+        assert original["binary_forecasts"][0]["market_equivalence"]["status"] == "unavailable"
         assert json.loads((folder / "target_evidence.json").read_text())["markets"] == payload
         assert original["inputs_health"]["markets"]["status"] == "fresh"
         assert original["inputs_health"]["markets"]["as_of"] == payload["as_of"]

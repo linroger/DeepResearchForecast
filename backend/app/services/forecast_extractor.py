@@ -4074,6 +4074,8 @@ def _market_anchor_binding_valid(
     binary: Dict[str, Any], anchor: Dict[str, Any]
 ) -> bool:
     """Verify that an unclassified semantic match is bound to the current bytes."""
+    if binary.get("derived_from") == "tree":
+        return _tree_market_anchor_binding_valid(binary, anchor)
     proposition_id = str(binary.get("proposition_id") or "").strip()
     if not proposition_id or str(anchor.get("forecast_proposition_id") or "") != proposition_id:
         return False
@@ -4106,7 +4108,10 @@ def audit_market_anchor_integrity(forecast: Dict[str, Any]) -> Dict[str, Any]:
         reasons: List[str] = []
         if not _market_anchor_complete(anchor):
             reasons.append("incomplete provenance")
-        if binary_key and market_key:
+        if binary.get("derived_from") == "tree":
+            if not _tree_market_anchor_binding_valid(binary, anchor):
+                reasons.append("tree exact equivalence lacks matching retained settlement terms")
+        elif binary_key and market_key:
             if binary_key != market_key:
                 reasons.append(f"resolution mismatch ({binary_key} vs {market_key})")
         elif not _market_anchor_binding_valid(binary, anchor):
@@ -4535,6 +4540,125 @@ def validate_tree_resolution_contract(contract, *, predicate, horizon, official_
     return out
 
 
+def _tree_market_settlement(terms):
+    """Expected annual settlement semantics, never manufactured source text."""
+    from datetime import date, timedelta
+    predicate = terms["predicate"]
+    source = terms["settlementSource"]
+    question = re.fullmatch(r"What will (.+) be in (\d{4})\?", terms["question"], re.I)
+    if (question is None or terms["horizon"] != question[2] + "-12-31"
+            or terms["comparatorPolicy"] != "Use the first calendar-year release; thresholds are inclusive only where gte/lte says so."
+            or predicate["operator"] == "between"):
+        raise ValueError("unsupported exact tree market settlement semantics")
+    deadline = (date.fromisoformat(terms["horizon"]) + timedelta(days=source["releaseLagDays"])).isoformat()
+    operator = {"lt": "less than", "lte": "at most", "gt": "more than", "gte": "at least"}[predicate["operator"]]
+    value = format(predicate["value"], ".15g")
+    questions = {f"Will {terms['nodeLabel']} be {operator} {value} {terms['units']}?"}
+    currency, _, magnitude = terms["units"].partition(" ")
+    if currency in {"USD", "EUR", "GBP", "CNY", "JPY"} and magnitude in {"million", "billion", "trillion"}:
+        questions.add(f"Will {terms['nodeLabel']} be {operator} {currency} {value} {magnitude}?")
+    return {"entity": question[1].casefold(), "period": terms["horizon"], "operator": predicate["operator"],
+            "threshold": predicate["value"], "units": terms["units"], "publisher": source["name"],
+            "source_url": source["url"], "deadline": deadline}, questions
+
+
+def _parse_tree_market_source(description):
+    """Recognize one natural annual threshold contract, rejecting extra clauses.
+
+    The full retained description must state the entity, period, units, exact
+    comparator, first-release source and deadline. Missing/unsupported wording
+    is unavailable evidence, not permission to infer equivalence from a title.
+    """
+    from datetime import datetime, date
+    if not isinstance(description, str):
+        return None
+    text = " ".join(description.split())
+    matched = re.fullmatch(
+        r'''This market will resolve to ["']Yes["'] if (.+?) for the calendar year (\d{4}) '''
+        r'''is (at least|more than|at most|less than) (USD|EUR|GBP|CNY|JPY|\$) ([0-9]+(?:\.[0-9]+)?) '''
+        r'''(million|billion|trillion), as reported in the first annual release by (.+?) '''
+        r'''\((https://[^\s)]+)\)\. It will otherwise resolve to ["']No["']\. '''
+        r'''The resolution deadline is ([A-Za-z]+ \d{1,2}, \d{4}|\d{4}-\d{2}-\d{2})\.''', text, re.I)
+    if matched is None:
+        return None
+    entity, year, comparator, currency, threshold, scale, publisher, url, deadline = matched.groups()
+    try:
+        period = date(int(year), 12, 31).isoformat()
+        deadline = (date.fromisoformat(deadline).isoformat() if re.fullmatch(r"\d{4}-\d{2}-\d{2}", deadline)
+                    else datetime.strptime(deadline, "%B %d, %Y").date().isoformat())
+        threshold = float(threshold)
+        if not math.isfinite(threshold):
+            return None
+    except (ValueError, OverflowError):
+        return None
+    return {"entity": entity.casefold(), "period": period,
+            "operator": {"at least": "gte", "more than": "gt", "at most": "lte", "less than": "lt"}[comparator.casefold()],
+            "threshold": threshold, "units": ("USD" if currency == "$" else currency.upper()) + " " + scale.casefold(),
+            "publisher": publisher, "source_url": url, "deadline": deadline}
+
+
+def _tree_market_anchor_binding_valid(binary, anchor):
+    """Recheck a deterministic proof against the actual retained source bytes."""
+    try:
+        terms = anchor["tree_settlement"]
+        if (anchor.get("match_method") != "deterministic-tree-settlement-v1"
+                or not isinstance(terms, dict) or set(terms) != {
+                    "predicate", "nodeLabel", "units", "question", "horizon", "settlementSource", "comparatorPolicy"}
+                or terms["predicate"] != binary.get("predicate")):
+            return False
+        expected, questions = _tree_market_settlement(terms)
+        observed = _parse_tree_market_source(anchor.get("description"))
+        return bool(anchor.get("resolution_equivalence") == "exact"
+                    and binary.get("statement") == anchor.get("question")
+                    and anchor.get("question") in questions
+                    and observed == expected
+                    and binary.get("resolution_criteria") == anchor.get("description")
+                    and binary.get("resolution_date") == anchor.get("endDate") == expected["deadline"]
+                    and (binary.get("resolution_contract") or {}) == {
+                        "kind": "polymarket", "market_id": anchor.get("market_id"), "equivalence": "exact"}
+                    and anchor.get("forecast_proposition_id") == binary.get("proposition_id"))
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return False
+
+
+def _admit_tree_market(row, snapshot, case, node):
+    """Only retained provider terms can establish exact equivalence; IDs cannot."""
+    from copy import deepcopy
+    resolution = case["resolution"]
+    if row["predicate"]["nodeId"] != resolution["targetNodeId"]:
+        raise ValueError("exact tree market requires a node-specific settlement source")
+    terms = {"predicate": deepcopy(row["predicate"]), "nodeLabel": node["label"], "units": node["units"],
+             "question": case["question"], "horizon": resolution["horizon"],
+             "settlementSource": deepcopy(resolution["settlementSource"]),
+             "comparatorPolicy": resolution["comparatorPolicy"]}
+    try:
+        expected, questions = _tree_market_settlement(terms)
+    except ValueError:
+        return "unsupported_case_settlement"
+    observed = _parse_tree_market_source(snapshot.get("description"))
+    if observed is None:
+        return "unsupported_or_missing_source_settlement"
+    differences = [key for key in expected if observed[key] != expected[key]]
+    if snapshot.get("question") != row["statement"] or row["statement"] not in questions:
+        differences.append("question")
+    if _market_end_date(snapshot) != expected["deadline"]:
+        differences.append("market_deadline")
+    if differences:
+        return "contradictory_source_terms:" + ",".join(differences)
+    # Construct ordinary prices first, without falsely asserting that a model
+    # reviewed semantic equivalence. Retain the actual description unchanged.
+    anchor = _build_market_anchor(row["probability"], snapshot, equivalence="exact", match_confidence=1.0)
+    if anchor is None or not _market_anchor_complete(anchor):
+        return "incomplete_source_snapshot"
+    row.update(resolution_criteria=snapshot["description"], resolution_date=expected["deadline"], proposition_id=row["id"])
+    anchor.update(description=snapshot["description"], tree_settlement=terms,
+                  match_method="deterministic-tree-settlement-v1", forecast_proposition_id=row["id"])
+    if not _tree_market_anchor_binding_valid(row, anchor):
+        raise ValueError("exact tree market settlement binding is invalid")
+    row["market_anchor"] = anchor
+    return None
+
+
 def derive_binaries_from_tree(case, *, scenarios=None, official_data=None, markets=None):
     """Project typed target predicates into resolvable binaries without LLM/quota.
 
@@ -4609,15 +4733,22 @@ def derive_binaries_from_tree(case, *, scenarios=None, official_data=None, marke
             if anchor is None:
                 raise ValueError("official tree contract cannot bind to stored snapshot")
             _admit_data_anchor(row, anchor, official_data, "English")
-        elif contract["kind"] == "polymarket" and markets is not None:
-            snapshot = next((m for m in markets if str(m.get("market_id")) == contract["market_id"]), None)
-            if snapshot is None:
-                raise ValueError("exact tree market contract has no stored snapshot")
-            row["proposition_id"] = candidate["binaryId"]
-            anchor = _build_market_anchor(row["probability"], snapshot, equivalence="exact", match_confidence=1.0, binary=row)
-            if anchor is None or not _market_anchor_complete(anchor):
-                raise ValueError("exact tree market snapshot is incomplete")
-            row["market_anchor"] = anchor
+        elif contract["kind"] == "polymarket":
+            matches = [m for m in (markets or []) if str(m.get("market_id")) == contract["market_id"]]
+            reason = (_admit_tree_market(row, matches[0], case, node) if len(matches) == 1
+                      else "missing_or_ambiguous_source_snapshot")
+            if reason is not None:
+                if predicate["nodeId"] != resolution["targetNodeId"]:
+                    raise ValueError("exact tree market has no node-specific fallback settlement")
+                source = resolution["settlementSource"]
+                deadline = (date.fromisoformat(resolution["horizon"]) + timedelta(days=source["releaseLagDays"])).isoformat()
+                fallback = {"kind": "named_source_event", "publisher": source["name"],
+                            "event": event + "; " + resolution["comparatorPolicy"], "deadline": deadline, "url": source["url"]}
+                row["resolution_contract"] = validate_tree_resolution_contract(fallback, predicate=predicate,
+                                                                               horizon=resolution["horizon"])
+                row["resolution_source"] = source["url"]
+                row["market_equivalence"] = {"status": "rejected" if reason.startswith("contradictory") else "unavailable",
+                                             "market_id": contract["market_id"], "reason": reason}
         binaries.append(row)
     quality = _binary_quality(binaries, min_count=0)
     quality["source"] = "tree"
@@ -5126,6 +5257,62 @@ def validate_prior_posterior_updates(forecast, prior, updates):
     forecast["research_prior"] = prior
     forecast["scenario_updates"] = list(ledger.values())
     return forecast
+
+
+def _rebind_prior_updates(original, revised, reasons):
+    """Keep an admitted prior immutable through a justified later revision.
+
+    This validates both ends. A previous reason cannot justify a new move; the
+    revision must supply its own rationale for every changed scenario.
+    """
+    from copy import deepcopy
+    prior = original.get("research_prior")
+    if prior is None:
+        return revised
+    validate_prior_posterior_updates(deepcopy(original), prior, original.get("scenario_updates"))
+    before = {s["name"]: s for s in original["scenarios"]}
+    after = {s["name"]: s for s in revised["scenarios"]}
+    if len(after) != len(revised["scenarios"]) or set(after) != set(before):
+        raise ValueError("prior-aware revision must preserve scenario identities")
+    for name, row in after.items():
+        if (row["probability"] != before[name]["probability"]
+                and (not isinstance(reasons.get(name), str) or not reasons[name].strip())):
+            raise ValueError("every revised probability requires a supplied evidence reason")
+    ledger = []
+    for update in original["scenario_updates"]:
+        row = deepcopy(update)
+        name = row["name"]
+        row["posterior"] = after[name]["probability"]
+        if after[name]["probability"] != before[name]["probability"]:
+            row["reason"] = "; ".join(dict.fromkeys(
+                text for text in (row["reason"], reasons[name].strip()) if text))
+        ledger.append(row)
+    return validate_prior_posterior_updates(revised, prior, ledger)
+
+
+def _prior_critique_rows(forecast, proposed):
+    """No implicit floor, rounding, new residual, or settlement rewrite."""
+    from copy import deepcopy
+    previous = {row["name"]: row for row in forecast["scenarios"]}
+    if (not all(isinstance(row, dict) and isinstance(row.get("name"), str) for row in proposed)
+            or len(proposed) != len(previous)
+            or {row["name"] for row in proposed} != set(previous)):
+        raise ValueError("prior-aware critique must preserve scenario identities")
+    probabilities = [row.get("probability") for row in proposed]
+    if (any(type(p) not in (int, float) or not math.isfinite(p) or not 0 <= p <= 1 for p in probabilities)
+            or not math.isclose(sum(probabilities), 1, abs_tol=1e-8)
+            or max(probabilities) > max(row["probability"] for row in previous.values())):
+        raise ValueError("prior-aware critique requires a complete, non-inflating distribution")
+    by_name = {row["name"]: row for row in proposed}
+    rows = deepcopy(forecast["scenarios"])
+    for row in rows:
+        supplied = by_name[row["name"]]
+        if supplied.get("resolution_criteria", row.get("resolution_criteria")) != row.get("resolution_criteria"):
+            raise ValueError("prior-aware critique cannot redefine settlement")
+        row["probability"] = supplied["probability"]
+        if isinstance(supplied.get("critique_note"), str):
+            row["critique_note"] = supplied["critique_note"]
+    return rows
 
 
 def _spine_draw(llm, user: str, temperature: float, max_tokens: int, *,
@@ -5915,16 +6102,24 @@ def self_critique_forecast(forecast: Dict[str, Any], llm, language: str = "",
         if not isinstance(critique_scenarios, list) or not critique_scenarios:
             return forecast
         out = dict(forecast)
-        raw_scenarios, residual_added = _ensure_residual_critique_scenario(
-            critique_scenarios, forecast,
-        )
-        if raw_scenarios is None:
-            return forecast
-        out["scenarios"] = _normalize_scenarios(raw_scenarios)
+        prior_aware = forecast.get("research_prior") is not None
+        if prior_aware:
+            raw_scenarios, residual_added = critique_scenarios, False
+            out["scenarios"] = _prior_critique_rows(forecast, raw_scenarios)
+        else:
+            raw_scenarios, residual_added = _ensure_residual_critique_scenario(
+                critique_scenarios, forecast,
+            )
+            if raw_scenarios is None:
+                return forecast
+            out["scenarios"] = _normalize_scenarios(raw_scenarios)
         if not out["scenarios"]:
             return forecast
         # preserve critique_note per scenario if the model supplied it
-        for new_s, raw_s in zip(out["scenarios"], raw_scenarios or [], strict=True):
+        raw_by_name = {s.get("name"): s for s in raw_scenarios if isinstance(s, dict)}
+        paired_rows = ([(s, raw_by_name.get(s["name"], {})) for s in out["scenarios"]] if prior_aware
+                       else zip(out["scenarios"], raw_scenarios or [], strict=True))
+        for new_s, raw_s in paired_rows:
             if isinstance(raw_s, dict) and raw_s.get("critique_note"):
                 new_s["critique_note"] = str(raw_s["critique_note"])
         ranges = {s.get("name"): s["metric_range"] for s in forecast.get("scenarios") or []
@@ -5940,7 +6135,10 @@ def self_critique_forecast(forecast: Dict[str, Any], llm, language: str = "",
             out["confidence_rationale"] = str(raw["confidence_rationale"])
         # R2-CAL-8：让红队评审「谦逊单调」——修正只能降低、不得抬高峰值自信。若评审反而把
         # 最高概率推得比原来更高，则把峰值夹回原始上限并重新归一（cap residual growth）。
-        out["scenarios"] = _enforce_humility_monotone(forecast, out["scenarios"])
+        if not prior_aware:
+            out["scenarios"] = _enforce_humility_monotone(forecast, out["scenarios"])
+        if prior_aware:
+            _rebind_prior_updates(forecast, out, {row["name"]: row.get("critique_note") for row in raw_scenarios})
         _synchronize_scenario_probability_narratives(out["scenarios"])
         if residual_added:
             out["residual_scenario_added"] = True
@@ -6078,6 +6276,14 @@ def premortem_forecast(forecast: Dict[str, Any], llm, language: str = "",
         _synchronize_scenario_probability_narratives(out["scenarios"])
         out["premortem"] = {"underweighted_scenario": str(raw.get("underweighted_scenario") or ""),
                             "missed_signals": missed[:8]}
+        if forecast.get("research_prior") is not None:
+            supplied_reasons = raw.get("missed_signals", [])
+            if not isinstance(supplied_reasons, list):
+                raise ValueError("prior-aware pre-mortem reasons must be a list")
+            actual_reasons = [text.strip() for text in supplied_reasons
+                              if isinstance(text, str) and text.strip()]
+            _rebind_prior_updates(forecast, out, {row["name"]: "; ".join(actual_reasons)
+                                                 for row in out["scenarios"]})
         # VIZ-GAP1(a)：概率被谦逊转移后旧区间可能不再包住 p——先作废再按 ±spread 重建。
         for s in out["scenarios"]:
             p = _coerce_float(s.get("probability"))

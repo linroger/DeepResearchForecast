@@ -395,7 +395,7 @@ def test_completed_llm_run_can_retry_report_without_decision_provider(execution,
     assert Path(state.artifacts['target_simulation']).read_bytes() == original
 
 
-@pytest.mark.parametrize('status,cache_hit,expected', [('ok', False, 'ok'), ('stale', True, 'unavailable')])
+@pytest.mark.parametrize('status,cache_hit,expected', [('ok', False, 'unavailable'), ('stale', True, 'unavailable')])
 def test_native_market_payload_reaches_frozen_estimates_and_publication(execution, monkeypatch, status, cache_hit, expected):
     from datetime import datetime, timezone
     execution.case['binaries'][0]['resolution_contract'] = {
@@ -419,5 +419,10 @@ def test_native_market_payload_reaches_frozen_estimates_and_publication(executio
     lane = next(row for row in frozen['estimators'] if row['source'] == 'market_implied')
     assert lane['status'] == expected
     forecast = json.loads(Path(state.artifacts['target_forecast']).read_text())
-    assert forecast['inputs_health']['markets']['status'] == ('fresh' if expected == 'ok' else 'stale')
+    # Transport freshness does not establish settlement equivalence. This
+    # title-only source still supplies health diagnostics, never market authority.
+    assert forecast['inputs_health']['markets']['status'] == ('fresh' if status == 'ok' else 'stale')
     assert forecast['binary_forecasts'][0]['probability'] == 0.6
+    assert 'market_anchor' not in forecast['binary_forecasts'][0]
+    assert forecast['binary_forecasts'][0]['resolution_contract']['kind'] == 'named_source_event'
+    assert forecast['binary_forecasts'][0]['market_equivalence']['status'] == 'unavailable'

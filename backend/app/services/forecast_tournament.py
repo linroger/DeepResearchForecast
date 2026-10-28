@@ -63,6 +63,7 @@ def _method_lane(source, context, llm, authority):
 
 def _market_lane(forecast, markets):
     from .forecast_inputs_health import build_inputs_health
+    from .forecast_extractor import _market_anchor_binding_valid, _market_end_date
     envelope = markets if isinstance(markets, dict) else {"markets": markets or []}
     rows = envelope.get("markets")
     if not isinstance(rows, list):
@@ -72,15 +73,20 @@ def _market_lane(forecast, markets):
     inputs, binaries, rejected = [], [], []
     for binary in forecast.get("binary_forecasts", []):
         anchor = binary.get("market_anchor") or {}
-        contract = binary.get("resolution_contract") or {}
-        if contract.get("kind") == "polymarket" and contract.get("equivalence") == "exact":
-            anchor = contract
         if anchor.get("resolution_equivalence", anchor.get("equivalence")) != "exact":
             continue
         market_id = str(anchor.get("market_id") or "")
         snapshot = snapshots.get(market_id)
         if not snapshot:
             continue
+        if binary.get("derived_from") == "tree":
+            if (not _market_anchor_binding_valid(binary, anchor)
+                    or sum(str(m.get("market_id")) == market_id for m in rows if isinstance(m, dict)) != 1
+                    or snapshot.get("question") != anchor.get("question")
+                    or snapshot.get("description") != anchor.get("description")
+                    or _market_end_date(snapshot) != anchor.get("endDate")):
+                rejected.append({"market_id": market_id, "reason": "exact_settlement_not_proven"})
+                continue
         health_payload = {k: envelope[k] for k in
             ("status", "as_of", "retrieved_at", "cached", "from_cache", "cache_status", "cache", "transport_errors", "enabled") if k in envelope}
         health_payload.update({k: snapshot[k] for k in

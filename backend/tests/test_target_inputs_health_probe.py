@@ -115,50 +115,63 @@ def test_configured_24h_scheduler_start_with_fake_thread_no_runtime(monkeypatch)
 
 
 def test_probe_cli_uses_real_configured_gamma_and_clob_transport(monkeypatch, capsys):
+    import io
+    from urllib.parse import parse_qs, urlsplit
+    import urllib.request
+    from deerflow_bridge import deerflow_research as collector
+
     monkeypatch.setattr(Config, "PREDICTION_MARKETS_ENABLED", True)
-    monkeypatch.setattr(pm, "POLYMARKET_BASE_URL", "https://gamma.fixture")
-    monkeypatch.setattr(pm, "CLOB_BASE_URL", "https://clob.fixture")
-    # The real class default is bound at definition; use its configured constructor
-    # while leaving every client method and normalization path real.
-    original = pm.PolymarketClient
-    monkeypatch.setattr(pm, "PolymarketClient", lambda **kw: original(base_url="https://gamma.fixture", **kw))
+    monkeypatch.setenv("PREDICTION_MARKETS_ENABLED", "true")
+    monkeypatch.setattr(collector, "_POLYMARKET_BASE_URL", "https://gamma.fixture")
+    monkeypatch.setattr(collector, "_CLOB_BASE_URL", "https://clob.fixture")
     requests = []
 
-    class Response:
-        status_code = 200
-
-        def __init__(self, payload):
-            self.payload = payload
-
-        def raise_for_status(self):
-            pass
-
-        def json(self):
-            return self.payload
-
-    def get(url, **kwargs):
-        requests.append((url, kwargs))
-        if url.endswith("public-search"):
-            return Response({"events": [{"id": "e1", "title": "Event", "markets": [{
+    def get(request, **kwargs):
+        url = urlsplit(request.full_url)
+        requests.append((url, request, kwargs))
+        if url.path == "/public-search":
+            payload = {"events": [{"id": "e1", "title": "Event", "markets": [{
                 "id": "m1", "question": "Event happens?", "volume": 1000, "liquidity": 500,
                 "closed": False, "outcomes": '["Yes","No"]', "outcomePrices": '["0.4","0.6"]',
-                "clobTokenIds": '["token1","token2"]'}]}]})
-        assert url == "https://clob.fixture/prices-history"
-        assert kwargs["params"]["market"] == "token1"
-        return Response({"history": [{"t": 1793102400, "p": 0.4}]})
+                "clobTokenIds": '["token1","token2"]'}]}]}
+        else:
+            assert (url.netloc, url.path) == ("clob.fixture", "/prices-history")
+            assert parse_qs(url.query)["market"] == ["token1"]
+            payload = {"history": [{"t": 1793102400, "p": 0.4}]}
+        return io.BytesIO(json.dumps(payload).encode())
 
-    monkeypatch.setattr(pm.httpx, "get", get)
+    monkeypatch.setattr(urllib.request, "urlopen", get)
+    monkeypatch.setattr(pm.httpx, "get", lambda *a, **k: pytest.fail("probe bypassed collector transport"))
     assert probe.main(["event", "--timeout", "3"]) == 0
     result = json.loads(capsys.readouterr().out)
     assert result["gamma"]["status"] == result["clob"]["status"] == "fresh"
     assert result["inputs_health"]["markets"]["rows"] == 1
-    assert [r[0] for r in requests] == ["https://gamma.fixture/public-search", "https://clob.fixture/prices-history"]
-    assert all(r[1]["timeout"] == 3 and r[1]["headers"]["User-Agent"] for r in requests)
+    assert [(r[0].netloc, r[0].path) for r in requests] == [
+        ("gamma.fixture", "/public-search"), ("clob.fixture", "/prices-history")]
+    assert all(r[2]["timeout"] == 3 and r[1].get_header("User-agent") == collector._POLYMARKET_UA
+               for r in requests)
 
 
 def test_probe_disabled_and_missing_clob_token_do_not_claim_success(monkeypatch):
+    import io
+    import urllib.request
+
     monkeypatch.setattr(Config, "PREDICTION_MARKETS_ENABLED", False)
+    monkeypatch.setenv("PREDICTION_MARKETS_ENABLED", "false")
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: pytest.fail("disabled probe touched transport"))
     monkeypatch.setattr(pm.httpx, "get", lambda *a, **k: pytest.fail("disabled probe touched transport"))
     result = probe.probe_markets("event")
     assert result["gamma"]["status"] == result["clob"]["status"] == "disabled"
     assert probe._safe_endpoint("https://user:secret@host/path?key=secret") == "https://host/path"
+    monkeypatch.setenv("PREDICTION_MARKETS_ENABLED", "true")
+    calls = []
+
+    def no_token(request, **kwargs):
+        calls.append(request.full_url)
+        return io.BytesIO(json.dumps({"events": [{"markets": [{"id": "m1", "question": "Event?",
+            "outcomes": ["Yes", "No"], "outcomePrices": [0.4, 0.6], "volume": 1000}]}]}).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", no_token)
+    result = probe.probe_markets("event")
+    assert result["gamma"]["status"] == "fresh" and result["clob"]["status"] == "unknown"
+    assert result["clob"]["reason"] == "missing_token_id" and len(calls) == 1

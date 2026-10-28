@@ -478,6 +478,8 @@ def validate_case(case):
         _object(scenario, sid, ("scenarioId", "label", "predicate"))
         _text(scenario["label"], sid)
         interval = _predicate(scenario["predicate"], nodes, sid)
+        if scenario["predicate"]["nodeId"] != resolution["targetNodeId"]:
+            _fail(sid, "settlement scenario predicate must reference the resolution target")
         for other, prior in intervals:
             # With independent dimensions, both one-dimensional regions can
             # hold simultaneously. A joint-region DSL is deliberately absent.

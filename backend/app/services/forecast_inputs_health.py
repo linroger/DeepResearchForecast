@@ -9,12 +9,13 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import math
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 
 class InputHealth(TypedDict):
     status: Literal["fresh", "stale", "offline", "unknown", "empty", "disabled"]
     as_of: str | None
+    attempted_at: NotRequired[str | None]
     rows: int
     reason: str
 
@@ -71,7 +72,15 @@ def _entry(payload, category, now, max_age_hours) -> InputHealth:
     timestamp = _time(stamp)
     result: InputHealth = {"status": "unknown", "as_of": stamp if timestamp else None,
                            "rows": count, "reason": "missing_status_evidence"}
+    # A collector attempt dates availability evidence, not an absent price.
+    # Keep this additive so older carriers and other inputs retain their shape.
+    attempt_stamp = detail.get("attempted_at", payload.get("attempted_at"))
+    attempt_time = _time(attempt_stamp)
+    if "attempted_at" in detail or "attempted_at" in payload:
+        result["attempted_at"] = (attempt_stamp if attempt_time is not None and attempt_time <= now else None)
+    failures = detail.get("transport_failure_count")
     failed = (label in ("offline", "error", "failed", "transport_failure", "timeout")
+              or (type(failures) is int and failures > 0)
               or detail.get("empty_reason") == "transport_failure"
               or bool(detail.get("transport_circuit_open"))
               or bool(detail.get("deadline_exhausted"))
@@ -81,7 +90,8 @@ def _entry(payload, category, now, max_age_hours) -> InputHealth:
               or (isinstance(payload.get("cache"), dict) and payload["cache"].get("hit") is True)
               or bool(rows and any(isinstance(r, dict) and (
                   r.get("requote_failed") is True or r.get("route") == "cache") for r in rows)))
-    if label == "disabled" or payload.get("enabled") is False:
+    if (label == "disabled" or payload.get("enabled") is False
+            or detail.get("empty_reason") == "disabled"):
         result.update(status="disabled", reason="input_disabled")
     elif failed:
         result.update(status="stale" if count and cached else "offline",
@@ -90,16 +100,22 @@ def _entry(payload, category, now, max_age_hours) -> InputHealth:
         result["reason"] = "future_snapshot_time"
     elif cached:
         result.update(status="stale", reason="cached_snapshot")
+    elif timestamp is None and attempt_time is not None and attempt_time > now:
+        result["reason"] = "future_attempt_time"
+    elif count == 0 and (timestamp is not None or attempt_time is not None):
+        successful = detail.get("successful_query_count")
+        confirmed_empty = (label in ("empty", "ok", "fresh", "available")
+                           or (type(successful) is int and successful > 0))
+        checked_at = timestamp or attempt_time
+        if confirmed_empty and (now - checked_at).total_seconds() > max_age_hours * 3600:
+            result.update(status="stale", reason="status_age_exceeded")
+        else:
+            result.update(status="empty" if confirmed_empty else "unknown",
+                          reason="no_rows" if confirmed_empty else "missing_status_evidence")
     elif timestamp is None:
         result["reason"] = "missing_snapshot_time"
     elif (now - timestamp).total_seconds() > max_age_hours * 3600:
         result.update(status="stale", reason="snapshot_age_exceeded")
-    elif count == 0:
-        successful = detail.get("successful_query_count")
-        confirmed_empty = (label in ("empty", "ok", "fresh", "available")
-                           or (type(successful) is int and successful > 0))
-        result.update(status="empty" if confirmed_empty else "unknown",
-                      reason="no_rows" if confirmed_empty else "missing_status_evidence")
     elif label in ("ok", "fresh", "available", "success") or (
             category != "provider" and rows is not None and label is None):
         result.update(status="fresh", reason="dated_snapshot")
@@ -111,7 +127,9 @@ def build_inputs_health(*, markets=None, news=None, official_data=None, provider
     """Return forecast.json.inputs_health with explicit per-input status.
 
     Accepts saved market/news/official payloads or explicit status receipts with
-    status/as_of/rows. The optional as_of is the evaluation clock, not a default
+    status/as_of/rows and optional attempted_at (also accepted inside status).
+    Attempt time can date an empty status check but never a price snapshot.
+    The optional as_of is the evaluation clock, not a default
     timestamp for inputs. No provider availability is inferred from configuration.
     """
     now = datetime.now(timezone.utc) if as_of is None else _time(as_of)

@@ -389,13 +389,27 @@ def test_typed_market_producer_anchor_reaches_real_journal_and_score(tmp_path):
     case = json.loads((Path(__file__).parent / "fixtures/target_case.json").read_text())
     candidate = case["binaries"][0]
     candidate["resolution_contract"] = {"kind": "polymarket", "market_id": "M1", "equivalence": "exact"}
+    # Retained natural settlement terms from a synthetic source fixture. The
+    # deadline includes the case's 90-day first-release lag after calendar 2027.
     snapshot = {"market_id": "M1", "implied_yes_prob": 0.73, "question": candidate["question"],
-                "url": "https://example.test/market", "endDate": "2027-12-31"}
+                "description": (
+                    'This market will resolve to "Yes" if worldwide security spending for the calendar year 2027 '
+                    'is at least USD 280 billion, as reported in the first annual release by '
+                    'Synthetic official statistics (https://example.test/spending). '
+                    'It will otherwise resolve to "No". The resolution deadline is March 30, 2028.'),
+                "url": "https://example.test/market", "endDate": "2028-03-30"}
     produced = derive_binaries_from_tree(case, markets=[snapshot])["binary_forecasts"][0]
-    publish(tmp_path, produced)
+    assert produced["probability"] == 0.6
+    assert produced["market_anchor"]["resolution_equivalence"] == "exact"
+    assert produced["market_anchor"]["description"] == snapshot["description"]
+    assert produced["resolution_date"] == "2028-03-30"
+    ledger.record_published_forecast({"binary_forecasts": [produced]}, report_id="r1",
+                                     created_at="2026-10-28T00:00:00Z", d=tmp_path)
+    issued = ledger.read_published_forecast("r1", d=tmp_path)["forecast"]["binary_forecasts"][0]
+    assert issued == produced
     proof = {"report_id": "r1", "forecast_id": produced["id"], "model_p": produced["probability"],
              "market_id": "M1", "market_anchor": produced["market_anchor"],
-             "resolved_at": "2028-01-02T00:00:00Z", "resolved_outcome": "Yes", "resolved_yes_price": 1.0}
+             "resolved_at": "2028-04-02T00:00:00Z", "resolved_outcome": "Yes", "resolved_yes_price": 1.0}
     assert reconcile(tmp_path, proof)["accepted"] == 1
     assert ledger.production_track_record(d=tmp_path)["tracks"]["market_binary"]["mean_brier"] == 0.16
     assert ledger.read_published_resolutions("r1", tmp_path)[0]["forecast_id"] == candidate["binaryId"]

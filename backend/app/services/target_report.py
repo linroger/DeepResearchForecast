@@ -86,7 +86,7 @@ def _simulation(case, simulation):
         _require(isinstance(budget, dict) and set(budget) == {"maximumRequests", "requests", "cacheHits", "exhausted"},
                  "invalid decision budget fields")
         _require(all(type(budget[key]) is int and budget[key] >= 0 for key in ("maximumRequests", "requests", "cacheHits"))
-                 and budget["maximumRequests"] > 0 and budget["requests"] <= budget["maximumRequests"]
+                 and budget["requests"] <= budget["maximumRequests"]
                  and type(budget["exhausted"]) is bool, "invalid decision budget counters")
     shares = result.get("scenarioShares")
     _require(isinstance(shares, dict) and bool(shares), "simulation shares missing")
@@ -183,7 +183,21 @@ def build_target_report(case, simulation=None, *, official_data=None, markets=No
                         scenario_label=None, base_simulation_id=None):
     """Project frozen typed inputs to the public forecast.json and Markdown shape."""
     case = _case_api().validate_case(case)
+    from .target_mechanisms import admit_model
+    model_admission = admit_model(case)
     simulation = _simulation(case, simulation)
+    has_model_receipt = simulation is not None and "modelValidation" in simulation
+    if has_model_receipt:
+        receipt = simulation["modelValidation"]
+        _require(isinstance(receipt, dict), "invalid model admission receipt")
+        if "policy" in receipt:
+            expected_receipt = model_admission
+        else:
+            # Historical diagnostic mode had no policy field. Verify its exact
+            # shape/values too; an unknown policy cannot select that legacy path.
+            from .target_mechanisms import validate_model
+            expected_receipt = validate_model(case)
+        _require(receipt == expected_receipt, "model admission receipt differs from frozen case")
     assessment = _assessment(case)
     nodes = {n["nodeId"]: n for n in case["nodes"]}
     weights = assessment["scenarioWeights"]
@@ -233,6 +247,8 @@ def build_target_report(case, simulation=None, *, official_data=None, markets=No
               "sensitivity": simulation.get("sensitivity", []) if simulation else [],
               "signposts": simulation.get("signposts", []) if simulation else [],
               "targetSummary": simulation.get("targetSummary") if simulation else None}
+    if has_model_receipt:
+        record["modelValidation"] = model_admission
     forecast = {"schema_version": 1, "headline": case["question"], "horizon": resolution["horizon"],
                 "scenarios": scenarios, "binary_forecasts": binaries,
                 "binary_quality": binary_projection["binary_quality"],
@@ -301,7 +317,7 @@ def build_target_report(case, simulation=None, *, official_data=None, markets=No
     return {"forecast": forecast, "markdown": "\n".join(lines), "record": record}
 
 
-def diagnostic_markdown(record):
+def diagnostic_markdown(record, *, forecast=None):
     """Exact ADR 0003 fence; no source markers or private path contents."""
     lines = [BRIDGE_START, "## Structural simulation diagnostics", "",
              "SIMULATED — structural sensitivity exercise. ZERO forecast weight. Not observed evidence.",
@@ -311,6 +327,10 @@ def diagnostic_markdown(record):
         lines.append(f"| {_text(row['scenarioId'])} | {row['researchProbability']:.10g} | {row['simulatedShare']:.10g} | {row['difference']:+.10g} |")
     if not record["divergence"]:
         lines += ["", "No structural paths supplied."]
+    from .forecast_estimator_table import render_estimator_table
+    estimator_table = render_estimator_table(forecast)
+    if estimator_table:
+        lines += ["", estimator_table]
     for label, key in (("Target summary", "targetSummary"), ("Sensitivity", "sensitivity"),
                        ("Signposts", "signposts"), ("Structural parameter bases", "simulationParameterBases")):
         lines += ["", f"### {label}", "", _text(canonical_json(record[key]))]
@@ -319,6 +339,9 @@ def diagnostic_markdown(record):
                   "These counts measure distinct decision requests; internal provider retries are recorded separately."]
         if record["decisionBudget"]["exhausted"]:
             lines += ["The decision request budget was exhausted. Subsequent uncached choices held their prior settings."]
+    if "modelValidation" in record:
+        lines += ["", "### Model validation", "", _text(canonical_json(record["modelValidation"])),
+                  "Unsupported units and unmeasured seed identities remain evidence gaps; they are not successful validation checks."]
     lines += ["", "Prospective paired evaluation is required. No measured lift or promotion is claimed.",
               f"Policy: {POLICY_VERSION}. Record SHA-256: {_hash(record)}.", BRIDGE_END]
     return "\n".join(lines)

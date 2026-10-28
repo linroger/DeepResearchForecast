@@ -1473,17 +1473,28 @@ def test_2027_no_decision_baseline_is_explicit_extrapolation_from_publisher_fore
 
 @pytest.mark.parametrize("kind", ["growth", "linear"])
 def test_actual_runtime_output_reaches_strict_report_and_registration(case, tmp_path, monkeypatch, kind):
+    """Both templates reach publication with dimensionally valid fixture inputs."""
     from datetime import datetime, timezone
     from app.services import target_report
     case["assessments"][0]["scenarioWeights"] = {"low": .4, "high": .6, "other": 0.0}
     case["binaries"][0]["probability"] = .6
     case["actors"] = [_actor(lag=1)]
     if kind == "linear":
+        # Linear coefficients are dimensionless: its second input is an additive
+        # quantity in target units, not the fractional rate used by growth. Keep
+        # its ID and numbers so coefficient:rate and the original paths survive.
+        _by_node(case, "rate")["units"] = _by_node(case, "target")["units"]
         case["mechanisms"][0].update(kind="linear", parameters={"coefficients": [1.0, 100.0], "intercept": 0.0})
     result = runtime_run_paths(case, paths=2, periods=3, lookahead=True,
         decision_provider=lambda obs: {"actorId": obs["actorId"], "leverId": obs["levers"][0]["leverId"], "value": .4},
         interventions=[{"interventionId": "declared", "settings": [{"actorId": "a", "leverId": "a-lever", "value": .3}]}],
         conditions=[{"conditionId": "tail", "predicate": {"nodeId": "target", "operator": "gte", "value": 110}}])
+    if kind == "linear":
+        assert result["paths"][0]["parameters"]["growth"] == {
+            "coefficient:base": 1.0, "coefficient:rate": 100.0, "intercept": 0.0}
+    assert result["baselineSummary"]["mean"] == pytest.approx(110)
+    assert result["targetSummary"]["mean"] == pytest.approx(140)
+    assert result["interventionTables"][0]["targetSummary"]["mean"] == pytest.approx(130)
     bundle = target_report.build_target_report(case, result)
     assert bundle["forecast"]
     monkeypatch.setattr(target_report, "_utcnow", lambda: datetime(2026, 10, 27, 12, tzinfo=timezone.utc))

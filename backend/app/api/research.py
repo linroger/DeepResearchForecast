@@ -34,7 +34,9 @@ from ..services.pipeline_orchestrator import (
 from ..services.world_simulation.admission import UNSET
 from ..services.world_simulation.contracts import WorldError
 from ..services.backtest_mode import BacktestRequestError
-from ..services.target_pipeline import TargetPipelineError, normalize_target_options
+from ..services.target_pipeline import (
+    TargetPipelineError, normalize_target_options, preflight_saved_target,
+)
 from ..services.research_progress import (
     ResearchProgressLimitError,
     merged_research_progress_full,
@@ -51,6 +53,20 @@ _VALID_LANGUAGES = {"Chinese", "English", "auto"}
 # B2: 人工编辑档案时报告的最小字符门。与编排器 research_report>=400 复用守卫语义一致：
 # <400 字符（含 LLM 降级/错误短串）一律拒绝，避免空/垃圾报告悄悄退化下游本体/图谱/模拟。
 MIN_DOSSIER_CHARS = 400
+
+
+def _preflight_existing_pipeline(existing, *, operation):
+    """Frozen target inputs do not need the completed research provider again."""
+    target_errors = preflight_saved_target(existing, operation=operation)
+    if target_errors is not None:
+        return target_errors
+    options = existing.get("options") or {}
+    target = options.get("forecast_authority") == "target-first-v1"
+    mode = "research_only" if target else (
+        (existing.get("mode") or "full") if operation == "resume" else "full")
+    if target or operation == "continue":
+        return preflight_pipeline(mode=mode, model=options.get("research_model"))
+    return preflight_pipeline(mode=mode)
 
 
 @research_bp.route('/run', methods=['POST'])
@@ -172,7 +188,7 @@ def resume_pipeline(pipeline_id: str):
         existing = PipelineManager.load(pipeline_id)
         if existing is None:
             return jsonify({"success": False, "error": "管线不存在"}), 404
-        preflight_errors = preflight_pipeline(mode="research_only" if (existing.get("options") or {}).get("forecast_authority") == "target-first-v1" else existing.get("mode") or "full")
+        preflight_errors = _preflight_existing_pipeline(existing, operation="resume")
         if preflight_errors:
             return jsonify({
                 "success": False,
@@ -210,9 +226,7 @@ def continue_pipeline(pipeline_id: str):
         if existing is None:
             return jsonify({"success": False, "error": "管线不存在"}), 404
         # 继续会跑完整管线（建图/模拟/报告），按 full 模式预检配置
-        preflight_errors = preflight_pipeline(
-            mode="research_only" if (existing.get("options") or {}).get("forecast_authority") == "target-first-v1" else "full",
-            model=(existing.get("options") or {}).get("research_model"))
+        preflight_errors = _preflight_existing_pipeline(existing, operation="continue")
         if preflight_errors:
             return jsonify({
                 "success": False,
@@ -256,7 +270,7 @@ def fork_scenario(pipeline_id: str):
         overlay = request.get_json(silent=True) or {}
         if not (overlay.get("label") or "").strip():
             return jsonify({"success": False, "error": "缺少情景标签 label"}), 400
-        preflight_errors = preflight_pipeline(mode="research_only" if (existing.get("options") or {}).get("forecast_authority") == "target-first-v1" else "full")
+        preflight_errors = _preflight_existing_pipeline(existing, operation="scenario")
         if preflight_errors:
             return jsonify({
                 "success": False,

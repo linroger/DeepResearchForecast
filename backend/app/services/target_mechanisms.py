@@ -554,6 +554,22 @@ def _dimension_check(mechanism, units, unsupported):
     record = {"mechanismId": mechanism.mechanism_id, "kind": mechanism.kind,
               "outputNodeId": mechanism.output}
     if invalid:
+        # An unknown unit must not mask an independently decidable contradiction.
+        # Growth has two separate constraints; additive templates require every
+        # pair of known units to agree. A partially unknown product cannot be
+        # checked without inventing the missing factor's dimensions.
+        known = {node_id: units[node_id] for node_id in involved if node_id not in invalid}
+        contradiction = False
+        if mechanism.kind == "growth":
+            base, rate = mechanism.inputs
+            contradiction = (base in known and mechanism.output in known
+                             and known[base] != known[mechanism.output]) or (
+                                 rate in known and known[rate] != _DIMENSIONLESS)
+        elif mechanism.kind in {"sum", "linear", "supply_demand", "adoption"}:
+            contradiction = len(set(known.values())) > 1
+        if contradiction:
+            return {**record, "status": "failed", "unsupportedUnits": invalid,
+                    "message": "Known input/output dimensions or scales contradict the template; other units remain unsupported."}
         return {**record, "status": "unsupported", "unsupportedUnits": invalid,
                 "message": "Unsupported units prevent a dimension and scale check."}
     inputs = [units[node_id] for node_id in mechanism.inputs]
@@ -653,3 +669,26 @@ def validate_model(case, *, strict=False, seed_tolerance=1e-8):
                             for check in failed)
         _fail("model", details)
     return result
+
+
+def admit_model(case, *, seed_tolerance=1e-8):
+    """Reject known contradictions and retain all unmeasured admission checks.
+
+    This pure check is for target-first production admission. It neither changes
+    compiler semantics nor interprets unsupported units as a contradiction.
+    Strict/diagnostic experiments keep their existing validate_model behavior.
+    Consumers must retain this receipt with the admitted case: ``unsupported``
+    and ``unmeasured`` are permitted evidence gaps, never a successful check.
+    """
+    result = validate_model(case, seed_tolerance=seed_tolerance)
+    checks = [*result["dimensionChecks"], *result["seedChecks"]]
+    contradictions = [check for check in checks if check["status"] == "failed"]
+    if contradictions:
+        details = "; ".join(
+            f"{check.get('mechanismId', check.get('nodeId'))}: {check['message']}"
+            for check in contradictions)
+        _fail("model admission", details)
+    statuses = {check["status"] for check in checks}
+    status = ("unsupported" if "unsupported" in statuses else
+              "unmeasured" if "unmeasured" in statuses else "passed")
+    return {**result, "status": status, "policy": "known-contradictions/v1"}

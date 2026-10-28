@@ -218,6 +218,9 @@ def test_real_structural_paths_reach_publication(case, tmp_path, monkeypatch, ki
     if kind == "linear":
         case["mechanisms"][-1].update(kind="linear", inputNodeIds=["base"],
                                     parameters={"coefficients": [2.0], "intercept": 0.0})
+        # A derived target has no observed period-zero value in this alternate
+        # model; preserve the parameter-envelope regression without a false seed.
+        next(n for n in case["nodes"] if n["nodeId"] == "spending")["value"] = None
     for actor in case["actors"]:
         actor["decisionRule"]["kind"] = "llm"
     observations = []
@@ -258,7 +261,7 @@ def test_real_structural_paths_reach_publication(case, tmp_path, monkeypatch, ki
     assert [row["probability"] for row in forecast["scenarios"]] == [0.4, 0.6]
     assert json.loads((folder / "target_simulation.json").read_text()) == sim
     markdown = (folder / "full_report.md").read_bytes()
-    block = tr.diagnostic_markdown(json.loads((folder / "target_report.json").read_text()))
+    block = tr.diagnostic_markdown(json.loads((folder / "target_report.json").read_text()), forecast=forecast)
     for _ in range(2):
         audit = agent._enforce_final_publish_audit(report.report_id, report)
         assert audit["hard_passed"] and not audit["lint"]["changed"]
@@ -287,6 +290,9 @@ def test_flattened_runtime_parameters_remain_strict(case, parameters):
     from app.services.target_simulation import run_paths
     case["mechanisms"][-1].update(kind="linear", inputNodeIds=["base"],
                                 parameters={"coefficients": [2.0], "intercept": 0.0})
+    # Leave this alternate model's seed unmeasured so the negative case reaches
+    # its intended malformed runtime-parameter boundary.
+    next(n for n in case["nodes"] if n["nodeId"] == "spending")["value"] = None
     sim = run_paths(case, paths=1, periods=1)
     sim["paths"][0]["parameters"]["spending-growth"] = parameters
     with pytest.raises(ValueError, match="parameter fields"):
@@ -413,7 +419,10 @@ def test_report_tournament_retains_native_market_health(case, monkeypatch, typed
     case["binaries"][0]["resolution_contract"] = {"kind": "polymarket", "market_id": "M1", "equivalence": "exact"}
     stamp = datetime.now(timezone.utc).isoformat()
     market = {"market_id": "M1", "implied_yes_prob": 0.73, "question": case["binaries"][0]["question"],
-              "url": "https://example.test/market", "endDate": "2027-12-31", "retrieved_at": stamp}
+              # Explicit synthetic retained source terms make this a genuine
+              # exact positive; matching only its ID/title was insufficient.
+              "description": 'This market will resolve to "Yes" if worldwide security spending for the calendar year 2027 is at least USD 280 billion, as reported in the first annual release by Synthetic official statistics (https://example.test/spending). It will otherwise resolve to "No". The resolution deadline is March 30, 2028.',
+              "url": "https://example.test/market", "endDate": "2028-03-30", "retrieved_at": stamp}
     payload = {"markets": [market], "as_of": stamp, "status": {"state": "stale" if stale else "fresh"},
                "cache": {"hit": stale, "stale": stale}}
     before = deepcopy(payload)

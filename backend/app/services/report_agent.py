@@ -657,6 +657,10 @@ def render_sim_bridge(record: Dict[str, Any], *, chinese: bool,
     if prior_note:
         lines.extend(["", prior_note])
     lines.extend(["", text["unchanged"].format(policy=str(policy or "diagnostic_only").strip())])
+    from .forecast_estimator_table import render_estimator_table
+    estimator_table = render_estimator_table(spine, chinese=chinese)
+    if estimator_table:
+        lines.extend(["", estimator_table])
 
     for chart in chart_rel_paths or []:
         block = _bridge_chart_block(chart, chinese, text)
@@ -3236,7 +3240,7 @@ class ReportAgent:
             # The citation finalizer is deterministic and uses only the case's source map.
             self._finalize_citations(report_id, report)
             report.markdown_content = _insert_sim_bridge(report.markdown_content,
-                                                        diagnostic_markdown(bundle["record"]))
+                                                        diagnostic_markdown(bundle["record"], forecast=bundle["forecast"]))
             write_text_atomic(str(folder / "full_report.md"), report.markdown_content)
             self._enforce_final_publish_audit(report_id, report)
             report.status = ReportStatus.COMPLETED
@@ -3627,7 +3631,8 @@ class ReportAgent:
         expected_block = ""
         if getattr(self, "_target_bundle_json", None):
             from .target_report import diagnostic_markdown
-            expected_block = diagnostic_markdown(json.loads(self._target_bundle_json)["record"])
+            forecast = self._sim_read_json(os.path.join(ReportManager._get_report_folder(report_id), "forecast.json"))
+            expected_block = diagnostic_markdown(json.loads(self._target_bundle_json)["record"], forecast=forecast)
             return {**self._sim_bridge_audit_block(md, expected_block), "policy": "diagnostic_only"}
         if self._sim_bridge_active():
             chinese = str(getattr(self, "output_language", "")).lower() in {"chinese", "zh", "zh-cn", "中文"}
@@ -5976,6 +5981,9 @@ class ReportAgent:
                         )
                 except Exception as _ce:  # noqa: BLE001 — 批判失败沿用未批判骨架
                     logger.warning(f"骨架前置自校准失败（忽略）: {_ce}")
+            if "research_prior" in spine or "scenario_updates" in spine:
+                _fe.validate_prior_posterior_updates(
+                    spine, spine.get("research_prior"), spine.get("scenario_updates"))
             self._forecast_spine = spine
             self._forecast_spine_block = _fe.render_forecast_spine_block(spine)
             # 早落 forecast.json（骨架版）；成稿后由 _finalize_structured_forecast 补
@@ -12082,6 +12090,8 @@ class ReportAgent:
                 f"报告仍有 {len(failed_sections)} 个生成失败章节，拒绝发布部分成稿"
             )
         structured = audit.get("structured_forecast") or {}
+        if (structured.get("research_prior") or {}).get("valid") is False:
+            issues.append("Research prior/posterior ledger differs from published probabilities")
         if structured.get("required") and not structured.get("valid"):
             issues.append(
                 "结构化预测已启用，但 forecast.json 缺失、无效或缺少情景/二元预测"
@@ -12429,6 +12439,19 @@ class ReportAgent:
                 and structured_forecast_audit["binary_count"] > 0
             )
         )
+        if forecast is not None and ("research_prior" in forecast or "scenario_updates" in forecast):
+            from copy import deepcopy
+            from .forecast_extractor import validate_prior_posterior_updates
+            prior_audit = {"required": True, "valid": True, "issues": []}
+            try:
+                checked = validate_prior_posterior_updates(
+                    deepcopy(forecast), forecast.get("research_prior"), forecast.get("scenario_updates"))
+                if checked != forecast:
+                    raise ValueError("research prior metadata is incomplete")
+            except (ValueError, KeyError, TypeError) as error:
+                prior_audit.update(valid=False, issues=[str(error)])
+            structured_forecast_audit["research_prior"] = prior_audit
+            structured_forecast_audit["valid"] &= prior_audit["valid"]
         proposition_audit = _audit_propositions(forecast or {})
         market_anchor_audit = _audit_market_anchors(forecast or {})
         scenario_contract_audit = _audit_scenarios(forecast or {})

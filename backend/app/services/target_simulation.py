@@ -533,8 +533,8 @@ def run_paths(case, *, paths=32, periods=12, seed=0, decision_provider=None, can
     _identity_mode(identity_mode)
     if not isinstance(lookahead, bool):
         raise ValueError("lookahead must be boolean")
-    if model_validation not in ("off", "diagnostic", "strict"):
-        raise ValueError("model_validation must be off, diagnostic or strict")
+    if model_validation not in ("off", "diagnostic", "strict", "admission"):
+        raise ValueError("model_validation must be off, diagnostic, strict or admission")
     integer(paths, "paths", 1)
     integer(periods, "periods", 1)
     integer(seed, "seed", 0)
@@ -552,7 +552,10 @@ def run_paths(case, *, paths=32, periods=12, seed=0, decision_provider=None, can
     model = compile_model(validated)
     intervention_requests, condition_requests = _table_requests(validated, interventions, conditions, periods)
     validation = None
-    if model_validation != "off":
+    if model_validation == "admission":
+        from .target_mechanisms import admit_model
+        validation = admit_model(validated)
+    elif model_validation != "off":
         from .target_mechanisms import validate_model
         validation = validate_model(validated, strict=model_validation == "strict")
     hindcast_results = (validate_hindcasts(validated, hindcast_snapshots, paths=paths, periods=periods,

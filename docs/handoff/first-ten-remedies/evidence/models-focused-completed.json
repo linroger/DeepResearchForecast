@@ -1,0 +1,39 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 73717,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:network:socket.__new__": 1,
+    "blocked:process:subprocess.Popen": 4,
+    "quarantine:oasis_import_cwd": 1,
+    "blocked:external_read": 20
+  },
+  "source_sha256": {
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/scripts/main_offline_pytest.py": "5046cf820fa468d8e8ffb2e3fdade1d20fca2f0bd56ee15eabdff51c223c02be",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/tests/test_first_ten_model_admission.py": "b4e15bd6627d2adcc629aee0a60e81b41c0aa08a509c6b7b74f3f9fb6472c6be",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/tests/test_target_simulation.py": "73e06b2d884c3520cb9d18e5b986abfbba46e9db4d2e1a4914cc62a424f6cec0",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/tests/test_forecast_case.py": "117165afb565cb2fcc1596de6facfcd082bfe71c9e166a0d0e1b01183e6a90b8",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/tests/test_world_state_seed_prior.py": "6e2eec31e6eac42cff2893e2a2e3d439174349199e2cb5286cccb4f282b41dfd",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/tests/test_world_share_sources.py": "156bd74b0666e80b82ecb068cac540c6e7f50bfc6bacc3a3c9bf17429d2b7e4b",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/app/config.py": "aae32fcbaea902e426e7ae542026eefd831d90074438c3fe35a529c995d5ceca",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/app/services/simulation_manager.py": "15df37d1a3b92eff72a1aa3d062f1414de1ebd9b845aacd2053e0a9d525b40e1",
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/lib/python3.12/site-packages/oasis/__init__.py": "63f941d057c4d45f79db84986701917756c45b4c060c6b8d2c509216700e2c33"
+  },
+  "contained_library_probes": {
+    "fc-list": 1,
+    "system_profiler": 1,
+    "font_directory_scan": 18
+  },
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {},
+  "children": {},
+  "identity_preserved": true
+}

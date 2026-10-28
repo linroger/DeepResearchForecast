@@ -16172,6 +16172,11 @@ def _pm_normalize_market(raw: Any, matched_query: str, min_volume: float,
         "event_title": event_title or str(raw.get("groupItemTitle") or "").strip(),
         "matched_query": matched_query,
     }
+    # Settlement equivalence consumes retained source terms, never a generated
+    # description. Preserve the provider's bytes, including whitespace.
+    description = raw.get("description")
+    if isinstance(description, str) and description.strip():
+        row["description"] = description
     # PM-1: 尽量携出可用的深链/时效/流动性信号（存在才写，缺失则降级为无该键）。
     slug = str(event_slug or "").strip()
     if slug:

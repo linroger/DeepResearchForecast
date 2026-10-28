@@ -343,15 +343,28 @@ def test_tree_driver_own_contract_and_declared_membership_validation(case):
 
 def test_tree_exact_market_adapts_stored_snapshot_without_changing_p(case):
     case["binaries"][0]["resolution_contract"] = {"kind": "polymarket", "market_id": "M1", "equivalence": "exact"}
+    # Synthetic retained source terms; the market title alone cannot prove an
+    # exact match to the case's publisher, first release, period and threshold.
     market = {"market_id": "M1", "implied_yes_prob": 0.73, "question": case["binaries"][0]["question"],
-              "url": "https://example.test/market", "endDate": "2027-12-31"}
+              "description": (
+                  'This market will resolve to "Yes" if worldwide security spending for the calendar year 2027 '
+                  'is at least USD 280 billion, as reported in the first annual release by '
+                  'Synthetic official statistics (https://example.test/spending). '
+                  'It will otherwise resolve to "No". The resolution deadline is March 30, 2028.'),
+              "url": "https://example.test/market", "endDate": "2028-03-30"}
     out = fe.derive_binaries_from_tree(case, markets=[market])
     row = out["binary_forecasts"][0]
     assert row["probability"] == 0.6
     assert row["market_anchor"]["resolution_equivalence"] == "exact"
+    assert row["market_anchor"]["description"] == market["description"]
+    assert row["resolution_date"] == "2028-03-30"
     assert fe._market_anchor_binding_valid(row, row["market_anchor"])
-    with pytest.raises(ValueError, match="stored snapshot"):
-        fe.derive_binaries_from_tree(case, markets=[])
+    fallback = fe.derive_binaries_from_tree(case, markets=[])["binary_forecasts"][0]
+    assert "market_anchor" not in fallback
+    assert fallback["probability"] == row["probability"]
+    assert fallback["resolution_contract"]["kind"] == "named_source_event"
+    assert fallback["market_equivalence"] == {
+        "status": "unavailable", "market_id": "M1", "reason": "missing_or_ambiguous_source_snapshot"}
 
 
 def test_tree_official_contract_binds_existing_carrier_with_native_units(case):

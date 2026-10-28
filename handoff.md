@@ -1,3 +1,5 @@
+> First-ten request reconciliation: [current handoff](docs/handoff/first-ten-remedies/handoff.md). This branch verifies and completes the delivered target-first implementation against the supplied acceptance criteria.
+
 > Target-first forecasting implementation: [current handoff and verification](docs/handoff/target-first-forecast/handoff.md), [architecture and API](docs/handoff/target-first-forecast/architecture.md). Work is isolated on `codex/target-first-forecast`; the original deployment checkout and saved runs are preserved.
 
 > Simulation/report boundary — complete and delivered: [completion and evidence](docs/handoff/simulation-after-action-record/completion.md), [ADR 0003](docs/adr/0003-simulation-after-action-record-and-report-bridge.md), and [current handoff](docs/handoff/simulation-after-action-record/handoff.md). The verified feature is on `codex/simulation-report-boundary`; active source preserves the separate Mandarin work. Fresh-provider calibration/acceptance remains a separate exercise.
