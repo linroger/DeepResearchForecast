@@ -1,8 +1,8 @@
 # Target-first forecast implementation handoff
 
 **Last Updated (UTC):** 2026-10-28
-**Status:** In Progress
-**Current Focus:** Commit and push the independently reviewed, fixed-source implementation; final verification is complete.
+**Status:** Complete
+**Current Focus:** Implementation is verified, committed and remotely delivered; retain the source freeze for review/integration.
 
 ## 1) Request & Context
 The user requested architecture familiarization followed by an orchestrated team implementing the attached 2026-10-27 review (request.md). This supersedes the earlier workflow-packaging request. The supplied design is implementation authorization; the plan translates it into reviewable contracts. Work starts from committed 6ab52f77 in an isolated managed worktree because the primary checkout contains extensive unrelated staged, unstaged and untracked translation/report work. Existing saved runs and authority modes remain readable. No real-provider execution or statistically supported simulation promotion is implied by offline tests.
@@ -29,7 +29,7 @@ Read current workflow and ADR authority contracts. Freeze the case schema and fu
 - [x] Integrate producer, persistence and consumers; independent real-engine publication and fork/replay probes pass.
 - [x] Close CORE-1 through CORE-12 and FBL-1 with independent source-bound evidence.
 - [x] Finish all17 broad compatibility repairs; final gate:5,199 passed / 0 failed / 2 named skips on537 unchanged files.
-- [ ] Update delivery records and commit/push scoped work.
+- [x] Commit and push scoped work; code commit 91cf47e960fa is verified on legacy/codex/target-first-forecast.
 
 ## 5) Findings, Decisions, Assumptions
 The live spine is PipelineOrchestrator research → ontology → graph → prepare → run → report. drf2 is pre-cutover. ADR 0002 requires immutable authority per run and shadow migration; ADR 0003 isolates simulation from evidence-only report probabilities. The new route must keep a zero simulation weight and preserve old runs. The review is a design proposal, not evidence of current execution or forecast skill. Missing parameters must remain explicit bounded assumptions; missing settlement targets cannot be invented from incidental facts.
@@ -44,7 +44,7 @@ Tests will follow real production entrypoints and include numeric target, settle
 Final guarded backend gate: **5,199 passed, zero failed, two named vendor-snapshot skips**,149 modules and 537 unchanged source/test/fixture files. Independent core gate:8 production probes and 248 regressions, with CORE 1–12 closed. FBL-1:62 focused / 291 composed / 62 peer passes. Final frontend: 329 passes plus production build, 95 unchanged inputs and unchanged primary .vite-temp mtime. Ruff F/E9, AST, setup syntax and strict environment documentation pass. See verification.md, verification.json and evidence/index.json for exact guard activity, skips, source hashes and durable receipts. These are controlled implementation results; paid/live/provider/deployment skill is separate.
 
 ## 9) Remaining Work & Next Steps
-Only scoped Git delivery remains for this implementation shift. No local code or review finding remains open. Live input/provider confirmation, realized historical actor-policy validation, monitor activation and prospective scoring remain under issue10 and require their separately stated authorization. Simulation stays at zero forecast weight.
+The scoped implementation and code delivery are complete. No local code or review finding remains open. Live input/provider confirmation, realized historical actor-policy validation, monitor activation and prospective scoring remain under issue10 and require their separately stated authorization. Simulation stays at zero forecast weight.
 
 Next-session prompt:
 ```text
@@ -77,3 +77,5 @@ Read docs/handoff/target-first-forecast/handoff.md, architecture.md, verificatio
 - 2026-10-28T04:42:13.591809+00:00: Final broad gate passed5,199 passed / 0 failed / 2 skips; 537 files and registered receipts show no source drift. Final frontend329/build and all static gates pass. All implementation acceptance checks are true; scoped commit/push remains.
 
 - 2026-10-28: Corrected the stale internal monitor-default comment before delivery. Normalized Python AST is identical to the broad-gate source;39 affected scheduler/lifecycle tests passed on the delivered bytes. The broad537-file freeze and the537-file delivery manifest differ only by that documented comment.
+
+- 2026-10-28T04:52:01.394171+00:00: Code commit 91cf47e960fa75a5c33c938df737aa6d135c3b59 was pushed to the active legacy remote and its exact branch ref was verified. The managed worktree was clean after the code commit. Delivery receipt and this documentation-only closing update preserve the exact tested implementation bytes.

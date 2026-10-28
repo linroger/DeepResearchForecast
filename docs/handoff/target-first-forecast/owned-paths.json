@@ -93,6 +93,7 @@
     "docs/handoff/target-first-forecast/baseline.json",
     "docs/handoff/target-first-forecast/contract-owner.md",
     "docs/handoff/target-first-forecast/contracts.md",
+    "docs/handoff/target-first-forecast/delivery.json",
     "docs/handoff/target-first-forecast/estimators-owner.md",
     "docs/handoff/target-first-forecast/evidence/backend-final-child-receipts.json.gz",
     "docs/handoff/target-first-forecast/evidence/backend-final-command.json",

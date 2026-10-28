@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "target-first-delivery/v1",
+  "status": "code_committed_pushed_and_remote_verified",
+  "verifiedAt": "2026-10-28T04:52:01.394171+00:00",
+  "codeCommit": "91cf47e960fa75a5c33c938df737aa6d135c3b59",
+  "branch": "codex/target-first-forecast",
+  "remote": "legacy",
+  "repository": "https://github.com/linroger/DeepResearchForecast",
+  "branchUrl": "https://github.com/linroger/DeepResearchForecast/tree/codex/target-first-forecast",
+  "remoteRefAtCodeVerification": "91cf47e960fa75a5c33c938df737aa6d135c3b59\trefs/heads/codex/target-first-forecast",
+  "workingTreeCleanAfterCodeCommit": true,
+  "sourceHashManifest": "owned-source-hashes.json",
+  "verification": "verification.json",
+  "backendPassed": 5199,
+  "backendSkipped": 2,
+  "frontendPassed": 329,
+  "buildPassed": true,
+  "sourceDeploymentPerformed": false,
+  "liveProvidersRun": false,
+  "productionSchedulerActivated": false,
+  "followupIssue": "https://github.com/linroger/DeepResearchForecast/issues/10",
+  "closingRecord": "The following documentation-only commit closes continuity; tested implementation bytes remain unchanged."
+}
