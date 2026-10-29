@@ -1,7 +1,7 @@
 # Durable run spending handoff
 
 **Last Updated (UTC):** 2026-10-29T06:03:40.503670+00:00
-**Status:** Offline implementation accepted; scoped Git delivery in progress.
+**Status:** Complete for approved offline implementation; source remotely delivered.
 **Current Focus:** Preserve the accepted source/evidence baseline and deliver it before World Anchor implementation.
 
 ## 1) Request & Context
@@ -26,7 +26,7 @@ Freeze the shared stdlib store/context/adapter contract. Implement store and led
 - [x] Parent/child/tool adapters implemented with owner gates; final composed process proof remains pending.
 - [x] Lifecycle, launcher, actual parent/child transport composition and supported fresh-PID backend resume accepted.
 - [x] Independent final review: no remaining technical gates for the frozen approved offline scope.
-- [ ] Scoped commit/push and remote verification.
+- [x] Scoped source commit c2736d3648f323d0fd2cc83b9ba53966f5484f3f pushed and matched on legacy/codex/target-run-spending.
 
 ## 5) Findings, Decisions, Assumptions
 Retain every committed maximum for the authorization lifetime; usage never refunds balance. SQLite WAL/FULL and immediate transactions are control authority, while telemetry stays observational. One qualified external API route and priced Firecrawl search/scrape are the closed first profile. Unverified tariffs or hidden retries refuse dispatch. No code acceptance is a paid-run approval.
@@ -58,3 +58,5 @@ Deliver the reviewed spending source and verify remote parity. The owner subsequ
 
 - 2026-10-29T06:03:40.503670+00:00: Final coordinator gates completed and independent review closed. Broad A preserved1200pass/1failure: a fresh-import test removed only one of the canonical spending aliases. Test-only cleanup now removes/restores both and asserts shared identity; production duplicate-instance denial remains unchanged. B passes1201, workflow05passes8oncurrent source, affected launcher86passes. Three intentional import locations received F401 comments using two replacement patterns; full test AST is identical to the Startup09 fixture. Current frozen17production/control hashes match.
 - 2026-10-29T06:03:40.503670+00:00: Durable private evidence copied to /Users/rogerlin/.local/share/DeepResearchForecast/evaluations/run-spending-acceptance-20261029T060017Z. Complete regular-file hashes match and originals remain unchanged; internal convenience links were relocated within each copied tree. Copy integrity is not a relocated execution claim. Private source/runtime/closed ledgers stay outside Git; sanitized gate summary is committed.
+
+- 2026-10-29T06:09:08.763110+00:00: Source commit c2736d3648f323d0fd2cc83b9ba53966f5484f3f remotely verified on legacy/codex/target-run-spending; issue11closed for offline scope. Exact committed source archived in the durable private evidence root. Issue10remains empirical; issue12records explicit WorldAnchor code/offline approval. No production source changed after the final accepted gates.
