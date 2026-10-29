@@ -1,0 +1,62 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 84157,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "blocked:network:socket.__new__": 1,
+    "blocked:process:subprocess.Popen": 4,
+    "quarantine:oasis_import_cwd": 1,
+    "blocked:external_read": 20
+  },
+  "source_sha256": {
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/scripts/main_offline_pytest.py": "5046cf820fa468d8e8ffb2e3fdade1d20fca2f0bd56ee15eabdff51c223c02be",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_agency_classification.py": "a95dc5409f399580240f205b98910830a944abca390bd39337d3b388f3ea73ec",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_agency_preparation_consumers.py": "4ee0d2f4d27e8695ae77730de7ae9e8451c82c62a60cd8dafb9c127cd26cc3a0",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_saved_world_replay.py": "1d474ccbe029e1924ad4b5e17d3dac56b7a5b07e474b3ad2efe70d088611ade5",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_world_model_seed.py": "1e3c9913db8eb3d5f2c081f7500f454b2151c72ffb72c0de8bed8439a4d9d522",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_agent_decision.py": "098d30d67971f5857d2665a4068e02fbc8363e1df26dc4758349fa3e75145d79",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_sim_context_persona.py": "4b4497d1e3ad8a419a4fcd3ea81f1cf1377ee9e5c25ee3793710176637d3f1cf",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_actor_context_runtime.py": "df194583e8e645dc29767fac8a6feddaeb0aab08c8863f8896f0da6e839da756",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_actor_role_prompt.py": "edad375d82e174f58e2cecf5230d53c6f0d5f14d7e3f0a51ce5c33b1909837b4",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_pipeline_actor_contract.py": "781a51577074cc35f077a08b4c505b4def0ec3a16af886d83502f97fdfe60178",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_simulation_config_seal.py": "6c2cc3020eb78100a0fa301486aa5a1bb2cb1f0f88a1153037ad072e32fb3fd5",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_sim_resume_reuse.py": "6f79e3736915e60917597fde72407a27dac067d976b5964cb0e4243964c4da2b",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_temporal_mode_contract.py": "1ac639c9dc3ce4c77b382b74038737ab2cd655c13aa0df6fbb2ac61f533ffc62",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_context_audit_binding_core.py": "f942c3311325098746d0fd1cad02a394a603e56ac0a5379d6e4f3f6a5269bddd",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_context_audit_direct_api.py": "b9161f25771fb0a3cae418549ddc63a178e84f51b23f0b7a8cabd4ab4d77b6de",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_context_audit_ensemble.py": "0c65cc2e8b433f7828e4cf78174dffcf02da86beee7def62ff4537dfd85407e1",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_context_audit_fork_preservation.py": "9adce197d4386997b3597fd27a7934ef53daa337c1be31fdb72ec2977926b8b5",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_context_audit_graph.py": "b6e491da8c3b72c571804f87fcc6ed20293207ae1180a24119611ff691e5136a",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_context_audit_lifecycle.py": "db189c6f4f0d2813025b60292b1129f139dec3057ed8c64e886e4a336faa6a5c",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_context_audit_prepare.py": "3ee8becb37b42c1a868e0f3b0ccd5e3a75b11c23f21502f4a70d142d0b2724ea",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_context_audit_simulation.py": "2dcc5bd74d8a63ca0a6bc32198a04dc5e9542c17dd0af36c5c82eba9c2063ffd",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_target_legacy_integrity.py": "fe53d021e169782c507cb09bf31b23e88c38c40a518114e8f0e4d390edf778c1",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_world_interactions.py": "b28d1274c03bf847ab362d2116ee54e4f6f739d7ab67f0abdb451a078acb8758",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_world_update.py": "a52ca264ab47b540c60a3d32d5fee46e6974439f04501b38cdc52cf615cdae61",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_target_pipeline.py": "56f69ca2268656471e59d7b7a362639af6a0883fbaa649e1e44a60e9133330b4",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_target_ui_api.py": "df85a030813b68caf6b24ffece8a57e08ae6cd8c5a5f4d23a38f3c09337e8105",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/app/config.py": "406cf338c01c218cecf9db7dda0bfcc05201b534c18c18e995862f58fd0a2032",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/app/services/simulation_manager.py": "bb0a5d95cc52f5e07531993db31863e819c21e9e622846cdc59b8f16bd6cc33a",
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/lib/python3.12/site-packages/oasis/__init__.py": "63f941d057c4d45f79db84986701917756c45b4c060c6b8d2c509216700e2c33"
+  },
+  "contained_library_probes": {
+    "fc-list": 1,
+    "system_profiler": 1,
+    "font_directory_scan": 18
+  },
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/fixtures/gateway_performance.py": "ea81aeb522a76a9fbb8e87e7f0d37616858cf3e221774feb288453ab0a611881",
+    "/private/tmp/drf-target-acceptance-release-men0ydbb/backend/tests/test_forecast_feedback_sdk.py": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec"
+  },
+  "children": {},
+  "identity_preserved": true
+}

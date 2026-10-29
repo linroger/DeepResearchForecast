@@ -1065,6 +1065,7 @@ def build_world_model_seed(
     temporal_timeline: Any = None,
     audience_entity_type: str = "Audience",
     ontology_classes: Optional[Dict[str, str]] = None,
+    agency_classifications: Optional[Dict[str, Dict[str, Any]]] = None,
     max_variables: int = DEFAULT_MAX_VARIABLES,
     arbiter_enabled: bool = True,
     max_change_ratio: float = 0.5,
@@ -1179,7 +1180,14 @@ def build_world_model_seed(
             actor = match_actor(name, actors_dict) if actors_dict else None
             actor = actor if isinstance(actor, dict) else None
             ontology_class = (ontology_classes or {}).get(entity_type, "") if ontology_classes else ""
-            agency = resolve_agency_class(actor, entity_type, ontology_class)
+            declaration = None
+            if agency_classifications is not None:
+                from .agency_classification import agency_classification_for
+                declaration = agency_classification_for(agency_classifications, _cfg_get(cfg, "entity_uuid"))
+            if declaration is not None and declaration["agency_class"] is not None:
+                agency = declaration["agency_class"]
+            else:
+                agency = resolve_agency_class(actor, entity_type, ontology_class)
             canonical = bool(actor and _is_canonical(actor))
             pack = pack_by_name.get(normalize_name(name)) if canonical else None
             if canonical:
@@ -1224,6 +1232,8 @@ def build_world_model_seed(
                 "allies": [],
                 "rivals": [],
             }
+            if declaration is not None:
+                row["agency_class_basis"] = declaration["basis"]
             rows.append(row)
             name_to_agent[normalize_name(name)] = aid
             for alias in aliases:

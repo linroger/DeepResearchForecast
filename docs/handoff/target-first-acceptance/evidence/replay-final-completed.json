@@ -1,0 +1,26 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 74790,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1
+  },
+  "source_sha256": {
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/scripts/main_offline_pytest.py": "5046cf820fa468d8e8ffb2e3fdade1d20fca2f0bd56ee15eabdff51c223c02be",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/tests/test_saved_world_replay.py": "1d474ccbe029e1924ad4b5e17d3dac56b7a5b07e474b3ad2efe70d088611ade5",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/app/config.py": "406cf338c01c218cecf9db7dda0bfcc05201b534c18c18e995862f58fd0a2032",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/app/services/simulation_manager.py": "bb0a5d95cc52f5e07531993db31863e819c21e9e622846cdc59b8f16bd6cc33a"
+  },
+  "contained_library_probes": {},
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {},
+  "children": {},
+  "identity_preserved": true
+}

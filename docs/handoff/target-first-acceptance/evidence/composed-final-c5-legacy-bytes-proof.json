@@ -1,0 +1,9 @@
+{
+  "baseline_revision": "e0b233779a08493603360ddd4b5f4ba12a0183bf",
+  "source_sha256": {
+    "simulation_config_generator": "2ce585b1f5c7b6445c201d712777efa93bec6d2feea0c213a194926e58f9f4b5",
+    "world_model_seed": "213bf3f7bc4b6ec865951c3b6ec440f8b290ce6cdd17f9d823bac2f31c7f1a8d"
+  },
+  "no_map_serialized_bytes_equal": true,
+  "config_sha256": "49a042de06d76c5579024656fce9374680c02bee60fca1fe9e9b77704528ed97"
+}

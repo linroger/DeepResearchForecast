@@ -253,6 +253,8 @@ class AgentActivityConfig:
     agency_class: str = ""
     archetype: str = ""
     outcome_power: Optional[float] = None
+    # Optional source declaration; omitted from serialized legacy configurations.
+    agency_class_basis: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -393,7 +395,11 @@ class SimulationParameters:
             "simulation_requirement": self.simulation_requirement,
             "as_of_date": self.as_of_date,
             "time_config": time_dict,
-            "agent_configs": [asdict(a) for a in self.agent_configs],
+            "agent_configs": [
+                {key: value for key, value in asdict(a).items()
+                 if key != "agency_class_basis" or value is not None}
+                for a in self.agent_configs
+            ],
             "event_config": asdict(self.event_config),
             "twitter_config": asdict(self.twitter_config) if self.twitter_config else None,
             "reddit_config": asdict(self.reddit_config) if self.reddit_config else None,
@@ -482,6 +488,8 @@ class SimulationConfigGenerator:
         actor_context_packs: Optional[Dict[str, Dict[str, Any]]] = None,
         max_rounds: Optional[int] = None,
         research_language: Optional[str] = None,
+        *,
+        agency_classifications: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> SimulationParameters:
         """
         智能生成完整的模拟配置（分步生成）
@@ -508,6 +516,8 @@ class SimulationConfigGenerator:
             research_language: 调研语言（可选）。PREP-4：为 English 且未显式设置
                         SIM_ACTIVITY_PROFILE 环境变量时，本次配置切换到
                         global_market 活动画像；未传 → 画像选择不变
+            agency_classifications: UUID-keyed source declarations already sealed
+                        by PREPARE; overrides named config and seed consistently.
 
         Returns:
             SimulationParameters: 完整的模拟参数
@@ -670,6 +680,18 @@ class SimulationConfigGenerator:
                 actor_context_packs=actor_context_packs,
             )
             all_agent_configs.extend(batch_configs)
+
+        # Apply source declarations before any config consumer, including the world
+        # seed. UUID binding prevents a same-name or reordered cast from borrowing
+        # another actor's declaration. Missing/invalid entries leave legacy behavior.
+        if agency_classifications is not None:
+            from .agency_classification import agency_classification_for
+            for config in all_agent_configs:
+                declaration = agency_classification_for(agency_classifications, config.entity_uuid)
+                if declaration is not None:
+                    config.agency_class_basis = declaration["basis"]
+                    if declaration["agency_class"] is not None:
+                        config.agency_class = declaration["agency_class"]
         
         _bs = self._agent_batch_stats
         reasoning_parts.append(
@@ -781,6 +803,8 @@ class SimulationConfigGenerator:
                 world_model_block = self._build_world_model_block(
                     simulation_requirement, actors, all_agent_configs, actor_context_packs,
                     temporal_timeline, simulation_id,
+                    **({"agency_classifications": agency_classifications}
+                       if agency_classifications is not None else {}),
                 )
                 if world_model_block:
                     from .world_model_seed import world_model_seed_summary
@@ -2180,6 +2204,8 @@ class SimulationConfigGenerator:
         actor_context_packs: Optional[Dict[str, Dict[str, Any]]],
         temporal_timeline: Any,
         simulation_id: Optional[str] = None,
+        *,
+        agency_classifications: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Optional[Dict[str, Any]]:
         """REFLEXIVE WORLD (design §2.7): the sealed ``world_model`` seed block.
 
@@ -2209,6 +2235,8 @@ class SimulationConfigGenerator:
             barrier_timeout_s=float(getattr(Config, "SIM_WORLD_BARRIER_TIMEOUT_S", 1800) or 1800),
             pressure_weight=self._backtest_pressure_weight(simulation_id),
             share_source=getattr(Config, "SIM_SHARE_SOURCE", "auto"),
+            **({"agency_classifications": agency_classifications}
+               if agency_classifications is not None else {}),
         )
         if not block.get("actors"):
             return None

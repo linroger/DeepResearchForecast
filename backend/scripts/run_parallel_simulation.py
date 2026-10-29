@@ -4464,6 +4464,18 @@ class _ReflexiveWorldCoordinator:
             if isinstance(ev, dict) and str(ev.get("content") or "").strip())
         if events_block:
             clock += "\n## CONFIRMED EVENTS THIS PERIOD\n" + events_block
+        # C11's dedicated system turn deliberately discards OASIS instructions.
+        # Recover shared task data from the admitted config, not the raw role.
+        # Original forecast wording wins over a legacy seed's different question.
+        question = self._config.get("simulation_requirement")
+        if not isinstance(question, str) or not question.strip():
+            question = self._block.get("question")
+        task_context = {
+            "question": question,
+            "world_brief": self._config.get("world_brief") if _world_brief_enabled() else None,
+            "as_of_date": self._tc.get("as_of_date") or self._block.get("as_of_date"),
+            "horizon_date": self._tc.get("horizon_date") or self._block.get("horizon_date"),
+        }
         cast_names = [a.name for a in world.actors.values()]
         period_end = str(p.get("period_end") or "") or None
         sem = asyncio.Semaphore(self._decision_conc)
@@ -4480,7 +4492,8 @@ class _ReflexiveWorldCoordinator:
                     private_brief="\n\n".join(filter(None, (
                         world.render_private_brief(aid, upto_round=rnd - 1), self._previous_decision_note(aid)))),
                     options=options, scenarios=self._scenarios, cast_names=cast_names,
-                    language=self._language, recent_discourse=self._recent_discourse)
+                    language=self._language, recent_discourse=self._recent_discourse,
+                    task_context=task_context)
                 try:
                     system_message = str(system_message_lookup(aid) or "") if system_message_lookup else ""
                 except Exception:  # noqa: BLE001

@@ -1,0 +1,27 @@
+{
+  "scope": "One read-only public Gamma/CLOB liveness probe through the real collector transport",
+  "query": "2028 presidential election",
+  "reason": "A broad active-market query tests transport liveness without assuming an equivalent cybersecurity spending market exists. It is not forecast evidence.",
+  "argv": [
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/bin/python",
+    "-B",
+    "backend/scripts/probe_markets.py",
+    "2028 presidential election",
+    "--timeout",
+    "10",
+    "--limit",
+    "3"
+  ],
+  "services": [
+    "https://gamma-api.polymarket.com/public-search",
+    "https://clob.polymarket.com/prices-history"
+  ],
+  "clobToken": "First returned public market token; missing token stays unknown",
+  "providerSpend": 0,
+  "modelCalls": 0,
+  "scheduled": false,
+  "productionWrites": false,
+  "output": "new private acceptance evidence subdirectory; sanitized status/latency/counts in repository receipt",
+  "authorization": "Explicit user approval in this chat on2026-10-28: Approve the free read-only probe",
+  "approvedAt": "2026-10-28T10:05:00.425862+00:00"
+}

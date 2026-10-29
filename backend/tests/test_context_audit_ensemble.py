@@ -121,7 +121,8 @@ def test_child_ensemble_does_not_write_parent_or_sibling_handoff(ensemble, monke
     assert (own / "ensemble_checkpoint.json").is_file() or seed_failure
 
 
-def test_seed_report_receives_scenario_owner_and_actual_baseline_prompt(tmp_path, monkeypatch):
+def test_seed_report_retains_owner_without_simulation_in_prompt(tmp_path, monkeypatch):
+    """ADR0003 retains scenario identity but fences simulated baseline differences."""
     monkeypatch.setattr(Config, "PIPELINE_DATA_DIR", str(tmp_path / "pipelines"))
     monkeypatch.setattr(SimulationManager, "SIMULATION_DATA_DIR", str(tmp_path / "simulations"))
     monkeypatch.setattr(ReportManager, "REPORTS_DIR", str(tmp_path / "reports"))
@@ -164,9 +165,11 @@ def test_seed_report_receives_scenario_owner_and_actual_baseline_prompt(tmp_path
                                     {"sources": []}, "Original research", seed=15838, max_rounds=1)
     assert constructors[0].get("scenario_label") == "PERMIT_FAST_TRACK"
     assert constructors[0].get("base_simulation_id") == base_sim.simulation_id
+    assert constructors[0].get("simulation_id") == sim and sim != base_sim.simulation_id
     prompt = json.dumps(captured_messages, ensure_ascii=False)
-    assert "PERMIT_FAST_TRACK" in prompt and "ACTUAL_BASELINE_DIFF_SENTINEL" in prompt
-    assert (base_sim.simulation_id, sim) in diffs
+    assert "PERMIT_FAST_TRACK" in prompt
+    assert "ACTUAL_BASELINE_DIFF_SENTINEL" not in prompt
+    assert diffs == []  # Default report planning must not query simulated evidence.
 
 
 def test_new_report_attempt_retires_previous_ensemble_pointers(ensemble):

@@ -641,6 +641,17 @@ def prepare_simulation():
                 "success": False,
                 "error": f"项目不存在: {state.project_id}"
             }), 404
+        preparation_ontology = None
+        if getattr(Config, "SIM_AGENCY_CLASS_SOURCE", "ontology") == "ontology":
+            if owner:
+                from ..services.pipeline_orchestrator import load_preparation_ontology
+                try:
+                    preparation_ontology = load_preparation_ontology(
+                        owner["pipeline_id"], owner.get("handoff_dir"))
+                except (OSError, ValueError, TypeError):
+                    return jsonify({"success": False, "error": "Preparation ontology generation is invalid"}), 409
+            else:
+                preparation_ontology = getattr(project, "ontology", None)
         
         # Bound secondary/manual simulations consume the same research and run
         # options as their owner. Never resolve this through today's project.
@@ -782,6 +793,7 @@ def prepare_simulation():
                     graph_priors=(context.get("report_artifacts") or {}).get("graph_priors"),
                     research_language=options.get("research_language"),
                     max_rounds=int(round_budget) if round_budget else None,
+                    **({"ontology": preparation_ontology} if preparation_ontology is not None else {}),
                 )
                 if result_state.status != SimulationStatus.READY:
                     raise ValueError(result_state.error or "Simulation preparation did not reach ready")

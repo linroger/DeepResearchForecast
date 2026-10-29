@@ -1,3 +1,5 @@
+> Current stage: [saved-specimen acceptance and operational readiness](docs/handoff/target-first-acceptance/handoff.md).
+
 > First-ten request reconciliation: [current handoff](docs/handoff/first-ten-remedies/handoff.md). Completed and remotely delivered on codex/first-ten-remedies; 5,306 backend checks pass with two known vendor-snapshot skips. The topic handoff records exact scope and empirical limits.
 
 > Target-first forecasting implementation: [current handoff and verification](docs/handoff/target-first-forecast/handoff.md), [architecture and API](docs/handoff/target-first-forecast/architecture.md). Work is isolated on `codex/target-first-forecast`; the original deployment checkout and saved runs are preserved.

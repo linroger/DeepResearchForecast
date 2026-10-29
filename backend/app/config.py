@@ -1243,6 +1243,7 @@ class Config:
     SIM_WORLD_ARBITER_REPAIR = os.environ.get('SIM_WORLD_ARBITER_REPAIR', 'field').strip().lower()
     SIM_SHARE_PRIOR = os.environ.get('SIM_SHARE_PRIOR', 'uniform').strip().lower()
     SIM_SHARE_SOURCE = os.environ.get('SIM_SHARE_SOURCE', 'auto').strip().lower()
+    SIM_AGENCY_CLASS_SOURCE = os.environ.get('SIM_AGENCY_CLASS_SOURCE', 'ontology').strip().lower()
 
     # Seconds a platform waits for the other platform's round before committing with what it has.
     SIM_WORLD_BARRIER_TIMEOUT_S = float(os.environ.get('SIM_WORLD_BARRIER_TIMEOUT_S', '1800') or '1800')
@@ -1849,6 +1850,7 @@ class Config:
             "SIM_WORLD_ARBITER_REPAIR": {"field", "round"},
             "SIM_SHARE_PRIOR": {"uniform", "research"},
             "SIM_SHARE_SOURCE": {"auto", "votes", "power_votes", "predicates"},
+            "SIM_AGENCY_CLASS_SOURCE": {"ontology", "legacy"},
         }.items():
             if getattr(cls, name) not in choices:
                 errors.append(f"{name} must be one of {', '.join(sorted(choices))}")

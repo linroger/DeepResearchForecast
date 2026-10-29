@@ -7329,6 +7329,45 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
 
 
 
+def load_preparation_ontology(pipeline_id: str, handoff_dir: Optional[str] = None) -> Optional[dict]:
+    """Read only this pipeline's receipt-bound ontology for fresh preparation.
+
+    Older pipelines without this optional receipt retain legacy inference. A
+    present invalid receipt cannot silently grant different decision rights.
+    """
+    if getattr(Config, "SIM_AGENCY_CLASS_SOURCE", "ontology") == "legacy":
+        return None
+    root = handoff_dir or PipelineManager.handoff_dir(pipeline_id)
+    manifest_path = PipelineManager.artifact_manifest_path(pipeline_id)
+
+    def read_manifest():
+        if not os.path.lexists(manifest_path):
+            return None
+        raw_manifest = _research_data_read(os.path.dirname(manifest_path), "manifest.json", 4_000_000)
+        manifest = json.loads(raw_manifest)
+        if not isinstance(manifest, dict):
+            raise ValueError("Preparation ontology manifest is invalid")
+        return manifest
+
+    manifest = read_manifest()
+    if manifest is None or "ontology" not in manifest:
+        return None
+    entry = manifest["ontology"]
+    expected = os.path.realpath(os.path.join(root, "ontology.json"))
+    if (not isinstance(entry, dict) or not isinstance(entry.get("path"), str)
+            or os.path.realpath(entry["path"]) != expected or not entry.get("sha256")):
+        raise ValueError("Preparation ontology receipt is invalid")
+    raw = _research_data_read(root, "ontology.json", 4_000_000)
+    if hashlib.sha256(raw).hexdigest() != entry["sha256"]:
+        raise ValueError("Preparation ontology differs from its admitted receipt")
+    ontology = json.loads(raw)
+    if not isinstance(ontology, dict) or not isinstance(ontology.get("entity_types"), list):
+        raise ValueError("Preparation ontology has no valid entity type declarations")
+    if read_manifest() != manifest:
+        raise ValueError("Preparation ontology generation changed during read")
+    return ontology
+
+
 def load_research_dossier_for_simulation(simulation_id: Optional[str]) -> dict[str, Any]:
     """Read a simulation's consumed dossier; only genuinely unbound runs use legacy lookup.
 
@@ -10162,6 +10201,7 @@ class PipelineOrchestrator:
                     "graph_priors.json"))
             except Exception:  # noqa: BLE001
                 _graph_priors = None
+            preparation_ontology = load_preparation_ontology(state.pipeline_id, state.handoff_dir)
             sim_manager.prepare_simulation(
                 simulation_id=sim_id,
                 simulation_requirement=state.prompt,
@@ -10171,6 +10211,7 @@ class PipelineOrchestrator:
                 graph_priors=_graph_priors,  # W9-5: 与主路径一致（P3-7 中心度先验）
                 max_rounds=max_rounds,  # PREP-1: 集成种子跑同样按真实执行窗排期
                 research_language=state.options.get("research_language"),  # PREP-4
+                **({"ontology": preparation_ontology} if preparation_ontology is not None else {}),
             )
             run_kwargs: dict[str, Any] = {"platform": "parallel", "sim_seed": int(seed), "finalize_record": False}
             if max_rounds:
@@ -14485,6 +14526,7 @@ class PipelineOrchestrator:
                     # 粒度、绝不截断）；默认上限已由生成器自身读取，不在此注入。
                     _prep_mr = state.options.get("max_rounds") or (
                         None if _calendar_mode() else (Config.OASIS_DEFAULT_MAX_ROUNDS or None))
+                    preparation_ontology = load_preparation_ontology(state.pipeline_id, state.handoff_dir)
                     sim_manager.prepare_simulation(
                         simulation_id=sim_state.simulation_id,
                         simulation_requirement=state.prompt,
@@ -14495,6 +14537,7 @@ class PipelineOrchestrator:
                         graph_priors=_graph_priors,  # P3-7: 中心度先验（融入 salience 排序）
                         max_rounds=int(_prep_mr) if _prep_mr else None,
                         research_language=state.options.get("research_language"),  # PREP-4
+                        **({"ontology": preparation_ontology} if preparation_ontology is not None else {}),
                     )
                     _prepare_completion_message = "环境就绪"
 

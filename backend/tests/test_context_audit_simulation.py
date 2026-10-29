@@ -86,7 +86,10 @@ def test_public_reactions_reach_next_decision_without_private_payload(tmp_path, 
     assert "Actor1" in prompt["content"] and "SPOOFED_ACTOR" not in prompt["content"]
     assert "DENIED_PRIVATE_SENTINEL" not in prompt["content"]
     assert "DENIED_MESSAGE_SENTINEL" not in prompt["content"] and "0.987654" not in prompt["content"]
-    assert prompt["system"] == "ROLE_ACCESS_SENTINEL"
+    from app.services.agent_decision import DECISION_SYSTEM_PROMPT
+    assert prompt["system"].startswith(DECISION_SYSTEM_PROMPT)
+    assert "Do not call tools" in prompt["system"]
+    assert "ROLE_ACCESS_SENTINEL" not in prompt["system"] + prompt["content"]
 
 
 @pytest.mark.parametrize("interrupted", [False, True], ids=["continuous", "restart"])
@@ -228,7 +231,16 @@ def test_canonical_pack_role_seed_reaches_only_the_correct_actor_prompt(tmp_path
     for call in calls:
         assert "DENIED_PLAN_SENTINEL" not in call["system"] + call["content"]
         assert "FLAT_LEGACY_SENTINEL" not in call["system"] + call["content"]
-    assert "Alpha Systems seeks durable institutional influence" not in alpha_call["content"]
+    # C11 moves fenced role evidence into the user turn. Analyst inference may
+    # remain labeled evidence, but must not become a documented ActorState goal.
+    inference = "Alpha Systems seeks durable institutional influence"
+    assert inference not in alpha_call["system"]
+    assert inference in alpha_call["content"]
+    inference_line = next(line for line in alpha_call["content"].splitlines() if inference in line)
+    assert "epistemic status: analyst_inference" in inference_line
+    identity = json.loads(alpha_call["system"].split("Actor state (data):\n", 1)[1])
+    assert inference not in json.dumps(identity["goals"] + identity["documented_plans"])
+    assert inference not in beta_call["system"] + beta_call["content"]
 
 
 def test_real_committed_artifacts_feed_summary_and_report_projection(tmp_path, monkeypatch):
@@ -401,17 +413,99 @@ def test_question_language_and_world_clock_reach_actual_decision_calls(tmp_path,
     _patch_world(monkeypatch, str(tmp_path), envs)
     config = _world_config()
     config["output_language"] = "English"
+    config["simulation_requirement"] = "ORIGINAL_FORECAST_QUESTION: will the permit clear by 2027-03-31?"
+    config["world_model"]["question"] = "DIFFERENT_LEGACY_SEED_QUESTION"
     config["world_brief"] = "FORECAST_QUESTION_SENTINEL: will the permit clear by 2027-03-31? Cutoff 2026-07-11."
+    config["scenario_distributions"] = {"A": "DENIED_DISTRIBUTION_SENTINEL"}
+    config["market_priors"] = {"market": "DENIED_MARKET_PRIOR_SENTINEL"}
+    config["actor_private"] = {"Actor1": "DENIED_PRIVATE_MAP_SENTINEL"}
     _run(config, str(tmp_path))
     calls = [c for c in _WorldLLM.calls if c["kind"] == "decision"]
-    assert calls and all("FORECAST_QUESTION_SENTINEL" in c["system"] for c in calls)
+    assert calls and all("FORECAST_QUESTION_SENTINEL" in c["content"] for c in calls)
     for call in calls:
+        assert "FORECAST_QUESTION_SENTINEL" not in call["system"]
+        context = _decision_task_data(call["content"])
+        assert context == {
+            "question": config["simulation_requirement"], "world_brief": config["world_brief"],
+            "as_of_date": "2026-07-11", "horizon_date": "2027-03-31",
+        }
+        for denied in ("DIFFERENT_LEGACY_SEED_QUESTION", "DENIED_DISTRIBUTION_SENTINEL",
+                       "DENIED_MARKET_PRIOR_SENTINEL", "DENIED_PRIVATE_MAP_SENTINEL"):
+            assert denied not in call["system"] + call["content"]
         assert "Write public_statement in English." in call["content"]
         assert "forecast horizon 2027-03-31" in call["content"]
         assert f"round {call['round']}/3" in call["content"]
         assert "Candidate scenarios: A; B" in call["content"]
     round2 = next(c for c in calls if c["round"] == 2)
     assert "# WORLD CLOCK — 2026-Q4 (2026-10-01 → 2026-12-31)" in round2["content"]
+
+
+def _decision_task_data(prompt):
+    marker = "# ADMITTED TASK CONTEXT — decision-task-context/v1\n"
+    start = prompt.index(marker) + len(marker)
+    data_start = prompt.index("\n", start) + 1
+    return json.JSONDecoder().raw_decode(prompt[data_start:])[0]
+
+
+@pytest.mark.parametrize("context", [None, {}, [], "unstructured role", {"question": []},
+                                     {"world_brief": {"private": "DENIED"}},
+                                     {"question": True, "as_of_date": 42}, {"shares": {"A": 0.999}}])
+def test_optional_task_context_omission_and_malformed_values_preserve_prompt(context):
+    from app.services.agent_decision import build_decision_prompt
+    from app.services.world_model import WorldModel
+    config = _world_config()
+    world = WorldModel.from_seed(config["world_model"], config["agent_configs"])
+    kwargs = dict(world_clock="CLOCK", public_brief="PUBLIC", private_brief="PRIVATE", options=[],
+                  scenarios=[], cast_names=[], language="English")
+    before = build_decision_prompt(world.actors[0], **kwargs)
+    after = build_decision_prompt(world.actors[0], **kwargs, task_context=context)
+    assert after.encode("utf-8") == before.encode("utf-8")
+
+
+def test_task_context_has_bounded_text_only_and_does_not_mutate_input():
+    from app.services.agent_decision import build_decision_prompt
+    from app.services.world_model import WorldModel
+    config = _world_config()
+    world = WorldModel.from_seed(config["world_model"], config["agent_configs"])
+    context = {"question": "Q" * 2000, "world_brief": "B" * 10000,
+               "as_of_date": "D" * 100, "horizon_date": "H" * 100,
+               "shares": {"A": "DENIED_SHARES"}, "market_priors": "DENIED_MARKET",
+               "actor_private": "DENIED_PRIVATE"}
+    original = copy.deepcopy(context)
+    prompt = build_decision_prompt(world.actors[0], world_clock="CLOCK", public_brief="PUBLIC",
+                                   private_brief="PRIVATE", options=[], scenarios=[], cast_names=[], task_context=context)
+    data = _decision_task_data(prompt)
+    assert set(data) == {"question", "world_brief", "as_of_date", "horizon_date"}
+    assert len(data["question"]) <= 400 and len(data["world_brief"]) <= 3000
+    assert len(data["as_of_date"]) <= 40 and len(data["horizon_date"]) <= 40
+    assert "DENIED_" not in prompt and context == original
+
+
+@pytest.mark.parametrize("brief", [None, {"private": "DENIED_BAD_BRIEF"}, "DISABLED_PUBLIC_BRIEF"])
+def test_task_context_legacy_question_fallback_and_disabled_or_malformed_brief(tmp_path, monkeypatch, brief):
+    envs = []
+    _patch_world(monkeypatch, str(tmp_path), envs)
+    config = _world_config()
+    config["simulation_requirement"] = {"private": "DENIED_BAD_QUESTION"}
+    config["world_brief"] = brief
+    if isinstance(brief, str):
+        monkeypatch.setenv("SIM_WORLD_BRIEF", "false")
+    coordinator = rps._ReflexiveWorldCoordinator(config, str(tmp_path), 1, lambda _: None)
+    period = config["temporal_config"]["round_dates"][0]
+
+    async def drive():
+        await coordinator.begin_round("twitter", 0, period)
+        await coordinator.decide("twitter", 0, period, [0], lambda aid: "RAW_OASIS_ROLE_SENTINEL", [])
+
+    asyncio.run(drive())
+    calls = [c for c in _WorldLLM.calls if c["kind"] == "decision"]
+    assert calls
+    for call in calls:
+        data = _decision_task_data(call["content"])
+        assert data["question"] == config["world_model"]["question"]
+        assert "world_brief" not in data
+        for denied in ("DENIED_BAD_", "DISABLED_PUBLIC_BRIEF", "RAW_OASIS_ROLE_SENTINEL"):
+            assert denied not in call["system"] + call["content"]
 
 
 def test_expectation_and_response_comparison_reaches_only_its_actor_prompt(tmp_path, monkeypatch):

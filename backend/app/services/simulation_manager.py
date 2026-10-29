@@ -8,7 +8,6 @@ import os
 import csv
 import json
 import hashlib
-import shutil
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -16,9 +15,9 @@ from enum import Enum
 
 from ..config import Config
 from ..utils.logger import get_logger
-from .zep_entity_reader import ZepEntityReader, FilteredEntities
-from .oasis_profile_generator import OasisProfileGenerator, OasisAgentProfile
-from .simulation_config_generator import SimulationConfigGenerator, SimulationParameters
+from .zep_entity_reader import ZepEntityReader
+from .oasis_profile_generator import OasisProfileGenerator
+from .simulation_config_generator import SimulationConfigGenerator
 from .actor_context import (
     ACTOR_CONTEXT_VERSION,
     ACTOR_INTELLIGENCE_VERSION,
@@ -954,6 +953,7 @@ class SimulationManager:
         # 定时事件按真实执行窗排期、英文调研自动切 global_market 画像/英文人设。None=旧行为。
         max_rounds: Optional[int] = None,
         research_language: Optional[str] = None,
+        ontology: Optional[Dict[str, Any]] = None,
     ) -> SimulationState:
         """
         准备模拟环境（全程自动化）
@@ -1030,12 +1030,24 @@ class SimulationManager:
                     selected_rows[str(row.get("name") or "").strip()] = entity
                     selected_actor_rows.append(row)
             selected_names = set(selected_rows)
+            agency_classifications = None
+            agency_source = getattr(Config, "SIM_AGENCY_CLASS_SOURCE", "ontology")
+            if agency_source not in {"ontology", "legacy"}:
+                raise ValueError("SIM_AGENCY_CLASS_SOURCE must be ontology or legacy")
+            if agency_source == "ontology" and ontology is not None:
+                from .agency_classification import build_agency_classifications
+                agency_classifications = build_agency_classifications(filtered.entities, actors, ontology)
+                actor_cast_manifest["agency_classifications"] = agency_classifications
             missing_eligible: List[str] = []
             for decision in actor_cast_manifest["decisions"]:
                 if decision["actor_name"] in selected_names:
                     entity = selected_rows[decision["actor_name"]]
                     decision["status"] = "selected"
                     decision["entity_uuid"] = getattr(entity, "uuid", None)
+                    classification = (agency_classifications or {}).get(str(getattr(entity, "uuid", "")))
+                    if classification is not None:
+                        decision["agency_class"] = classification["agency_class"]
+                        decision["agency_class_basis"] = classification["basis"]
                     if not decision.get("eligible"):
                         decision["reason"] = (
                             "selected by the all-context safety fallback; role remains explicit"
@@ -1258,6 +1270,8 @@ class SimulationManager:
                 actor_context_packs=actor_context_packs,
                 max_rounds=max_rounds,  # PREP-1: 定时事件按真实执行轮数窗排期
                 research_language=research_language,  # PREP-4: 英文调研→global_market 画像
+                **({"agency_classifications": agency_classifications}
+                   if agency_classifications is not None else {}),
             )
             
             if progress_callback:

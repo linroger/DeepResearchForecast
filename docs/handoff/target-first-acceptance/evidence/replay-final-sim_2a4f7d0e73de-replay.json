@@ -1,0 +1,95 @@
+{
+  "assumptions": [
+    "isolated_offer_open_before_recorded_answer",
+    "isolated_promise_open_before_recorded_delivery",
+    "breach_probe_assumes_no_delivery_by_either_party",
+    "legacy_is_scalar_rule_comparison_only"
+  ],
+  "confidence": {
+    "full_historical_equivalence": "unavailable",
+    "historical_preconditions": "conditional",
+    "local_helper_execution": "direct"
+  },
+  "coverage": {
+    "action_rows": 138,
+    "actions_not_checked": 80,
+    "complete_round_prestate_records": 0,
+    "history_rounds": 14,
+    "local_action_checks": 58,
+    "retained_commitments": 49,
+    "retained_events": 272,
+    "retained_interactions": 6,
+    "scheduled_event_records": 3
+  },
+  "deadlines": {
+    "breach_events_after_current_grace": 6,
+    "current_accepted": 3,
+    "current_countered": 1,
+    "current_not_admitted": 1,
+    "deadline_changed_from_legacy_lag_rule": 0,
+    "default_deadline": 2,
+    "lapsed_after_current_grace": 6,
+    "lapsed_in_current_grace": 0,
+    "local_checks": 5,
+    "recorded_accept_actions": 5,
+    "recorded_due_matches_current_rule": 3,
+    "recorded_due_matches_legacy_rule": 3,
+    "rejected_after_retained_offer_expiry": 1,
+    "rejected_offer_binding": 1,
+    "rejected_option_metadata": 0,
+    "rejected_target_binding": 0,
+    "released_after_current_grace": 0,
+    "retained_obligation_pairs": 3,
+    "terms_deadline": 1
+  },
+  "deliveries": {
+    "after_current_grace_window": 0,
+    "current_admitted": 53,
+    "fulfilled_without_arbiter": 0,
+    "in_current_grace_window": 0,
+    "local_checks": 53,
+    "recorded_delivery_actions": 53,
+    "within_legacy_due_window": 53
+  },
+  "full_trajectory_replay": false,
+  "input_preserved": true,
+  "input_sha256": {
+    "arbiter_raw.jsonl": null,
+    "simulation_config.json": "a13ab4ff254a368ea0e2e0f7e23ba15360b570b44da980196ab5849627dc277c",
+    "world_actions.jsonl": "fcd8820ef0f39bd726ec851c85a7fd6dd37ce4970c9fda23deeabf5c8868d68e",
+    "world_state.json": "15608b6e41f40b516fe6d033c668d49d86ded35fc26791dddbf3a0cf53171b7f",
+    "world_state_history.jsonl": "e3570e968d8383a6dceeef7165f16e0e8f5f09e7dd86c8f31aaa45a536f8cfdd"
+  },
+  "input_status": "valid_structural",
+  "limits": [
+    "final_state_is_not_a_pre_round_checkpoint",
+    "history_arbiter_is_application_summary",
+    "no_rng_or_pending_effect_trajectory_reconstruction",
+    "other_actions_not_replayed",
+    "no_historical_raw_repair_lift_without_capture_and_full_prestate"
+  ],
+  "observed_lapses": {
+    "current_would_preserve": 8,
+    "in_current_grace_window": 8,
+    "local_checks": 8,
+    "matches_legacy_overdue_rule": 8,
+    "retained_commitment_consequence_events": 8
+  },
+  "raw": {
+    "file_present": false,
+    "history_arbiter_is_raw": false,
+    "records": 0,
+    "replayed": 0,
+    "status": "missing"
+  },
+  "schema_version": "saved-world-replay/v1",
+  "source_sha256": {
+    "backend/app/services/agent_decision.py": "17a458fa6acadd5d4646b5d256e33f51f41826f54879676412fc74ee3722a244",
+    "backend/app/services/world_model.py": "805c5f67e26176de9ac722145aa4662627b8c9d58a8d522fa6c1a3997752067a",
+    "backend/app/services/world_model_seed.py": "30832cbf1f70afe49d74c225dbce3f25f0f77c531c51b0d15bd4425cff64d606",
+    "backend/app/services/world_text_budgets.py": "ec10ca3ecb7c7a500828accb47ec2a5a188b0278a3bfacca7e6f274e299e2891",
+    "backend/app/services/world_update.py": "507ba97936dc306f3f7e009235811e08c1a3969066d49fd769bb85526e2832f6",
+    "backend/scripts/replay_saved_world.py": "d29c4b0c244fe4bc15cc87b604a49e69ce8b391a30671da2a5123e1739438947"
+  },
+  "status": "partial"
+}

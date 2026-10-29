@@ -1,0 +1,11 @@
+{
+  "snapshot_manifest_matches": true,
+  "frozen_files_checked": 100,
+  "frozen_file_mismatches": [],
+  "source_freeze_mismatches": [],
+  "replay_source_mismatches": [],
+  "aggregate_semantics_unchanged": {
+    "sim_2a4f7d0e73de": true,
+    "sim_1838cf014c0b": true
+  }
+}

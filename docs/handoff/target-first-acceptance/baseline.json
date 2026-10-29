@@ -1,0 +1,7 @@
+{
+  "startedAt": "2026-10-28T09:49:30.889674+00:00",
+  "baseCommit": "e0b233779a08493603360ddd4b5f4ba12a0183bf",
+  "verifiedSourceFiles": 547,
+  "sourceDrift": [],
+  "scope": "saved-specimen acceptance and operational readiness; separate approval required for live probes, paid runs and scheduler activation"
+}

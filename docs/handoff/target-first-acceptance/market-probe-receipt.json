@@ -1,0 +1,52 @@
+{
+  "startedAt": "2026-10-28T10:05:00.426173+00:00",
+  "finishedAt": "2026-10-28T10:05:22.683000+00:00",
+  "exitCode": 1,
+  "timedOut": false,
+  "gamma": {
+    "endpoint": "https://gamma-api.polymarket.com",
+    "status": "offline",
+    "latency_ms": 21433.67,
+    "errors": {
+      "URLError": 1
+    }
+  },
+  "gammaRows": 0,
+  "clob": {
+    "endpoint": "https://clob.polymarket.com",
+    "status": "unknown",
+    "latency_ms": null,
+    "reason": "missing_token_id"
+  },
+  "clobRows": 0,
+  "inputsHealth": {
+    "markets": {
+      "status": "offline",
+      "as_of": null,
+      "rows": 0,
+      "reason": "transport_failure",
+      "attempted_at": "2026-10-28T10:05:22.626090+00:00"
+    },
+    "news": {
+      "status": "unknown",
+      "as_of": null,
+      "rows": 0,
+      "reason": "missing_status_evidence"
+    },
+    "official_data": {
+      "status": "unknown",
+      "as_of": null,
+      "rows": 0,
+      "reason": "missing_status_evidence"
+    },
+    "provider": {
+      "status": "unknown",
+      "as_of": null,
+      "rows": 0,
+      "reason": "missing_status_evidence"
+    }
+  },
+  "providerSpend": 0,
+  "modelCalls": 0,
+  "privateEvidence": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/free-market-probe"
+}

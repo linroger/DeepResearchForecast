@@ -1,0 +1,186 @@
+{
+  "prepare-initial-completed.json": {
+    "source": "/private/tmp/drf-agency-prepare-20261028-01/completed.json",
+    "sha256": "7db1555a7489b958a2a24e787320f60b2d2b01e3de3a5a4f2dad9adaca9cb379"
+  },
+  "prepare-initial-junit.xml.gz": {
+    "source": "/private/tmp/drf-agency-prepare-20261028-01/junit.xml",
+    "sha256": "6db4f30109b367b6b367807243acb6beb73b2f7f3ae3a3fd71ad4d5803ea31d8"
+  },
+  "prepare-composed-completed.json": {
+    "source": "/private/tmp/drf-agency-prepare-20261028-02/completed.json",
+    "sha256": "2ca63763198ee878b1942ccbf39961f8c781a7506d0912b1581d81052f3e23f8"
+  },
+  "prepare-composed-junit.xml.gz": {
+    "source": "/private/tmp/drf-agency-prepare-20261028-02/junit.xml",
+    "sha256": "028e10c3ac9645d8fba1f4bb42038d622461fa4a43167aa61277443b7b0c014f"
+  },
+  "prepare-extra-completed.json": {
+    "source": "/private/tmp/drf-agency-prepare-20261028-03/completed.json",
+    "sha256": "2fee8ada911ad5fda580562b9bbc4c09767f9948acc5d2fde676c0f374d10aba"
+  },
+  "prepare-extra-junit.xml.gz": {
+    "source": "/private/tmp/drf-agency-prepare-20261028-03/junit.xml",
+    "sha256": "8d09b95d29a61238260c29e189fe38fa993d40c0da4857b3ee9e6dbac5a2d409"
+  },
+  "ontology-red-completed.json": {
+    "source": "/private/tmp/drf-agency-null-receipt-red-20261028/completed.json",
+    "sha256": "4bc72d8281a7e57356b3c8f833563a83c99bdcb992f729d2fd2a049c6ad527cb"
+  },
+  "ontology-red-junit.xml.gz": {
+    "source": "/private/tmp/drf-agency-null-receipt-red-20261028/junit.xml",
+    "sha256": "89d44fd2ed6d84130ad5bb83ae711633d30dec5200310fcfa1e144d0d96cbb56"
+  },
+  "ontology-green-completed.json": {
+    "source": "/private/tmp/drf-agency-null-receipt-green-20261028/completed.json",
+    "sha256": "9da8cd002e31f23f94c6dec1a783bfee5ea6d79acdbbdb65401c6eae742dbff7"
+  },
+  "ontology-green-junit.xml.gz": {
+    "source": "/private/tmp/drf-agency-null-receipt-green-20261028/junit.xml",
+    "sha256": "791c2baa84045ce8f27db09d32ddd962fe571e961633c5d07657457f3a7580b6"
+  },
+  "temporal-compatibility-completed.json": {
+    "source": "/private/tmp/drf-agency-temporal-compat-20261028/completed.json",
+    "sha256": "6ea1cc299bb55717b33591b53defce4f69dda7c4ae4e2dec726e04b7e8db593d"
+  },
+  "temporal-compatibility-junit.xml.gz": {
+    "source": "/private/tmp/drf-agency-temporal-compat-20261028/junit.xml",
+    "sha256": "8a9ba6dc48b56561a219394b6109542dbb576fd52f3417882f9e871183fcfa73"
+  },
+  "c5-owner-final-completed.json": {
+    "source": "/private/tmp/c5-final-gate-20261028-b/completed.json",
+    "sha256": "67a76595b695d5ee73448d07374531da819c6f4a746e2d71d4897d68cc9ccf3c"
+  },
+  "c5-owner-final-junit.xml.gz": {
+    "source": "/private/tmp/c5-final-gate-20261028-b/junit.xml",
+    "sha256": "75474dd79d7fd544dd1560c2b9382b23df62c5e077751d09d4c206ebee50a9c3"
+  },
+  "c5-source-hashes.json": {
+    "source": "/private/tmp/c5-final-gate-20261028-b/c5-source-hashes.json",
+    "sha256": "26f43b6d9a2fa4c76cb02cb31db85449136eacfe803b54921ed5e1861b1a4520"
+  },
+  "c5-specimen-proof.json": {
+    "source": "/private/tmp/c5-final-gate-20261028-b/c5-specimen-proof.json",
+    "sha256": "d0a7a7f5fc44a1a452801687b2f85ff8a80835d0b1b12cad6f59e96cfb713e8b"
+  },
+  "c5-legacy-bytes-proof.json": {
+    "source": "/private/tmp/c5-final-gate-20261028-b/c5-legacy-bytes-proof.json",
+    "sha256": "9b1e5948553984b6603b9618cb86d3e09a170574116b85447489add58d111756"
+  },
+  "snapshot-preservation.json": {
+    "source": "/private/tmp/c5-final-gate-20261028-b/snapshot-preservation.json",
+    "sha256": "66fe738a45c871e86e605400eae74b4d62bfc7914ccb66e062cbc055c29bbdc1"
+  },
+  "composed-initial-completed.json": {
+    "source": "/private/tmp/drf-target-acceptance-composed-20261028-01/completed.json",
+    "sha256": "a7366b59c1ed3800b708e45b5d4a3c87d837ec392d1046af6d5bf56f1d36d111"
+  },
+  "composed-initial-junit.xml.gz": {
+    "source": "/private/tmp/drf-target-acceptance-composed-20261028-01/junit.xml",
+    "sha256": "0ddef1e612d1c05316b66eb9193185067483264312291a85f22570ba58860908"
+  },
+  "composed-initial-composed-launcher-receipt.json": {
+    "source": "/private/tmp/drf-target-acceptance-composed-20261028-01/composed-launcher-receipt.json",
+    "sha256": "f8c25a89124b5bd4975c57d2164a6b3018fd94595279c020e9c4cd454602f89c"
+  },
+  "replay-final-completed.json": {
+    "source": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/replay-final/completed.json",
+    "sha256": "e001571ca001ac42a4e5f9216d3586ad776ac013ae2251989951ec56af43050e"
+  },
+  "replay-final-junit.xml.gz": {
+    "source": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/replay-final/junit.xml",
+    "sha256": "d14ba3f5416631bc7ef2c81e1bc25590bd8a6dbae969945854a4d1784b20b095"
+  },
+  "replay-final-sim_2a4f7d0e73de-replay.json": {
+    "source": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/replay-final/sim_2a4f7d0e73de-replay.json",
+    "sha256": "700562bbc24f3a9870041709170e9fd6ea1c2175cb5c99e8d9a55c975003eb2a"
+  },
+  "replay-final-sim_1838cf014c0b-replay.json": {
+    "source": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/replay-final/sim_1838cf014c0b-replay.json",
+    "sha256": "772eae82710cb87be07f377181c3e61d6979117c1b76cb9f714b415847a5f6fa"
+  },
+  "replay-final-preservation.json": {
+    "source": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/replay-final/preservation.json",
+    "sha256": "3e1f095cc3822ed8a663d3cbf7492f0b045a4c568fa0638ba611d41ae89c25bc"
+  },
+  "replay-final-source-freeze.json": {
+    "source": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/replay-final/source-freeze.json",
+    "sha256": "a952d6d377bb10371631f072c6a301b53cc81beb872181e3939f403e17dff02e"
+  },
+  "decision-context-baseline-completed.json": {
+    "source": "/private/tmp/c5-decision-context-baseline-20261028-a/completed.json",
+    "sha256": "8ce046506ace44101880a148779177e82d92754b99756f836667f40e8187f876"
+  },
+  "decision-context-baseline-junit.xml.gz": {
+    "source": "/private/tmp/c5-decision-context-baseline-20261028-a/junit.xml",
+    "sha256": "13909a98f55e5f6c1fdc7f5b90873184fcfe18b9476f0d6cfce53df062c4de1e"
+  },
+  "decision-context-red-completed.json": {
+    "source": "/private/tmp/c5-decision-context-red-20261028-a/completed.json",
+    "sha256": "d91666970673021469d0696988f1390c9a465e30d479efac55e631ae4a6edf73"
+  },
+  "decision-context-red-junit.xml.gz": {
+    "source": "/private/tmp/c5-decision-context-red-20261028-a/junit.xml",
+    "sha256": "e5af700156ec2f57a80fb61adc10770a5b83589f8224b107490681433a57a25d"
+  },
+  "decision-context-green-completed.json": {
+    "source": "/private/tmp/c5-decision-context-green-20261028-a/completed.json",
+    "sha256": "be30df93d9b8326edc76d3a3eea4e04352f7e0077fd9d32ef8a5fac57dedca6a"
+  },
+  "decision-context-green-junit.xml.gz": {
+    "source": "/private/tmp/c5-decision-context-green-20261028-a/junit.xml",
+    "sha256": "022e2e91ccfb1f9b105a03f2f5c5fafa8a09bec6e21c45cca8a14ea419c99b65"
+  },
+  "ensemble-boundary-completed.json": {
+    "source": "/private/tmp/drf-acceptance-ensemble-boundary-20261028/completed.json",
+    "sha256": "d8c7ebe811c67f0b95da7915525ae1147db2927f23742f115e3d26ef2806b142"
+  },
+  "ensemble-boundary-junit.xml.gz": {
+    "source": "/private/tmp/drf-acceptance-ensemble-boundary-20261028/junit.xml",
+    "sha256": "ba7f0f08ad64ffbb35497766228c303ed0faa671e668a607734595179b0d8c79"
+  },
+  "independent-ontology-completed.json": {
+    "source": "/private/tmp/drf-acceptance-independent-review-20261028-r5/completed.json",
+    "sha256": "1875f2700f494e29f5b3a24548a6e950ff411188291fbbd3e559d8ec08a42a90"
+  },
+  "independent-ontology-junit.xml.gz": {
+    "source": "/private/tmp/drf-acceptance-independent-review-20261028-r5/junit.xml",
+    "sha256": "f05fec69c6ff504ea4421b2d3ad6057d7fe6dbc301733f61b3a34e2df6552b79"
+  },
+  "independent-replay-completed.json": {
+    "source": "/private/tmp/drf-acceptance-independent-review-20261028-r7/completed.json",
+    "sha256": "5d9020f44b7ddc30ac9df07c11b53d3fe44a743fd3f38f6a93472dae8d0f9285"
+  },
+  "independent-replay-junit.xml.gz": {
+    "source": "/private/tmp/drf-acceptance-independent-review-20261028-r7/junit.xml",
+    "sha256": "38af3f98feec83cd91819cb37d0d1379722175480646bff05e53c211f2d9584d"
+  },
+  "composed-final-completed.json": {
+    "source": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/composed-final-evidence/completed.json",
+    "sha256": "043586ca1a1770db9afda555ddcf28165214401ed1a0504aabbf299b892d6c7f"
+  },
+  "composed-final-junit.xml.gz": {
+    "source": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/composed-final-evidence/junit.xml",
+    "sha256": "339261009f1374099ac12bcf4a9601875516f2837cbf0a56830dd7f9235b7a53"
+  },
+  "composed-final-composed-launcher-receipt.json": {
+    "source": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/composed-final-evidence/composed-launcher-receipt.json",
+    "sha256": "b29b3bcdde8476d94ccfbd0e9b9a6e67268fb48e33d9066a741909ef67a2deec"
+  },
+  "composed-final-sim_2a4f7d0e73de-replay.json": {
+    "source": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/composed-final-evidence/sim_2a4f7d0e73de-replay.json",
+    "sha256": "54afc3f06d803158b00e0d747ad809c4c46c96db5da8543348880a4d47966f0d"
+  },
+  "composed-final-sim_1838cf014c0b-replay.json": {
+    "source": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/composed-final-evidence/sim_1838cf014c0b-replay.json",
+    "sha256": "b7d04ba2d1208ca22a267e61c232c748e4f4952617cd87ba7647b82275fe9f8c"
+  },
+  "composed-final-c5-specimen-proof.json": {
+    "source": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/composed-final-evidence/c5-specimen-proof.json",
+    "sha256": "d0a7a7f5fc44a1a452801687b2f85ff8a80835d0b1b12cad6f59e96cfb713e8b"
+  },
+  "composed-final-c5-legacy-bytes-proof.json": {
+    "source": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/composed-final-evidence/c5-legacy-bytes-proof.json",
+    "sha256": "9b1e5948553984b6603b9618cb86d3e09a170574116b85447489add58d111756"
+  }
+}
