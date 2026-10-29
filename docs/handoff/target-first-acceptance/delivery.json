@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "target-first-acceptance-delivery/v1",
+  "codeCommit": "fadd95944c93bb2a022cb3fc91cfb7121cb36988",
+  "branch": "codex/target-first-acceptance",
+  "remote": "legacy",
+  "remoteVerifiedCommit": "fadd95944c93bb2a022cb3fc91cfb7121cb36988",
+  "verifiedAt": "2026-10-29T02:50:28.316608+00:00",
+  "backendPassed": 718,
+  "skipped": 0,
+  "frozenFiles": 552,
+  "sourceManifest": "final-source-after.json",
+  "originalAndSnapshotFilesPreserved": 100,
+  "paidCalls": 0,
+  "deployed": false,
+  "schedulerActivated": false,
+  "freeProbe": "explicitlyapproved; Gamma TLS handshake timeout; CLOB notattempted",
+  "nextImplementation": "spending-PLANS.md approved for codework only2026-10-29",
+  "overhaul": "new draft pending architecture/phase approval"
+}

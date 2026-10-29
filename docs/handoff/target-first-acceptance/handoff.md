@@ -1,7 +1,7 @@
 # Target-first acceptance handoff
 
-**Last Updated (UTC):** 2026-10-28T11:13:58.177202+00:00
-**Status:** Verified — current acceptance slice complete; Git delivery pending
+**Last Updated (UTC):** 2026-10-29T02:50:28.316608+00:00
+**Status:** Complete — verified source and acceptance delivery
 **Current Focus:** Commit/push the verified acceptance slice; begin the now-approved spending-boundary implementation from a fresh slice worktree.
 
 ## 1) Request & Context
@@ -25,7 +25,7 @@ First inventory and freeze evidence. Delegate disjoint replay and readiness anal
 - [x] Complete available conditional replay and record exact missing raw-state coverage.
 - [x] Verify three real cast corrections; typed-case graph benchmark remains unavailable for the old specimen.
 - [x] Audit live readiness, run the approved free probe, and prepare spending-PLANS.md; no enforceable cap exists yet.
-- [ ] Close source/review findings, verify preservation, commit and push.
+- [x] Close source/review findings, verify preservation, commit and push; codefadd9594 remote verified.
 
 ## 5) Findings, Decisions, Assumptions
 Prior5,306passing tests prove controlled contracts, not original-specimen replay or live-provider behavior. The old specimens may predate raw arbiter capture and the typed case schema; inspect before choosing a replay method. Missing inputs remain missing.
@@ -78,3 +78,5 @@ Read docs/handoff/target-first-acceptance/handoff.md, acceptance.json, verificat
 - 2026-10-29T02:41:40.140154+00:00: User supplied a new one-world-model overhaul draft superseding the earlier roadmap. It is still awaiting explicit architecture/plan approval. Preserve and deliver this already-verified acceptance slice before reconciling the new draft in docs/handoff/overhaul/. The718-case evidence and552hashes remain unchanged; they do not prove new I30/store contracts. No spending-ledger or overhaul implementation has begun.
 
 - 2026-10-29T02:44:19.988492+00:00: User explicitly approved spending-boundary implementation, codeworkonly. A new overhaul draft was also supplied but remains draftforapproval; the spending boundary is an approved prerequisite that must remain compatible. Deliver this completed718-case slice first, then create a fresh isolated spending worktree. No live spending authorization was granted.
+
+- 2026-10-29T02:50:28.316608+00:00: Acceptance codefadd95944c93bb2a022cb3fc91cfb7121cb36988 is committed, pushed and remote-verified on legacy/codex/target-first-acceptance. Closing documentation records delivery without changing tested source. The approved spending implementation begins in a new worktree; the new overhaul draft is retained as a separate target for review.
