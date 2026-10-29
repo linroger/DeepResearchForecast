@@ -99,6 +99,8 @@ def v1_run():
     """
     try:
         data = request.get_json(silent=True) or {}
+        from ..services.run_spending import validate_api_request
+        validate_api_request(data)
         prompt = (data.get('prompt') or '').strip()
         if not prompt:
             return _err("缺少 prompt")
@@ -168,6 +170,9 @@ def v1_run():
         body, status = simulation_admission_error(error)
         return jsonify(body), status
     except Exception as e:
+        from ..services.run_spending import api as spending_api
+        if spending_api().is_spending_stop(e):
+            return jsonify({"success": False, "error": "Run spending stopped", "error_code": e.code}), 409
         logger.error(f"[v1] 启动管线失败: {e}", exc_info=True)
         return _err(str(e), 500)
 

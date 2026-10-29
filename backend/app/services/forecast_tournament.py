@@ -43,7 +43,9 @@ def _method_lane(source, context, llm, authority):
         "rationale and cruxes (strings). Return status='unavailable' and a rationale if evidence does not "
         "support an estimate. Do not invent observations or fill missing probabilities.\n" + block)
     try:
-        raw = llm.chat_json(messages=[{"role": "user", "content": prompt}], temperature=0.2, max_tokens=2000)
+        from .run_spending import model_operation
+        with model_operation("estimator", {"method": source, "inputs": canonical_hash(context)}):
+            raw = llm.chat_json(messages=[{"role": "user", "content": prompt}], temperature=0.2, max_tokens=2000)
         if not isinstance(raw, dict):
             raise ValueError("method must return an object")
         if raw.get("status") == "unavailable":
@@ -57,6 +59,9 @@ def _method_lane(source, context, llm, authority):
         return _lane(source, context, status="ok", distribution=distribution, binaries=binaries,
                      rationale=raw.get("rationale", ""), cruxes=raw.get("cruxes", []))
     except Exception as exc:
+        from .run_spending import api as spending_api
+        if spending_api().is_spending_stop(exc):
+            raise
         # Exception text may contain provider request bodies/credentials. Keep only type.
         return _lane(source, context, status="error", rationale="Method failed validation or gateway call (" + type(exc).__name__ + ").")
 

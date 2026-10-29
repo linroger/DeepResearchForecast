@@ -219,7 +219,7 @@ def _lever_error(action, actor_id, levers, values, capacities, pending,
 
 
 def _run_path(case, model, initial, parameters, periods, *, callback=None,
-              baseline=False, cancel_check=None, lookahead=False, identity_mode="opaque"):
+              baseline=False, cancel_check=None, lookahead=False, identity_mode="opaque", path_id=None):
     identities = DecisionIdentities(case)
     actors = sorted(case["actors"], key=lambda actor: actor["actorId"])
     actors_by_id = {actor["actorId"]: actor for actor in actors}
@@ -286,12 +286,19 @@ def _run_path(case, model, initial, parameters, periods, *, callback=None,
                     decision_observation = add_lookahead(observation, model) if lookahead else deepcopy(observation)
                     if identity_mode == "opaque":
                         decision_observation = identities.transform(decision_observation)
-                    actions = callback(decision_observation)
+                    from .run_spending import model_operation
+                    with model_operation("actor", {"case": case.get("caseId"), "path": path_id,
+                                                    "period": period, "actor": actor_id,
+                                                    "observation": _hash(decision_observation)}):
+                        actions = callback(decision_observation)
                     if identity_mode == "opaque":
                         actions = identities.decode_actions(actions, actor_id)
                 except SimulationCancelled:
                     raise
-                except Exception:
+                except Exception as error:
+                    from .run_spending import api as spending_api
+                    if spending_api().is_spending_stop(error):
+                        raise
                     # Repair a failed field/actor; the deterministic world still
                     # propagates. Exception messages may contain private prompts.
                     decisions.append(_record(period, actor_id, "blocked", "decision_provider_error"))
@@ -569,7 +576,9 @@ def run_paths(case, *, paths=32, periods=12, seed=0, decision_provider=None, can
         rng = random.Random(path_seed)
         initial = model.initial_values(rng)
         parameters = model.draw_parameters(rng)
-        path = _run_path(decision_case, model, initial, parameters, periods, callback=decision_provider, cancel_check=cancel_check, lookahead=lookahead, identity_mode=identity_mode)
+        path = _run_path(decision_case, model, initial, parameters, periods, callback=decision_provider,
+                         cancel_check=cancel_check, lookahead=lookahead, identity_mode=identity_mode,
+                         path_id=f"path-{index:05d}")
         path.update(pathId=f"path-{index:05d}", seed=path_seed)
         baseline = _run_path(decision_case, model, initial, parameters, periods, baseline=True, cancel_check=cancel_check)
         baseline.update(pathId=path["pathId"], seed=path_seed)

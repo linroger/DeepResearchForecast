@@ -59,6 +59,7 @@ from __future__ import annotations
 
 import bisect
 import calendar
+import contextvars
 import datetime as _dt
 import difflib
 import functools
@@ -72,6 +73,7 @@ import os
 import re
 import shutil
 import signal
+import stat
 import string
 import threading
 import time
@@ -88,6 +90,8 @@ if __package__:
     from . import research_gateway as rg
 else:
     import research_gateway as rg
+
+_spending = rg._spending
 
 __all__ = [
     "ENGINE_CORE",
@@ -1124,6 +1128,8 @@ class _Reporter:
             return
         try:
             self._plog.write(kind, message)
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — logging is best-effort by contract
             pass
 
@@ -1326,6 +1332,8 @@ def _open_work_dir(out_dir: Path, identity: Mapping[str, Any],
                     raise ValueError("previous context binding changed")
                 api.archive_context(out_dir, work, expected_generation_id=binding["generation_id"],
                                     expected_sha256=binding["sha256"])
+            except _spending.SpendingStop:
+                raise
             except Exception as exc:
                 raise _EngineFailure(f"news_context_evidence_corrupt: archive failed ({type(exc).__name__})") from None
         work.rename(target)
@@ -3849,6 +3857,8 @@ class KiqAgent:
             notes, fallback = None, "content_filter"
         except rg.GatewayError as exc:
             notes, fallback = None, exc.category
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — a broken KIQ must not sink the phase
             self.engine.log("warn", f"v3: {self.kiq.id} agent error {type(exc).__name__}: {exc}")
             notes, fallback = None, f"error_{type(exc).__name__}"
@@ -4058,7 +4068,9 @@ class KiqAgent:
         elif runnable:
             workers = max(1, min(len(runnable), self.engine.preset.workers))
             with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="v3-tools") as pool:
-                list(pool.map(run_one, runnable))
+                futures = [pool.submit(contextvars.copy_context().run, run_one, index) for index in runnable]
+                for future in futures:
+                    future.result()
         novel = False
         for index, (call, output) in enumerate(zip(calls, outputs, strict=True)):
             if call.get("name") == "data_search" and not output.startswith(("DATA_", "NO_DATA_", "TOOL_")):
@@ -4207,6 +4219,8 @@ class KiqAgent:
             if self._data_tools():
                 return "UNKNOWN_TOOL: only web_search, web_fetch, data_search and data_get are available."
             return "UNKNOWN_TOOL: only web_search and web_fetch are available."
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — a tool failure is text for the model
             return f"TOOL_ERROR({type(exc).__name__}): try another source."
 
@@ -5379,6 +5393,9 @@ class _Engine:
 
     def _configure_context(self) -> None:
         """Bind the trusted run directory once; a resumed attempt never reacquires."""
+        if _spending.check_context() is not None:
+            self.meta["news_market_context"] = {"status": "disabled_spending_profile"}
+            return
         names = rg.context_tool_names(self.env)
         parent_digest = str(self.env.get("NEWS_CONTEXT_QUESTION_SHA256") or "").strip()
         if parent_digest and not re.fullmatch(r"[a-f0-9]{64}", parent_digest):
@@ -5439,6 +5456,8 @@ class _Engine:
                 raise _EngineFailure("news_context_evidence_corrupt: captured generation cannot be validated") from None
             # An undeployed optional module is unavailable, not an empty search.
             self.meta["news_market_context"] = {"status": "unavailable"}
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:
             raise _EngineFailure(f"news_context_evidence_corrupt: {type(exc).__name__}") from None
 
@@ -5540,6 +5559,9 @@ class _Engine:
         again, so its data phase and its unfinished KIQs can still fetch; when
         they are unavailable it keeps what an earlier attempt stored
         (:meth:`_keep_stored_data`)."""
+        if _spending.check_context() is not None:
+            self.meta["data_sources"] = {"status": "disabled_spending_profile", "providers": {}}
+            return
         self.meta["data_sources"] = {"status": "disabled", "providers": {}}
         if not callable(getattr(self.tools, "restore_data", None)):
             return
@@ -5569,6 +5591,8 @@ class _Engine:
             if self.data_enabled:
                 self.tools.data_sources = sources
                 sources.prewarm()
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — optional capability must not fail research
             self.log("warn", f"v3: official data unavailable ({type(exc).__name__})")
             self.meta["data_sources"]["status"] = "unavailable"
@@ -5584,6 +5608,8 @@ class _Engine:
             if skills.skills_mode(self.env) == "off":
                 return
             self.skill_library = skills.load_library(self.env)
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — methodology is optional; it never fails research
             self.log("warn", f"v3: method skills unavailable ({type(exc).__name__})")
             self.skill_library = None
@@ -5669,6 +5695,8 @@ class _Engine:
             self.tools.freeze_data()
             self.data_enabled = True
             self.meta["data_sources"]["status"] = "stored_only"
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — optional capability must not fail research
             self.log("warn", f"v3: stored official data unavailable ({type(exc).__name__})")
 
@@ -5783,17 +5811,23 @@ class _Engine:
     def flush_meta(self) -> None:
         try:
             self._write_meta()
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — meta is telemetry; the run goes on
             self.log("warn", f"v3: write_meta failed ({type(exc).__name__}: {exc})")
 
     def bridge_call(self, name: str, *args: Any, **kwargs: Any) -> Any:
         """Call an optional bridge helper; failures are recorded, never raised."""
+        if _spending.check_context() is not None and name == "_collect_prediction_markets":
+            return None
         func = getattr(self.bridge, name, None)
         if not callable(func):
             self.analytics_errors.append({"helper": name, "error": "unavailable"})
             return None
         try:
             return func(*args, **kwargs)
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — helpers are best-effort enrichment
             self.analytics_errors.append({"helper": name, "error": f"{type(exc).__name__}: {exc}"[:300]})
             self.log("warn", f"v3: {name} failed ({type(exc).__name__}: {exc})")
@@ -5951,6 +5985,8 @@ class _Engine:
                 requested = self._data_requests([k for k in self.kiqs if k.round == 0])
                 self.log("stage", f"research:v3:data start ({len(requested)} series)")
                 stored, failed = self._prefetch(requested, deadline)
+            except _spending.SpendingStop:
+                raise
             except Exception as exc:  # noqa: BLE001 — bounded enrichment never fails research
                 self.log("warn", f"v3: official data prefetch stopped ({type(exc).__name__})")
             self.ledger.flush()
@@ -6122,6 +6158,8 @@ class _Engine:
                 needs.append(_collapse(need.get("query") or need.get("series"), 160)
                              + (f" ({geography})" if geography else ""))
             return needs
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — a data problem never fails a KIQ task
             return []
 
@@ -6692,6 +6730,8 @@ class _Engine:
                         notes=agent.fallback_notes("provider"), fallback="provider", steps=agent.steps,
                         forced=agent.forced, fetched=list(agent.fetched), seen=list(agent.seen),
                         truncated=agent.truncated))
+                except _spending.SpendingStop:
+                    raise
                 except Exception as exc:  # noqa: BLE001 — the provider failure is what the phase decides on
                     self.log("warn", f"v3: {kiq.id} reads not kept ({type(exc).__name__}: {exc})")
             raise
@@ -6935,6 +6975,8 @@ class _Engine:
             turns = [pair for row in itertools.zip_longest(*statistics.values()) for pair in row if pair]
             return [f"{identity} — {_collapse(entry.title, 90)} ({entry.units}, {entry.frequency}, "
                     f"{entry.geography})" for identity, entry in turns[:DATA_TASK_HINTS]]
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — hints are optional discovery text
             return []
 
@@ -6962,6 +7004,8 @@ class _Engine:
                         if stop.startswith(GAP_PROVIDER_STOP):
                             status = "partial"
                         break
+            except _spending.SpendingStop:
+                raise
             except Exception as exc:  # noqa: BLE001 — the gap review is best-effort by design
                 detail = f"stopped: {type(exc).__name__}"
                 if isinstance(exc, _PROVIDER_ERRORS):
@@ -7049,6 +7093,8 @@ class _Engine:
             if requested:
                 self.log("stage", f"v3: gap round {round_no}: official data for follow-ups "
                                   f"(stored={stored}, failed={failed})")
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — bounded enrichment never fails the gap round
             self.log("warn", f"v3: follow-up official data stopped ({type(exc).__name__})")
 
@@ -7157,6 +7203,8 @@ class _Engine:
             by_sid = {sid: series.series for series, sid in self._data_rows()}
             stored, failed = self._kiq_data_outcome(kid, stats.get("per_kiq") or {}, by_sid)
             return {"calls": int((stats.get("per_agent") or {}).get(kid, 0)), "stored": stored, "failed": failed}
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — optional telemetry
             return {}
 
@@ -7412,6 +7460,8 @@ class _Engine:
                     lines.append("- Publisher projections to set the scenarios against (the publisher's outlook, "
                                  f"never an observation): {listed(outlook)}.")
             return lines
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — optional writer guidance
             return []
 
@@ -8355,6 +8405,8 @@ class _Engine:
                 value = func(url)
                 if isinstance(value, str) and value:
                     return value
+            except _spending.SpendingStop:
+                raise
             except Exception:  # noqa: BLE001 — a local id is an equivalent fallback
                 pass
         return "src_" + _sha256(rg.canonical_url(url))[:16]
@@ -8695,6 +8747,8 @@ class _Engine:
             self.write_json(path, quant, internal=False)
             self.log("ok", f"wrote {path.name} ({len(quant)} rows, {len(official)} from official data)")
             return {"quantitative_count": len(quant), "official_quantitative_count": len(official)}
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — a data problem never fails finalize
             self.log("warn", f"v3: official quantitative rows unavailable ({type(exc).__name__})")
             return {}
@@ -8724,6 +8778,8 @@ class _Engine:
                     "date_or_trigger": text["next_release"].format(word=word, period=data_period(series, latest.date)),
                     "source_ref": f"S{positions[sid]}" if sid in positions else ""})
             return indicators
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — see the docstring
             self.log("warn", f"v3: official indicators unavailable ({type(exc).__name__})")
             return []
@@ -9205,6 +9261,8 @@ def _bridge_lease(bridge: Any, reporter: _Reporter,
                             stack.enter_context(lease_fn(1))
                     except TimeoutError as exc:
                         end_leasing(exc)
+                    except _spending.SpendingStop:
+                        raise
                     except Exception as exc:  # noqa: BLE001 — a failed lease must not block research
                         if warned.acquire(blocking=False):
                             reporter.write("warn", f"v3: model lease unavailable ({type(exc).__name__}: "
@@ -9236,19 +9294,68 @@ def _deerflow_app_config(args: Any) -> Any:
     return config
 
 
+def _bound_chat_model(args: Any, app_config: Any) -> Any:
+    """Construct only the explicitly qualified ChatOpenAI configuration.
+
+    Arbitrary DeerFlow model factories may add tracing, retries or CLI routes.
+    The first spending profile has one inspectable chat-completions adapter.
+    """
+    # Validate the child carrier without replacing the already activated
+    # participant. A factory cannot switch authority by reading an environment.
+    environment_binding = _spending.binding_from_environment()
+    if environment_binding != _spending.check_context():
+        _spending.deny("invalid_binding")
+    if app_config is None:
+        from deerflow.config import get_app_config
+        app_config = get_app_config()
+    config = app_config.get_model_config(getattr(args, "model", None))
+    if config is None or getattr(config, "use", None) != "langchain_openai:ChatOpenAI":
+        _spending.deny("unsupported_route")
+
+    def value(name: str) -> str:
+        raw = getattr(config, name, None)
+        if callable(getattr(raw, "get_secret_value", None)):
+            raw = raw.get_secret_value()
+        raw = str(raw or "")
+        return os.environ.get(raw[1:], "") if raw.startswith("$") else raw
+
+    endpoint, model_name, api_key = value("base_url"), value("model"), value("api_key")
+    if not api_key:
+        _spending.deny("unsupported_route")
+    _spending.qualify_route("openai_chat", endpoint, model_name,
+        account_sha256=hashlib.sha256(api_key.encode("utf-8")).hexdigest())
+    if any(os.environ.get(key) for key in ("OPENAI_ORG_ID", "OPENAI_ORGANIZATION", "OPENAI_PROJECT_ID")):
+        _spending.deny("unsupported_route")
+    from langchain_openai import ChatOpenAI
+    rg._check_bound_callbacks()
+    import httpx
+    http_client = httpx.Client(follow_redirects=False, trust_env=False,
+                               transport=httpx.HTTPTransport(retries=0))
+    http_async_client = httpx.AsyncClient(follow_redirects=False, trust_env=False,
+                                         transport=httpx.AsyncHTTPTransport(retries=0))
+    return ChatOpenAI(model=model_name, base_url=endpoint, api_key=api_key, max_retries=0,
+                      n=1, streaming=False, use_responses_api=False, cache=False, callbacks=[],
+                      http_client=http_client, http_async_client=http_async_client)
+
+
 def _default_gateway_factory(args: Any, plog: Any, bridge: Any, preset: Preset) -> rg.ModelGateway:
     """Production gateway: DeerFlow model (+ optional fallback), bridge lease."""
-    from deerflow.models import create_chat_model  # lazy: the backend venv has no deerflow
-
+    bound = _spending.check_context() is not None
     reporter = plog if isinstance(plog, _Reporter) else _Reporter(plog)
     app_config = _deerflow_app_config(args)
     model_name = getattr(args, "model", None)
-    model = create_chat_model(model_name, thinking_enabled=False, app_config=app_config)
+    if bound:
+        model = _bound_chat_model(args, app_config)
+    else:
+        from deerflow.models import create_chat_model  # lazy: backend venv has no deerflow
+        model = create_chat_model(model_name, thinking_enabled=False, app_config=app_config)
     fallback = None
     fallback_name = (os.environ.get("DEERFLOW_FALLBACK_MODEL") or "").strip()
-    if fallback_name and fallback_name != model_name:
+    if not bound and fallback_name and fallback_name != model_name:
         try:
             fallback = create_chat_model(fallback_name, thinking_enabled=False, app_config=app_config)
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — the fallback is optional
             reporter.write("warn", f"v3: fallback model {fallback_name!r} unavailable "
                                    f"({type(exc).__name__}: {exc}); continuing without it")
@@ -9307,6 +9414,59 @@ def _stop_on_signals(engine: _Engine) -> Callable[[], None]:
     return restore
 
 
+def _validate_spending_request(question: str, out_dir: Path, args: Any, binding: Mapping[str, Any]) -> None:
+    """Bind the producer's loaded input to the immutable launcher request.
+
+    The CLI reads its prompt file after bootstrap validation. Validate that
+    in-memory text here, before any engine/client construction, using only the
+    fixed control carrier under the already validated binding root.
+    """
+    expected = Path(binding["root"]) / "app/backend/uploads/pipelines" / binding["pipeline_id"] / "handoff"
+    try:
+        output = Path(out_dir)
+        if (output != expected or output.resolve() != expected
+                or any(path.is_symlink() for path in (output, *output.parents))):
+            _spending.deny("binding_conflict")
+        control = Path(binding["root"]) / "control"
+        if control.resolve() != control:
+            _spending.deny("binding_conflict")
+        directory = os.open(control, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            descriptor = os.open("request.json", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
+        finally:
+            os.close(directory)
+        with os.fdopen(descriptor, "r", encoding="utf-8") as stream:
+            info = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or info.st_uid != os.getuid() or info.st_mode & 0o022):
+                _spending.deny("binding_conflict")
+            raw = stream.read(4_000_001)
+        if len(raw) > 4_000_000:
+            _spending.deny("binding_conflict")
+        def unique(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    _spending.deny("binding_conflict")
+                result[key] = value
+            return result
+        approved = json.loads(raw, object_pairs_hook=unique)
+    except _spending.SpendingStop:
+        raise
+    except (OSError, TypeError, ValueError, UnicodeError):
+        _spending.deny("binding_conflict")
+    _spending.validate_bound_request(binding, approved)
+    if (type(question) is not str or set(approved) != {
+            "prompt", "mode", "depth", "language", "model", "forecast_authority", "target_simulation"}
+            or approved["mode"] != "full" or approved["forecast_authority"] != "target-first-v1"):
+        _spending.deny("binding_conflict")
+    actual = dict(approved)
+    actual.update(prompt=question.strip(), model=getattr(args, "model", None),
+                  depth=getattr(args, "depth", None), language=getattr(args, "target_language", None) or "",
+                  forecast_authority=getattr(args, "forecast_authority", None))
+    _spending.validate_bound_request(binding, actual)
+
+
 def run(question: str, out_dir: Path, args: Any, meta: dict, plog: Any, write_meta: Callable[[], None],
         *, bridge: Any = None, gateway_factory: GatewayFactory | None = None,
         tools_factory: ToolsFactory | None = None) -> int:
@@ -9323,6 +9483,14 @@ def run(question: str, out_dir: Path, args: Any, meta: dict, plog: Any, write_me
     engine: _Engine | None = None
     restore_signals: Callable[[], None] | None = None
     try:
+        binding = _spending.binding_from_environment()
+        if binding is not None:
+            _spending.activate_binding(binding)
+            _spending.check_context()
+            _validate_spending_request(question, out_dir, args, binding)
+            if (getattr(args, "extract_only", False) or getattr(args, "evidence_only", False)
+                    or os.environ.get("RESEARCH_LINEAR_MODE", "").strip().lower() == "salvage"):
+                _spending.deny("unsupported_route")
         if bridge is None:
             import deerflow_research as bridge  # noqa: PLW0127 — deployed next to this file
         engine = _Engine(question, Path(out_dir), args, meta, reporter, write_meta, bridge,
@@ -9334,6 +9502,9 @@ def run(question: str, out_dir: Path, args: Any, meta: dict, plog: Any, write_me
         meta.update(status="failed", error=str(failure), finished_at=_iso_now())
         reporter.write("error", f"v3: {failure}")
         return 2
+    except _spending.SpendingStop as exc:
+        meta.update(status="failed", error=str(exc), finished_at=_iso_now())
+        raise
     except Exception as exc:  # noqa: BLE001 — the engine's failure boundary
         meta.update(status="failed", error=f"v3 engine error: {type(exc).__name__}: {exc}",
                     traceback=traceback.format_exc(), finished_at=_iso_now())
@@ -9347,17 +9518,25 @@ def run(question: str, out_dir: Path, args: Any, meta: dict, plog: Any, write_me
         reporter.write("error", f"v3: {error}")
         raise
     finally:
-        if engine is not None:
-            try:
-                engine.attach_telemetry()
-            except Exception as exc:  # noqa: BLE001 — telemetry never masks the outcome
-                reporter.write("warn", f"v3: telemetry summary failed ({type(exc).__name__}: {exc})")
-        if meta.get("status") not in ("completed", "failed"):
-            meta.update(status="failed", error=meta.get("error") or "v3 engine ended without a terminal status",
-                        finished_at=_iso_now())
         try:
-            write_meta()
-        except Exception as exc:  # noqa: BLE001
-            reporter.write("warn", f"v3: final write_meta failed ({type(exc).__name__}: {exc})")
-        if restore_signals is not None:
-            restore_signals()
+            if engine is not None:
+                try:
+                    engine.attach_telemetry()
+                except _spending.SpendingStop as exc:
+                    meta.update(status="failed", error=str(exc), finished_at=_iso_now())
+                    raise
+                except Exception as exc:  # noqa: BLE001 — telemetry never masks the outcome
+                    reporter.write("warn", f"v3: telemetry summary failed ({type(exc).__name__}: {exc})")
+            if meta.get("status") not in ("completed", "failed"):
+                meta.update(status="failed", error=meta.get("error") or "v3 engine ended without a terminal status",
+                            finished_at=_iso_now())
+            try:
+                write_meta()
+            except _spending.SpendingStop as exc:
+                meta.update(status="failed", error=str(exc), finished_at=_iso_now())
+                raise
+            except Exception as exc:  # noqa: BLE001
+                reporter.write("warn", f"v3: final write_meta failed ({type(exc).__name__}: {exc})")
+        finally:
+            if restore_signals is not None:
+                restore_signals()

@@ -829,8 +829,14 @@ def test_backend_only_import_path_can_validate_observe_and_run(case, monkeypatch
     case["actors"] = [_actor()]
     repo = Path(__file__).resolve().parents[2]
     prefix = "deerflow_bridge"
+
+    def isolated_module(name):
+        # The deployed sibling and backend names intentionally share one core.
+        # A fresh-import fixture must remove and restore both aliases together.
+        return name == "run_spending" or name == prefix or name.startswith(prefix + ".")
+
     original = {key: value for key, value in sys.modules.items()
-                if key == prefix or key.startswith(prefix + ".")}
+                if isolated_module(key)}
     original_path = list(sys.path)
     try:
         with monkeypatch.context() as patch:
@@ -840,6 +846,7 @@ def test_backend_only_import_path_can_validate_observe_and_run(case, monkeypatch
                 patch.delitem(sys.modules, key)
             assert str(repo) not in sys.path
             result = run_paths(case, paths=1, periods=1, decision_provider=lambda observation: [])
+            assert sys.modules["run_spending"] is sys.modules["deerflow_bridge.run_spending"]
             observation = actor_observation(case, {"base": 100.0, "rate": 0.1, "target": 110.0}, "a")
             assert result["paths"][0]["targetValue"] == pytest.approx(110.0)
             assert observation["values"]["rate"] == pytest.approx(0.1)
@@ -847,7 +854,7 @@ def test_backend_only_import_path_can_validate_observe_and_run(case, monkeypatch
         # Modules first created in the restricted context also need removal;
         # monkeypatch restores previously present entries but not new imports.
         for key in list(sys.modules):
-            if (key == prefix or key.startswith(prefix + ".")) and key not in original:
+            if isolated_module(key) and key not in original:
                 del sys.modules[key]
         sys.modules.update(original)
     assert sys.path == original_path

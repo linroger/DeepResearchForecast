@@ -1381,7 +1381,7 @@ _RUNTIME_SKILL_SYNC_HELPER_PATH = os.path.abspath(os.path.join(
 # setup.sh deploys the same set; test_deerflow_bridge_sync_guard pins the parity.
 _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
     "market_tools.py", "search_tools.py", "cached_fetch.py",
-    "research_budget.py", "linear_research.py", "research_gateway.py",
+    "research_budget.py", "run_spending.py", "linear_research.py", "research_gateway.py",
     "data_mcp.py", "data_catalog.py", "data_sources.py", "data_tools.py",
     "research_skills.py", "backtest_cutoff.py", "forecast_case.py", "target_research.py",
     "news_signals.py", "news_tools.py", "market_intelligence.py",
@@ -2214,9 +2214,13 @@ class DeerFlowResearchRunner:
             "flushed": False,
         }
         try:
-            return DeerFlowResearchRunner._run_attempt(
-                prompt, handoff_dir, model=model, budget_run_id=budget_run_id,
-                _spend=spend, **kwargs)
+            from .run_spending import research_child_scope
+            with research_child_scope(prompt, handoff_dir, model=model,
+                                      budget_run_id=budget_run_id, options=kwargs) as (binding, tracker):
+                return DeerFlowResearchRunner._run_attempt(
+                    prompt, handoff_dir, model=model, budget_run_id=budget_run_id,
+                    _spend=spend, **({"spending_binding": binding, "spending_tracker": tracker}
+                                   if binding is not None else {}), **kwargs)
         except PipelineCancelled:
             _flush_failed_research_attempt_spend(spend, "cancelled", run_id=budget_run_id)
             raise
@@ -2258,6 +2262,8 @@ class DeerFlowResearchRunner:
         backtest: Optional[dict[str, Any]] = None,
         context_question_sha256: Optional[str] = None,
         _spend: Optional[dict[str, Any]] = None,
+        spending_binding: Optional[dict[str, Any]] = None,
+        spending_tracker: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """运行研究子进程，阻塞直到结束。返回 handoff 摘要。
 
@@ -2542,6 +2548,9 @@ class DeerFlowResearchRunner:
                     "——跳过 MCP 接线（研究照常运行）", kg_graph_id)
 
         logger.info(f"启动 DeerFlow 研究子进程: {' '.join(cmd[:1])} … (cwd={deerflow_dir})")
+        if spending_binding is not None:
+            from .run_spending import configure_child
+            cmd = configure_child(spending_binding, env, cmd, script)
         on_progress(2, "启动深度研究子进程…")
 
         proc = subprocess.Popen(
@@ -2554,6 +2563,8 @@ class DeerFlowResearchRunner:
             bufsize=1,
             start_new_session=True,  # 自成进程组，便于 os.killpg 连带清理孙子进程
         )
+        if spending_tracker is not None:
+            spending_tracker["process"] = proc
         DeerFlowResearchRunner._live_procs.add(proc)
         if on_spawn is not None:
             try:
@@ -2570,7 +2581,14 @@ class DeerFlowResearchRunner:
         def _watchdog():
             if proc.poll() is None:
                 timed_out["hit"] = True
-                _kill_process_group(proc)
+                if spending_binding is not None:
+                    from .run_spending import api as spending_api
+                    try:
+                        spending_api().halt(spending_binding, "unknown_outcome")
+                    finally:
+                        _kill_process_group(proc)
+                else:
+                    _kill_process_group(proc)
 
         watchdog = threading.Timer(budget, _watchdog)
         watchdog.daemon = True
@@ -8964,6 +8982,15 @@ class PipelineOrchestrator:
             target_options["target_decision_budget_v1"] = {"max_calls": cap}
             target_options["target_tournament_enabled"] = bool(getattr(Config, "REPORT_TOURNAMENT", True))
         pipeline_id = f"pipe_{uuid.uuid4().hex[:12]}"
+        from . import run_spending as spending
+        spending_options = spending.bind_start(
+            pipeline_id, prompt, mode=mode, depth=depth or Config.DEERFLOW_RESEARCH_DEPTH,
+            language=language, model=model, forecast_authority=forecast_authority,
+            target_simulation=target_simulation, project_name=project_name, max_rounds=max_rounds)
+        if spending_options:
+            admitted = spending_options[spending.REQUEST_KEY]
+            prompt, depth, language, model = (admitted["prompt"], admitted["depth"],
+                                               admitted["language"], admitted["model"])
         PipelineManager.ensure_dirs(pipeline_id)
 
         task_manager = TaskManager()
@@ -8993,6 +9020,7 @@ class PipelineOrchestrator:
             "research_language": language,
             "research_model": model or None,
             **simulation_options,
+            **spending_options,
         })
         state.options["actor_intelligence_policy_v1"] = (
             {"required": False, "research_engine": "v3", "source": AUTHORITY}
@@ -9037,6 +9065,9 @@ class PipelineOrchestrator:
                 return {"ok": False, "status": "not_found"}
             if data.get("status") != "running":
                 return {"ok": False, "status": "not_running"}
+
+            from . import run_spending as spending
+            spending.cancel_bound(data)
 
             event = cls._cancel_events.get(pipeline_id)
             thread = cls._threads.get(pipeline_id)
@@ -9107,6 +9138,9 @@ class PipelineOrchestrator:
             data = PipelineManager.load(pipeline_id)
             if data is None:
                 return {"ok": False, "status": "not_found"}
+            from . import run_spending as spending
+            if spending.state_binding(data) is not None:
+                return {"ok": False, "status": "spending_authority_retained"}
             if not force:
                 deps = cls._dependent_forks(pipeline_id)
                 if deps:
@@ -9199,7 +9233,11 @@ class PipelineOrchestrator:
                            if _ph.get("status") in ("degraded", "failed") else "")
                     )
 
+            from . import run_spending as spending
+            rebound = spending.resume_bound(data)
             state = PipelineState.from_dict(data)
+            if rebound is not None:
+                state.options[spending.BINDING_KEY] = rebound
             PipelineManager.ensure_dirs(pipeline_id)
             bands = RESEARCH_ONLY_BANDS if state.mode == "research_only" else STAGE_BANDS
             for name in bands.keys():
@@ -9288,6 +9326,8 @@ class PipelineOrchestrator:
             data = PipelineManager.load(pipeline_id)
             if data is None:
                 raise FileNotFoundError("管线不存在")
+            from . import run_spending as spending
+            spending.reject_scope_change(data)
             _bad = PipelineManager.is_incompatible(data)  # I-4-4
             if _bad is not None:
                 raise IncompatiblePipelineSchema(pipeline_id, _bad)
@@ -9373,6 +9413,8 @@ class PipelineOrchestrator:
         base = PipelineManager.load(base_pipeline_id)
         if base is None:
             raise FileNotFoundError("基础管线不存在")
+        from . import run_spending as spending
+        spending.reject_scope_change(base)
         _bad = PipelineManager.is_incompatible(base)  # I-4-4
         if _bad is not None:
             raise IncompatiblePipelineSchema(base_pipeline_id, _bad)
@@ -13537,6 +13579,25 @@ class PipelineOrchestrator:
 
     @classmethod
     def _run(cls, state: PipelineState) -> None:
+        from . import run_spending as spending
+        try:
+            with spending.pipeline_scope(state):
+                cls._run_impl(state)
+                spending.finish_pipeline(state)
+                if spending.state_binding(state) is not None:
+                    PipelineManager.save(state)
+        except Exception as error:
+            if not spending.api().is_spending_stop(error):
+                raise
+            spending.record_stop(state, error)
+            PipelineManager.save(state)
+            if state.task_id:
+                TaskManager().fail_task(state.task_id, state.error)
+            cls._threads.pop(state.pipeline_id, None)
+            cls._cancel_events.pop(state.pipeline_id, None)
+
+    @classmethod
+    def _run_impl(cls, state: PipelineState) -> None:
         self = cls()
         task_manager = TaskManager()
         # EXECPLAN2 I-5-0/I-5-2: 把本次管线所有 LLM 调用归属到该 pipeline_id（contextvars）。
@@ -15074,8 +15135,12 @@ class PipelineOrchestrator:
             self._halt_for_provider_outage(state, task_manager, e)
         except Exception as e:  # noqa: BLE001
             logger.error(f"[{state.pipeline_id}] 管线失败: {e}", exc_info=True)
-            state.status = "failed"
-            state.error = str(e)
+            from . import run_spending as spending
+            if spending.api().is_spending_stop(e):
+                spending.record_stop(state, e)
+            else:
+                state.status = "failed"
+                state.error = str(e)
             if state.current_stage:
                 self._fail_stage(state, state.current_stage, str(e))
             PipelineManager.save(state)

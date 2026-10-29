@@ -47,6 +47,11 @@ import re
 import time
 from typing import Any, Optional
 
+if __package__:
+    from . import run_spending as _spending
+else:
+    import run_spending as _spending
+
 logger = logging.getLogger(__name__)
 
 try:  # copied beside this module by the bridge sync guard; absence is fail-open
@@ -286,6 +291,8 @@ def _read_search_cache(path: str, ttl_seconds: float) -> Optional[str]:
         except OSError:
             pass
         return result
+    except _spending.SpendingStop:
+        raise
     except Exception:  # noqa: BLE001 — 缓存读损坏/并发写中 → 当作未命中，degrade-safe
         return None
 
@@ -307,6 +314,8 @@ def _write_search_cache(path: str, provider: str, query: str, result: str) -> No
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, path)
+    except _spending.SpendingStop:
+        raise
     except Exception as e:  # noqa: BLE001
         logger.warning("search_tools: 写搜索缓存失败（跳过，不影响结果）: %s", e)
 
@@ -339,6 +348,8 @@ def _enforce_search_cache_cap(root: str, max_bytes: int) -> None:
                 total -= size
             except OSError:
                 continue
+    except _spending.SpendingStop:
+        raise
     except Exception as e:  # noqa: BLE001
         logger.warning("search_tools: 淘汰搜索缓存失败（跳过）: %s", e)
 
@@ -352,6 +363,8 @@ def _select_search_provider() -> str:
     显示零 key 的社区 DDG 在 2026-07-14 人形机器人 run 中 78% 返回空结果，配置 Firecrawl
     key 后它取代 DDG 成为实际后端。
     """
+    if _spending.check_context() is not None:
+        return "firecrawl"
     if os.environ.get("SERPER_API_KEY", "").strip():
         return "serper"
     if os.environ.get("TAVILY_API_KEY", "").strip():
@@ -449,6 +462,17 @@ def _firecrawl_payload(query: str, limit: int, backtest: Any = None) -> dict:
     return body
 
 
+def _firecrawl_usage(response: Any) -> dict | None:
+    """Only raw reported credits are observations; missing counters stay missing."""
+    try:
+        raw = response.json()
+    except (ValueError, TypeError):
+        return None
+    if isinstance(raw, dict) and raw.get("creditsUsed") is not None:
+        return {"kind": "provider_reported", "tool_units": raw["creditsUsed"]}
+    return None
+
+
 def _firecrawl_search(query: str, max_results: int, backtest: Any = None) -> str:
     """Firecrawl v2 /search 直连实现，输出与 community 工具同形的 JSON 字符串。
 
@@ -462,7 +486,12 @@ def _firecrawl_search(query: str, max_results: int, backtest: Any = None) -> str
     date; each result keeps its ``date``.  ``None`` sends today's payload.
     """
     global _firecrawl_search_calls, _firecrawl_ceiling_warned
+    bound = _spending.check_context() is not None
+    if bound and backtest is not None:
+        _spending.deny("unsupported_route")
     api_key = os.environ.get("FIRECRAWL_API_KEY", "").strip()
+    if bound and not api_key:
+        _spending.deny("unsupported_route")
     q = str(query or "").strip()
     ceiling = _firecrawl_search_call_ceiling()
     if ceiling > 0 and _firecrawl_search_calls >= ceiling:
@@ -484,20 +513,42 @@ def _firecrawl_search(query: str, max_results: int, backtest: Any = None) -> str
             "FIRECRAWL_SEARCH_API_URL", "https://api.firecrawl.dev/v2/search"
         ).strip() or "https://api.firecrawl.dev/v2/search"
         limit = max(1, min(int(max_results), _firecrawl_search_limit_cap()))
+        body = _firecrawl_payload(q, limit, backtest)
+        route_id = (_spending.qualify_route("firecrawl_search", endpoint,
+            account_sha256=hashlib.sha256(api_key.encode("utf-8")).hexdigest()) if bound else None)
+        envelope = None
+        if bound:
+            route = _spending.get_route(route_id)
+            # Reserve the entire reviewed per-request unit envelope. The route
+            # must cover this closed web-only payload; never infer a USD cost
+            # or a refund from the number of returned rows.
+            if limit > route["max_tool_units"]:
+                _spending.deny("invalid_request")
+            envelope = {"endpoint": endpoint, "model": "", "input_tokens": 0,
+                        "max_output_tokens": 0, "tool_units": route["max_tool_units"],
+                        "payload_sha256": _spending.hash_payload(body)}
         _firecrawl_search_calls += 1  # 计在发出请求前：HTTP 4xx/5xx 同样可能计费
         max_retries = _firecrawl_search_max_retries()
         attempt = 0
         while True:
             _firecrawl_throttle()
-            with httpx.Client(timeout=timeout, trust_env=True) as client:
-                response = client.post(
-                    endpoint,
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=_firecrawl_payload(q, limit, backtest),
-                )
+            def send():
+                options = {"timeout": timeout, "trust_env": not bound}
+                if bound:
+                    options.update(follow_redirects=False, transport=httpx.HTTPTransport(retries=0))
+                with httpx.Client(**options) as client:
+                    response = client.post(endpoint, headers={
+                        "Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                        json=body)
+                if bound and response.status_code >= 300:
+                    raise RuntimeError("firecrawl_transport_status")
+                return response
+            if bound:
+                _spending.check_context()
+                with _spending.operation("research:search", envelope["payload_sha256"]):
+                    response = _spending.dispatch(route_id, envelope, send, usage=_firecrawl_usage)
+            else:
+                response = send()
             if response.status_code != 429 or attempt >= max_retries:
                 break
             # 429：优先信 body 里的 "please retry after Ns" 提示，缺省退避 5s×2^n + 抖动。
@@ -541,6 +592,8 @@ def _firecrawl_search(query: str, max_results: int, backtest: Any = None) -> str
         return json.dumps(
             {"query": q, "total_results": len(results), "results": results},
             ensure_ascii=False)
+    except _spending.SpendingStop:
+        raise
     except Exception as exc:  # noqa: BLE001 — 不回显异常正文（可能含 bearer 头）
         return json.dumps(
             {"error": f"firecrawl search failed: {type(exc).__name__}",
@@ -550,6 +603,8 @@ def _firecrawl_search(query: str, max_results: int, backtest: Any = None) -> str
 
 def _load_search_module(provider: str) -> Optional[Any]:
     """延迟 import 指定 provider 的 harness community 工具模块；失败返回 None（degrade-safe）。"""
+    if _spending.check_context() is not None:
+        _spending.deny("unsupported_route")
     path = _PROVIDER_MODULES.get(provider)
     if not path:
         return None
@@ -557,6 +612,8 @@ def _load_search_module(provider: str) -> Optional[Any]:
         import importlib
 
         return importlib.import_module(path)
+    except _spending.SpendingStop:
+        raise
     except Exception as e:  # noqa: BLE001 — 无 deerflow / provider 依赖缺失 → 交由上层回退
         logger.warning("search_tools: 导入 %s 失败（%s）", path, e)
         return None
@@ -570,6 +627,8 @@ def _call_delegate(tool_obj: Any, query: str, max_results: int) -> str:
     max_results）——故仅在被调函数确有 max_results 形参时才传，避免 TypeError。无论是否传，
     community 工具都以 config 的 max_results 覆盖（本 stanza=10），因此结果与直接配置一致。
     """
+    if _spending.check_context() is not None:
+        _spending.deny("unsupported_route")
     fn = getattr(tool_obj, "func", None) or tool_obj
     kwargs: dict[str, Any] = {"query": query}
     try:
@@ -609,6 +668,8 @@ def web_search_impl(
     row of every provider then passes ``backtest_cutoff.filter_search_payload``
     (rows dated after the cutoff dropped, undated ones dropped in strict mode).
     """
+    if _spending.check_context() is not None and os.environ.get("DRF_BACKTEST_POLICY"):
+        _spending.deny("unsupported_route")
     try:
         backtest = _backtest_policy()
     except ValueError as exc:
@@ -628,6 +689,8 @@ def _web_search(query: str, max_results: int, revisit_reason: str, backtest: Any
         if not attempt.allowed:
             return _budget_denial("web_search", attempt.reason, query)
     if provider == "firecrawl" and not _firecrawl_search_available():
+        if _spending.check_context() is not None:
+            _spending.deny("unsupported_route")
         # firecrawl 依赖缺失（无 httpx）→ 与 community 模块导入失败同类，回退 DDG。
         logger.warning("search_tools: 后端 firecrawl 不可用（httpx 缺失），回退 DDG")
         provider = "ddg"
@@ -673,6 +736,8 @@ def _web_search(query: str, max_results: int, revisit_reason: str, backtest: Any
                                 "web_search", artifact_id)
                     _research_budget.record_positive("search", exact_key)
                 return hit
+        except _spending.SpendingStop:
+            raise
         except Exception as e:  # noqa: BLE001 — 缓存故障 → 当作未命中直连
             logger.warning("search_tools: 搜索缓存读取异常（跳过缓存）: %s", e)
             _cache_path_str = ""
@@ -739,6 +804,10 @@ def _web_search(query: str, max_results: int, revisit_reason: str, backtest: Any
                   else _call_delegate(tool_obj, query, max_results))
         result = result if isinstance(result, str) else str(result)
         result = _filter_denied_search_results(result)
+    except _spending.SpendingStop:
+        if _research_budget is not None:
+            _research_budget.release_request(claim_token)
+        raise
     except Exception as e:  # noqa: BLE001 — 工具层最后兜底：绝不向 agent 循环抛异常
         logger.warning("search_tools: 委派 %s 失败（降级为空结果）: %s", provider, e)
         if _research_budget is not None:
@@ -762,6 +831,8 @@ def _web_search(query: str, max_results: int, revisit_reason: str, backtest: Any
                 _write_search_cache(_cache_path_str, provider, query, result)
                 _enforce_search_cache_cap(_search_cache_root(), _search_max_bytes())
         return result
+    except _spending.SpendingStop:
+        raise
     except Exception as e:  # noqa: BLE001 — 落盘/淘汰失败绝不影响已取得的结果
         logger.warning("search_tools: 搜索缓存写入路径异常（跳过）: %s", e)
         return result

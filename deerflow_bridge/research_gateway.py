@@ -68,6 +68,11 @@ from pathlib import Path
 from typing import Any, Callable, ContextManager, Iterator, Mapping, Sequence, TypeVar
 from urllib.parse import quote, urlsplit, urlunsplit
 
+if __package__:
+    from . import run_spending as _spending
+else:
+    import run_spending as _spending
+
 T = TypeVar("T")
 
 __all__ = [
@@ -819,6 +824,8 @@ def _as_mapping(value: Any) -> Mapping[str, Any] | None:
     if callable(dump):
         try:
             dumped = dump()
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — foreign object; treat as absent
             return None
         return dumped if isinstance(dumped, Mapping) else None
@@ -1243,9 +1250,184 @@ def without_sdk_retries(model: Any) -> Any:
         if isinstance(state, dict):
             for name in _LAZY_CLIENT_ATTRS:
                 state.pop(name, None)
+    except _spending.SpendingStop:
+        raise
     except Exception:  # noqa: BLE001 — an uncopyable model still works, with SDK retries
         return model
     return clone
+
+
+def _check_bound_callbacks() -> None:
+    """No inherited or environment-selected callback may export a bound prompt."""
+    def enabled(name: str) -> bool:
+        return str(os.environ.get(name, "")).strip().lower() not in {"", "0", "false", "off", "no"}
+    if any(enabled(name) for name in ("LANGCHAIN_TRACING", "LANGCHAIN_TRACING_V2",
+                                     "LANGSMITH_TRACING", "LANGSMITH_TRACING_V2")):
+        _spending.deny("unsupported_route")
+    try:
+        from langchain_core.runnables.config import var_child_runnable_config
+        from langchain_core.tracers.context import _configure_hooks, _tracing_v2_is_enabled
+        from langsmith.run_helpers import get_tracing_context
+    except ImportError:
+        _spending.deny("unsupported_route")
+    inherited = var_child_runnable_config.get() or {}
+    tracing = get_tracing_context()
+    if (_tracing_v2_is_enabled() or inherited.get("callbacks") or tracing.get("enabled")
+            or tracing.get("parent") or tracing.get("client")
+            or any(var.get() is not None or (env and enabled(env)) for var, _, _, env in _configure_hooks)):
+        _spending.deny("unsupported_route")
+
+
+def _model_route(model: Any) -> str | None:
+    """Verify the actual closed ChatOpenAI transport, including its SDK resource.
+
+    Legacy retry suppression remains best effort. Required runs admit only an
+    inspectable chat-completions client with no SDK/HTTP retry or redirect path.
+    """
+    if _spending.check_context() is None:
+        return None
+    try:
+        from langchain_openai import ChatOpenAI
+    except ImportError:
+        _spending.deny("unsupported_route")
+    if type(model) is not ChatOpenAI:
+        _spending.deny("unsupported_route")
+    _check_bound_callbacks()
+    endpoint = str(getattr(model, "openai_api_base", None) or "")
+    name = str(getattr(model, "model_name", None) or "")
+    credential = getattr(model, "openai_api_key", None)
+    if callable(getattr(credential, "get_secret_value", None)):
+        credential = credential.get_secret_value()
+    if not isinstance(credential, str) or not credential:
+        _spending.deny("unsupported_route")
+    route_id = _spending.qualify_route("openai_chat", endpoint, name,
+        account_sha256=hashlib.sha256(credential.encode("utf-8")).hexdigest())
+    if (type(getattr(model, "max_retries", None)) is not int or model.max_retries != 0
+            or getattr(model, "streaming", None) is not False
+            or getattr(model, "cache", None) is not False
+            or type(getattr(model, "n", None)) is not int or model.n != 1
+            or getattr(model, "use_responses_api", None) is not False
+            or getattr(model, "retry_max_attempts", 1) != 1
+            or any(getattr(model, key, None) for key in
+                   ("model_kwargs", "default_headers", "default_query", "extra_body", "callbacks"))
+            or any(key in getattr(model, "__dict__", {}) for key in
+                   ("invoke", "_generate", "_get_request_payload", "bind", "bind_tools", "model_copy"))):
+        _spending.deny("unsupported_route")
+    root = getattr(model, "root_client", None)
+    resource = getattr(model, "client", None)
+    if (root is None or resource is None
+            or resource is not getattr(getattr(root, "chat", None), "completions", None)
+            or getattr(resource, "_client", None) is not root
+            or type(getattr(root, "max_retries", None)) is not int or root.max_retries != 0
+            or getattr(root, "api_key", None) != credential
+            or getattr(root, "organization", None) or getattr(root, "project", None)
+            or not callable(getattr(getattr(resource, "with_raw_response", None), "create", None))
+            or str(getattr(root, "base_url", "")).rstrip("/") != endpoint.rstrip("/")):
+        _spending.deny("unsupported_route")
+    http = getattr(root, "_client", None)
+    pool = getattr(getattr(http, "_transport", None), "_pool", None)
+    if (http is None or getattr(http, "follow_redirects", None) is not False
+            or getattr(pool, "_retries", None) != 0
+            or getattr(http, "auth", None) is not None
+            or any((getattr(http, "event_hooks", {}) or {}).values())
+            or any(value is not None for value in (getattr(http, "_mounts", {}) or {}).values())
+            or getattr(root, "_custom_query", None) or getattr(root, "_custom_headers", None)):
+        _spending.deny("unsupported_route")
+    return route_id
+
+
+def _model_wire_body(payload: dict) -> dict:
+    """Chat completions JSON after SDK options are removed and extra_body merged."""
+    body = dict(payload)
+    body.pop("timeout", None)
+    extra = body.pop("extra_body", None) or {}
+    if not isinstance(extra, dict) or set(extra) - {"thinking", "reasoning_effort", "max_tokens", "clear_thinking"}:
+        _spending.deny("unsupported_route")
+    body.update(extra)
+    return body
+
+
+def _model_spending_request(model: Any, messages: list, params: dict,
+                            tools: Sequence[Any] | None) -> tuple[str, dict] | None:
+    route_id = _model_route(model)
+    if route_id is None:
+        return None
+    # These are local function declarations. Each execution has its own priced
+    # Firecrawl admission; hosted tools and other schemas are not supported.
+    if tools and list(tools) != AGENT_TOOLS_SCHEMA:
+        _spending.deny("unsupported_route")
+    serializer = getattr(model, "_get_request_payload", None)
+    if not callable(serializer):
+        _spending.deny("unsupported_route")
+    wire_params = dict(params)
+    if tools:
+        wire_params["tools"] = list(tools)
+    payload = serializer(messages, **wire_params)
+    allowed = {"messages", "model", "stream", "n", "max_tokens", "max_completion_tokens",
+               "tools", "temperature", "top_p", "frequency_penalty", "presence_penalty",
+               "stop", "seed", "reasoning_effort", "extra_body", "timeout"}
+    if (not isinstance(payload, dict) or set(payload) - allowed
+            or payload.get("model") != model.model_name or payload.get("stream", False) is not False
+            or payload.get("n", 1) != 1 or payload.get("tools") != wire_params.get("tools")):
+        _spending.deny("unsupported_route")
+    extra = payload.get("extra_body") or {}
+    if (not isinstance(extra, dict)
+            or set(extra) - {"thinking", "reasoning_effort", "max_tokens", "clear_thinking"}):
+        _spending.deny("unsupported_route")
+    cap = params["max_tokens"]
+    caps = [payload[key] for key in ("max_tokens", "max_completion_tokens") if key in payload]
+    if "max_tokens" in extra:
+        caps.append(extra["max_tokens"])
+    if not caps or any(type(value) is not int or value != cap for value in caps):
+        _spending.deny("invalid_request")
+    route = _spending.get_route(route_id)
+    request = {"endpoint": route["endpoint"], "model": model.model_name,
+               "input_tokens": route["input_ceiling"], "max_output_tokens": cap,
+               "tool_units": 0, "payload_sha256": _spending.hash_payload(_model_wire_body(payload))}
+    _spending.quote_request(route_id, request)
+    return route_id, request
+
+
+def _raw_model_usage(body: Any) -> dict | None:
+    """Read reported HTTP JSON counters before SDK/LangChain message conversion."""
+    raw = body.get("usage") if isinstance(body, dict) else None
+    usage: dict[str, Any] = {"kind": "provider_reported"}
+    if isinstance(raw, Mapping):
+        for source, target in (("prompt_tokens", "input_tokens"), ("completion_tokens", "output_tokens")):
+            if raw.get(source) is not None:
+                usage[target] = raw[source]
+    return usage if len(usage) > 1 else None
+
+
+class _BoundRawCompletion:
+    """One concrete SDK send, matching the admitted JSON, with raw usage capture."""
+    def __init__(self, resource: Any, request: dict, observed: dict) -> None:
+        self.resource, self.request, self.observed = resource, request, observed
+
+    def create(self, **kwargs: Any) -> Any:
+        _spending.check_context()
+        if self.observed["calls"] or _spending.hash_payload(_model_wire_body(kwargs)) != self.request["payload_sha256"]:
+            _spending.deny("invalid_request")
+        self.observed["calls"] += 1
+        raw = self.resource.with_raw_response.create(**kwargs)
+        response = raw.http_response
+        if not 200 <= response.status_code < 300:
+            raise RuntimeError("model_transport_status")
+        self.observed["response"] = True
+        try:
+            body = response.json()
+        except (ValueError, TypeError):
+            body = None
+        self.observed["usage"] = _raw_model_usage(body)
+        return raw
+
+
+class _BoundCompletion:
+    def __init__(self, resource: Any, request: dict, observed: dict) -> None:
+        self.with_raw_response = _BoundRawCompletion(resource, request, observed)
+
+    def create(self, **kwargs: Any) -> Any:
+        return self.with_raw_response.create(**kwargs).parse()
 
 
 # How much longer than a call's own timeout the gateway waits for it.  A bound
@@ -1334,7 +1516,13 @@ class _ModelSlot:
 
     def __init__(self, name: str, model: Any) -> None:
         self.name = name
-        self.model = without_sdk_retries(model)
+        if _spending.check_context() is not None:
+            # Bound clients are constructed with retries disabled. Never try a
+            # best-effort SDK reconstruction before validating their route.
+            _model_route(model)
+            self.model = model
+        else:
+            self.model = without_sdk_retries(model)
         self.profile = detect_profile(self.model)
         self.level = 0
         self.disabled_reason: str | None = None
@@ -1432,6 +1620,8 @@ class ModelGateway:
                  sleep: Callable[[float], None] = time.sleep,
                  clock: Callable[[], float] = time.monotonic,
                  max_attempts: int = 5) -> None:
+        if _spending.check_context() is not None and fallback_model is not None:
+            _spending.deny("unsupported_route")
         if model is None:
             raise ValueError("ModelGateway requires a model")
         self.plog = plog
@@ -1486,6 +1676,8 @@ class ModelGateway:
             return
         try:
             self.plog.write(kind, message)
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — telemetry must never break a call
             pass
 
@@ -1521,6 +1713,7 @@ class ModelGateway:
         outcomes, and ``ValueError`` for caller bugs (unknown kind, empty or
         system-only messages, a non-integer ``max_tokens``).
         """
+        _spending.check_context()
         if kind not in CALL_KINDS:
             raise ValueError(f"unknown call kind {kind!r}; expected one of {CALL_KINDS}")
         messages = list(messages or ())
@@ -1570,6 +1763,8 @@ class ModelGateway:
         ``announce`` is False once the primary is sticky-disabled (that event
         was already logged once), so routine fallback calls stay quiet.
         """
+        if _spending.check_context() is not None:
+            _spending.deny("unsupported_route")
         if self._fallback is None:  # unreachable: callers route here only with a fallback
             raise primary_error
         if request.deadline is not None and request.deadline.expired():
@@ -1639,10 +1834,50 @@ class ModelGateway:
                     params = slot.profile.call_params(request.kind, level=level, timeout=timeout)
                     if cap is not None:
                         _apply_output_cap(params, cap)
+                    admission = _model_spending_request(slot.model, wire_messages, params, request.tools)
+                    observed = {"calls": 0, "response": False, "usage": None}
+                    if admission is not None:
+                        # Never mutate the shared model/client across fan-out jobs.
+                        clone = slot.model.model_copy(update={
+                            "client": _BoundCompletion(slot.model.client, admission[1], observed),
+                            "cache": False, "callbacks": []})
+                        if type(clone) is not type(slot.model) or clone is slot.model:
+                            _spending.deny("unsupported_route")
+                        base = clone.bind_tools(request.tools) if request.tools else clone
                     runnable = base.bind(**params)
+                except _spending.SpendingStop:
+                    raise
                 except Exception as exc:  # noqa: BLE001 — re-raised unchanged by the caller
                     raise _PreparationError(exc) from exc
-                message = _call_within(lambda: runnable.invoke(wire_messages), timeout + CALL_WAIT_GRACE_S)
+                if admission is None:
+                    message = _call_within(lambda: runnable.invoke(wire_messages), timeout + CALL_WAIT_GRACE_S)
+                else:
+                    route_id, envelope = admission
+                    unparsed = object()
+                    def invoke_bound():
+                        _spending.check_context()
+                        _check_bound_callbacks()
+                        return runnable.invoke(wire_messages, config={"callbacks": []})
+                    def send():
+                        try:
+                            value = _call_within(invoke_bound, timeout + CALL_WAIT_GRACE_S)
+                        except (_spending.SpendingStop, ProviderCallTimeout):
+                            raise
+                        except Exception:
+                            if observed["response"]:
+                                return unparsed
+                            raise
+                        if observed["calls"] != 1 or not observed["response"]:
+                            _spending.deny("unsupported_route")
+                        return value
+                    # The outer wait belongs inside dispatch: an abandoned worker
+                    # must latch unknown before the caller can retry or fall back.
+                    _spending.check_context()
+                    with _spending.operation("research:" + request.phase,
+                                             request.label + ":" + envelope["payload_sha256"]):
+                        message = _spending.dispatch(route_id, envelope, send, usage=lambda _: observed["usage"])
+                    if message is unparsed:
+                        raise _PreparationError(BadRequest("The provider returned an unusable response."))
                 return message, int(params["max_tokens"])
 
     def _widened_cap(self, slot: _ModelSlot, request: _Request, cap: int | None, latency: float) -> int:
@@ -1699,12 +1934,16 @@ class ModelGateway:
                 request.deadline.check(request.label)
             self._check_budget(request, slot.profile)
             level = max(slot.level, degraded_to)
+            if _spending.check_context() is not None and request.tools and list(request.tools) != AGENT_TOOLS_SCHEMA:
+                _spending.deny("unsupported_route")
             base = slot.runnable(request.tools)
             started = self._clock()
             try:
                 message, sent_cap = self._provider_call(slot, request, base, wire_messages, level, cap)
             except _PreparationError as prep:
                 raise prep.error from prep.error.__cause__
+            except _spending.SpendingStop:
+                raise
             except Exception as exc:  # noqa: BLE001 — classified below, never swallowed
                 category = classify_exception(exc)
                 if self._maybe_degrade(slot, level, category, exc, request):
@@ -1940,6 +2179,7 @@ class ModelGateway:
         budget or the deadline cannot cover it.  Never raises: priming is an
         optimization, so every failure returns ``False``.
         """
+        _spending.check_context()
         if kind not in CALL_KINDS:
             raise ValueError(f"unknown call kind {kind!r}; expected one of {CALL_KINDS}")
         messages = list(messages or ())
@@ -1967,6 +2207,8 @@ class ModelGateway:
                 raise prep.error from prep.error.__cause__
             self._build_result(message, slot, request, 1, self._clock() - started, output_cap=sent_cap)
             return True
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — priming must never fail the caller
             self._log("warn", f"gateway: {request.label}: cache priming skipped "
                               f"({_error_summary(exc, 160)})")
@@ -1982,6 +2224,7 @@ class ModelGateway:
         (``KeyboardInterrupt``/``SystemExit``) propagate.  No worker thread
         outlives this call.
         """
+        _spending.check_context()
         jobs = list(jobs or ())
         results: list[Any] = [None] * len(jobs)
         if not jobs:
@@ -1990,6 +2233,8 @@ class ModelGateway:
         def run(index: int) -> None:
             try:
                 results[index] = jobs[index]()
+            except _spending.SpendingStop:
+                raise
             except Exception as exc:  # noqa: BLE001 — returned to the caller by contract
                 results[index] = exc
 
@@ -2001,7 +2246,9 @@ class ModelGateway:
         if remaining:
             pool_size = max(1, min(len(remaining), int(workers or self.max_concurrency)))
             with ThreadPoolExecutor(max_workers=pool_size, thread_name_prefix="gateway-fanout") as pool:
-                futures = [pool.submit(run, index) for index in remaining]
+                # A fresh Context per worker preserves the required run binding
+                # without sharing a Context concurrently or putting it in prompts.
+                futures = [pool.submit(contextvars.copy_context().run, run, index) for index in remaining]
                 for future in futures:
                     future.result()
         return results
@@ -2593,6 +2840,8 @@ class SourceLedger:
         if callable(tier_fn):
             try:
                 tier = tier_fn(url)
+            except _spending.SpendingStop:
+                raise
             except Exception:  # noqa: BLE001 — tiering is advisory metadata
                 tier = None
             if tier in ("S1", "S2"):
@@ -2601,6 +2850,8 @@ class SourceLedger:
         if callable(default_fn):
             try:
                 tier = default_fn()
+            except _spending.SpendingStop:
+                raise
             except Exception:  # noqa: BLE001
                 tier = None
             if tier in _VALID_TIERS:
@@ -2612,6 +2863,8 @@ class SourceLedger:
         if callable(check):
             try:
                 return bool(check(url))
+            except _spending.SpendingStop:
+                raise
             except Exception:  # noqa: BLE001
                 return False
         return _fallback_valid_url(url)
@@ -3776,6 +4029,8 @@ CONTEXT_TOOLS_SCHEMA = [
 
 def context_tool_names(env: Mapping[str, Any]) -> tuple[str, ...]:
     """Trusted feature switches only; credential presence is the provider owner's job."""
+    if _spending.check_context() is not None:
+        return ()
     if str(env.get("DRF_BACKTEST_POLICY") or "").strip():
         return ()  # Current news/quotes have no point-in-time admissibility contract.
     def on(name: str, default: str = "true") -> bool:
@@ -3908,6 +4163,8 @@ def _data_hint(api: Any, request: str, code: str) -> str:
     hint = getattr(getattr(api, "DataSources", None), "_hint", None)
     try:
         return str(hint(request, code)) if callable(hint) else ""
+    except _spending.SpendingStop:
+        raise
     except Exception:  # noqa: BLE001 — the hint is optional text
         return ""
 
@@ -4044,7 +4301,7 @@ def _run_coroutine_blocking(factory: Callable[[], Any]) -> Any:
     except RuntimeError:
         return asyncio.run(factory())
     with ThreadPoolExecutor(max_workers=1, thread_name_prefix="gateway-async") as pool:
-        return pool.submit(lambda: asyncio.run(factory())).result()
+        return pool.submit(contextvars.copy_context().run, lambda: asyncio.run(factory())).result()
 
 
 def _default_search_fn(query: str, max_results: int) -> str:
@@ -4171,6 +4428,9 @@ class ResearchTools:
                  limits: ToolLimits | None = None, data_sources: Any = None,
                  context_client: Any = None, backtest: Any = None,
                  archive_get: Callable[[str, float], str] | None = None) -> None:
+        if _spending.check_context() is not None and any(value is not None for value in
+                (search_fn, fetch_fn, data_sources, context_client, backtest, archive_get)):
+            _spending.deny("unsupported_route")
         self.ledger = ledger
         self.pages_dir = Path(pages_dir)
         self.pages_dir.mkdir(parents=True, exist_ok=True)
@@ -4230,6 +4490,8 @@ class ResearchTools:
         ContextClient owns shared attempt/network budgets and provider singleflight.
         Gateway caches/replays consume neither provider nor local search admission.
         """
+        if _spending.check_context() is not None:
+            _spending.deny("unsupported_route")
         if self.backtest is not None:
             return "CONTEXT_UNAVAILABLE[backtest_unsupported]: historical context is not admissible."
         if name not in CONTEXT_TOOL_METHODS or not isinstance(query, str) or not query.strip():
@@ -4387,6 +4649,8 @@ class ResearchTools:
 
     def data_search(self, query: Any, *, provider: str | None = None,
                     agent_id: str, deadline: Deadline | None = None) -> str:
+        if _spending.check_context() is not None:
+            _spending.deny("unsupported_route")
         if not isinstance(query, str) or not query.strip() or (provider is not None and not isinstance(provider, str)):
             return "DATA_UNAVAILABLE[invalid_input]: data_search needs a non-empty query string; provider is optional."
         # An empty optional argument means "not given" (models often send "").
@@ -4411,6 +4675,8 @@ class ResearchTools:
         seeder (:data:`DATA_SEEDER`) passes the KIQs whose data needs it
         serves, and its gets count toward the prefetch cap.
         """
+        if _spending.check_context() is not None:
+            _spending.deny("unsupported_route")
         if not isinstance(series, str) or any(value is not None and not isinstance(value, str)
                                              for value in (start, end, transform)):
             return "DATA_UNAVAILABLE[invalid_input]: series, start, end and transform must be strings."
@@ -4483,6 +4749,8 @@ class ResearchTools:
         is immutable for the run, so long histories and projection horizons
         must be requested here.  Answers are keyed by the IDs as passed.
         """
+        if _spending.check_context() is not None:
+            _spending.deny("unsupported_route")
         outputs: dict[str, str] = {}
         pending: dict[str, tuple[str, tuple[str | None, str | None]]] = {}
         links: dict[str, list[str]] = {}
@@ -4549,6 +4817,8 @@ class ResearchTools:
                 for job in jobs:
                     try:
                         merged.update(job.result())
+                    except _spending.SpendingStop:
+                        raise
                     except Exception:  # noqa: BLE001 — one window group never voids the others
                         pass
             return merged
@@ -4558,6 +4828,8 @@ class ResearchTools:
             # Leave a bounded margin to receive and persist those results.
             provider_seconds = max(0.0, remaining - min(5.0, remaining * 0.2))
             results = _call_within(lambda: batch(provider_seconds), remaining)
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — bounded batch failure, no raw provider text
             results = {}
         with self._data_lock:
@@ -4594,6 +4866,8 @@ class ResearchTools:
         commit under the data lock.  ``identity`` marks a dataset get (else a
         search); ``flight`` is the singleflight key, shared by every window of
         one series so concurrent agents never fetch it twice."""
+        if _spending.check_context() is not None:
+            _spending.deny("unsupported_route")
         with self._singleflight(self._inflight_data, flight,
                                 wait=deadline.remaining() if deadline else 90.0) as owner:
             with self._data_lock:
@@ -4628,6 +4902,8 @@ class ResearchTools:
                 # Only the API read runs in the daemon. Late returns cannot
                 # mutate the ledger, run datasets, pages or sealed exhibits.
                 result = _call_within(lambda: fetch(provider_seconds), bound)
+            except _spending.SpendingStop:
+                raise
             except Exception as exc:  # noqa: BLE001 — provider/file failures are optional enrichment
                 result = exc
             with self._data_lock:
@@ -4704,6 +4980,8 @@ class ResearchTools:
                                          {**series.to_dict(), "slug": persisted["slug"]}, agent_id)
             self.ledger.mark_fetched(sid, content_sha256=digest, chars=len(page), page_path=page_path)
             self.ledger.flush()
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — a failed write never becomes evidence
             if sid is not None:
                 self.ledger.forget_dataset(sid)
@@ -4741,6 +5019,8 @@ class ResearchTools:
         try:
             manifest = _data_api().write_dataset_files([series], self.pages_dir.parent,
                                                        citations={series.series: sid})
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — links are advisory; the writer never raises by contract
             manifest = {"error": "unavailable"}
         if manifest.get("error"):
@@ -4786,6 +5066,8 @@ class ResearchTools:
             return
         try:
             self.plog.write(kind, message)
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — logging must not break a tool call
             pass
 
@@ -4842,6 +5124,7 @@ class ResearchTools:
     # ----------------------------------------------------------------- search
     def search(self, query: Any, *, agent_id: str) -> str:
         """Model-visible search result text for one query."""
+        _spending.check_context()
         agent_id = str(agent_id or "agent")
         clean = " ".join(str(query or "").split())
         if len(clean.replace(" ", "")) < 2:
@@ -4869,7 +5152,13 @@ class ResearchTools:
             self._log("result", "web_search → SEARCH_BUDGET_EXHAUSTED")
             return MSG_SEARCH_BUDGET
         try:
-            raw = self._search_fn(clean, SEARCH_RESULTS_PER_QUERY)
+            if _spending.check_context() is None:
+                raw = self._search_fn(clean, SEARCH_RESULTS_PER_QUERY)
+            else:
+                with _spending.operation("research:search", _spending.hash_payload({"agent": agent_id, "query": clean})):
+                    raw = self._search_fn(clean, SEARCH_RESULTS_PER_QUERY)
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — tools never raise into the agent loop
             self._failure(agent_id)
             self._log("result", f"web_search → SEARCH_TEMPORARILY_UNAVAILABLE ({type(exc).__name__})")
@@ -4981,6 +5270,7 @@ class ResearchTools:
     # ------------------------------------------------------------------ fetch
     def fetch(self, url: Any, *, focus: str = "", agent_id: str, kiq_text: str = "") -> str:
         """Model-visible, query-focused excerpt of one page."""
+        _spending.check_context()
         agent_id = str(agent_id or "agent")
         url = str(url or "").strip()
         # A dataset identity, or the origin page of stored datasets, never
@@ -5114,7 +5404,13 @@ class ResearchTools:
         if self.backtest is not None:
             return self._fetch_as_of(url, key, terms, context_terms, agent_id)
         try:
-            raw = self._fetch_fn(url)
+            if _spending.check_context() is None:
+                raw = self._fetch_fn(url)
+            else:
+                with _spending.operation("research:fetch", _spending.hash_payload({"agent": agent_id, "url": url})):
+                    raw = self._fetch_fn(url)
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — tools never raise into the agent loop
             self._remember_failure(key, type(exc).__name__, transient=True)
             return self._fetch_failed(agent_id, type(exc).__name__)
@@ -5152,6 +5448,8 @@ class ResearchTools:
         """Backtest mode's fetch: the archive capture at or before the cutoff when
         there is a readable one, else the live page; refused unless its date
         verdict admits it.  Mirrors :meth:`_fetch_uncached` otherwise."""
+        if _spending.check_context() is not None:
+            _spending.deny("unsupported_route")
         bt = _backtest_api()
         policy = self.backtest
         if _source_policy_rejection(url):
@@ -5165,6 +5463,8 @@ class ResearchTools:
         if snapshot is not None:
             try:
                 raw = self._fetch_fn(snapshot.url)
+            except _spending.SpendingStop:
+                raise
             except Exception:  # noqa: BLE001 — an unreadable capture falls back to the live page
                 raw = None
             candidate, envelope, metadata = _fetch_payload(raw)
@@ -5174,6 +5474,8 @@ class ResearchTools:
         if text is None:
             try:
                 raw = self._fetch_fn(url)
+            except _spending.SpendingStop:
+                raise
             except Exception as exc:  # noqa: BLE001 — tools never raise into the agent loop
                 self._remember_failure(key, type(exc).__name__, transient=True)
                 return self._fetch_failed(agent_id, type(exc).__name__)

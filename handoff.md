@@ -1,3 +1,5 @@
+> Active implementation: [durable run spending](docs/handoff/run-spending/handoff.md), approved for code and offline tests only.
+
 > Current stage: [saved-specimen acceptance and operational readiness](docs/handoff/target-first-acceptance/handoff.md).
 
 > First-ten request reconciliation: [current handoff](docs/handoff/first-ten-remedies/handoff.md). Completed and remotely delivered on codex/first-ten-remedies; 5,306 backend checks pass with two known vendor-snapshot skips. The topic handoff records exact scope and empirical limits.

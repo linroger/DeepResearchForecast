@@ -43,6 +43,11 @@ from html.parser import HTMLParser
 from typing import Any, Awaitable, Callable, Optional
 from urllib.parse import urljoin, urlparse
 
+if __package__:
+    from . import run_spending as _spending
+else:
+    import run_spending as _spending
+
 logger = logging.getLogger(__name__)
 
 try:  # copied beside this module by the bridge sync guard; absence is fail-open
@@ -155,6 +160,8 @@ async def _host_is_public(host: str) -> bool:
 
 async def _direct_http_fetch(url: str) -> str:
     """Keyless bounded fallback for a public page when Jina is unavailable."""
+    if _spending.check_context() is not None:
+        _spending.deny("unsupported_route")
     try:
         import httpx
 
@@ -208,6 +215,8 @@ async def _direct_http_fetch(url: str) -> str:
                     return text[:12000] if len(text.strip()) >= 200 else (
                         "Error: direct fallback PDF had no extractable text"
                     )
+                except _spending.SpendingStop:
+                    raise
                 except Exception as exc:  # noqa: BLE001
                     return f"Error: direct fallback PDF extraction failed: {type(exc).__name__}"
             raw = response.text
@@ -222,6 +231,8 @@ async def _direct_http_fetch(url: str) -> str:
                 markdown = article.to_markdown()
                 if len(str(markdown or "").strip()) >= 200:
                     return str(markdown)[:12000]
+            except _spending.SpendingStop:
+                raise
             except Exception:  # noqa: BLE001
                 pass
             parser = _TextExtractor()
@@ -230,12 +241,16 @@ async def _direct_http_fetch(url: str) -> str:
             return plain[:12000] if len(plain.strip()) >= 200 else (
                 "Error: direct fallback extracted no usable content"
             )
+    except _spending.SpendingStop:
+        raise
     except Exception as exc:  # noqa: BLE001
         return f"Error: direct fallback failed: {type(exc).__name__}: {exc}"
 
 
 async def _exa_fetch(url: str) -> str:
     """Fetch one public URL through Exa when its configured credential exists."""
+    if _spending.check_context() is not None:
+        _spending.deny("unsupported_route")
     api_key = os.environ.get("EXA_API_KEY", "").strip()
     if not api_key:
         return "Error: Exa fallback unavailable (EXA_API_KEY is not configured)"
@@ -266,6 +281,8 @@ async def _exa_fetch(url: str) -> str:
         if not body:
             return "Error: Exa fallback returned no page text"
         return f"# {title}\n\n{body[:max_chars]}"
+    except _spending.SpendingStop:
+        raise
     except Exception as exc:  # noqa: BLE001
         # Do not include provider exception text: some clients echo request
         # headers or credentials in their exception representation.
@@ -318,6 +335,17 @@ def get_firecrawl_call_counts() -> dict[str, int]:
     return {"fetch": _firecrawl_fetch_calls}
 
 
+def _firecrawl_usage(response: Any) -> dict | None:
+    """Retain reported credit units before content parsing; absence is unknown usage."""
+    try:
+        raw = response.json()
+    except (ValueError, TypeError):
+        return None
+    if isinstance(raw, dict) and raw.get("creditsUsed") is not None:
+        return {"kind": "provider_reported", "tool_units": raw["creditsUsed"]}
+    return None
+
+
 async def _firecrawl_fetch(url: str) -> str:
     """Fetch one URL through Firecrawl v2 /scrape when its credential exists.
 
@@ -327,8 +355,11 @@ async def _firecrawl_fetch(url: str) -> str:
     _is_cacheable/_is_transport_failure 分类），且绝不回显异常正文（可能含请求头/凭据）。
     """
     global _firecrawl_fetch_calls
+    bound = _spending.check_context() is not None
     api_key = os.environ.get("FIRECRAWL_API_KEY", "").strip()
     if not api_key:
+        if bound:
+            _spending.deny("unsupported_route")
         return "Error: Firecrawl unavailable (FIRECRAWL_API_KEY is not configured)"
     ceiling_sentinel = _firecrawl_over_ceiling()
     if ceiling_sentinel is not None:
@@ -351,18 +382,34 @@ async def _firecrawl_fetch(url: str) -> str:
         if max_age_ms > 0:
             # Firecrawl 端缓存回放窗口（毫秒）：未变页面不再触发全新计费抓取。
             payload_body["maxAge"] = max_age_ms
-        _firecrawl_fetch_calls += 1  # 计在发出请求前：HTTP 4xx/5xx 同样可能计费
-        async with httpx.AsyncClient(timeout=timeout, trust_env=True) as client:
-            response = await client.post(
-                os.environ.get(
-                    "FIRECRAWL_API_URL", "https://api.firecrawl.dev/v2/scrape"
-                ).strip() or "https://api.firecrawl.dev/v2/scrape",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload_body,
-            )
+        endpoint = (os.environ.get("FIRECRAWL_API_URL", "https://api.firecrawl.dev/v2/scrape").strip()
+                    or "https://api.firecrawl.dev/v2/scrape")
+        route_id = (_spending.qualify_route("firecrawl_scrape", endpoint,
+            account_sha256=hashlib.sha256(api_key.encode("utf-8")).hexdigest()) if bound else None)
+        envelope = None
+        if bound:
+            route = _spending.get_route(route_id)
+            envelope = {"endpoint": endpoint, "model": "", "input_tokens": 0,
+                        "max_output_tokens": 0, "tool_units": route["max_tool_units"],
+                        "payload_sha256": _spending.hash_payload(payload_body)}
+        _firecrawl_fetch_calls += 1  # Even errors and remote cache hits retain their full maximum.
+        async def send():
+            options = {"timeout": timeout, "trust_env": not bound}
+            if bound:
+                options.update(follow_redirects=False, transport=httpx.AsyncHTTPTransport(retries=0))
+            async with httpx.AsyncClient(**options) as client:
+                response = await client.post(endpoint, headers={
+                    "Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json=payload_body)
+            if bound and response.status_code >= 300:
+                raise RuntimeError("firecrawl_transport_status")
+            return response
+        if bound:
+            _spending.check_context()
+            with _spending.operation("research:fetch", envelope["payload_sha256"]):
+                response = await _spending.dispatch_async(route_id, envelope, send, usage=_firecrawl_usage)
+        else:
+            response = await send()
         if response.status_code == 402:
             return "Error: Firecrawl failed: payment required / quota exhausted"
         if response.status_code == 429:
@@ -381,6 +428,8 @@ async def _firecrawl_fetch(url: str) -> str:
             metadata = {}
         title = str(metadata.get("title") or "").strip()
         return (f"# {title}\n\n{body[:max_chars]}" if title else body[:max_chars])
+    except _spending.SpendingStop:
+        raise
     except Exception as exc:  # noqa: BLE001
         # Do not include provider exception text (may echo the bearer header).
         return f"Error: Firecrawl failed: {type(exc).__name__}"
@@ -432,6 +481,10 @@ async def _resilient_fetch(url: str) -> str:
     Jina (53% ConnectTimeout in the 2026-07-14 humanoid run) becomes fallback.
     """
     _FETCH_PROVIDER.set("")
+    if _spending.check_context() is not None:
+        result = await _firecrawl_fetch(url)
+        _FETCH_PROVIDER.set("firecrawl")
+        return result
     physical_attempts = 0
     firecrawl_result = ""
     if (os.environ.get("FIRECRAWL_API_KEY", "").strip()
@@ -462,6 +515,8 @@ async def _resilient_fetch(url: str) -> str:
                 _jina_delegate_fetch(url),
                 timeout=_env_float("RESEARCH_JINA_PRIMARY_TIMEOUT_SECONDS", 10.0),
             )
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001
             primary_result = f"Error: Jina primary failed: {type(exc).__name__}: {exc}"
         if _is_cacheable(primary_result):
@@ -512,6 +567,8 @@ def _source_policy_rejection(url: str) -> Optional[str]:
         from urllib.parse import urlparse
 
         host = (urlparse(str(url or "")).hostname or "").lower().rstrip(".")
+    except _spending.SpendingStop:
+        raise
     except Exception:
         return None
     raw = os.environ.get(
@@ -630,6 +687,8 @@ def _read_cache(path: str, ttl_seconds: float) -> Optional[str]:
         except OSError:
             pass
         return content
+    except _spending.SpendingStop:
+        raise
     except Exception:  # noqa: BLE001 — 缓存读损坏/并发写中 → 当作未命中，degrade-safe
         return None
 
@@ -650,6 +709,8 @@ def _write_cache(path: str, url: str, content: str) -> None:
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, path)
+    except _spending.SpendingStop:
+        raise
     except Exception as e:  # noqa: BLE001
         logger.warning("cached_fetch: 写缓存失败（跳过，不影响抓取结果）: %s", e)
 
@@ -685,6 +746,8 @@ def _enforce_size_cap(root: str, max_bytes: int) -> None:
                 total -= size
             except OSError:
                 continue
+    except _spending.SpendingStop:
+        raise
     except Exception as e:  # noqa: BLE001
         logger.warning("cached_fetch: 淘汰缓存失败（跳过）: %s", e)
 
@@ -699,6 +762,8 @@ async def cached_fetch(
     TTL<=0 → 关闭正缓存（LOOP-007 预算仍独立生效）。否则：命中未过期即返回；否则真抓，成功且可缓存
     （非失败/非哨兵/≥200 字符）才落盘 + 触发 LRU 淘汰。缓存层任何异常都不改变返回结果。
     """
+    if _spending.check_context() is not None and fetch_fn is not _resilient_fetch:
+        _spending.deny("unsupported_route")
     exact_key = str(url or "").strip()
     policy_rejection = _source_policy_rejection(exact_key)
     if policy_rejection:
@@ -714,6 +779,8 @@ async def cached_fetch(
     if ttl > 0:
         try:
             hit = _read_cache(path, ttl)
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — 极端情况下路径计算/读取异常也不阻断抓取
             hit = None
         if hit is not None:
@@ -787,6 +854,8 @@ async def cached_fetch(
 
     try:
         content = await fetch_fn(url)
+    except _spending.SpendingStop:
+        raise
     except Exception:
         if _research_budget is not None:
             _research_budget.export_telemetry(force=True)
@@ -819,6 +888,8 @@ async def cached_fetch(
 
 async def _jina_delegate_fetch(url: str) -> str:
     """委派给 harness 自带的 jina `web_fetch` 异步工具；其读本 `web_fetch` stanza 的 timeout(30)。"""
+    if _spending.check_context() is not None:
+        _spending.deny("unsupported_route")
     import importlib
 
     mod = importlib.import_module("deerflow.community.jina_ai.tools")

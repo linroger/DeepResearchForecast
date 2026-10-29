@@ -209,6 +209,8 @@ def isolate_target_fork(state):
 
 
 def _check_cancel(state):
+    from .run_spending import check_state
+    check_state(state)
     from .pipeline_orchestrator import PipelineOrchestrator, PipelineCancelled
     event = PipelineOrchestrator._cancel_events.get(state.pipeline_id)
     if event is not None and event.is_set():
@@ -568,6 +570,8 @@ def run_target_pipeline(owner, state):
 
 def _finish(state, pipeline):
     _check_cancel(state)
+    from .run_spending import complete_target
+    complete_target(state)
     state.status, state.global_progress = "completed", 100
     pipeline.PipelineManager.save(state)
     if state.task_id:
