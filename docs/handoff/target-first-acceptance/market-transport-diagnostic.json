@@ -1,0 +1,11 @@
+{
+  "status": "failed",
+  "error_class": "URLError",
+  "http_status": null,
+  "reason_category": "tls_handshake_timeout",
+  "endpoint": "https://gamma-api.polymarket.com/public-search",
+  "attempts": 1,
+  "timeout_seconds": 5,
+  "elapsed_seconds": 6.879,
+  "model_calls": 0
+}

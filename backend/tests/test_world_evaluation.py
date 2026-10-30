@@ -607,10 +607,67 @@ class MeteredUnknown(ScriptedPolicy):
         raise RuntimeError('scripted ambiguous dispatch')
 
 
-def test_unknown_concurrent_attempts_remain_reserved_and_stopped_in_denominator(tmp_path):
+@pytest.mark.parametrize('first_error', [None, 'required_decision_failed', 'run_budget_exhausted'],
+                         ids=['native-order', 'slot-first', 'budget-first'])
+def test_unknown_concurrent_attempts_remain_reserved_and_stopped_in_denominator(
+        tmp_path, monkeypatch, first_error):
     factory = ScriptedFactory(MeteredUnknown)
+    if first_error is not None:
+        from app.services.world_simulation import controller
+
+        gates = []
+        original_as_completed = controller.as_completed
+
+        class ScheduledUnknown(MeteredUnknown):
+            def reservation(self, observation):
+                if observation['actorId'] != self.first_actor:
+                    assert self.release_peers.wait(timeout=5), 'first actor did not release peers'
+                return super().reservation(observation)
+
+        class ScheduledFactory(ScriptedFactory):
+            def __call__(self, spec):
+                policy = super().__call__(spec)
+                # run_round submits participants in actor-ID order. Each case
+                # gets its own event, with no sleeps or cross-case state reuse.
+                policy.first_actor = min(actor['actorId'] for actor in spec['actors'])
+                policy.release_peers = threading.Event()
+                gates.append(policy.release_peers)
+                return policy
+
+        def ordered_errors(futures):
+            # Finish both unknown attempts in the first slot before peers can
+            # reserve. Their remaining shared allowance then admits one call.
+            try:
+                with pytest.raises(WorldError) as exhausted:
+                    futures[0].result(timeout=5)
+                assert exhausted.value.code == 'required_decision_failed'
+            finally:
+                gates[-1].set()
+            finished = list(original_as_completed(futures, timeout=5))
+            errors = [future.exception() for future in finished]
+            assert all(isinstance(error, WorldError) for error in errors)
+            assert {error.code for error in errors} == {
+                'required_decision_failed', 'run_budget_exhausted'}
+            yield from sorted(finished, key=lambda future: future.exception().code != first_error)
+
+        factory = ScheduledFactory(ScheduledUnknown)
+        monkeypatch.setattr(controller, 'as_completed', ordered_errors)
+
     report = evaluation.run_evaluation(tmp_path, factory, PRICING)
-    assert set(report['cases'].values()) == {'budget_stopped'}
+    # The first yielded exception may be slot exhaustion or shared-budget
+    # exhaustion. Neither outcome may lose unknown exposure or scoring cases.
+    assert set(report['cases'].values()) <= {'budget_stopped', 'failed'}
+    for case_id, status in report['cases'].items():
+        receipt = json.loads((tmp_path / case_id / 'receipt.json').read_text())
+        assert receipt['status'] == status
+        if status == 'budget_stopped':
+            assert receipt['errorCode'] == 'run_budget_exhausted'
+        else:
+            assert receipt['errorCode'] == 'required_decision_failed'
+            assert receipt['errorDetails']['lastErrorCode'] == 'policy_decision_failed'
+    if first_error is not None:
+        expected_status = 'failed' if first_error == 'required_decision_failed' else 'budget_stopped'
+        assert set(report['cases'].values()) == {expected_status}
     assert report['budget']['reserved']['costUsd'] == '21.6'
     assert report['budget']['unknown']['costUsd'] == '21.6'
     assert report['budget']['actual']['costUsd'] == '0'

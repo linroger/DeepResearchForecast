@@ -1,0 +1,26 @@
+{
+  "schema": "world-anchor-delivery/v1",
+  "implementation_commit": "8bc53cc50a84faf002782c5fd17caba0e766a03d",
+  "base_commit": "9916b3beff6753cd07f2407f36428ca2030127fd",
+  "remote": "legacy",
+  "repository": "https://github.com/linroger/DeepResearchForecast",
+  "branch": "codex/world-anchor",
+  "remote_implementation_ref_verified": "8bc53cc50a84faf002782c5fd17caba0e766a03d",
+  "issue": {
+    "number": 12,
+    "state": "closed",
+    "reason": "completed offline implementation"
+  },
+  "verification": "final-verification.json",
+  "source_pins": "source-hashes.json",
+  "closing_commit_scope": "documentation only; application and test bytes unchanged",
+  "primary_checkout_written": false,
+  "provider_connections_admitted": 0,
+  "deployment_performed": false,
+  "scheduler_activated": false,
+  "historical_planning_cleanup": {
+    "archived_owned_untracked_files": 16,
+    "private_manifest": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-final-20261030-03/historical-planning-worktrees/manifest.json",
+    "tracked_or_primary_files_removed": false
+  }
+}

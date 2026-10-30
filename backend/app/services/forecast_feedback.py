@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import re
 import threading
+from urllib.parse import urlsplit
 
 
 class ForecastFeedbackError(ValueError):
@@ -85,7 +86,7 @@ def _production(row):
     return is_production_calibration_row(row)
 
 
-def _snapshot(forecast):
+def _snapshot(forecast, *, validate_contracts=False):
     _require(isinstance(forecast, dict), "invalid_forecast")
     _require(_production(forecast), "evaluation_excluded")
     snapshot = _clone({
@@ -118,6 +119,19 @@ def _snapshot(forecast):
         for key in ("market_anchor", "data_anchor"):
             if key in row and row[key] is not None:
                 _require(isinstance(row[key], dict), "invalid_anchor")
+        contract = row.get("resolution_contract")
+        if validate_contracts and contract is not None:
+            _require(isinstance(contract, dict), "invalid_resolution_contract")
+            _require(isinstance(contract.get("kind"), str) and contract["kind"] in (
+                "named_source_event", "manual", "official_data", "polymarket"),
+                "invalid_resolution_contract")
+            if contract.get("kind") in ("named_source_event", "manual"):
+                _manual_contract(row)
+            if contract["kind"] == "official_data":
+                _require(not row.get("market_anchor") or bool(row.get("data_anchor")),
+                         "resolution_kind_mismatch")
+            if contract["kind"] == "polymarket":
+                _require(not row.get("data_anchor"), "resolution_kind_mismatch")
     return snapshot
 
 
@@ -248,6 +262,9 @@ def record_published_forecast(forecast, *, report_id, created_at, d=None):
                      "publication_conflict")
             _durable(stream)
             return _clone(original)
+        # New admission rules must never re-interpret accepted version-1 history.
+        # The digest/replay path keeps the original canonicalization semantics.
+        _snapshot(forecast, validate_contracts=True)
         _append(stream, events, {"type": "publication", "record": row})
     return _clone(row)
 
@@ -288,12 +305,152 @@ def verify_published_forecast(forecast, *, report_id, d=None):
     return original
 
 
-def _lane(binary):
+def _lane(binary, *, legacy=False):
     if binary.get("data_anchor"):
         return "official_data_binary"
     if binary.get("market_anchor"):
+        anchor = binary["market_anchor"]
+        if (not legacy and anchor.get("resolution_equivalence") == "near"
+                and anchor.get("forecast_contract_sha256")):
+            return "market_binary_near"
         return "market_binary"
+    contract = binary.get("resolution_contract")
+    if not legacy and isinstance(contract, dict) and isinstance(contract.get("kind"), str):
+        return {"named_source_event": "named_source_event", "official_data": "official_data_binary",
+                "polymarket": "market_binary"}.get(contract.get("kind"), "unanchored_binary")
     return "unanchored_binary"
+
+
+def _manual_contract(binary):
+    """Validate only declared settlement terms; never extract dates from prose."""
+    contract = binary.get("resolution_contract")
+    if contract is None:
+        contract = {"kind": "manual", "deadline": binary.get("resolution_date")}
+    _require(isinstance(contract, dict), "invalid_resolution_contract")
+    _require(contract.get("kind") in ("named_source_event", "manual"),
+             "resolution_kind_mismatch")
+    _require(not binary.get("market_anchor") and not binary.get("data_anchor"),
+             "ambiguous_resolution_contract")
+    _identity(binary.get("statement"))
+    _identity(binary.get("resolution_criteria"))
+    _instant(contract.get("deadline"), date_end=True)
+    if contract["kind"] == "named_source_event":
+        _identity(contract.get("publisher"))
+        _identity(contract.get("event"))
+    return contract
+
+
+def binary_resolution_contract_sha256(binary):
+    """Hash frozen manual settlement identity, not caller-authored evidence.
+
+    The publication separately seals probability and all other forecast fields.
+    A manual legacy question must declare resolution_date; prose is not a clock.
+    """
+    _require(isinstance(binary, dict), "invalid_binary")
+    contract = _manual_contract(binary)
+    return _digest({"schemaVersion": "binary-resolution-contract/v1",
+                    "forecastId": _identity(binary.get("id")),
+                    "statement": binary["statement"],
+                    "resolutionCriteria": binary["resolution_criteria"],
+                    "resolutionContract": contract,
+                    "resolutionDate": binary.get("resolution_date"),
+                    "horizonYear": binary.get("horizon_year")})
+
+
+def market_near_resolution_enabled():
+    """Admission switch only; historical journal replay is independent of it."""
+    from ..config import Config
+    return getattr(Config, "FORECAST_MARKET_NEAR_RESOLUTION", False) is True
+
+
+def market_resolution_contract_sha256(contract):
+    """Hash verbatim market settlement terms obtained from its source record."""
+    _require(isinstance(contract, dict), "market_contract_mismatch")
+    terms = {key: _identity(contract.get(key)) for key in (
+        "market_id", "question", "description", "endDate")}
+    _instant(terms["endDate"], date_end=True)
+    return _digest(terms)
+
+
+def _exact_near_contract(binary, evidence):
+    """A near label is eligible only when full source terms are byte-identical.
+
+    A forecast self-hash only detects mutation; it never proves equivalence.
+    Legacy near anchors lacking source settlement text stay unresolved proxies.
+    """
+    anchor = binary["market_anchor"]
+    observed = evidence.get("market_contract")
+    _require(isinstance(observed, dict), "market_settlement_identity_missing")
+    frozen = {key: anchor.get(key) for key in ("market_id", "question", "description", "endDate")}
+    digest = market_resolution_contract_sha256(frozen)
+    _require(anchor.get("market_contract_sha256") == digest
+             and market_resolution_contract_sha256(observed) == digest,
+             "market_contract_mismatch")
+    _require(binary.get("statement") == frozen["question"]
+             and binary.get("resolution_criteria") == frozen["description"],
+             "market_not_exact")
+    _require(_instant(binary.get("resolution_date"), date_end=True)
+             == _instant(frozen["endDate"], date_end=True), "market_not_exact")
+
+
+def _manual_evidence(publication, binary, evidence, resolved_at):
+    contract = _manual_contract(binary)
+    _require(evidence.get("contract_sha256") == binary_resolution_contract_sha256(binary),
+             "resolution_contract_mismatch")
+    _require(evidence.get("adjudication") == "manual", "manual_adjudication_required")
+    for field in ("text", "publisher", "adjudicator"):
+        _identity(evidence.get(field))
+    url = _identity(evidence.get("url"))
+    try:
+        parsed = urlsplit(url)
+        valid_url = parsed.scheme in ("https", "http") and bool(parsed.hostname)
+    except ValueError:
+        valid_url = False
+    _require(valid_url, "invalid_evidence_url")
+    if contract["kind"] == "named_source_event":
+        _require(evidence["publisher"] == contract["publisher"], "publisher_mismatch")
+    created = _instant(publication["created_at"])
+    deadline = _instant(contract["deadline"], date_end=True)
+    published = _instant(evidence.get("published_at"))
+    retrieved = _instant(evidence.get("retrieved_at"))
+    # Do not replace publication dates with retrieval dates. A post-deadline
+    # source statement is mandatory even when a human asserts an early result.
+    _require(created < deadline <= published <= retrieved <= _instant(resolved_at),
+             "invalid_resolution_chronology")
+
+
+def resolve_published_binary(report_id, forecast_id, *, outcome, evidence,
+                             contract_sha256, resolved_at, d=None):
+    """Manual SDK entrypoint: validate evidence and append to the existing journal.
+
+    Evidence requires text, url, publisher, published_at, retrieved_at and
+    adjudicator. Source dates/text are supplied documentary evidence, never LLM
+    inference. Existing market/official contracts cannot be bypassed manually.
+    Raises ForecastFeedbackError with a stable .code; retries keep original facts.
+    """
+    _identity(report_id)
+    _identity(forecast_id)
+    _require(type(outcome) is bool, "invalid_outcome")
+    _require(isinstance(evidence, dict) and _production(evidence), "invalid_evidence")
+    # Check wall-clock admissibility once at the write boundary, never while
+    # replaying an immutable journal. A client cannot submit a future outcome.
+    _require(_instant(resolved_at) <= datetime.now(timezone.utc), "resolution_in_future")
+    with _journal(d, write=True) as (stream, events):
+        publications, outcomes, _ = _state(events)
+        _require(report_id in publications, "unpublished_report")
+        publication = publications[report_id]
+        binary = next((b for b in publication["forecast"].get("binary_forecasts", [])
+                       if b["id"] == forecast_id), None)
+        _require(binary is not None, "unknown_forecast")
+        _require(_lane(binary) in ("unanchored_binary", "named_source_event"),
+                 "resolution_kind_mismatch")
+        supplied = dict(evidence, report_id=report_id, forecast_id=forecast_id,
+                        model_p=binary["probability"], resolved_outcome=outcome,
+                        contract_sha256=contract_sha256, resolved_at=resolved_at,
+                        adjudication="manual")
+        row = _binary_record(publication, _lane(binary), supplied)
+        original, _ = _persist_outcome(stream, events, outcomes, row)
+        return _clone(original)
 
 
 def _score(scenarios, outcome):
@@ -349,18 +506,42 @@ def _binary_record(publication, kind, evidence):
     binaries = publication["forecast"].get("binary_forecasts") or []
     binary = next((b for b in binaries if b["id"] == fid), None)
     _require(binary is not None, "unknown_forecast")
-    _require(kind == _lane(binary) and kind != "unanchored_binary", "resolution_kind_mismatch")
+    _require(kind == _lane(binary), "resolution_kind_mismatch")
+    contract = binary.get("resolution_contract")
+    # New typed joins stamp this proof at admission. Old journal outcomes had no
+    # such marker and retain their original replay semantics.
+    typed_proof = evidence.get("resolution_contract_sha256")
+    if typed_proof is not None:
+        _require(isinstance(contract, dict) and typed_proof == _digest(contract),
+                 "resolution_contract_mismatch")
+        _require(kind == {"official_data": "official_data_binary", "polymarket": "market_binary"}.get(
+            contract.get("kind") if isinstance(contract.get("kind"), str) else None),
+            "resolution_kind_mismatch")
     probability = binary["probability"]
     _require(_probability(evidence.get("model_p")) == probability, "probability_mismatch")
     resolved_at = evidence.get("resolved_at")
     _require(_instant(resolved_at, date_end=True) >= _instant(publication["created_at"]),
              "outcome_before_publication")
     outcome = evidence.get("resolved_outcome")
-    if kind == "market_binary":
-        anchor = binary["market_anchor"]
+    if kind in ("named_source_event", "unanchored_binary"):
+        _require(type(outcome) is bool, "invalid_outcome")
+        _manual_evidence(publication, binary, evidence, resolved_at)
+    elif kind in ("market_binary", "market_binary_near"):
+        anchor = binary.get("market_anchor")
+        _require(isinstance(anchor, dict) and bool(anchor), "missing_validated_anchor")
+        if typed_proof is not None:
+            _require(contract.get("market_id") == anchor.get("market_id")
+                     and contract.get("equivalence") == "exact", "market_contract_mismatch")
         _require(evidence.get("market_id") == _identity(anchor.get("market_id")),
                  "market_identity_mismatch")
-        _require(anchor.get("resolution_equivalence") == "exact", "market_not_exact")
+        _require(anchor.get("resolution_equivalence") == (
+            "near" if kind == "market_binary_near" else "exact"), "market_not_exact")
+        if kind == "market_binary_near":
+            _require(evidence.get("market_anchor") == anchor, "market_contract_mismatch")
+            _require(evidence.get("forecast_contract_sha256") == anchor.get("forecast_contract_sha256"),
+                     "market_contract_mismatch")
+            _require(evidence.get("market_resolved") is True
+                     and evidence.get("market_closed") is True, "market_not_terminal")
         # Bind supplied richer evidence when available; original anchor always survives.
         if "market_anchor" in evidence:
             _require(evidence["market_anchor"] == anchor, "market_contract_mismatch")
@@ -369,6 +550,11 @@ def _binary_record(publication, kind, evidence):
                 binary.get("resolution_criteria") or "").strip()
             _require(anchor["forecast_contract_sha256"] == hashlib.sha256(
                 contract.encode("utf-8")).hexdigest(), "market_contract_mismatch")
+        if kind == "market_binary_near":
+            _exact_near_contract(binary, evidence)
+            _require(_instant(publication["created_at"])
+                     < _instant(binary["resolution_date"], date_end=True)
+                     <= _instant(resolved_at), "invalid_resolution_chronology")
         if type(outcome) is str:
             _require(outcome in ("Yes", "No"), "invalid_outcome")
             outcome = outcome == "Yes"
@@ -377,7 +563,8 @@ def _binary_record(publication, kind, evidence):
         _require(price >= 0.99 if outcome else price <= 0.01, "market_not_terminal")
     else:
         from . import official_data
-        anchor = binary["data_anchor"]
+        anchor = binary.get("data_anchor")
+        _require(isinstance(anchor, dict) and bool(anchor), "missing_validated_anchor")
         _require(evidence.get("series") == _identity(anchor.get("series")), "series_mismatch")
         _require(type(outcome) is bool, "invalid_outcome")
         dataset = evidence.get("dataset_snapshot")
@@ -395,6 +582,11 @@ def _binary_record(publication, kind, evidence):
         keys = ("series", "comparator", "threshold", "period", "transform", "units")
         _require(bool(original) and bool(supplied) and all(
             original.get(k) == supplied.get(k) for k in keys), "data_contract_mismatch")
+        if typed_proof is not None:
+            declared = official_data.validate_data_anchor(
+                {key: value for key, value in contract.items() if key != "kind"}, carrier)
+            _require(bool(declared) and all(original.get(k) == declared.get(k) for k in keys),
+                     "data_contract_mismatch")
         for field in ("units", "transform", "source_url", "retrieved_at", "vintage"):
             _require(evidence.get(field, "") == dataset.get(field, ""),
                      "data_provenance_mismatch")
@@ -447,7 +639,21 @@ def reconcile_published_resolutions(report_id, *, market_rows=None, data_rows=No
                 if isinstance(evidence, dict) and evidence.get("report_id") != report_id:
                     continue
                 try:
-                    row = _binary_record(publications[report_id], kind, evidence)
+                    lane = kind
+                    binary = next((b for b in publications[report_id]["forecast"].get("binary_forecasts", [])
+                                   if isinstance(evidence, dict) and b["id"] == evidence.get("forecast_id")), None)
+                    contract = binary.get("resolution_contract") if binary is not None else None
+                    if isinstance(contract, dict) and contract.get("kind") in ("official_data", "polymarket"):
+                        required = "data_anchor" if contract["kind"] == "official_data" else "market_anchor"
+                        _require(bool(binary.get(required)), "missing_validated_anchor")
+                        _require(contract["kind"] != "polymarket" or not binary.get("data_anchor"),
+                                 "resolution_kind_mismatch")
+                        evidence = dict(evidence, resolution_contract_sha256=_digest(contract))
+                    if kind == "market_binary" and isinstance(evidence, dict):
+                        if binary is not None and _lane(binary) == "market_binary_near":
+                            lane = "market_binary_near"
+                            _require(market_near_resolution_enabled(), "market_near_resolution_disabled")
+                    row = _binary_record(publications[report_id], lane, evidence)
                     _, added = _persist_outcome(stream, events, outcomes, row)
                     result["accepted" if added else "duplicates"] += 1
                 except ForecastFeedbackError as exc:
@@ -459,6 +665,14 @@ def reconcile_published_resolutions(report_id, *, market_rows=None, data_rows=No
 
 
 def _due(binary, forecast):
+    contract = binary.get("resolution_contract") or {}
+    if isinstance(contract, dict) and contract.get("kind") in ("named_source_event", "manual"):
+        try:
+            return _instant(contract.get("deadline"), date_end=True).date().isoformat()
+        except ForecastFeedbackError:
+            # Older journal versions admitted arbitrary auxiliary contracts.
+            # Keep those questions visible without inventing settlement dates.
+            return None
     anchor = binary.get("data_anchor") or binary.get("market_anchor") or {}
     if binary.get("data_anchor"):
         # Use the official observation period, not the report's broader horizon.
@@ -519,6 +733,12 @@ def _outstanding(publications, outcomes, checked, as_of):
                 created_at=publication["created_at"],
                 publication_sha256=publication["publication_sha256"], binary=binary,
                 selection_token=checked.get(rid, {}).get("sequence", 0)))
+            contract = binary.get("resolution_contract")
+            if isinstance(contract, dict) and (
+                contract.get("kind") == "official_data" and not binary.get("data_anchor")
+                or contract.get("kind") == "polymarket" and not binary.get("market_anchor")
+            ):
+                grouped[rid][-1]["resolution_status"] = "missing_validated_anchor"
     report_ids = sorted(grouped, key=lambda rid: (
         checked.get(rid, {}).get("sequence", 0),
         min(row["resolution_date"] or "9999-12-31" for row in grouped[rid]),
@@ -597,7 +817,7 @@ def _legacy_summary(d, excluded):
                 mean_brier=round(sum(scores) / len(scores), 4) if scores else None)
 
 
-def _typed_track_record(events, exclude_report_id):
+def _typed_track_record(events, exclude_report_id, *, legacy_lanes=False):
     publications, outcomes, _ = _state(events)
     included = {rid: row for rid, row in publications.items() if rid != exclude_report_id}
     tracks = {kind: dict(n_forecasts=0, n_resolved=0, n_outstanding=0,
@@ -606,7 +826,9 @@ def _typed_track_record(events, exclude_report_id):
         forecast = publication["forecast"]
         tracks["scenario"]["n_forecasts"] += bool(forecast.get("scenarios"))
         for binary in forecast.get("binary_forecasts") or []:
-            tracks[_lane(binary)]["n_forecasts"] += 1
+            lane = _lane(binary, legacy=legacy_lanes)
+            tracks.setdefault(lane, dict(n_forecasts=0, n_resolved=0, n_outstanding=0,
+                                         mean_brier=None, coverage=0.0))["n_forecasts"] += 1
     scored = [row for (rid, _), row in outcomes.items() if rid in included]
     scored.sort(key=lambda row: (row["report_id"], row["kind"], row["forecast_id"] or ""))
     for kind, track in tracks.items():
@@ -648,6 +870,15 @@ def verify_production_track_record(summary, *, exclude_report_id=None, d=None):
                  "track_record_prefix_mismatch")
         expected = _typed_track_record(events[:length], exclude_report_id)
     actual = {key: value for key, value in summary.items() if key != "legacy_scenario"}
+    # Verify exact old classification as a whole, never mutate counts to fit a
+    # caller's summary. New manual/near outcomes did not exist in that version.
+    if _json(actual) != _json(expected) and not any(
+            event["type"] == "outcome" and event["record"].get("kind") in (
+                "market_binary_near", "named_source_event", "unanchored_binary")
+            for event in events[:length]):
+        legacy = _typed_track_record(events[:length], exclude_report_id, legacy_lanes=True)
+        if _json(actual) == _json(legacy):
+            return True
     # Canonical JSON comparison rejects Python's True == 1 and related coercions.
     _require(_json(actual) == _json(expected), "track_record_mismatch")
     return True

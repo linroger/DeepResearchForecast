@@ -1,0 +1,38 @@
+{
+  "manifest_sha256": "afc740def0967d66a0c8ebf6b4faf01c3516f9b8d1a65ab8d0f20eab583edeb9",
+  "manifest_files": 154,
+  "pre_post_source_drift": [],
+  "runs": {
+    "final-probes": {
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      },
+      "identity_preserved": true,
+      "source_drift": [],
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "final-core-suite": {
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      },
+      "identity_preserved": true,
+      "source_drift": [],
+      "tests": 248,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "bootstrap_sha256": "b1715e20779b4e95fec2e0f2e4b3c2f854c8b8f4d92a15ab7c652c0ba17b0c1d"
+}

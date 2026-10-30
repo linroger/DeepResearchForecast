@@ -30,6 +30,8 @@ Kernel invariants (design §2.3):
 from __future__ import annotations
 
 import datetime as _dt
+import calendar
+import copy
 import hashlib
 import json
 import math
@@ -37,6 +39,15 @@ import re
 import unicodedata
 from datetime import date
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+from .world_text_budgets import (
+    INTERACTION_TERMS_MAX_CHARS,
+    PRIVATE_BRIEF_MAX_CHARS,
+    PUBLIC_BRIEF_MAX_CHARS,
+    STATEMENT_STATE_MAX_CHARS,
+    STATEMENT_PUBLIC_BRIEF_MAX_CHARS,
+    STATEMENT_RESPONSE_MAX_CHARS,
+)
 
 WORLD_MODEL_STATE_VERSION = "world-model-state/v1"
 
@@ -141,8 +152,10 @@ PROPOSAL_OPTION_IDS = frozenset({"open_talks", "form_alliance", "signal_concessi
                                  "partnership_deal", "bargain", "convene", "program_decision"})
 RESPONSE_PREFIXES = ("accept:", "reject:", "counter:", "defer:")
 FULFILLMENT_PREFIX = "fulfill:"
-FULFILLMENT_ACTION_COST = 1
-MAX_ACTION_RESOLUTIONS = 24
+FULFILLMENT_ACTION_COST = 0
+MAX_DELIVERIES = 4
+MAX_ACTION_RESOLUTIONS = 24 * (1 + MAX_DELIVERIES)
+COMMITMENT_GRACE_PERIODS = 1
 # OFFERS, mirror-image rule: an ``accept:`` answer adopts the offer's terms verbatim.  When the
 # acceptor writes its own ``terms`` the kernel compares them with the offer (``terms_restate_offer``).
 # Terms that are empty, a word-bounded fragment of the offer, or too short to state terms of their
@@ -160,7 +173,6 @@ ACCEPT_TERMS_MIN_TOKENS = 3
 INTERACTION_TTL_PERIODS = 2          # an unanswered offer lapses after this many periods
 INTERACTION_MAX_DEFERRALS = 2        # a deferral moves the deadline one period, at most this often
 # 2026-10-21: 300→2400（UI 不裁剪要求；offer 条款在 Consequences 面板整段展示）
-INTERACTION_TERMS_MAX_CHARS = 2400
 INTERACTION_LIMIT = 200
 COMMITMENT_STATUSES = ("pending", "due", "fulfilled", "lapsed", "withdrawn")
 
@@ -177,8 +189,6 @@ ANNOUNCED_FIGURE_TOLERANCE = 0.005   # relative tolerance when matching an annou
 EVENT_LIMIT = 400
 DEFAULT_MAX_CHANGE_RATIO = 0.5
 # (raised 2026-10-20 from 2400 / 900 for the track-record and expectation lines)
-PUBLIC_BRIEF_MAX_CHARS = 3200
-PRIVATE_BRIEF_MAX_CHARS = 1300
 # TRACK RECORDS and EXPECTATIONS (reflexivity, 2026-10-20): how an actor's past conduct reads to
 # others, and what each actor expected the others to do next.
 RESOLUTION_COUNTED = ("success", "partial", "blocked", "failed")
@@ -548,6 +558,33 @@ def _iso_date(raw: Any) -> Optional[date]:
         return None
 
 
+def _label_dates(label: Any) -> Optional[Tuple[date, date]]:
+    """Calendar labels used by saved timelines, without a wall-clock fallback."""
+    label = str(label or "")
+    try:
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", label):
+            day = date.fromisoformat(label)
+            return day, day
+        match = re.fullmatch(r"(\d{4})-(\d{2})(?:-H([12]))?", label)
+        if match:
+            year, month = int(match[1]), int(match[2])
+            half = match[3]
+            return (date(year, month, 16 if half == "2" else 1),
+                    date(year, month, 15 if half == "1" else calendar.monthrange(year, month)[1]))
+        match = re.fullmatch(r"(\d{4})-Q([1-4])", label)
+        if match:
+            year, month = int(match[1]), 3 * int(match[2])
+            return date(year, month - 2, 1), date(year, month, calendar.monthrange(year, month)[1])
+        match = re.fullmatch(r"(\d{4})-W(\d{2})", label)
+        if match:
+            return date.fromisocalendar(int(match[1]), int(match[2]), 1), date.fromisocalendar(int(match[1]), int(match[2]), 7)
+        if re.fullmatch(r"\d{4}", label):
+            return date(int(label), 1, 1), date(int(label), 12, 31)
+    except ValueError:
+        pass
+    return None
+
+
 # ---------------------------------------------------------------------------
 # entities
 # ---------------------------------------------------------------------------
@@ -559,6 +596,8 @@ class StateVariable:
                  kind: str = "numeric", as_of: Optional[str] = None,
                  provenance: str = "seed", rationale: str = "",
                  history: Optional[List[Dict[str, Any]]] = None,
+                 read_only: bool = False, identity: Optional[Dict[str, Any]] = None,
+                 anchor_metadata: Optional[Dict[str, Any]] = None,
                  research_evidence: Optional[Dict[str, Any]] = None) -> None:
         self._research_evidence_json = (_metadata_json(research_evidence, "research_evidence")
                                       if research_evidence is not None else None)
@@ -575,6 +614,9 @@ class StateVariable:
         self.as_of = _text(as_of, 40) or None
         self.provenance = provenance if provenance in PROVENANCES else "seed"
         self.rationale = _text(rationale, 240)
+        self.read_only = read_only is True
+        self.identity = copy.deepcopy(identity) if isinstance(identity, dict) else None
+        self.anchor_metadata = copy.deepcopy(anchor_metadata) if anchor_metadata is not None else None
         self.history: List[Dict[str, Any]] = list(history or [])
         if not self.history:
             self.history.append({"round": 0, "value": self.value, "cause": "seed",
@@ -582,6 +624,8 @@ class StateVariable:
 
     def _coerce(self, value: Any) -> Any:
         if self.kind == "numeric":
+            if value is None:
+                return None  # Unknown typed inputs remain unknown until propagation.
             num, _ = parse_quantity(value)
             if num is None:
                 self.kind = "text"
@@ -634,6 +678,8 @@ class StateVariable:
         research-sourced updates stay untouched.  Damping, when it fires, is recorded in
         the history cause as ``[damped: …]``.  Returns True when the stored value changed.
         """
+        if self.read_only and source != "mechanism":
+            return False
         new = self._coerce(value)
         if self.kind != "numeric":
             self.unit = ""  # a numeric fact that became text keeps no unit
@@ -711,6 +757,8 @@ class StateVariable:
             "kind": self.kind, "as_of": self.as_of, "provenance": self.provenance,
             "rationale": self.rationale, "history": list(self.history),
             **({"research_evidence": self.research_evidence} if self._research_evidence_json is not None else {}),
+            **({"read_only": True, "identity": copy.deepcopy(self.identity)} if self.read_only else {}),
+            **({"anchor_metadata": copy.deepcopy(self.anchor_metadata)} if self.anchor_metadata is not None else {}),
         }
 
     @classmethod
@@ -719,6 +767,7 @@ class StateVariable:
                    d.get("value"), unit=d.get("unit") or "", kind=d.get("kind") or "text",
                    as_of=d.get("as_of"), provenance=d.get("provenance") or "seed",
                    rationale=d.get("rationale") or "", history=d.get("history") or None,
+                   read_only=d.get("read_only", False), identity=d.get("identity"), anchor_metadata=d.get("anchor_metadata"),
                    research_evidence=d.get("research_evidence"))
 
 
@@ -731,10 +780,12 @@ class ActorState:
                  documented_plans: Optional[List[str]] = None,
                  red_lines: Optional[List[str]] = None, aliases: Optional[List[str]] = None,
                  goals: Optional[List[str]] = None, incentives: Optional[Dict[str, str]] = None,
-                 reputation: float = 0.5, allow_zero_capacity: bool = False) -> None:
+                 reputation: float = 0.5, allow_zero_capacity: bool = False,
+                 agency_class_basis: Optional[Dict[str, Any]] = None) -> None:
         self.agent_id = int(agent_id)
         self.name = _text(name, 160) or f"Agent_{agent_id}"
         self.agency_class = _text(agency_class, 48) or "other_actor"
+        self.agency_class_basis = copy.deepcopy(agency_class_basis)
         self.archetype = _text(archetype, 32) or "actor"
         if allow_zero_capacity and (type(capacity_per_round) is not int or capacity_per_round < 0):
             raise ValueError("action policy requires a nonnegative integer capacity")
@@ -758,6 +809,7 @@ class ActorState:
         self.reputation = _clamp(float(reputation), 0.0, 1.0)
         self.commitments: List[Dict[str, Any]] = []
         self.last_action: Optional[Dict[str, Any]] = None
+        self.action_rejections: List[Dict[str, Any]] = []
         self.irreversible_option_ids: List[str] = []
         # TRACK RECORDS: how the arbiter resolved this actor's moves (counts per outcome)
         self.outcomes: Dict[str, int] = {}
@@ -776,7 +828,8 @@ class ActorState:
         return [k for k in keys if k]
 
     def add_commitment(self, description: str, *, made_round: int, due_round: Optional[int],
-                       source: str = "decision") -> Dict[str, Any]:
+                       source: str = "decision", due_basis: str = "default",
+                       due_date: Optional[str] = None) -> Dict[str, Any]:
         sequence = len(self.commitments) + 1
         existing = {c.get("id") for c in self.commitments if isinstance(c.get("id"), str)}
         while f"c{self.agent_id}_{made_round}_{sequence}" in existing:
@@ -788,7 +841,10 @@ class ActorState:
             "due_round": int(due_round) if due_round is not None else None,
             "status": "pending",
             "source": _text(source, 40),
+            "due_basis": "terms" if due_basis == "terms" else "default",
         }
+        if due_date is not None:
+            row["due_date"] = due_date
         self.commitments.append(row)
         if len(self.commitments) > 24:
             self.commitments = self.commitments[-24:]
@@ -824,9 +880,11 @@ class ActorState:
             "incentives": dict(self.incentives), "aliases": list(self.aliases),
             "reputation": round(self.reputation, 4), "commitments": list(self.commitments),
             "last_action": self.last_action, "irreversible_option_ids": list(self.irreversible_option_ids),
+            "action_rejections": list(self.action_rejections),
             "outcomes": dict(self.outcomes), "expectations": list(self.expectations),
             # derived (from_dict ignores it): for the /world-state API and the panel
             "track_record": self.track_record(),
+            **({"agency_class_basis": copy.deepcopy(self.agency_class_basis)} if self.agency_class_basis is not None else {}),
         }
 
     @classmethod
@@ -839,7 +897,8 @@ class ActorState:
                 outcome_power=d.get("outcome_power"), posture=d.get("posture") or "",
                 documented_plans=d.get("documented_plans"), red_lines=d.get("red_lines"),
                 aliases=d.get("aliases"), goals=d.get("goals"), incentives=d.get("incentives"),
-                reputation=d.get("reputation", 0.5) if isinstance(d.get("reputation"), (int, float)) else 0.5)
+                reputation=d.get("reputation", 0.5) if isinstance(d.get("reputation"), (int, float)) else 0.5,
+                agency_class_basis=d.get("agency_class_basis"))
         if allow_zero_capacity and (type(d.get("capacity_used", 0)) is not int
                                     or not 0 <= d.get("capacity_used", 0) <= a.capacity_per_round):
             raise ValueError("action policy checkpoint has invalid capacity_used")
@@ -849,6 +908,7 @@ class ActorState:
             a.capacity_used = 0
         a.commitments = [c for c in (d.get("commitments") or []) if isinstance(c, dict)]
         a.last_action = d.get("last_action") if isinstance(d.get("last_action"), dict) else None
+        a.action_rejections = [r for r in (d.get("action_rejections") or []) if isinstance(r, dict)][-24:]
         a.irreversible_option_ids = [str(x) for x in (d.get("irreversible_option_ids") or [])
                                      if str(x).strip()]
         outcomes = d.get("outcomes") if isinstance(d.get("outcomes"), dict) else {}
@@ -964,7 +1024,8 @@ class Shock:
     def __init__(self, shock_id: str, *, event: str, hazard_per_day: float,
                  base_rate: Optional[Dict[str, Any]] = None, source: str = "",
                  effects: Optional[List[Dict[str, Any]]] = None, affects: Optional[List[str]] = None,
-                 recurring: bool = False, fired_rounds: Optional[List[int]] = None) -> None:
+                 recurring: bool = False, fired_rounds: Optional[List[int]] = None,
+                 trigger: Optional[Dict[str, Any]] = None) -> None:
         self.id = _text(shock_id, 64) or "shock"
         self.event = _text(event, 200)
         try:
@@ -977,6 +1038,7 @@ class Shock:
         self.effects = [dict(e) for e in (effects or []) if isinstance(e, dict) and e.get("variable_id")][:4]
         self.affects = _items(affects, 6, 160)
         self.recurring = recurring is True
+        self.trigger = copy.deepcopy(trigger)
         self.fired_rounds = [int(r) for r in (fired_rounds or []) if isinstance(r, int) and not isinstance(r, bool)]
         # a documented stretch of the calendar ("October–December 2026"): the shock fires only inside it
         start, end = _iso_date(self.base_rate.get("window_start")), _iso_date(self.base_rate.get("window_end"))
@@ -1025,14 +1087,15 @@ class Shock:
         return {"id": self.id, "event": self.event, "hazard_per_day": self.hazard_per_day,
                 "base_rate": dict(self.base_rate), "source": self.source,
                 "effects": [dict(e) for e in self.effects], "affects": list(self.affects),
-                "recurring": self.recurring, "fired_rounds": list(self.fired_rounds)}
+                "recurring": self.recurring, "fired_rounds": list(self.fired_rounds),
+                **({"trigger": copy.deepcopy(self.trigger)} if self.trigger is not None else {})}
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "Shock":
         return cls(d.get("id") or "", event=d.get("event") or "", hazard_per_day=d.get("hazard_per_day") or 0.0,
                    base_rate=d.get("base_rate"), source=d.get("source") or "", effects=d.get("effects"),
                    affects=d.get("affects"), recurring=d.get("recurring") is True,
-                   fired_rounds=d.get("fired_rounds"))
+                   fired_rounds=d.get("fired_rounds"), trigger=d.get("trigger"))
 
 
 class Interaction:
@@ -1123,7 +1186,7 @@ class WorldEvent:
         self.targets = _items(targets, 8, 120)
         self.source = _text(source, 60)
         self.variable_ids = [str(v) for v in (variable_ids or []) if v][:8]
-        self.statement = _text(statement, 320)
+        self.statement = _text(statement, STATEMENT_STATE_MAX_CHARS)
         self.option_id = _text(option_id, 64)
         self.action_kind = _text(action_kind, 32)
         self.period_label = _text(period_label, 40)
@@ -1188,6 +1251,18 @@ class WorldModel:
         self.seed_gaps: List[Dict[str, Any]] = []
         # EXOGENOUS SHOCKS: researched risks rolled once per period (fire_shocks)
         self.shocks: List[Shock] = []
+        # Engine-only structural inputs can contain private nodes. Only evaluated
+        # PUBLIC nodes may enter self.variables or an actor-facing observation.
+        self._target_projection: Optional[Dict[str, Any]] = None
+        self._target_values: Dict[str, Any] = {}
+        self._target_parameters: Optional[Dict[str, Any]] = None
+        self._target_evaluated_round: Optional[int] = None
+        self.target_projection_status = "unavailable"
+        self.target_projection_reason = "not_configured"
+        self._anchor_runtime = None
+        self._anchor_context = None
+        self._anchor_fired_events: List[str] = []
+        self.anchor_signposts: List[Dict[str, Any]] = []
 
     def mechanics_policy(self, key: str) -> bool:
         expected = {"action_policy": ACTION_POLICY, "agreement_policy": AGREEMENT_POLICY}[key]
@@ -1224,7 +1299,7 @@ class WorldModel:
             start, end = self._operative_period()
             return (bool(deadline and end and deadline <= end), bool(deadline and start and deadline < start))
         due = int(commitment.get("due_round", 0))
-        return due <= round_num, due < round_num
+        return due <= round_num, due + COMMITMENT_GRACE_PERIODS < round_num
 
     def agreement_admission(self, round_num: int, actor_id: int, option_id: str, *,
                             terms: str = "", operative_terms: Any = None,
@@ -1322,17 +1397,23 @@ class WorldModel:
     # -- construction -----------------------------------------------------------
     @classmethod
     def from_seed(cls, seed: Dict[str, Any], agent_configs: Optional[List[Dict[str, Any]]] = None,
-                  *, scenarios: Iterable[str] = ()) -> "WorldModel":
+                  *, scenarios: Iterable[str] = (), anchor_context: Any = None) -> "WorldModel":
         """Build the initial world from the PREPARE-time ``world_model`` block.
 
         ``agent_configs`` (``simulation_config.agent_configs``) supplies names for
         cast members the seed does not describe, so every agent has an actor state.
         """
         seed = seed if isinstance(seed, dict) else {}
+        from .agent_decision import default_capacity
         world = cls(question=seed.get("question") or "", as_of_date=seed.get("as_of_date"),
                     horizon_date=seed.get("horizon_date"), scenarios=scenarios or seed.get("scenarios") or (),
                     settings=seed.get("settings") if isinstance(seed.get("settings"), dict) else None)
         world.seed_gaps = [g for g in (seed.get("gaps") or []) if isinstance(g, dict)][:32]
+        if "world_anchor" in seed or anchor_context is not None:
+            world._bind_anchor_runtime(seed, anchor_context)
+        world._target_projection = copy.deepcopy(seed.get("target_projection")) if isinstance(seed.get("target_projection"), dict) else None
+        world.target_projection_reason = _text(seed.get("target_projection_reason"), 120) or (
+            "typed_identity_pending_kernel_propagation" if world._target_projection else "not_configured")
         world.shocks = [Shock.from_dict(s) for s in (seed.get("shocks") or []) if isinstance(s, dict)][:8]
         seeded: Dict[int, Dict[str, Any]] = {}
         for row in seed.get("actors") or []:
@@ -1355,15 +1436,17 @@ class WorldModel:
             world.add_actor(ActorState(
                 aid, row.get("name") or cfg.get("entity_name") or f"Agent_{aid}",
                 agency_class=row.get("agency_class") or cfg.get("agency_class") or "other_actor",
+                agency_class_basis=row.get("agency_class_basis") if world._anchor_runtime is not None else None,
                 archetype=row.get("archetype") or cfg.get("archetype") or "actor",
                 capacity_per_round=(row.get("capacity_per_round", DEFAULT_CAPACITY_PER_ROUND) if world.mechanics_policy("action_policy")
-                                    else row.get("capacity_per_round") or DEFAULT_CAPACITY_PER_ROUND),
+                                    else (row["capacity_per_round"] if row.get("capacity_per_round") is not None
+                                          else default_capacity(row.get("agency_class") or cfg.get("agency_class") or "other_actor"))),
                 allow_zero_capacity=world.mechanics_policy("action_policy"),
                 outcome_power=row.get("outcome_power", cfg.get("outcome_power")),
-                posture=(row.get("posture", "") if grounded else row.get("posture") or cfg.get("stance") or ""),
+                posture=(row.get("posture", "") if grounded or world._anchor_runtime is not None else row.get("posture") or cfg.get("stance") or ""),
                 documented_plans=row.get("documented_plans"), red_lines=row.get("red_lines"),
                 aliases=row.get("aliases"), goals=row.get("goals"),
-                incentives=(row.get("incentives", {}) if grounded else row.get("incentives") or {
+                incentives=(row.get("incentives", {}) if grounded or world._anchor_runtime is not None else row.get("incentives") or {
                     k: v for k, v in (("gains_if", cfg.get("gains_if")), ("loses_if", cfg.get("loses_if"))) if v
                 }),
             ))
@@ -1371,9 +1454,11 @@ class WorldModel:
             if aid not in world.actors:
                 world.add_actor(ActorState(
                     aid, row.get("name") or f"Agent_{aid}", agency_class=row.get("agency_class") or "other_actor",
+                    agency_class_basis=row.get("agency_class_basis") if world._anchor_runtime is not None else None,
                     archetype=row.get("archetype") or "actor",
                     capacity_per_round=(row.get("capacity_per_round", DEFAULT_CAPACITY_PER_ROUND) if world.mechanics_policy("action_policy")
-                                    else row.get("capacity_per_round") or DEFAULT_CAPACITY_PER_ROUND),
+                                    else (row["capacity_per_round"] if row.get("capacity_per_round") is not None
+                                          else default_capacity(row.get("agency_class") or "other_actor"))),
                 allow_zero_capacity=world.mechanics_policy("action_policy"),
                     outcome_power=row.get("outcome_power"), posture=row.get("posture") or "",
                     documented_plans=row.get("documented_plans"), red_lines=row.get("red_lines"),
@@ -1382,13 +1467,14 @@ class WorldModel:
             if not isinstance(row, dict):
                 continue
             name = row.get("name") or row.get("metric")
-            if not name:
+            if not name or world._is_private_target_variable(row.get("id") or name):
                 continue
             world.add_variable(name, row.get("value"), unit=row.get("unit") or "",
                                kind=row.get("kind") or "numeric", as_of=row.get("as_of") or row.get("as_of_date"),
                                provenance=row.get("provenance") or "research",
                                rationale=row.get("rationale") or row.get("source") or "",
-                               var_id=row.get("id"), research_evidence=row.get("research_evidence"))
+                               var_id=row.get("id"), read_only=row.get("read_only", False), identity=row.get("identity"),
+                               anchor_metadata=row.get("anchor_metadata"), research_evidence=row.get("research_evidence"))
         for row in seed.get("relationships") or []:
             if not isinstance(row, dict):
                 continue
@@ -1403,6 +1489,493 @@ class WorldModel:
                 basis=row.get("basis") or ""))
         return world
 
+    def _bind_anchor_runtime(self, payload: Dict[str, Any], context: Any) -> None:
+        from .world_anchor import validate_anchor_context, anchor_config_pin, engine_projection
+        from .world_model_seed import build_anchor_runtime_projection
+        validate_anchor_context(context, engine="oasis-legacy")
+        runtime = payload.get("anchor_runtime")
+        if (not isinstance(runtime, dict) or runtime.get("schema_version") != "world-anchor-reflexive/v1"
+                or payload.get("world_anchor") != anchor_config_pin(context)
+                or runtime.get("projection") != engine_projection(context, engine="oasis-legacy")):
+            raise ValueError("world anchor context/runtime binding mismatch")
+        rebuilt = build_anchor_runtime_projection(context, None, case_projection=payload.get("target_projection"))
+        if runtime != rebuilt:
+            raise ValueError("world anchor executable projection changed")
+        self._anchor_context = context
+        self._anchor_runtime = copy.deepcopy(rebuilt)
+
+    def _validate_anchor_restore(self, payload: Dict[str, Any]) -> None:
+        """Check raw saved fields before legacy deserializers can coerce them.
+
+        Definitions come from the authenticated adapter and its checked case.
+        Only bounded, well-formed evolution is restored. A target evaluation is
+        a snapshot: effects may have changed primitive values since that snapshot.
+        This check neither samples nor applies events.
+        """
+        def fail(note: str) -> None:
+            raise ValueError("world anchor invalid restored state: " + note)
+
+        def number(value: Any) -> bool:
+            try:
+                return type(value) in (int, float) and math.isfinite(value)
+            except OverflowError:
+                return False
+
+        def rows_by_id(rows: Any, expected: set, label: str) -> Dict[str, Any]:
+            if not isinstance(rows, list) or any(
+                    not isinstance(row, dict) or not isinstance(row.get("id"), str) for row in rows):
+                fail(label + " identities")
+            indexed = {row["id"]: row for row in rows}
+            if len(indexed) != len(rows) or set(indexed) != expected:
+                fail(label + " identities")
+            return indexed
+
+        round_num, committed = payload.get("round"), payload.get("committed_round")
+        if type(round_num) is not int or type(committed) is not int or not 0 <= committed <= round_num:
+            fail("round bounds")
+        runtime = self._anchor_runtime
+        projection = payload["target_projection"]
+        writers = {m["outputNodeId"]: m for m in projection["mechanisms"]}
+        metadata = {v["node_id"]: v for v in runtime["variables"]}
+        public_nodes = {slugify(n["nodeId"]): n for n in projection["nodes"] if n["visibility"] == "public"}
+        variables = rows_by_id(payload.get("variables"), set(public_nodes), "variable")
+        for vid, node in public_nodes.items():
+            row = variables[vid]
+            mechanism = writers.get(node["nodeId"])
+            identity = None if mechanism is None else {
+                "mechanismId": mechanism["mechanismId"], "kind": mechanism["kind"],
+                "inputs": mechanism["inputNodeIds"], "parameters": mechanism["parameters"],
+            }
+            expected_unit = "" if is_kind_name_unit(node["units"]) else _text(node["units"], 24)
+            if (row.get("anchor_metadata") != metadata[node["nodeId"]]
+                    or row.get("read_only", False) is not (mechanism is not None)
+                    or row.get("identity") != identity or row.get("kind") != "numeric"
+                    or row.get("name") != _text(node["nodeId"], 140)
+                    or row.get("unit") != expected_unit
+                    or row.get("as_of") != (_text(node["vintage"], 40) or None)
+                    or row.get("rationale") != "Typed structural input; not an assessment."):
+                fail("variable definition")
+            history = row.get("history")
+            if not isinstance(history, list) or not 1 <= len(history) <= HISTORY_LIMIT:
+                fail("variable history")
+            previous = -1
+            for entry in history:
+                if not isinstance(entry, dict) or set(entry) != {"round", "value", "cause", "source"}:
+                    fail("variable history")
+                r, value, source = entry["round"], entry["value"], entry["source"]
+                if (type(r) is not int or not 0 <= r <= round_num or r < previous
+                        or not isinstance(entry["cause"], str) or len(entry["cause"]) > 200):
+                    fail("variable history bounds")
+                if r == 0 and source != "mechanism":
+                    if source != "research" or value != node["value"] or entry["cause"] != "seed":
+                        fail("variable initial history")
+                elif source not in ({"mechanism"} if mechanism else {"action", "arbiter", "effect", "shock", "mechanism"}):
+                    fail("variable history authority")
+                if not number(value) and not (value is None and r == 0 and source == "research" and node["value"] is None):
+                    fail("variable history value")
+                previous = r
+            # Match set_value: mechanism writes retain the previous provenance.
+            # If bounded history contains only mechanism writes, the admitted
+            # research seed remains the provenance authority.
+            expected_provenance = next((entry["source"] for entry in reversed(history)
+                                        if entry["source"] in PROVENANCES), "research")
+            if row.get("provenance") != expected_provenance:
+                fail("variable provenance")
+            value = row.get("value")
+            if (value != history[-1]["value"]
+                    or not number(value) and not (value is None and history[-1]["round"] == 0 and node["value"] is None)):
+                fail("variable current value")
+
+        definitions = [Shock.from_dict(row).to_dict() for row in runtime["shocks"]]
+        shocks = rows_by_id(payload.get("shocks", []), {s["id"] for s in definitions}, "shock")
+        for definition in definitions:
+            saved = shocks[definition["id"]]
+            if {k: v for k, v in saved.items() if k != "fired_rounds"} != {
+                    k: v for k, v in definition.items() if k != "fired_rounds"}:
+                fail("shock definition")
+            fired = saved.get("fired_rounds")
+            if (not isinstance(fired, list) or any(type(r) is not int or not 1 <= r <= round_num for r in fired)
+                    or fired != sorted(set(fired)) or not definition["recurring"] and len(fired) > 1):
+                fail("shock fired rounds")
+
+        calendar_ids = {event["id"] for event in runtime["calendar"]}
+        fired_events = payload.get("anchor_fired_events")
+        if (not isinstance(fired_events, list) or any(not isinstance(e, str) for e in fired_events)
+                or len(fired_events) != len(set(fired_events)) or not set(fired_events) <= calendar_ids
+                or round_num == 0 and fired_events):
+            fail("calendar fired events")
+        period = payload.get("period")
+        if period is not None and not isinstance(period, dict):
+            fail("calendar period")
+        period_end = str((period or {}).get("period_end") or "")[:10]
+        if any(event["id"] in fired_events and (not period_end or event["date"] > period_end)
+               for event in runtime["calendar"]):
+            fail("calendar fired date")
+        indicators = {row["indicator_id"]: row for row in runtime["indicators"]}
+        signposts, seen = payload.get("anchor_signposts"), set()
+        if not isinstance(signposts, list):
+            fail("indicator state")
+        for row in signposts:
+            if (not isinstance(row, dict) or set(row) != {"round", "indicator_id", "node_id", "value", "triggered", "value_kind"}
+                    or type(row["round"]) is not int or not 0 <= row["round"] <= round_num
+                    or not isinstance(row["indicator_id"], str) or row["indicator_id"] not in indicators):
+                fail("indicator state")
+            key = (row["round"], row["indicator_id"])
+            if (key in seen or row["node_id"] != indicators[row["indicator_id"]]["node_id"]
+                    or row["value_kind"] != "simulated" or row["value"] is not None and not number(row["value"])
+                    or row["triggered"] is not None and type(row["triggered"]) is not bool):
+                fail("indicator state")
+            seen.add(key)
+
+        state = payload.get("target_projection_state")
+        if not isinstance(state, dict) or set(state) != {"values", "parameters", "evaluated_round"}:
+            fail("target state")
+        values, parameters, evaluated = state["values"], state["parameters"], state["evaluated_round"]
+        if parameters is None and evaluated is None and values == {}:
+            if payload.get("target_projection_status") != "unavailable":
+                fail("unevaluated target status")
+            if any(variables[vid]["value"] != node["value"]
+                   or any(h["source"] == "mechanism" for h in variables[vid]["history"])
+                   for vid, node in public_nodes.items() if node["nodeId"] in writers):
+                fail("unevaluated derived value")
+            return
+        if (type(evaluated) is not int or not 0 <= evaluated <= round_num
+                or not isinstance(values, dict) or set(values) != {n["nodeId"] for n in projection["nodes"]}
+                or any(not number(value) for value in values.values()) or not isinstance(parameters, dict)
+                or payload.get("target_projection_status") not in ("ready", "unavailable")
+                or payload.get("target_projection_status") == "ready" and evaluated != round_num):
+            fail("target state bounds")
+        # The compiler checks exact parameter keys and fixed/ranged values, and
+        # validates mechanism domains without sampling or mutating saved state.
+        from .target_mechanisms import compile_model
+        checked_projection = copy.deepcopy(projection)
+
+        def provenance(value: Any) -> None:
+            if isinstance(value, dict):
+                if value.get("basis") == "assumed" and "gap" not in value:
+                    value["gap"] = "Structural projection omits evidence prose; declared assumption retained."
+                for child in value.values():
+                    provenance(child)
+            elif isinstance(value, list):
+                for child in value:
+                    provenance(child)
+
+        provenance(checked_projection)
+        try:
+            propagated = compile_model(checked_projection).propagate(values, parameters, evaluated)
+        except (ValueError, TypeError, KeyError, OverflowError):
+            fail("target parameters or values")
+        if propagated != values:
+            fail("target evaluated values")
+        if any(variables[vid]["value"] != values[node["nodeId"]]
+               or any(h["round"] > evaluated for h in variables[vid]["history"])
+               for vid, node in public_nodes.items() if node["nodeId"] in writers):
+            fail("derived current value")
+
+    def _anchor_predicate(self, predicate: Optional[Dict[str, Any]]) -> Optional[bool]:
+        if predicate is None:
+            return True
+        variable = self.variables.get(slugify(predicate["node_id"]))
+        if variable is None or type(variable.value) not in (int, float):
+            return None
+        value, op = variable.value, predicate["operator"]
+        if op == "between":
+            return float(predicate["low"]) <= value <= float(predicate["high"])
+        threshold = float(predicate["value"])
+        if op == "lt":
+            return value < threshold
+        if op == "lte":
+            return value <= threshold
+        if op == "gt":
+            return value > threshold
+        if op == "gte":
+            return value >= threshold
+        raise ValueError("world anchor unsupported_predicate")
+
+    def _apply_anchor_calendar(self) -> None:
+        if self._anchor_runtime is None:
+            return
+        end = str((self.period or {}).get("period_end") or "")[:10]
+        for event in self._anchor_runtime["calendar"]:
+            if event["id"] in self._anchor_fired_events or not end or event["date"] > end:
+                continue
+            for effect in event["effects"]:
+                variable = self.variables.get(slugify(effect["variable_id"]))
+                if variable is None or self.is_derived_variable(variable):
+                    raise ValueError("world anchor unsupported calendar effect target")
+                value = effect["value"]
+                if effect["op"] == "add":
+                    value = variable.value + value
+                elif effect["op"] == "mul":
+                    value = variable.value * value
+                variable.set_value(value, round_num=self.round, source="effect", cause="admitted scheduled event")
+            self._anchor_fired_events.append(event["id"])
+            self._add_event(WorldEvent(self.round, "scheduled", event["description"], source="world_anchor",
+                                       variable_ids=[e["variable_id"] for e in event["effects"]]))
+
+    def evaluate_anchor_indicators(self) -> None:
+        if self._anchor_runtime is None:
+            return
+        seen = {(r["round"], r["indicator_id"]) for r in self.anchor_signposts}
+        for indicator in self._anchor_runtime["indicators"]:
+            if (self.round, indicator["indicator_id"]) in seen:
+                continue
+            variable = self.variables.get(slugify(indicator["node_id"]))
+            self.anchor_signposts.append({"round": self.round, "indicator_id": indicator["indicator_id"],
+                                          "node_id": indicator["node_id"],
+                                          "value": variable.value if variable is not None else None,
+                                          "triggered": self._anchor_predicate(indicator["trigger"]),
+                                          "value_kind": "simulated"})
+
+    def anchor_actor_observations(self, actor_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """No initial analyst/prior values; only authorized initial or public simulated facts."""
+        if self._anchor_runtime is None:
+            raise ValueError("world anchor runtime required for strict actor observation")
+        out = []
+        for variable in self.variables.values():
+            metadata = variable.anchor_metadata or {}
+            identity = metadata.get("identity")
+            authorized = any(
+                identity is not None and item.get("identity") == identity
+                and item.get("value_kind") == metadata.get("value_kind")
+                and isinstance(item.get("value"), dict)
+                and item["value"].get("kind") == "number"
+                and float(item["value"]["value"]) == variable.value
+                for item in actor_payload["items"])
+            simulated = any(h.get("round", 0) > 0 and h.get("source") in {"effect", "shock", "mechanism", "arbiter"}
+                            for h in variable.history)
+            if not authorized and not simulated:
+                continue
+            out.append({"node_id": variable.id, "value": variable.value, "unit": variable.unit,
+                        "value_kind": "simulated" if simulated else metadata.get("value_kind")})
+        return out
+
+    def anchor_owned_simulated_state(self, agent_id: int) -> Dict[str, Any]:
+        """Bounded own duties and verified resolutions, without legacy dossiers.
+
+        Select fields explicitly; free-form resolution rationale, rival state,
+        beliefs, cached text and estimator material never enter this projection.
+        """
+        if self._anchor_runtime is None:
+            raise ValueError("world anchor runtime required for owned simulated state")
+        result: Dict[str, Any] = {"open_commitments": [], "own_outcomes": []}
+        actor = self.actors.get(agent_id) if type(agent_id) is int else None
+        if actor is None:
+            return result
+        outcomes = []
+        for commitment in actor.commitments[-24:]:
+            if not isinstance(commitment, dict):
+                continue
+            cid = commitment.get("id")
+            made, due = commitment.get("made_round"), commitment.get("due_round")
+            description = commitment.get("description")
+            if (not isinstance(cid, str) or not re.fullmatch(rf"c{agent_id}_[0-9]+_[1-9][0-9]*", cid)
+                    or len(cid) > 56 or sum(isinstance(c, dict) and c.get("id") == cid for c in actor.commitments) != 1
+                    or type(made) is not int or made < 0
+                    or made > self.round or cid.split("_")[1] != str(made)
+                    or not isinstance(description, str) or not description.strip() or len(description) > 220):
+                continue
+            source = commitment.get("source")
+            if (not isinstance(source, str)
+                    or source not in ("decision", "option_lag") and not source.startswith("agreement:")):
+                continue
+            target_ids = []
+            operative_terms = None
+            if source.startswith("agreement:"):
+                interaction = self.interactions.get(source.split(":", 1)[1])
+                if (interaction is None or agent_id not in (interaction.proposer, interaction.recipient)
+                        or cid not in interaction.obligations):
+                    continue
+                other = interaction.recipient if agent_id == interaction.proposer else interaction.proposer
+                if (other not in self.actors or type(commitment.get("counterparty", other)) is not int
+                        or commitment.get("counterparty", other) != other):
+                    continue
+                target_ids = [other]
+                operative_terms = interaction.operative_terms
+                if commitment.get("status") in ("pending", "due") and interaction.status != "accepted":
+                    continue
+            # Binding remains mandatory for historical outcomes, even after a
+            # duty is fulfilled or the agreement is breached. Delivery admission
+            # cannot serve as this check: it intentionally accepts only open duties.
+            if operative_terms is not None:
+                if (not self.mechanics_policy("agreement_policy") or due is not None
+                        or commitment.get("operative_terms") != operative_terms
+                        or commitment.get("operative_terms_hash") != interaction.operative_terms_hash):
+                    continue
+                if "due_round" not in commitment:
+                    raise ValueError("operative_terms commitment projection requires due_round")
+                start, end = self._operative_period()
+                open_in_time = (start is not None and end is not None and start <= end
+                                and not self.commitment_timing(commitment, self.round)[1])
+            else:
+                if ({"operative_terms", "operative_terms_hash"} & commitment.keys()
+                        or type(due) is not int or not made < due):
+                    continue
+                open_in_time = self.round <= due + COMMITMENT_GRACE_PERIODS
+            if commitment.get("status") in ("pending", "due") and open_in_time:
+                row = {key: commitment[key] for key in ("id", "description", "made_round", "due_round", "status")}
+                if operative_terms is not None:
+                    row["operative_terms"] = operative_terms
+                    row["operative_terms_hash"] = interaction.operative_terms_hash
+                due_date = commitment.get("due_date")
+                if isinstance(due_date, str) and _iso_date(due_date) is not None and len(due_date) == 10:
+                    row["due_date"] = due_date
+                result["open_commitments"].append(row)
+            for key in ("last_fulfillment_attempt", "fulfillment_evidence"):
+                evidence = commitment.get(key)
+                if (not isinstance(evidence, dict) or type(evidence.get("agent_id")) is not int
+                        or evidence["agent_id"] != agent_id or evidence.get("commitment_id") != cid
+                        or evidence.get("option_id") != FULFILLMENT_PREFIX + cid
+                        or type(evidence.get("round")) is not int or not made < evidence["round"] <= self.round
+                        or evidence.get("commitment_target_ids") != target_ids
+                        or evidence.get("outcome") not in RESOLUTION_COUNTED):
+                    continue
+                if key == "fulfillment_evidence" and (commitment.get("status") != "fulfilled"
+                        or evidence["outcome"] != "success" or commitment.get("fulfilled_round") != evidence["round"]):
+                    continue
+                row = {"commitment_id": cid, "round": evidence["round"], "outcome": evidence["outcome"]}
+                if row not in outcomes:
+                    outcomes.append(row)
+        action = actor.last_action
+        if (isinstance(action, dict) and action.get("status") == "ok" and action.get("action_reviewed") is True
+                and type(action.get("round")) is int and 0 < action["round"] <= self.round
+                and action.get("resolution") in RESOLUTION_COUNTED
+                and isinstance(action.get("option_id"), str)
+                and re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", action["option_id"])):
+            outcomes.append({"round": action["round"], "option_id": action["option_id"], "outcome": action["resolution"]})
+        result["own_outcomes"] = sorted(outcomes, key=lambda row: row["round"])[-8:]
+        return result
+
+    def _target_nodes(self) -> List[Dict[str, Any]]:
+        nodes = (self._target_projection or {}).get("nodes", [])
+        return [n for n in nodes if isinstance(n, dict)] if isinstance(nodes, list) else []
+
+    @property
+    def target_projection(self) -> Optional[Dict[str, Any]]:
+        """Engine-only configuration presence/read hook; never an actor prompt."""
+        return copy.deepcopy(self._target_projection)
+
+    def _is_private_target_variable(self, ref: Any) -> bool:
+        return any(n.get("visibility") != "public" and slugify(n.get("nodeId")) == slugify(ref)
+                   for n in self._target_nodes())
+
+    def is_derived_variable(self, ref: Any) -> bool:
+        """Write guard shared by arbiter validation and all kernel mutation paths."""
+        if isinstance(ref, StateVariable):
+            ref = ref.id
+        vid = slugify(ref)
+        variable = self.variables.get(str(ref)) or self.variables.get(vid)
+        if variable is not None and variable.read_only:
+            return True
+        mechanisms = (self._target_projection or {}).get("mechanisms", [])
+        mechanisms = mechanisms if isinstance(mechanisms, list) else []
+        return self._is_private_target_variable(ref) or any(
+            isinstance(m, dict) and slugify(m.get("outputNodeId")) == vid
+            for m in mechanisms)
+
+    def public_target_values(self) -> Dict[str, Any]:
+        """A structural result is usable only after this round actually propagated."""
+        if self.target_projection_status != "ready" or self._target_evaluated_round != self.round:
+            return {}
+        return {n["nodeId"]: self._target_values[n["nodeId"]] for n in self._target_nodes()
+                if n.get("visibility") == "public" and n.get("nodeId") in self._target_values}
+
+    def evaluate_target_projection(self, round_num: int, rng: Any = None) -> Dict[str, Any]:
+        """Evaluate the optional typed DAG once per round, after ordinary world updates.
+
+        The runner owns this boundary. No evaluation runs inside commit_round or
+        apply_arbiter_update. Persisted draws support deterministic path resumes.
+        A malformed/missing model declines target evidence; it never uses votes.
+        """
+        from .target_mechanisms import compile_model, MechanismValidationError
+
+        def result() -> Dict[str, Any]:
+            return {"status": self.target_projection_status, "reason": self.target_projection_reason}
+
+        if type(round_num) is not int or round_num != self.round:
+            self.target_projection_status, self.target_projection_reason = "unavailable", "invalid_projection_round"
+            return result()
+        if self._target_evaluated_round == round_num and self.target_projection_status == "ready":
+            return result()
+        self.target_projection_status = "unavailable"
+        if self._target_projection is None:
+            return result()
+        projection = copy.deepcopy(self._target_projection)
+        try:
+            nodes = projection.get("nodes")
+            mechanisms = projection.get("mechanisms")
+            resolution = projection.get("resolution")
+            if not isinstance(nodes, list) or not isinstance(mechanisms, list) or not isinstance(resolution, dict):
+                raise MechanismValidationError("invalid projection structure")
+            target = resolution.get("targetNodeId")
+            public = {n.get("nodeId") for n in nodes if isinstance(n, dict) and n.get("visibility") == "public"}
+            if target not in public:
+                self.target_projection_reason = "private_target_unavailable"
+                return result()
+            if not any(isinstance(m, dict) and m.get("outputNodeId") == target for m in mechanisms):
+                self.target_projection_reason = "missing_target_identity"
+                return result()
+            node_ids = [n.get("nodeId") for n in nodes if isinstance(n, dict)]
+            if (len(node_ids) != len(nodes) or any(not isinstance(nid, str) or not nid for nid in node_ids)
+                    or len({slugify(nid) for nid in node_ids}) != len(node_ids)):
+                raise MechanismValidationError("ambiguous variable identity")
+            # simulation_projection deliberately omits evidence prose. Supply a
+            # generic declaration for assumed scalars, never synthetic citations.
+            def provenance(value: Any) -> None:
+                if isinstance(value, dict):
+                    if value.get("basis") == "assumed" and "gap" not in value:
+                        value["gap"] = "Structural projection omits evidence prose; declared assumption retained."
+                    for child in value.values():
+                        provenance(child)
+                elif isinstance(value, list):
+                    for child in value:
+                        provenance(child)
+            provenance(projection)
+            model = compile_model(projection)
+            if self._target_parameters is None:
+                if rng is None:
+                    self.target_projection_reason = "projection_rng_required"
+                    return result()
+                values = model.initial_values(rng)
+                parameters = model.draw_parameters(rng)
+            else:
+                values = dict(self._target_values)
+                parameters = copy.deepcopy(self._target_parameters)
+            writers = {m["outputNodeId"] for m in mechanisms}
+            for node in nodes:
+                nid = node["nodeId"]
+                variable = self.variables.get(slugify(nid))
+                if nid in public and nid not in writers and variable is not None:
+                    value = variable.value
+                    if type(value) in (int, float) and math.isfinite(value):
+                        values[nid] = value
+            values = model.propagate(values, parameters, round_num)
+        except (MechanismValidationError, TypeError, ValueError, KeyError, OverflowError):
+            # Raw compiler errors may identify private nodes; publish only a code.
+            self.target_projection_reason = "invalid_target_projection"
+            if self._anchor_runtime is not None:
+                raise ValueError("world anchor invalid target projection") from None
+            return result()
+        self._target_values, self._target_parameters = values, parameters
+        self._target_evaluated_round = round_num
+        self.target_projection_status, self.target_projection_reason = "ready", "typed_identity_propagated"
+        for node in nodes:
+            nid = node["nodeId"]
+            if nid not in public:
+                self.variables.pop(slugify(nid), None)
+                continue
+            vid = slugify(nid)
+            if vid not in self.variables:
+                self.add_variable(nid, values[nid], var_id=vid, unit=node.get("units", ""),
+                                  kind="numeric", provenance="seed", read_only=nid in writers)
+            variable = self.variables[vid]
+            variable.kind = "numeric"
+            variable.unit = _text(node.get("units"), 24)
+            variable.read_only = nid in writers
+            variable.set_value(values[nid], round_num=round_num, source="mechanism", cause="typed structural propagation")
+        self.evaluate_anchor_indicators()
+        return result()
+
     def add_actor(self, actor: ActorState) -> None:
         self.actors[actor.agent_id] = actor
         for key in actor.name_keys():
@@ -1411,7 +1984,10 @@ class WorldModel:
     def add_variable(self, name: Any, value: Any, *, unit: str = "", kind: str = "numeric",
                      as_of: Optional[str] = None, provenance: str = "research", rationale: str = "",
                      var_id: Optional[str] = None, initial_round: int = 0,
-                     initial_cause: str = "", research_evidence: Optional[Dict[str, Any]] = None) -> str:
+                     initial_cause: str = "", read_only: bool = False,
+                     identity: Optional[Dict[str, Any]] = None,
+                     anchor_metadata: Optional[Dict[str, Any]] = None,
+                     research_evidence: Optional[Dict[str, Any]] = None) -> str:
         """Register (or update) a variable; returns its id.  Duplicate names merge."""
         vid = slugify(var_id or name)
         if research_evidence is not None:
@@ -1419,17 +1995,19 @@ class WorldModel:
             if vid in self.variables and encoded != self.variables[vid]._research_evidence_json:
                 raise ValueError("research_evidence is immutable after variable creation")
         if vid in self.variables:
-            self.variables[vid].set_value(value, round_num=self.round, source=provenance,
-                                          cause="re-seeded")
+            if not self.is_derived_variable(vid):
+                self.variables[vid].set_value(value, round_num=self.round, source=provenance,
+                                              cause="re-seeded")
             return vid
         if kind == "numeric":
             num, parsed_unit = parse_quantity(value)
-            if num is None:
+            if num is None and value is not None:
                 kind = "text"
             elif not unit and parsed_unit:
                 unit = parsed_unit
         self.variables[vid] = StateVariable(vid, name, value, unit=unit, kind=kind, as_of=as_of,
-                                            provenance=provenance, rationale=rationale, research_evidence=research_evidence)
+                                            provenance=provenance, rationale=rationale,
+                                            read_only=read_only, identity=identity, anchor_metadata=anchor_metadata, research_evidence=research_evidence)
         self.variables[vid].history = [{
             "round": int(initial_round),
             "value": self.variables[vid].value,
@@ -1526,6 +2104,10 @@ class WorldModel:
         """Open round ``round_num`` (1-based): reset capacity, mark due commitments."""
         self.round = int(round_num)
         self.period = dict(period) if isinstance(period, dict) else None
+        self._apply_anchor_calendar()
+        if self._target_projection and self._target_evaluated_round != self.round:
+            self.target_projection_status = "unavailable"
+            self.target_projection_reason = "typed_identity_pending_kernel_propagation"
         if self.period and self.period.get("label"):
             self.period_labels[self.round] = _text(self.period["label"], 40)
         for actor in self.actors.values():
@@ -1584,7 +2166,7 @@ class WorldModel:
                    for key in ("made_round", "due_round")):
                 return None
             made, due = int(c["made_round"]), int(c["due_round"])
-            if isinstance(c["made_round"], bool) or isinstance(c["due_round"], bool) or not (0 <= made < round_num <= due):
+            if not (0 <= made < due and made < round_num <= due + COMMITMENT_GRACE_PERIODS):
                 return None
         if str(c.get("source") or "").startswith("agreement:"):
             inter = self.interactions.get(c["source"].split(":", 1)[1])
@@ -1628,23 +2210,27 @@ class WorldModel:
 
     def delivery_resolution_target(self, actor_id: int, commitment_id: Any, round_num: int,
                                    action_round: Any) -> Optional[Dict[str, Any]]:
-        actor = self.actors.get(actor_id)
-        action = actor.last_action if actor is not None else None
         if (type(round_num) is not int or round_num != self.round
-                or type(action_round) is not int or action_round != round_num or not action
-                or action.get("round") != round_num or action.get("status") != "ok"
-                or action.get("commitment_reviewed") or action.get("commitment_id") != commitment_id
-                or action.get("option_id") != FULFILLMENT_PREFIX + str(commitment_id)):
+                or type(action_round) is not int or action_round != round_num):
             return None
         c = self.delivery_commitment(actor_id, commitment_id, round_num)
-        if c is None or action.get("targets") != self.delivery_targets(actor_id, c):
-            return None
-        if ("commitment_target_ids" in action
-                and not self._delivery_target_ids_match(actor_id, c, action["commitment_target_ids"])):
+        if c is None:
             return None
         attempt = c.get("last_fulfillment_attempt") or {}
-        if (not isinstance(attempt, dict) or attempt.get("round") != round_num
-                or attempt.get("option_id") != action["option_id"] or attempt.get("outcome") != "unverified"):
+        if (not isinstance(attempt, dict) or type(attempt.get("round")) is not int
+                or attempt["round"] != round_num or attempt.get("outcome") != "unverified"
+                or attempt.get("option_id") != FULFILLMENT_PREFIX + commitment_id):
+            return None
+        if "commitment_target_ids" in attempt:
+            return c if self._delivery_target_ids_match(actor_id, c, attempt["commitment_target_ids"]) else None
+        # Saved pre-maintenance attempts need their complete legacy action binding.
+        action = self.actors[actor_id].last_action or {}
+        if (type(action.get("round")) is not int or action["round"] != round_num
+                or action.get("status") != "ok" or action.get("commitment_reviewed")
+                or action.get("commitment_id") != commitment_id or action.get("option_id") != attempt["option_id"]
+                or action.get("targets") != self.delivery_targets(actor_id, c)
+                or ("commitment_target_ids" in action and not self._delivery_target_ids_match(
+                    actor_id, c, action["commitment_target_ids"]))):
             return None
         return c
 
@@ -1660,6 +2246,93 @@ class WorldModel:
         valid = bool(refs) and all(len(ids) == 1 for ids in matches) and len(implicated) == 1
         return (next(iter(implicated)) if valid else None), implicated
 
+    def resolution_key(self, row: Dict[str, Any]) -> Tuple[Optional[tuple], set]:
+        """Count conflicting identity claims before filtering malformed outcomes."""
+        aid, implicated = self.resolution_actor(row)
+        cid = row.get("commitment_id")
+        valid = cid is None or isinstance(cid, str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,56}", cid)
+        keys = {(actor_id, cid if valid else None) for actor_id in implicated}
+        return ((aid, cid) if aid is not None and valid else None), keys
+
+    def register_deliveries(self, round_num: int, actor_id: int,
+                           commitment_ids: Any) -> List[WorldEvent]:
+        """Register at most four exact owned attempts, without spending or replacing a move.
+
+        Invalid lists are rejected atomically. Re-registration never resets a
+        reviewed attempt, and splitting a list across calls cannot evade the cap.
+        """
+        if (type(round_num) is not int or round_num != self.round or type(actor_id) is not int
+                or actor_id not in self.actors or not isinstance(commitment_ids, list)
+                or len(commitment_ids) > MAX_DELIVERIES
+                or any(not isinstance(cid, str) for cid in commitment_ids)
+                or len(set(commitment_ids)) != len(commitment_ids)):
+            return []
+        promises = [self.delivery_commitment(actor_id, cid, round_num) for cid in commitment_ids]
+        if any(c is None for c in promises):
+            return []
+        actor = self.actors[actor_id]
+        attempted = {c.get("id") for c in actor.commitments
+                     if isinstance(c.get("last_fulfillment_attempt"), dict)
+                     and c["last_fulfillment_attempt"].get("round") == round_num}
+        if len(attempted | set(commitment_ids)) > MAX_DELIVERIES:
+            return []
+        events = []
+        for c in promises:
+            if c["id"] in attempted:
+                continue
+            option_id = FULFILLMENT_PREFIX + c["id"]
+            c["last_fulfillment_attempt"] = {
+                "round": round_num, "option_id": option_id, "outcome": "unverified",
+                "commitment_target_ids": self.delivery_target_ids(actor_id, c),
+            }
+            events.append(self._add_event(WorldEvent(
+                round_num, "action", f"{actor.name} attempts delivery [{c['id']}]: {c['description']}",
+                actors=[actor.name], targets=self.delivery_targets(actor_id, c), source="commitment",
+                option_id=option_id, action_kind="operational", period_label=str((self.period or {}).get("label") or ""))))
+        return events
+
+    def _admitted_option(self, actor: ActorState, option: Dict[str, Any], round_num: int) -> Optional[Dict[str, Any]]:
+        # Local import keeps the world/decision dependency acyclic at module load.
+        from .agent_decision import build_option_menu, option_feasibility_problem, _custom_option
+
+        option_id = option.get("id")
+        if not isinstance(option_id, str):
+            return None
+        canonical = next((o for o in build_option_menu(actor, self, round_num, max_options=1000)
+                          if o["id"] == option_id), None)
+        if option_id == "custom":
+            canonical = _custom_option(option.get("kind"), option.get("label"))
+        if canonical is None:
+            return None
+        # Optional metadata omitted by old saved rows is restored, never discounted.
+        admitted = {**canonical, **option}
+        if option_feasibility_problem(actor, admitted, action_policy=self.mechanics_policy("action_policy")) is not None:
+            return None
+        if any(admitted.get(key) != canonical.get(key)
+               for key in ("kind", "cost", "lag", "reversibility", "targets_actor", "interaction_id")):
+            return None
+        if "suggested_targets" in canonical:
+            admitted["suggested_targets"] = canonical["suggested_targets"]
+        return admitted
+
+    def _reject_decision(self, actor: ActorState, round_num: int, option_id: str,
+                         problem: str, status: str = "invalid") -> WorldEvent:
+        # C11 also rejects after the optional mechanics preflight. Keep the
+        # final admission audit aligned with the reducer's recorded outcome.
+        if self.last_decision_admissions:
+            admission = self.last_decision_admissions[-1]
+            if admission["agent_id"] == actor.agent_id and admission["option_id"] == option_id:
+                admission.update(status="invalid", reason=problem)
+        rejection = {"round": round_num, "option_id": option_id, "status": status,
+                     "admission_problems": [problem], "resolution": None}
+        actor.action_rejections.append(rejection)
+        actor.action_rejections = actor.action_rejections[-24:]
+        if not (actor.last_action and actor.last_action.get("round") == round_num
+                and actor.last_action.get("status") == "ok"):
+            actor.last_action = dict(rejection)
+        return self._add_event(WorldEvent(round_num, "system", f"{actor.name} makes no recorded move ({status})",
+                                         actors=[actor.name], source="admission", option_id=option_id))
+
     def register_decisions(self, round_num: int, decisions: Iterable[Dict[str, Any]]) -> List[WorldEvent]:
         """Apply the deterministic part of the actors' structured decisions.
 
@@ -1671,6 +2344,8 @@ class WorldModel:
         ``action`` event is recorded.  Decisions whose status is not ``ok`` only
         record a ``hold`` event.
         """
+        if type(round_num) is not int or round_num != self.round:
+            return []
         out: List[WorldEvent] = []
         label = str((self.period or {}).get("label") or "")
         self.last_decision_admissions = []
@@ -1684,50 +2359,90 @@ class WorldModel:
                     "Decision rejected: " + admission["reason"], source="decision_admission",
                     option_id=admission["option_id"], period_label=label)))
                 continue
-            aid = self.resolve_actor(d.get("agent_id"))
+            aid = self.resolve_actor(d.get("agent_id"), exact=True)
             if aid is None:
                 continue
             actor = self.actors[aid]
             option = d.get("option") if isinstance(d.get("option"), dict) else {}
+            status = _text(d.get("status"), 24) or "ok"
+            original_id = _text(option.get("id"), 64) or "hold_position"
+            if "round" in d and (type(d["round"]) is not int or d["round"] != round_num):
+                status = "invalid"
+            if status != "ok":
+                out.append(self._reject_decision(actor, round_num, original_id, "decision is not current and admissible", status))
+                continue
+            if original_id.startswith(FULFILLMENT_PREFIX):
+                cid = original_id[len(FULFILLMENT_PREFIX):]
+                delivery = self.delivery_commitment(aid, cid, round_num)
+                targets_match = delivery is not None and self.delivery_targets_match(aid, delivery, d.get("targets"))
+                if delivery is not None and "commitment_target_ids" in option:
+                    targets_match = (self._delivery_target_ids_match(aid, delivery, option["commitment_target_ids"])
+                                     and (targets_match or d.get("targets") == self.delivery_targets(aid, delivery)))
+                if (type(d.get("round")) is not int or not targets_match):
+                    out.append(self._reject_decision(actor, round_num, original_id, "invalid commitment delivery binding"))
+                    continue
+                events = self.register_deliveries(round_num, aid, [cid])
+                out.extend(events)
+                if events and self.mechanics_policy("action_policy"):
+                    actor.capacity_used += 1
+                if events and (not actor.last_action or actor.last_action.get("round") != round_num):
+                    actor.last_action = {
+                        "round": round_num, "option_id": original_id, "kind": "operational", "lag": 0,
+                        "label": f"Deliver commitment [{cid}]: {delivery['description']}",
+                        "targets": self.delivery_targets(aid, delivery), "status": "ok", "resolution": "pending",
+                        "commitment_id": cid, "commitment_description": delivery["description"],
+                        "commitment_target_ids": self.delivery_target_ids(aid, delivery),
+                        "statement": _text(d.get("public_statement"), STATEMENT_STATE_MAX_CHARS),
+                    }
+                if events:
+                    self._record_expectations(actor, round_num, d.get("expected_reactions"))
+                continue
+            admitted = self._admitted_option(actor, option, round_num)
+            if admitted is None:
+                out.append(self._reject_decision(actor, round_num, original_id, "option violates capacity, canonical metadata or decision rights"))
+                continue
+            option = admitted
+            raw_targets = d.get("targets")
+            if raw_targets is None:
+                raw_targets = option.get("suggested_targets", [])
+            targets = ([self.resolve_actor(t, exact=True) for t in raw_targets]
+                       if isinstance(raw_targets, list) and len(raw_targets) <= 6 else [None])
+            if any(t is None or t == aid for t in targets) or (option.get("targets_actor") and not targets):
+                out.append(self._reject_decision(actor, round_num, original_id, "invalid action target binding"))
+                continue
+            if original_id.startswith(RESPONSE_PREFIXES):
+                inter = self.interactions.get(original_id.partition(":")[2])
+                if (inter is None or inter.recipient != aid or not inter.is_open() or inter.expires_round < round_num
+                        or (targets and set(targets) != {inter.proposer})):
+                    out.append(self._reject_decision(actor, round_num, original_id, "invalid offer response binding"))
+                    continue
+                targets = [inter.proposer]
+            elif original_id.startswith("respond_") and option.get("targets_actor"):
+                expected = {self.resolve_actor(t, exact=True) for t in option.get("suggested_targets", [])}
+                if None in expected or set(targets) != expected:
+                    out.append(self._reject_decision(actor, round_num, original_id, "invalid response target binding"))
+                    continue
+            deliveries = d.get("deliveries", [])
+            if (not isinstance(deliveries, list) or len(deliveries) > MAX_DELIVERIES
+                    or any(not isinstance(cid, str) for cid in deliveries)
+                    or len(set(deliveries)) != len(deliveries)
+                    or (deliveries and type(d.get("round")) is not int)
+                    or any(self.delivery_commitment(aid, cid, round_num) is None for cid in deliveries)):
+                out.append(self._reject_decision(actor, round_num, original_id, "invalid deliveries list"))
+                continue
+            attempted = {c.get("id") for c in actor.commitments
+                         if isinstance(c.get("last_fulfillment_attempt"), dict)
+                         and c["last_fulfillment_attempt"].get("round") == round_num}
+            if len(attempted | set(deliveries)) > MAX_DELIVERIES:
+                out.append(self._reject_decision(actor, round_num, original_id, "period delivery limit exceeded"))
+                continue
             kind = _text(option.get("kind"), 32) or "communication"
             option_id = _text(option.get("id"), 64) or "hold_position"
             try:
                 magnitude = _clamp(float(d.get("magnitude", 0.5) or 0.0), 0.0, 1.0)
             except (TypeError, ValueError):
                 magnitude = 0.5
-            targets = [t for t in (self.resolve_actor(x) for x in (d.get("targets") or [])) if t is not None and t != aid]
             target_names = [self.actor_name(t) for t in targets]
-            status = _text(d.get("status"), 24) or "ok"
-            delivery = None
-            if option_id.startswith(FULFILLMENT_PREFIX):
-                if self.resolve_actor(d.get("agent_id"), exact=True) != aid:
-                    continue  # A guessed actor reference cannot bind or spend an owned promise.
-                if (type(round_num) is not int or round_num != self.round
-                        or type(d.get("round")) is not int or d["round"] != round_num):
-                    continue  # Never relabel a saved decision as a new delivery attempt.
-                if any(isinstance(c.get("last_fulfillment_attempt"), dict)
-                       and c["last_fulfillment_attempt"].get("round") == int(round_num) for c in actor.commitments):
-                    continue  # Re-registration cannot reset a reviewed attempt or spend/credit it twice.
-                delivery = self.delivery_commitment(aid, option_id[len(FULFILLMENT_PREFIX):], int(round_num))
-                targets_match = delivery is not None and self.delivery_targets_match(aid, delivery, d.get("targets"))
-                if delivery is not None and "commitment_target_ids" in option:
-                    # Parsed decisions carry names for display and IDs for binding.
-                    # A canonical display name may be shared, but it never replaces
-                    # the exact stored counterparty ID or legitimizes a guessed name.
-                    targets_match = (self._delivery_target_ids_match(aid, delivery, option["commitment_target_ids"])
-                                     and (targets_match or d.get("targets") == self.delivery_targets(aid, delivery)))
-                if (status != "ok" or delivery is None or actor.capacity_remaining < FULFILLMENT_ACTION_COST
-                        or not targets_match):
-                    delivery = None
-                    status = status if status != "ok" else "invalid"
-                else:
-                    target_names = self.delivery_targets(aid, delivery)
-                    targets = self.delivery_target_ids(aid, delivery)
-                option = {"id": option_id, "label": f"Deliver commitment [{option_id[len(FULFILLMENT_PREFIX):]}]: "
-                          + (_text(delivery.get("description"), 220) if delivery else "invalid delivery attempt"),
-                          "kind": "operational", "cost": FULFILLMENT_ACTION_COST if delivery else 0,
-                          "lag": 0, "reversibility": "reversible"}
-                kind = "operational"
             try:
                 cost = max(0, int(option.get("cost", 1) or 0))
             except (TypeError, ValueError):
@@ -1736,7 +2451,7 @@ class WorldModel:
                 lag = max(0, int(option.get("lag", 0) or 0))
             except (TypeError, ValueError):
                 lag = 0
-            actor.capacity_used = min(actor.capacity_per_round, actor.capacity_used + cost)
+            actor.capacity_used += cost
             description = _text(option.get("label"), 400) or option_id
             if target_names:
                 description += " → " + ", ".join(target_names[:4])
@@ -1748,17 +2463,13 @@ class WorldModel:
                 announced_terms = accepted.terms if accepted is not None else ""
             actor.last_action = {
                 "round": int(round_num), "option_id": option_id, "kind": kind,
+                "lag": lag, "effective_round": int(round_num) + lag,
                 "label": _text(option.get("label"), 400), "targets": target_names,
                 "magnitude": round(magnitude, 3), "status": status, "resolution": None,
                 "reversibility": _text(option.get("reversibility"), 24),
-                "statement": _text(d.get("public_statement"), 320), "terms": announced_terms,
+                "statement": _text(d.get("public_statement"), STATEMENT_STATE_MAX_CHARS), "terms": announced_terms,
             }
-            if delivery is not None:
-                actor.last_action.update(commitment_id=delivery["id"],
-                                         commitment_description=delivery.get("description"),
-                                         commitment_target_ids=self.delivery_target_ids(aid, delivery), resolution="pending")
-                delivery["last_fulfillment_attempt"] = {"round": int(round_num), "option_id": option_id,
-                                                       "outcome": "unverified"}
+            out.extend(self.register_deliveries(round_num, aid, deliveries))
             event_kind = "action"
             if option_id == "hold_position" or status != "ok":
                 description = (f"{actor.name} holds position" if status == "ok"
@@ -1772,9 +2483,6 @@ class WorldModel:
             if self.mechanics_policy("action_policy") and kind == "wait":
                 continue  # Waiting cannot smuggle a free pledge or relationship move.
             self._record_expectations(actor, round_num, d.get("expected_reactions"))
-            if delivery is not None:
-                # Selection is an attempt, not delivery or a fresh pledge/alliance.
-                continue
             if option_id.startswith(RESPONSE_PREFIXES):
                 # OFFERS: the recipient's answer settles the offer; nothing else in this decision
                 # can create an agreement (consent rule)
@@ -1887,6 +2595,76 @@ class WorldModel:
         return [it for it in self.interactions.values() if it.status == "accepted"
                 and {it.proposer, it.recipient} == {int(a), int(b)}]
 
+    def _agreement_deadline(self, round_num: int, terms: str, lag: int) -> Tuple[int, str, Optional[str]]:
+        """Resolve an unambiguous term against the simulated calendar, never today's date."""
+        from .world_model_seed import parse_dated_window
+
+        period = self.period or {}
+        bounds = _label_dates(period.get("label"))
+        clock = (_iso_date(period.get("period_end")) or (bounds[1] if bounds else None)
+                 or _iso_date(self.as_of_date))
+        fallback = (round_num + max(1, int(lag or 0)), "default", None)
+        text = unicodedata.normalize("NFKC", terms)
+        # The shared calendar parser bounds its input; split long clauses so a
+        # deadline after boilerplate remains discoverable, without evaluating prose.
+        clauses = re.split(r"[;。\n]|(?<=[.!?])\s+", text)
+        windows = [clause for clause in clauses if len(clause) <= 160]
+        for clause in clauses:
+            if len(clause) > 160:
+                windows.extend(clause[m.start():m.start() + 160] for m in re.finditer(
+                    r"\b(?:by|before|until|through|Q[1-4])\b|截至|截止", clause, re.IGNORECASE))
+        spans = {span for fragment in windows
+                 if (span := parse_dated_window(fragment, as_of=clock)) is not None}
+        deadline = None
+        if len(spans) == 1:
+            deadline = next(iter(spans))[1]
+        elif len(spans) > 1:
+            return fallback  # Multiple distinct obligations need an explicit contract.
+        else:
+            dates = set(_iter_dates_in_text(text, default_year=clock.year if clock else None))
+            if len(dates) == 1:
+                deadline = next(iter(dates))
+            elif len(dates) > 1:
+                return fallback
+        if deadline is not None:
+            if clock is None or not (bounds or period_days(period)):
+                return fallback
+            periods = self._periods_until(deadline)
+            return round_num + periods, "terms", deadline.isoformat()
+        words = {word: i for i, word in enumerate(
+            ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"))}
+        durations = []
+        for match in re.finditer(
+                r"\b(?:within|in|after|over|for)\s+(\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)"
+                r"\s+(days?|weeks?|months?|years?|periods?|rounds?)\b", text, re.IGNORECASE):
+            number, unit = match.groups()
+            durations.append((int(number) if number.isdigit() else words[number.lower()], unit.lower().rstrip("s")))
+        if re.search(r"\bnext\s+period\b|下(?:一)?期", text, re.IGNORECASE):
+            durations.append((1, "period"))
+        for match in re.finditer(r"(\d{1,4})\s*(天|周|个月|月|年|期)(?:之?内|后)", text):
+            number, unit = match.groups()
+            durations.append((int(number), {"天": "day", "周": "week", "个月": "month", "月": "month", "年": "year", "期": "period"}[unit]))
+        if len(set(durations)) != 1:
+            return fallback
+        amount, unit = durations[0]
+        if amount <= 0:
+            return fallback
+        if unit in ("period", "round"):
+            return round_num + amount, "terms", None
+        if clock is None or not (bounds or period_days(period)):
+            return fallback
+        try:
+            if unit in ("day", "week"):
+                deadline = clock + _dt.timedelta(days=amount * (7 if unit == "week" else 1))
+            else:
+                months = amount * (12 if unit == "year" else 1) + clock.year * 12 + clock.month - 1
+                year, month = divmod(months, 12)
+                deadline = date(year, month + 1, min(clock.day, calendar.monthrange(year, month + 1)[1]))
+        except (ValueError, OverflowError):
+            return fallback
+        periods = self._periods_until(deadline)
+        return round_num + periods, "terms", deadline.isoformat()
+
     def resolve_interaction(self, round_num: int, iid: str, verb: str, actor_id: int, *, statement: str = "",
                             terms: str = "", magnitude: float = 0.5, lag: int = 0,
                             operative_terms: Optional[Dict[str, Any]] = None,
@@ -1904,7 +2682,7 @@ class WorldModel:
             return [self._add_event(WorldEvent(round_num, "system", "Decision rejected: " + error,
                                                source="decision_admission", option_id=f"{verb}:{iid}"))]
         pname, rname = self.actor_name(inter.proposer), self.actor_name(inter.recipient)
-        inter.response = _text(statement, 200)
+        inter.response = _text(statement, STATEMENT_RESPONSE_MAX_CHARS)
         inter.resolved_round = int(round_num)
         label = str((self.period or {}).get("label") or "")
         events: List[WorldEvent] = []
@@ -1915,11 +2693,13 @@ class WorldModel:
             verb, accept_as_counter = "counter", True
         if verb == "accept":
             inter.status = "accepted"
-            due = None if inter.operative_terms is not None else int(round_num) + max(1, int(lag or 0))
+            due, due_basis, due_date = ((None, "terms", None) if inter.operative_terms is not None
+                                        else self._agreement_deadline(round_num, inter.terms, lag))
             for party, other in ((inter.proposer, inter.recipient), (inter.recipient, inter.proposer)):
                 row = self.actors[party].add_commitment(
                     f"Honour the agreement with {self.actor_name(other)}: {inter.terms}",
-                    made_round=round_num, due_round=due, source=f"agreement:{inter.id}")
+                    made_round=round_num, due_round=due, source=f"agreement:{inter.id}",
+                    due_basis=due_basis, due_date=due_date)
                 if inter.operative_terms is not None:
                     row["operative_terms"] = inter.operative_terms
                     row["operative_terms_hash"] = inter.operative_terms_hash
@@ -2188,26 +2968,40 @@ class WorldModel:
         return out
 
     def _periods_until(self, target_date) -> int:
-        """从当前期到 ``target_date`` 的期数（按 period 长度估算，日粒度兜底）。"""
-        period = self.period if isinstance(self.period, dict) else {}
-        pe = period.get("period_end") or period.get("label") or ""
-        ps = period.get("period_start") or pe
-        length_days = 1
-        try:
-            from ..utils.dates import parse_as_of as _pao
-            d1, d2 = _pao(ps), _pao(pe)
-            if d1 is not None and d2 is not None:
-                length_days = max(1, (d2.date() - d1.date()).days or 1)
-            if d2 is not None:
-                gap = (target_date - d2.date()).days
-                return max(1, math.ceil(max(0, gap) / length_days))
-        except Exception:  # noqa: BLE001 — 估算失败按 1 期/天兜底
-            pass
-        try:
-            gap = (target_date - _dt.date.today()).days
-            return max(1, math.ceil(max(0, gap) / 1))
-        except Exception:  # noqa: BLE001
+        """Estimate elapsed periods from persisted simulation dates only."""
+        period = self.period or {}
+        bounds = _label_dates(period.get("label"))
+        clock = _iso_date(period.get("period_end")) or (bounds[1] if bounds else None)
+        if clock is None:
             return 1
+        for r, label in sorted(self.period_labels.items()):
+            span = _label_dates(label)
+            if r > self.round and span and span[0] <= target_date <= span[1]:
+                return r - self.round
+        label = str(period.get("label") or "")
+        months = (target_date.year - clock.year) * 12 + target_date.month - clock.month
+        if re.fullmatch(r"\d{4}-\d{2}", label):
+            return max(1, months)
+        if re.fullmatch(r"\d{4}-\d{2}-H[12]", label):
+            return max(1, 2 * months + int(target_date.day > 15) - int(clock.day > 15))
+        if re.fullmatch(r"\d{4}-Q[1-4]", label):
+            return max(1, (target_date.year - clock.year) * 4
+                       + (target_date.month - 1) // 3 - (clock.month - 1) // 3)
+        if re.fullmatch(r"\d{4}", label):
+            return max(1, target_date.year - clock.year)
+        length = period_days(period) or ((bounds[1] - bounds[0]).days + 1 if bounds else None)
+        if length is None:
+            return 1
+        return max(1, math.ceil(max(0, (target_date - clock).days) / length))
+
+    def action_effect_due(self, caused_by: Any, round_num: int) -> int:
+        """Earliest direct implementation date of the admitted current action."""
+        actor = self.actors.get(self.resolve_actor(caused_by))
+        action = actor.last_action if actor is not None else None
+        if not action or action.get("round") != round_num or action.get("status") != "ok":
+            return round_num
+        due = action.get("effective_round")
+        return max(round_num, due) if type(due) is int else round_num
 
     def apply_arbiter_update(self, round_num: int, update: Dict[str, Any]) -> Dict[str, Any]:
         """Apply a *validated* arbiter update (see ``world_update.validate_arbiter_update``).
@@ -2228,15 +3022,16 @@ class WorldModel:
             if not isinstance(ch, dict):
                 continue
             var = self.variables.get(str(ch.get("variable_id") or ""))
-            if var is None:
+            if var is None or self.is_derived_variable(var):
                 continue
             rationale = _text(ch.get("rationale"), 200) or "arbiter"
             # 未来日期门槛：理由明示判定日晚于本期 → 不当轮生效，按时间线转 pending。
             pe = str((self.period or {}).get("period_end") or label or "")
             future_dt = _earliest_future_date(rationale, pe) if pe else None
-            if future_dt is not None:
+            action_due = self.action_effect_due(ch.get("caused_by"), round_num)
+            if future_dt is not None or action_due > round_num:
                 value = ch.get("new_value") if ch.get("new_value") is not None else ch.get("delta")
-                due = round_num + self._periods_until(future_dt)
+                due = max(action_due, round_num + self._periods_until(future_dt) if future_dt else round_num)
                 self.pending_effects.append(PendingEffect(
                     self._next_effect_id(round_num), due_round=due, description=rationale,
                     variable_id=var.id,
@@ -2244,7 +3039,7 @@ class WorldModel:
                     value=value, probability=1.0, source="arbiter", created_round=round_num))
                 summary["deferred_changes"].append(
                     {"id": var.id, "name": var.name, "value": value,
-                     "cites_date": future_dt.isoformat(), "due_round": due})
+                     "cites_date": future_dt.isoformat() if future_dt else None, "due_round": due})
                 continue
             before = var.value
             if ch.get("new_value") is not None:
@@ -2275,7 +3070,7 @@ class WorldModel:
             if not isinstance(nv, dict) or not nv.get("name"):
                 continue
             vid = slugify(nv.get("id") or nv.get("name"))
-            if vid in self.variables:
+            if vid in self.variables or self.is_derived_variable(vid):
                 continue
             self.add_variable(nv["name"], nv.get("value"), unit=nv.get("unit") or "",
                               kind=nv.get("kind") or "numeric", as_of=str((self.period or {}).get("period_end") or ""),
@@ -2324,7 +3119,10 @@ class WorldModel:
             fx_future = _earliest_future_date(fx.get("description"), fx_pe) if fx_pe else None
             if fx_future is not None:
                 due = max(due, round_num + self._periods_until(fx_future))
+            due = max(due, self.action_effect_due(fx.get("caused_by"), round_num))
             vid = fx.get("variable_id")
+            if vid is not None and self.is_derived_variable(vid):
+                continue
             if vid is not None and str(vid) not in self.variables:
                 vid = None
             op = "add" if fx.get("delta") is not None and fx.get("new_value") is None else "set"
@@ -2343,45 +3141,55 @@ class WorldModel:
         resolutions = update.get("action_resolutions") or []
         if not isinstance(resolutions, list) or len(resolutions) > MAX_ACTION_RESOLUTIONS:
             resolutions = []
-        counts: Dict[int, int] = {}
+        counts: Dict[tuple, int] = {}
         for res in resolutions:
             if isinstance(res, dict):
-                _, implicated = self.resolution_actor(res)
-                for aid in implicated:
-                    counts[aid] = counts.get(aid, 0) + 1
+                _, implicated = self.resolution_key(res)
+                for key in implicated:
+                    counts[key] = counts.get(key, 0) + 1
         for res in resolutions:
             if not isinstance(res, dict):
                 continue
-            aid, _ = self.resolution_actor(res)
-            if aid is None or counts.get(aid) != 1:
+            key, _ = self.resolution_key(res)
+            if key is None or counts.get(key) != 1:
                 continue
+            aid, cid = key
             actor = self.actors[aid]
             outcome = _text(res.get("outcome"), 16).casefold() or "pending"
             rationale = _text(res.get("rationale"), 200)
             delivery = None
-            is_delivery = bool(actor.last_action and str(actor.last_action.get("option_id", "")).startswith(FULFILLMENT_PREFIX))
-            if is_delivery or res.get("commitment_id") is not None:
-                delivery = self.delivery_resolution_target(aid, res.get("commitment_id"), round_num, res.get("action_round"))
+            action = actor.last_action or {}
+            is_legacy_delivery = str(action.get("option_id", "")).startswith(FULFILLMENT_PREFIX)
+            if is_legacy_delivery or cid is not None:
+                delivery = self.delivery_resolution_target(aid, cid, round_num, res.get("action_round"))
                 if (delivery is None or not isinstance(res.get("rationale"), str) or not rationale
                         or not isinstance(res.get("outcome"), str) or not res["outcome"].strip()
                         or outcome not in ("success", "partial", "blocked", "pending", "failed")):
                     continue  # A rejected attestation cannot earn generic reputation credit.
                 evidence = {"round": int(round_num), "agent_id": aid, "commitment_id": delivery["id"],
-                            "option_id": actor.last_action["option_id"], "outcome": outcome, "rationale": rationale}
-                actor.last_action["commitment_reviewed"] = True
+                            "option_id": FULFILLMENT_PREFIX + delivery["id"], "outcome": outcome, "rationale": rationale,
+                            "commitment_target_ids": self.delivery_target_ids(aid, delivery)}
                 delivery["last_fulfillment_attempt"] = dict(evidence)
                 if outcome == "success":
                     delivery.update(status="fulfilled", fulfilled_round=int(round_num), fulfillment_evidence=dict(evidence))
                     self._add_event(WorldEvent(round_num, "resolution",
                         f"{actor.name} fulfilled commitment [{delivery['id']}]: {delivery.get('description')}",
                         actors=[actor.name], targets=self.delivery_targets(aid, delivery), source="commitment",
-                        option_id=actor.last_action["option_id"], period_label=label))
+                        option_id=evidence["option_id"], period_label=label))
                     summary["commitments_fulfilled"] += 1
                     summary["events"] += 1
-            if actor.last_action and actor.last_action.get("round") == round_num:
-                actor.last_action["resolution"] = outcome
-                actor.last_action["resolution_rationale"] = _text(res.get("rationale"), 200)
-            if outcome in RESOLUTION_COUNTED:
+            elif (action.get("round") != round_num or action.get("status") != "ok"
+                  or action.get("resolution") not in (None, "pending")
+                  or action.get("action_reviewed")
+                  or outcome not in (*RESOLUTION_COUNTED, "pending")):
+                continue
+            legacy_match = (delivery is not None and is_legacy_delivery
+                            and action.get("round") == round_num and action.get("commitment_id") == cid)
+            if delivery is None or legacy_match:
+                action["resolution"] = outcome
+                action["resolution_rationale"] = rationale
+                action["commitment_reviewed" if legacy_match else "action_reviewed"] = True
+            if outcome in RESOLUTION_COUNTED and (delivery is None or legacy_match):
                 actor.outcomes[outcome] = int(actor.outcomes.get(outcome, 0)) + 1
             if outcome in ("success", "fulfilled"):
                 actor.reputation = _clamp(actor.reputation + 0.02, 0.0, 1.0)
@@ -2408,7 +3216,8 @@ class WorldModel:
             happened = roll < fx.probability
             desc = fx.description if happened else f"Did not materialise: {fx.description}"
             var_ids: List[str] = []
-            if happened and fx.variable_id and fx.variable_id in self.variables:
+            if (happened and fx.variable_id and fx.variable_id in self.variables
+                    and not self.is_derived_variable(fx.variable_id)):
                 var = self.variables[fx.variable_id]
                 if fx.op == "set":
                     target = fx.value
@@ -2452,6 +3261,8 @@ class WorldModel:
         base: Dict[str, Any] = {}
         fired: List[Dict[str, Any]] = []
         for shock in self.shocks:
+            if shock.trigger is not None and self._anchor_predicate(shock.trigger) is not True:
+                continue
             if shock.fired_rounds and not shock.recurring:
                 continue
             active = shock.active_days(self.period)
@@ -2470,7 +3281,7 @@ class WorldModel:
             to_size: List[str] = []
             for fx in shock.effects:
                 var = self.variables.get(str(fx.get("variable_id") or ""))
-                if var is None:
+                if var is None or self.is_derived_variable(var):
                     continue
                 if fx.get("op") not in ("set", "add", "mul"):
                     if fx.get("direction") in ("up", "down"):
@@ -2492,12 +3303,13 @@ class WorldModel:
         return fired
 
     def lapse_overdue_commitments(self, round_num: int) -> List[Dict[str, Any]]:
-        """Commitments due before this round that were never resolved lapse (visible)."""
+        """Expire after one full grace period; decide simultaneous breaches as a batch."""
         lapsed: List[Dict[str, Any]] = []
+        breaches: Dict[str, List[Tuple[ActorState, Dict[str, Any]]]] = {}
         for actor in list(self.actors.values()):
             for c in actor.commitments:
-                if (c.get("status") in ("pending", "due") and self.commitment_timing(c, round_num)[1]
-                        and ("operative_terms" in c or c.get("status") == "due")):
+                overdue = self.commitment_timing(c, round_num)[1]
+                if c.get("status") in ("pending", "due") and overdue:
                     c["status"] = "lapsed"
                     lapsed.append({"actor": actor.name, **c})
                     self._add_event(WorldEvent(round_num, "consequence",
@@ -2508,8 +3320,13 @@ class WorldModel:
                         # OFFERS: an obligation under an agreement that lapses is a breach
                         inter = self.interactions.get(source.split(":", 1)[1])
                         if inter is not None and inter.status == "accepted":
-                            self._breach(round_num, inter, actor.agent_id,
-                                         cause=f"its obligation lapsed: {c.get('description')}")
+                            breaches.setdefault(inter.id, []).append((actor, c))
+        # Every default is already marked lapsed. _breach only releases still
+        # open duties, so neither simultaneously defaulting party is released.
+        for iid in sorted(breaches):
+            for actor, c in sorted(breaches[iid], key=lambda pair: pair[0].agent_id):
+                self._breach(round_num, self.interactions[iid], actor.agent_id,
+                             cause=f"its obligation lapsed: {c.get('description')}")
         return lapsed
 
     def commit_round(self, round_num: int) -> None:
@@ -2619,12 +3436,13 @@ class WorldModel:
                 if periods >= TREND_MIN_PERIODS:
                     notes.append(f"{direction} {periods} periods running")
                 lines.append(f"- {v.name}: {format_value(v.value, v.unit)}" + (f" ({'; '.join(notes)})" if notes else ""))
-        moves = self.events_in_round(r, ("action",)) if r > 0 else []
+        moves = [e for e in self.events_in_round(r, ("action", "system"))
+                 if e.kind == "action" or e.source == "admission"] if r > 0 else []
         if moves:
             lines.append("## Moves last period")
             for e in moves[:10]:
                 who = e.actors[0] if e.actors else "An actor"
-                stmt = f' — "{_text(e.statement, 160)}"' if e.statement else ""
+                stmt = f' — "{_text(e.statement, STATEMENT_PUBLIC_BRIEF_MAX_CHARS)}"' if e.statement else ""
                 lines.append(f"- {who}: {e.description}{stmt}")
         consequences = (self.events_in_round(r, ("scheduled", "consequence", "emergent", "resolution", "red_line"))
                         if r > 0 else [])
@@ -2681,9 +3499,16 @@ class WorldModel:
         if actor is None:
             return ""
         r = int(upto_round if upto_round is not None else self.committed_round)
-        lines = [f"# YOUR SITUATION — {actor.name}",
+        lines = []
+        if actor.red_lines:
+            # Put a bounded first red line before even the heading so small
+            # actor budgets cannot silently drop the constraint altogether.
+            prefix = "- Your red lines: "
+            room = max(0, max_chars - len(prefix) - 1)
+            lines.append(prefix + "; ".join(actor.red_lines)[:room])
+        lines.extend([f"# YOUR SITUATION — {actor.name}",
                  f"- Capacity this period: {actor.capacity_remaining}/{actor.capacity_per_round} action units",
-                 f"- Your simulated credibility (0–1): {actor.reputation:.2f}"]
+                 f"- Your simulated credibility (0–1): {actor.reputation:.2f}"])
         # Outcome evidence precedes expandable promises, so it survives the
         # normal private-brief budget even when the actor has many open duties.
         outcomes = [e for e in self.events_in_round(r, ("resolution", "consequence", "breach"))
@@ -2749,8 +3574,6 @@ class WorldModel:
             lines.append("- Rivals / opponents: " + ", ".join(sorted(set(rivals))[:8]))
         if changed:
             lines.append("- Relationships that moved last period: " + ", ".join(changed[:6]))
-        if actor.red_lines:
-            lines.append("- Your red lines: " + "; ".join(actor.red_lines[:3]))
         return _bound_lines(lines, max_chars)
 
     # -- persistence ---------------------------------------------------------------
@@ -2776,23 +3599,53 @@ class WorldModel:
             "interactions": [it.to_dict() for it in self.interactions.values()],
             "interaction_seq": self._interaction_seq,
             "seed_gaps": list(self.seed_gaps),
+            **({
+                "target_projection": copy.deepcopy(self._target_projection),
+                "target_projection_status": self.target_projection_status,
+                "target_projection_reason": self.target_projection_reason,
+                "target_projection_state": {
+                    "values": copy.deepcopy(self._target_values),
+                    "parameters": copy.deepcopy(self._target_parameters),
+                    "evaluated_round": self._target_evaluated_round,
+                },
+            } if self._target_projection is not None or self.target_projection_reason != "not_configured" else {}),
             # EXOGENOUS SHOCKS: only when the seed documented some (a world without shocks serialises
             # exactly as before)
             **({"shocks": [s.to_dict() for s in self.shocks]} if self.shocks else {}),
+            **({"world_anchor": copy.deepcopy(self._anchor_runtime["pin"]),
+                "anchor_runtime": copy.deepcopy(self._anchor_runtime),
+                "anchor_fired_events": list(self._anchor_fired_events),
+                "anchor_signposts": copy.deepcopy(self.anchor_signposts)} if self._anchor_runtime is not None else {}),
         }
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "WorldModel":
+    def from_dict(cls, d: Dict[str, Any], *, anchor_context: Any = None) -> "WorldModel":
         if not isinstance(d, dict):
             raise ValueError("world model state must be an object")
         world = cls(question=d.get("question") or "", as_of_date=d.get("as_of_date"),
                     horizon_date=d.get("horizon_date"), scenarios=d.get("scenarios") or (),
                     settings=d.get("settings") if isinstance(d.get("settings"), dict) else None)
+        if "world_anchor" in d or anchor_context is not None:
+            world._bind_anchor_runtime(d, anchor_context)
+            world._validate_anchor_restore(d)
+            world._anchor_fired_events = list(d.get("anchor_fired_events") or [])
+            world.anchor_signposts = copy.deepcopy(d.get("anchor_signposts") or [])
+        world._target_projection = copy.deepcopy(d.get("target_projection")) if isinstance(d.get("target_projection"), dict) else None
+        world.target_projection_status = "ready" if d.get("target_projection_status") == "ready" and world._target_projection else "unavailable"
+        world.target_projection_reason = _text(d.get("target_projection_reason"), 120) or (
+            "typed_identity_pending_kernel_propagation" if world._target_projection else "not_configured")
+        state = d.get("target_projection_state")
+        if isinstance(state, dict):
+            world._target_values = copy.deepcopy(state.get("values")) if isinstance(state.get("values"), dict) else {}
+            world._target_parameters = copy.deepcopy(state.get("parameters")) if isinstance(state.get("parameters"), dict) else None
+            world._target_evaluated_round = state.get("evaluated_round") if type(state.get("evaluated_round")) is int else None
+        if world._target_parameters is None or world._target_evaluated_round is None:
+            world.target_projection_status = "unavailable"
         for row in d.get("actors") or []:
             if isinstance(row, dict):
                 world.add_actor(ActorState.from_dict(row, allow_zero_capacity=world.mechanics_policy("action_policy")))
         for row in d.get("variables") or []:
-            if isinstance(row, dict):
+            if isinstance(row, dict) and not world._is_private_target_variable(row.get("id") or row.get("name")):
                 var = StateVariable.from_dict(row)
                 world.variables[var.id] = var
         for row in d.get("relationships") or []:
@@ -2817,7 +3670,7 @@ class WorldModel:
                         or actor.agent_id not in (inter.proposer, inter.recipient)
                         or commitment.get("operative_terms") != inter.operative_terms
                         or commitment.get("operative_terms_hash") != inter.operative_terms_hash
-                        or commitment.get("due_round") is not None):
+                        or "due_round" not in commitment or commitment["due_round"] is not None):
                     raise ValueError("operative_terms commitment checkpoint binding mismatch")
         world.seed_gaps = [g for g in (d.get("seed_gaps") or []) if isinstance(g, dict)][:32]
         world.shocks = [Shock.from_dict(s) for s in (d.get("shocks") or []) if isinstance(s, dict)][:8]

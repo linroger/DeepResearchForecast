@@ -1,0 +1,13 @@
+{
+  "schema_version": "replay-source-freeze/v1",
+  "source_sha256": {
+    "backend/scripts/replay_saved_world.py": "d29c4b0c244fe4bc15cc87b604a49e69ce8b391a30671da2a5123e1739438947",
+    "backend/tests/test_saved_world_replay.py": "1d474ccbe029e1924ad4b5e17d3dac56b7a5b07e474b3ad2efe70d088611ade5",
+    "backend/scripts/main_offline_pytest.py": "5046cf820fa468d8e8ffb2e3fdade1d20fca2f0bd56ee15eabdff51c223c02be",
+    "backend/app/services/world_model.py": "805c5f67e26176de9ac722145aa4662627b8c9d58a8d522fa6c1a3997752067a",
+    "backend/app/services/world_update.py": "507ba97936dc306f3f7e009235811e08c1a3969066d49fd769bb85526e2832f6",
+    "backend/app/services/world_model_seed.py": "30832cbf1f70afe49d74c225dbce3f25f0f77c531c51b0d15bd4425cff64d606",
+    "backend/app/services/agent_decision.py": "17a458fa6acadd5d4646b5d256e33f51f41826f54879676412fc74ee3722a244",
+    "backend/app/services/world_text_budgets.py": "ec10ca3ecb7c7a500828accb47ec2a5a188b0278a3bfacca7e6f274e299e2891"
+  }
+}

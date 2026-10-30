@@ -543,6 +543,8 @@ def test_quantitative_repair_cites_true_official_claims(env, monkeypatch):
     """RPT-1 / RPT-16: uncited true values gain the stored series' marker, including a
     dataset no research source cited; a contradicted value never gains one."""
     bundle = _bundle()
+    # Preserve the historical destructive repair as an explicit fail-mode rollback.
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MODE", "fail", raising=False)
     _handoff, carrier = _carrier(env, bundle["series"])
     monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", 0.99, raising=False)
     agent, _model = _agent(monkeypatch, "English", bundle["sources"], carrier)
@@ -823,8 +825,11 @@ def test_forecast_json_keeps_the_official_data_track_record_separate(env, monkey
                     "scoring": "binary Brier vs official observation"}  # (0.7-1)^2=0.09, (0.4-0)^2=0.16
 
     tracked = finalize("report_track_data")
-    assert tracked["historical_calibration"] == {"n_resolved": 0, "mean_brier": None, "calibration_error": None,
-                                                 "official_data_track_record": track_record}
+    history = tracked["historical_calibration"]
+    assert history == {"n_resolved": 0, "mean_brier": None, "calibration_error": None,
+                       "official_data_track_record": track_record,
+                       "source": "published_forecasts.jsonl", "source_digest": history["source_digest"]}
+    assert len(history["source_digest"]) == 64
     assert "confidence_rationale" not in tracked  # no scenario has resolved: no calibration note
     assert {key: value for key, value in tracked.items() if key != "historical_calibration"} == untracked
 
@@ -837,12 +842,14 @@ def test_forecast_json_keeps_the_official_data_track_record_separate(env, monkey
     entries[0].update(resolved=True, outcome=untracked["scenarios"][1]["name"])
     (ledger / "ledger.jsonl").write_text("".join(json.dumps(entry, ensure_ascii=False) + "\n" for entry in entries),
                                          encoding="utf-8")
+    # Part2: a historical legacy resolution no longer enters production calibration.
     scenario = forecast_ledger.calibration_summary()
-    assert scenario["n_resolved"] == 1 and scenario["mean_brier"] is not None
+    assert scenario["n_resolved"] == 0 and scenario["mean_brier"] is None
+    legacy = forecast_ledger.calibration_summary(entries=entries)
+    assert legacy["n_resolved"] == 1 and legacy["mean_brier"] is not None
     both = finalize("report_track_both")
     assert both["historical_calibration"] == {**scenario, "official_data_track_record": track_record}
-    assert f"平均 Brier {scenario['mean_brier']}" in both["confidence_rationale"]
-    assert "0.125" not in both["confidence_rationale"]
+    assert "confidence_rationale" not in both
 
 
 @pytest.mark.parametrize("language", ["English", "Chinese"])

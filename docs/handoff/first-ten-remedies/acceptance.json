@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "first-ten-reconciliation-acceptance/v1",
+  "status": "verified_offline",
+  "scope": "implementation and controlled offline verification",
+  "checks": [
+    {
+      "id": "HTTP-REUSE",
+      "description": "Receipt-aware resume, continuation, seed fork and interrupted-fork recovery",
+      "testModule": "backend/tests/test_target_reuse_preflight.py",
+      "focusedPasses": true,
+      "combinedPasses": true
+    },
+    {
+      "id": "PRIOR-LEDGER",
+      "description": "Critique and publication preserve justified prior/posterior updates",
+      "testModule": "backend/tests/test_first_ten_prior_updates.py",
+      "focusedPasses": true,
+      "combinedPasses": true
+    },
+    {
+      "id": "PRIOR-PUBLISH",
+      "description": "Final audit rejects stale update ledgers in grade mode",
+      "testModule": "backend/tests/test_first_ten_prior_publication.py",
+      "focusedPasses": true,
+      "combinedPasses": true
+    },
+    {
+      "id": "ESTIMATOR-TABLE",
+      "description": "Frozen lanes reach both deterministic report diagnostics",
+      "testModule": "backend/tests/test_first_ten_estimator_table.py",
+      "focusedPasses": true,
+      "combinedPasses": true
+    },
+    {
+      "id": "MARKET-EXACT",
+      "description": "Native retained settlement terms reach exact anchor and score; mismatches have no market authority",
+      "testModule": "backend/tests/test_first_ten_market_equivalence.py",
+      "focusedPasses": true,
+      "combinedPasses": true
+    },
+    {
+      "id": "MARKET-HEALTH",
+      "description": "Actual collector states preserve disabled, empty, offline, stale and attempt times",
+      "testModule": "backend/tests/test_first_ten_market_health.py",
+      "focusedPasses": true,
+      "combinedPasses": true
+    },
+    {
+      "id": "MARKET-PROBE",
+      "description": "Probe uses the production collector transport through a scripted urllib leaf",
+      "testModule": "backend/tests/test_first_ten_collector_probe.py",
+      "focusedPasses": true,
+      "combinedPasses": true
+    },
+    {
+      "id": "MODEL-ADMISSION",
+      "description": "Known dimensions/identities and settlement target binding are enforced",
+      "testModule": "backend/tests/test_first_ten_model_admission.py",
+      "focusedPasses": true,
+      "combinedPasses": true
+    },
+    {
+      "id": "MODEL-CONSUMER",
+      "description": "Actual publication consumes validated models, honest receipts and zero-call budgets",
+      "testModule": "backend/tests/test_first_ten_model_consumers.py",
+      "focusedPasses": true,
+      "combinedPasses": true
+    },
+    {
+      "id": "EVAL-ACCOUNTING",
+      "description": "Both terminal failure orderings preserve exact costs, denominator and replay",
+      "testModule": "backend/tests/test_world_evaluation.py",
+      "focusedPasses": true,
+      "combinedPasses": true
+    }
+  ],
+  "empiricalFollowup": "https://github.com/linroger/DeepResearchForecast/issues/10",
+  "evidence": "verification.json"
+}

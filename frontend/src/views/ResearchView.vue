@@ -91,6 +91,16 @@
               </div>
             </div>
             <div class="param">
+              <label for="forecast-authority">{{ L('预测模式','Forecast mode') }}</label>
+              <select id="forecast-authority" v-model="forecastAuthority" class="adv-select" :disabled="starting" aria-describedby="forecast-authority-hint">
+                <option value="">{{ L('现有预测流程','Existing forecast workflow') }}</option>
+                <option value="target-first-v1">{{ L('目标优先 v1（实验性）','Target-first v1 (experimental)') }}</option>
+              </select>
+              <p id="forecast-authority-hint" class="param-hint" v-if="forecastAuthority === 'target-first-v1'">
+                {{ L('研究评估决定预测数字；机制路径仅供诊断，预测权重为 0。','Research assessments determine forecast numbers; mechanism paths are diagnostics with forecast weight 0.') }}
+              </p>
+            </div>
+            <div v-if="forecastAuthority !== 'target-first-v1'" class="param">
               <label for="simulation-engine">{{ L('模拟引擎','Simulation engine') }}</label>
               <select id="simulation-engine" v-model="simulationEngine" class="adv-select" :disabled="starting" aria-describedby="simulation-engine-hint">
                 <option value="">{{ L('服务器默认','Server default') }}</option>
@@ -106,6 +116,12 @@
                 {{ L('检查确认的引擎：','Engine confirmed by preflight:') }} {{ simulationEngineLabel(effectiveSimulationEngine) }}
               </p>
             </div>
+            <template v-if="forecastAuthority === 'target-first-v1'">
+              <div class="param"><label for="target-paths">{{ L('路径数','Paths') }}</label><input id="target-paths" v-model.number="targetPaths" type="number" min="1" max="256" step="1" class="num-input" :disabled="starting" /></div>
+              <div class="param"><label for="target-periods">{{ L('时期数','Periods') }}</label><input id="target-periods" v-model.number="targetPeriods" type="number" min="1" max="120" step="1" class="num-input" :disabled="starting" /></div>
+              <div class="param"><label for="target-seed">{{ L('随机种子','Seed') }}</label><input id="target-seed" v-model.number="targetSeed" type="number" min="0" max="2147483647" step="1" class="num-input" :disabled="starting" /></div>
+              <p v-if="!targetSettingsValid" class="err">{{ L('路径和时期必须为范围内的正整数；种子必须为非负整数。','Paths and periods must be positive integers within the limits; seed must be a nonnegative integer.') }}</p>
+            </template>
             <div class="param" v-if="showRoundCap">
               <label for="max-rounds">{{ L('回合上限（日历模式下将粗化时间粒度，不截断预测期）','Round cap (calendar mode coarsens time granularity, never truncates the horizon)') }}</label>
               <input id="max-rounds" v-model.number="maxRounds" type="number" min="1" :placeholder="L('留空=按时长自动','blank = auto')" class="num-input" :disabled="starting"/>
@@ -242,7 +258,8 @@
                 </div>
               </div>
               <div v-show="activeTab==='sim'" class="simulation-pane">
-                <SimulationView :simulation-id="simulationId" :stage-status="stages.run?.status || ''" :open-record-request="openRecordRequest" @record-state="onSimRecordState" />
+                <TargetSimulationView v-if="isTargetForecast" :pipeline-id="pipelineId" :simulation-id="simulationId" :stage-status="stages.run?.status || ''" />
+                <SimulationView v-else :simulation-id="simulationId" :stage-status="stages.run?.status || ''" :open-record-request="openRecordRequest" @record-state="onSimRecordState" />
               </div>
               <ForecastReport v-show="activeTab==='report'" :report-id="reportId" @open-simulation-record="openSimulationRecord" />
             </div>
@@ -256,7 +273,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
 import { runPipeline, cancelPipeline, resumePipeline, getPipelineStatus, getProgressLog, getDossier, continuePipeline, getPreflight } from '../api/research'
 import { getGraphData } from '../api/graph'
 import { locale, setLocale, L } from '../i18n'
@@ -276,6 +293,8 @@ import SettingsMenu from '../components/research/SettingsMenu.vue'
 import ConfirmDialog from '../components/research/ConfirmDialog.vue'
 import GraphPanel from '../components/GraphPanel.vue'
 
+const TargetSimulationView = defineAsyncComponent(() => import('../components/research/TargetSimulationView.vue'))
+
 const ACTIVE_PIPELINE_KEY = 'drf_active_pipeline'
 // One-time migration: earlier builds persisted under the old MiroFish key.
 const LEGACY_PIPELINE_KEY = 'mirofish_active_pipeline'
@@ -290,6 +309,16 @@ function depthLabel(d) {
 }
 const maxRounds = ref(null)
 const simulationEngine = ref('') // Empty means the server resolves and pins its fresh default.
+const forecastAuthority = ref('')
+const targetPaths = ref(32)
+const targetPeriods = ref(12)
+const targetSeed = ref(0)
+const runForecastAuthority = ref('')
+const isTargetForecast = computed(() => runForecastAuthority.value === 'target-first-v1')
+const targetSettingsValid = computed(() =>
+  Number.isInteger(targetPaths.value) && targetPaths.value >= 1 && targetPaths.value <= 256 &&
+  Number.isInteger(targetPeriods.value) && targetPeriods.value >= 1 && targetPeriods.value <= 120 &&
+  Number.isInteger(targetSeed.value) && targetSeed.value >= 0 && targetSeed.value <= 2147483647)
 const starting = ref(false)
 const error = ref('')
 const showSettings = ref(false)
@@ -313,7 +342,7 @@ const preflightChecked = ref(false)
 const preflightLoading = ref(false)
 const preflightFailed = ref(false)
 const effectiveSimulationEngine = ref('')
-const showRoundCap = computed(() => mode.value === 'full' && effectiveSimulationEngine.value === 'oasis-legacy')
+const showRoundCap = computed(() => forecastAuthority.value !== 'target-first-v1' && mode.value === 'full' && effectiveSimulationEngine.value === 'oasis-legacy')
 let preflightRequestId = 0
 
 function simulationEngineLabel(engine) {
@@ -339,7 +368,8 @@ async function checkPreflight() {
   const requestedMode = mode.value
   const options = {}
   if (researchModel.value) options.model = researchModel.value
-  if (simulationEngine.value) options.simulation_engine = simulationEngine.value
+  if (forecastAuthority.value === 'target-first-v1') options.simulation_engine = 'target-first-v1'
+  else if (simulationEngine.value) options.simulation_engine = simulationEngine.value
   preflightLoading.value = true
   try {
     const res = await getPreflight(requestedMode, options)
@@ -347,12 +377,13 @@ async function checkPreflight() {
     const data = res?.data
     // Missing/mismatched admission metadata is unknown, never an inferred legacy default.
     if (res?.success !== true || data?.mode !== requestedMode || typeof data.ready !== 'boolean' ||
-        !['world-v1', 'oasis-legacy'].includes(data.simulation_engine) ||
+        !['world-v1', 'oasis-legacy', 'target-first-v1'].includes(data.simulation_engine) ||
+        (forecastAuthority.value !== 'target-first-v1' && data.simulation_engine === 'target-first-v1') ||
         (options.simulation_engine && data.simulation_engine !== options.simulation_engine) ||
         !Array.isArray(data.errors) || data.errors.some(item => typeof item !== 'string')) {
       throw new Error('Invalid preflight response')
     }
-    effectiveSimulationEngine.value = data.simulation_engine
+    effectiveSimulationEngine.value = data.simulation_engine === 'target-first-v1' ? '' : data.simulation_engine
     preflightErrors.value = data.errors
     preflightReady.value = data.ready && data.errors.length === 0
   } catch {
@@ -494,6 +525,7 @@ function stageLabel(name) {
 // Only the latest completed readiness check can authorize a fresh launch.
 const canStart = computed(() =>
   !pipelineId.value && prompt.value.trim().length > 0 &&
+  (forecastAuthority.value !== 'target-first-v1' || targetSettingsValid.value) &&
   preflightChecked.value && !preflightLoading.value && preflightReady.value
 )
 const statusTitle = computed(() => {
@@ -510,7 +542,7 @@ const tabs = computed(() => {
     { key: 'log', label: L('实时日志', 'Live log'), enabled: true },
     { key: 'dossier', label: L('研究档案', 'Dossier'), enabled: !!researchDone, badge: actorCount || '' },
     { key: 'graph', label: L('知识图谱', 'Graph'), enabled: !!graphId.value },
-    { key: 'sim', label: L('情景模拟', 'Scenario simulation'), enabled: !!simulationId.value, badge: simRecordReady.value ? L('记录就绪', 'record ready') : '' },
+    { key: 'sim', label: L('情景模拟', 'Scenario simulation'), enabled: !!simulationId.value, badge: !isTargetForecast.value && simRecordReady.value ? L('记录就绪', 'record ready') : '' },
     { key: 'report', label: L('预测报告', 'Forecast'), enabled: !!reportId.value }
   ]
 })
@@ -548,7 +580,9 @@ async function start() {
       mode: mode.value,
       depth: depth.value,
       ...(showRoundCap.value && maxRounds.value ? { max_rounds: maxRounds.value } : {}),
-      ...(simulationEngine.value ? { simulation_engine: simulationEngine.value } : {}),
+      ...(forecastAuthority.value === 'target-first-v1'
+        ? { forecast_authority: 'target-first-v1', target_simulation: { paths: targetPaths.value, periods: targetPeriods.value, seed: targetSeed.value } }
+        : simulationEngine.value ? { simulation_engine: simulationEngine.value } : {}),
       language: researchLanguage.value || undefined,  // T5.5
       model: researchModel.value || undefined          // T5.5
     })
@@ -766,6 +800,7 @@ async function poll(generation) {
     pollFailures = 0
     if (connErrorShown) { error.value = ''; connErrorShown = false }
     const d = st.data
+    runForecastAuthority.value = d.options?.forecast_authority || ''
     status.value = d.status
     globalProgress.value = d.global_progress || 0
     currentStage.value = d.current_stage || ''
@@ -852,13 +887,17 @@ async function fetchGraph(force = false) {
   if (!graphId.value) return
   if (graphData.value && !force) return
   graphLoading.value = true
+  const requestedGraph = graphId.value
+  const requestedPipeline = pipelineId.value
   try {
-    const res = await getGraphData(graphId.value)
+    const res = await getGraphData(requestedGraph)
+    if (requestedGraph !== graphId.value || requestedPipeline !== pipelineId.value) return
     graphData.value = res.data || { nodes: [], edges: [] }
   } catch (e) {
+    if (requestedGraph !== graphId.value || requestedPipeline !== pipelineId.value) return
     error.value = L('图谱加载失败：', 'Graph load failed: ') + (e?.message || '')
   } finally {
-    graphLoading.value = false
+    if (requestedGraph === graphId.value && requestedPipeline === pipelineId.value) graphLoading.value = false
   }
 }
 
@@ -908,6 +947,7 @@ function resetState() {
   stopPolling()
   status.value = 'running'; globalProgress.value = 0; currentStage.value = ''
   stages.value = {}; graphId.value = ''; simulationId.value = ''; reportId.value = ''
+  runForecastAuthority.value = ''
   runPrompt.value = ''; logLines.value = []; logSourceCount.value = 0
   liveVitals.value = null; runTiming.value = { createdAt: '', updatedAt: '', resumedAt: '' }
   logHistoryHydrated.value = false; logHistoryFinalized.value = false
@@ -947,7 +987,7 @@ onMounted(() => {
 })
 // Synchronous invalidation gives each A→B→A change its own request identity,
 // even in one tick. Entering saved runs invalidates fresh readiness without fetching.
-watch([mode, researchModel, simulationEngine, pipelineId], checkPreflight, { flush: 'sync' })
+watch([mode, researchModel, simulationEngine, forecastAuthority, pipelineId], checkPreflight, { flush: 'sync' })
 onUnmounted(() => {
   invalidatePreflight()
   stopPolling()

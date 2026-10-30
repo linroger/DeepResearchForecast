@@ -595,6 +595,8 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
   #   - linear_research.py + research_gateway.py are the deep-research engine v3
   #     (RESEARCH_ENGINE=v3, the default). deerflow_research.py imports them by
   #     bare name, so they must be colocated too or the v3 dispatch hits ImportError.
+  #   - target_research.py + forecast_case.py provide the explicitly admitted
+  #     target-first-v1 case builder and contract used by the v3 engine.
   #   - data_mcp.py (stdio MCP hub), data_catalog.py (curated series catalog),
   #     data_sources.py (unified official-data API) and data_tools.py (the
   #     legacy engine's data_search/data_get tools) are imported by bare name by
@@ -605,7 +607,7 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
   #     name by search_tools.py, data_sources.py and the v3 engine.
   #     Keep this list in sync with _sync_deerflow_bridge_if_stale in
   #     backend/app/services/pipeline_orchestrator.py (the launch-time drift guard).
-  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py runtime_skill_sync.py linear_research.py research_gateway.py data_mcp.py data_catalog.py data_sources.py data_tools.py research_skills.py backtest_cutoff.py news_signals.py news_tools.py market_intelligence.py fmp_mcp.py fmp_research.py fmp_tools.py; do
+  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py run_spending.py world_anchor.py world_anchor_binding.py world_anchor_case.py world_anchor_publication.py runtime_skill_sync.py linear_research.py research_gateway.py target_research.py forecast_case.py data_mcp.py data_catalog.py data_sources.py data_tools.py research_skills.py backtest_cutoff.py news_signals.py news_tools.py market_intelligence.py fmp_mcp.py fmp_research.py fmp_tools.py; do
     if [ -f "$BRIDGE_DIR/$_tool_mod" ]; then
       cp "$BRIDGE_DIR/$_tool_mod" "$DEERFLOW_DIR/$_tool_mod"
       case "$_tool_mod" in
@@ -613,6 +615,8 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
           ok "Installed runtime_skill_sync.py (runtime bundle verifier)" ;;
         linear_research.py|research_gateway.py)
           ok "Installed $_tool_mod (deep-research engine v3)" ;;
+        target_research.py|forecast_case.py)
+          ok "Installed $_tool_mod (target-first forecast authority)" ;;
         data_mcp.py|data_catalog.py|data_sources.py|data_tools.py)
           ok "Installed $_tool_mod (official-data sources)" ;;
         fmp_mcp.py|fmp_research.py|fmp_tools.py)

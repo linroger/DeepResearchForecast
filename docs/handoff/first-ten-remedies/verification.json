@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "first-ten-reconciliation-verification/v1",
+  "verifiedAt": "2026-10-28T06:32:12.896603+00:00",
+  "baseCommit": "5b9b92157b8a5699c6e702cd8e3e3766eaadf02a",
+  "branch": "codex/first-ten-remedies",
+  "scope": "source implementation and controlled offline acceptance",
+  "backend": {
+    "passed": 5306,
+    "failed": 0,
+    "errors": 0,
+    "skipped": [
+      {
+        "test": "tests.test_deerflow_bridge_sync_guard::test_subagent_overlay_preserves_current_vendor_observability",
+        "reason": "vendored deer-flow harness snapshot is not present in this checkout"
+      },
+      {
+        "test": "tests.test_deerflow_bridge_sync_guard::test_subagent_overlay_fails_closed_on_model_inheritance_drift",
+        "reason": "vendored deer-flow harness snapshot is not present in this checkout"
+      }
+    ],
+    "testModules": 159,
+    "seconds": 473.9,
+    "frozenFiles": 547,
+    "sourceDrift": [],
+    "guardEvents": {
+      "redirect:app.config": 1,
+      "redirect:app.utils.logger": 1,
+      "redirect:app.services.simulation_manager": 1,
+      "blocked:process:subprocess.Popen": 11,
+      "blocked:external_read": 20,
+      "blocked:network:socket.__new__": 1,
+      "quarantine:oasis_import_cwd": 1,
+      "allowed:guarded_child": 15,
+      "allow:directory_traversal": 177
+    },
+    "shutdownComplete": true,
+    "identityPreserved": true,
+    "registeredChildren": 15
+  },
+  "frontend": {
+    "changed": false,
+    "verifiedInputHashes": 95,
+    "freshTestsOrBuildRun": false,
+    "priorRecordedTests": 329,
+    "priorRecordedBuild": "passed"
+  },
+  "review": {
+    "reproducedFindings": "closed",
+    "independentParentCases": 68,
+    "independentPriorPublicationCases": 2,
+    "deterministicAccountingCasesAndControls": 9
+  },
+  "static": {
+    "ruffFE9": "passed on31changedPythonfiles",
+    "diffCheck": "passed",
+    "environmentMissingControls": []
+  },
+  "boundaries": {
+    "deployed": false,
+    "paidModelsRun": false,
+    "liveMarketProbeRun": false,
+    "schedulerActivated": false,
+    "simulationForecastWeight": 0,
+    "empiricalIssue": "https://github.com/linroger/DeepResearchForecast/issues/10"
+  }
+}

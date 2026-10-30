@@ -109,7 +109,7 @@ def _terminal(row):
 
 def generate_candidate(directory: Path, *, research_report, research_generation_id, research_engine,
                        actor_bundle, ontology, simulation_requirement, policy_spec, transport=None,
-                       validate=None, preparation_context=None):
+                       validate=None, preparation_context=None, anchor_context=None):
     """Return a model proposal and conservative prep charges, never seal the model.
 
     ``validate(raw)`` compiles a proposal (with the caller's authority applied)
@@ -135,7 +135,8 @@ def generate_candidate(directory: Path, *, research_report, research_generation_
     messages = build_compiler_messages(research_report=research_report,
         research_generation_id=research_generation_id, research_engine=research_engine,
         actor_bundle=actor_bundle, ontology=ontology, simulation_requirement=simulation_requirement,
-        max_actors=budget.get('maxActors'), preparation_context=preparation_context)
+        max_actors=budget.get('maxActors'), preparation_context=preparation_context,
+        **({"anchor_context": anchor_context} if anchor_context is not None else {}))
     binding = digest({'messagesSha256': _source_hash(messages), 'policySpec': policy_spec})
     effect = policy_spec.get('forecastEffect', 'diagnostic_only')
     require(effect in {'diagnostic_only', 'no_update'}, 'unsupported_policy', 'Unknown pinned forecast policy')

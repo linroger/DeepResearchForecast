@@ -2909,6 +2909,26 @@ def projected_edges_block(actors: Optional[Any], max_rows: int = 14) -> str:
     return "\n".join(lines)
 
 
+def research_prior_from_actors(actors: Optional[Any]) -> Optional[Dict[str, Any]]:
+    """Typed research prior for report updating; never a simulation seed."""
+    from ..config import Config
+    if not getattr(Config, "REPORT_SPINE_RESEARCH_PRIOR", True):
+        return None
+    rows = extract_forecast_inputs(actors)["scenarios"]
+    weights = {}
+    for row in rows:
+        name = str(row.get("name") or "").strip()
+        raw = row.get("probability")
+        p = 0.0 if type(raw) in (int, float) and raw == 0 else _parse_probability_value(raw)
+        if not name or p is None or name in weights:
+            return None
+        weights[name] = p
+    if not weights or sum(weights.values()) > 1 + 1e-8:
+        return None
+    return {"schema_version": "research-prior/v1", "scenarioWeights": weights,
+            "asOf": str((actors or {}).get("as_of_date") or "unknown")}
+
+
 def forecast_inputs_block(actors: Optional[Any], max_per_section: int = 6) -> str:
     """把 forecast_inputs 渲染为预测脚手架块；全空返回空串。
 
@@ -2980,6 +3000,12 @@ def forecast_inputs_block(actors: Optional[Any], max_per_section: int = 6) -> st
             seg = f"- {label}"
             if band:
                 seg += f"（概率 {band}）"
+            else:
+                prior = research_prior_from_actors(actors)
+                probability = (prior or {}).get("scenarioWeights", {}).get(str(sc.get("name") or "").strip())
+                if probability is not None:
+                    seg += (f"（research prior {probability:.12g}; set at plan time from scout evidence; "
+                            f"dated {prior['asOf']}）")
             if narrative:
                 seg += f"：{narrative}"
             out.append(seg)

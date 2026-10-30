@@ -22,6 +22,7 @@ from model_translation_fakes import model_protocol, raw_fixture_zh
 @pytest.fixture(autouse=True)
 def strict_coverage(monkeypatch):
     monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE", True)
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MODE", "fail")
     monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", 1.0)
 
 

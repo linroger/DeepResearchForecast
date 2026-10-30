@@ -16,6 +16,12 @@ from app.config import Config  # noqa: E402
 from app.services.report_agent import ReportAgent, ReportManager  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def historical_fail_mode(monkeypatch):
+    """Keep legacy repair/rollback assertions; grade semantics are explicit below."""
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MODE", "fail", raising=False)
+
+
 def _agent(source: dict | None = None) -> ReportAgent:
     agent = ReportAgent.__new__(ReportAgent)
     agent.output_language = "English"
@@ -144,6 +150,8 @@ def test_final_audit_fingerprints_exact_post_citation_markdown_without_mutation(
 def test_final_audit_does_not_launder_adjacent_sentences_or_table_cells(
     monkeypatch, tmp_path
 ):
+    """F1: previously failed for coverage; now publishes grade B with exact coverage."""
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MODE", "grade", raising=False)
     monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE", True, raising=False)
     monkeypatch.setattr(
         Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", 0.75, raising=False
@@ -167,14 +175,16 @@ def test_final_audit_does_not_launder_adjacent_sentences_or_table_cells(
     agent = _agent(source)
 
     agent._finalize_citations(report_id, report)
-    audit = agent._audit_final_published_markdown(report_id, report)
+    audit = agent._enforce_final_publish_audit(report_id, report)
 
     grounding = audit["citation_grounding"]
     assert grounding["quantitative_claims"] == 4
     assert grounding["resolved_cited"] == 2
     assert grounding["resolved_coverage"] == 0.5
-    assert audit["publish_gate"]["passed"] is False
-    assert any("引用覆盖率" in issue for issue in audit["publish_gate"]["issues"])
+    assert audit["publish_gate"]["passed"] is True
+    assert audit["publish_gate"]["grade"] == "B"
+    assert len(audit["publish_gate"]["disclosures"]) == 1
+    assert "50%" in audit["publish_gate"]["disclosures"][0]
 
 
 def test_final_audit_fails_gate_but_never_repairs_published_markdown(

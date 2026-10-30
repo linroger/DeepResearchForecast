@@ -47,8 +47,12 @@ def test_calibration_summary_over_resolved(tmp_path):
     with open(os.path.join(d, "ledger.jsonl"), "w", encoding="utf-8") as fh:
         for e in led:
             fh.write(json.dumps(e) + "\n")
-    cs = calibration_summary(d)
+    # Legacy arithmetic stays available explicitly; production reads the journal.
+    cs = calibration_summary(d, entries=led)
     assert cs["n_resolved"] == 2 and cs["mean_brier"] is not None
+    production = calibration_summary(d)
+    assert production["n_resolved"] == 0
+    assert production["source"] == "published_forecasts.jsonl"
 
 
 def test_calibration_empty_when_unresolved(tmp_path):

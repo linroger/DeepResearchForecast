@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+from app.config import Config
 from app.services.report_agent import ReportAgent, ReportSection
 
 
@@ -66,7 +67,9 @@ def test_critique_without_market_pack_says_none():
 
 
 # --------------------------------------- 机制 2：最终定量接地修复的市场证据
-def test_final_grounding_preserves_market_corroborated_price():
+def test_final_grounding_preserves_market_corroborated_price(monkeypatch):
+    # Historical removal is the explicit rollback policy, not grade mode.
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MODE", "fail")
     a = _agent(_prediction_markets=[{
         "market_id": "m1",
         "question": "Will Tesla ship the Optimus milestone by 2026?",
@@ -82,8 +85,9 @@ def test_final_grounding_preserves_market_corroborated_price():
     assert stats["sentences_removed"] >= 1
 
 
-def test_price_without_market_context_still_removed():
+def test_price_without_market_context_still_removed(monkeypatch):
     """快照里有 0.125，但句子没有市场语境 → 不豁免（防止裸数字碰巧撞价）。"""
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MODE", "fail")
     a = _agent(_prediction_markets=[{
         "market_id": "m1", "question": "q", "implied_yes_prob": 0.125,
     }])
@@ -91,6 +95,24 @@ def test_price_without_market_context_still_removed():
     out, stats = a._repair_final_quantitative_grounding(md)
     assert "12.5" not in out
     assert stats["market_claims_preserved"] == 0
+
+
+def test_grade_preserves_uncited_uncertainty_without_claiming_market_support(monkeypatch):
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MODE", "grade")
+    monkeypatch.setattr(Config, "REPORT_PUBLISH_GATE_MIN_COVERAGE", 0.75)
+    a = _agent(_prediction_markets=[{
+        "market_id": "m1", "question": "Optimus milestone", "implied_yes_prob": 0.125,
+    }])
+    md = ("## Analysis\n"
+          "Polymarket implied probability for the Optimus milestone is 12.5%.\n"
+          "Total capex reached $42.5B according to unnamed filings.\n"
+          "Fleet adoption reached 12.5% across operators.\n")
+    out, stats = a._repair_final_quantitative_grounding(md)
+    assert out == md and "[S" not in out
+    assert stats["market_claims_preserved"] == 1
+    assert stats["unverifiable_claims_preserved"] == 2
+    assert stats["sentences_removed"] == 0
+    assert stats["passed"] is True and stats["coverage_met"] is False
 
 
 def test_decision_market_supported_status_and_miss():

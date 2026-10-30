@@ -29,7 +29,8 @@ Design notes
   ``linear_research.run`` after env hygiene and the credential preflight;
   ``legacy`` (or unset) keeps this module's DeerFlow/LangGraph engine, which also
   serves every ``--extract-only`` / ``--evidence-only`` / ``--synthesis-manifest``
-  invocation.
+  invocation. Explicit ``--forecast-authority target-first-v1`` requires v3
+  regardless of the environment and rejects those legacy-only contracts.
 
 Exit codes:
     0 = report produced.
@@ -5093,9 +5094,11 @@ def _close_legacy_fmp() -> None:
 
 def _prepare_legacy_fmp(out_dir: Path, question: str, args, *, meta: dict, plog=None) -> None:
     global _LEGACY_FMP_TOOLS, _LEGACY_FMP_DEADLINE, _LEGACY_FMP_META
+    rg = _context_module("research_gateway")
+    if rg._spending.check_context() is not None:
+        rg._spending.deny("unsupported_route")
     _close_legacy_fmp()
     api = _context_module("fmp_research")
-    rg = _context_module("research_gateway")
     manifest = getattr(args, "synthesis_manifest", None)
     if manifest:
         manifest_path = Path(manifest).resolve()
@@ -15792,8 +15795,8 @@ _PM_CLAUSE_SPLIT_RE = re.compile(r"[,;:.!?，。；：、（）()\[\]{}\"'`\n\r]
 def _pm_float(v: Any) -> float | None:
     try:
         f = float(v)
-        return None if f != f else f
-    except (TypeError, ValueError):
+        return f if math.isfinite(f) else None
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -16357,6 +16360,11 @@ def _pm_normalize_market(raw: Any, matched_query: str, min_volume: float,
         "event_title": event_title or str(raw.get("groupItemTitle") or "").strip(),
         "matched_query": matched_query,
     }
+    # Settlement equivalence consumes retained source terms, never a generated
+    # description. Preserve the provider's bytes, including whitespace.
+    description = raw.get("description")
+    if isinstance(description, str) and description.strip():
+        row["description"] = description
     # PM-1: 尽量携出可用的深链/时效/流动性信号（存在才写，缺失则降级为无该键）。
     slug = str(event_slug or "").strip()
     if slug:
@@ -16587,12 +16595,16 @@ def _strip_markdown_h2_section(report: str, title: str) -> str:
     return "\n".join(kept)
 
 
-def _pm_render_section(markets: list[dict], as_of: str) -> str:
+def _pm_render_section(markets: list[dict], as_of: str, *, stale: bool = False,
+                       historical: bool = False) -> str:
     """确定性渲染追加到 research_report.md 的「预测市场信号」markdown 节。"""
+    as_of = as_of or "unknown (undated)"
     lines = [
         f"## {_PM_SECTION_HEADING}",
         "",
-        (f"> Machine-fetched from Polymarket (public Gamma API) as of {as_of}. "
+        ((f"> **HISTORICAL market snapshot — as of {as_of}.** These are cutoff prices, not live quotes. "
+          if historical else f"> **STALE market snapshot — original as of {as_of}.** These are stored prices, not fresh quotes. "
+          if stale else f"> Machine-fetched from Polymarket (public Gamma API) as of {as_of}. ") +
          "Market-implied probabilities are **calibration anchors, not ground truth** — "
          "prices move continuously; mind freshness before relying on them."),
         "",
@@ -16777,7 +16789,7 @@ def _load_tool_market_candidates(out_dir: Path, *, max_bytes: int = 4_000_000) -
 
 
 def _merge_market_rows(primary: list[dict], secondary: list[dict]) -> list[dict]:
-    """Merge market rows by ID; primary rows win fields, order is deterministic."""
+    """Fresh rows replace quotes; only explicit tool provenance is carried."""
     order: list[str] = []
     by_id: dict[str, dict] = {}
     for rows, overwrite in ((secondary or [], True), (primary or [], True)):
@@ -16791,7 +16803,8 @@ def _merge_market_rows(primary: list[dict], secondary: list[dict]) -> list[dict]
                 order.append(mid)
                 by_id[mid] = dict(row)
             elif overwrite:
-                combined = dict(by_id[mid])
+                combined = {key: by_id[mid][key] for key in
+                            ("captured_via", "captured_at", "tool_queries") if key in by_id[mid]}
                 combined.update(row)
                 by_id[mid] = combined
     return [by_id[mid] for mid in order]
@@ -16843,6 +16856,198 @@ def _pm_initial_snapshot(question: str, model_name: str, plog: "ProgressLog") ->
     return _apply_relevance_gate(markets, scores, _pm_min_relevance())
 
 
+_PM_CACHE_SCHEMA = "prediction-markets-cache/v1"
+_PM_CACHE_MAX_AGE_SECONDS = 7 * 86400
+_PM_CACHE_MAX_BYTES = 2_000_000
+
+
+def _pm_cache_root(out_dir: Path) -> Path | None:
+    """Opt-out or standalone runs never discover/write an unrelated cache."""
+    if os.environ.get("PREDICTION_MARKETS_CACHE", "").strip().lower() in {"off", "false", "0", "no"}:
+        return None
+    configured = os.environ.get("PREDICTION_MARKETS_CACHE_DIR", "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    handoff = Path(out_dir).resolve()
+    if (handoff.name == "handoff" and handoff.parent.parent.name == "pipelines"
+            and handoff.parent.parent.parent.name == "uploads"):
+        return handoff.parent.parent.parent / "_markets_cache"
+    return None
+
+
+def _pm_cache_key(question: str, hot_topics: list | None = None,
+                  actor_names: list | None = None, model_name: str = "claude") -> str:
+    """Bind the full request, not only lossy keywords; no LLM or transport work."""
+    def normalized(value: Any) -> str:
+        return " ".join(unicodedata.normalize("NFKC", str(value or "")).split()).casefold()
+
+    request = {
+        "schema": _PM_CACHE_SCHEMA, "question": normalized(question),
+        "hot_topics": [normalized(t) for t in hot_topics or []],
+        "actor_names": [normalized(a) for a in actor_names or []],
+        "deterministic_queries": [normalized(q) for q in _pm_derive_queries(question, hot_topics, actor_names)],
+        "caps": [*_pm_env_caps(), _pm_per_query()], "min_relevance": _pm_min_relevance(),
+        "llm_queries": _env_flag("PREDICTION_MARKETS_LLM_QUERIES", True),
+        "horizon_retry": _env_flag("PREDICTION_MARKETS_HORIZON_RETRY", True),
+        "refresh_with_tools": _env_flag("PREDICTION_MARKETS_REFRESH_WITH_TOOL_CANDIDATES", False),
+        "model": str(model_name or ""),
+        "transport": {"gamma": _POLYMARKET_BASE_URL, "clob": _CLOB_BASE_URL,
+                      "user_agent": _POLYMARKET_UA, "path": "/public-search", "events_status": "active"},
+    }
+    try:
+        encoded = json.dumps(request, ensure_ascii=False, sort_keys=True, allow_nan=False)
+    except (TypeError, ValueError):
+        return ""  # Nonfinite/invalid settings cannot identify a reusable request.
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _pm_cache_time(value: Any) -> _dt.datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        stamp = _dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return stamp if stamp.tzinfo is not None and stamp.utcoffset() is not None else None
+    except ValueError:
+        return None
+
+
+def _pm_cache_age(payload: dict, now: str, *, bounded: bool = True) -> float | None:
+    times = [_pm_cache_time(payload.get(key)) for key in ("as_of", "fetched_at")]
+    current = _pm_cache_time(now)
+    if current is None or any(stamp is None for stamp in times):
+        return None
+    ages = [(current - stamp).total_seconds() for stamp in times]
+    return max(ages) if all(age >= 0 and (not bounded or age <= _PM_CACHE_MAX_AGE_SECONDS)
+                           for age in ages) else None
+
+
+def _pm_cache_rows_valid(rows: Any) -> bool:
+    if not isinstance(rows, list) or not rows:
+        return False
+    for row in rows:
+        if not isinstance(row, dict) or not row.get("market_id") or not row.get("question"):
+            return False
+        value = row.get("implied_yes_prob")
+        prob = _pm_float(value)
+        if isinstance(value, bool) or prob is None or not math.isfinite(prob) or not 0 < prob < 1:
+            return False
+        for field in ("best_bid", "best_ask"):
+            if field in row:
+                price = _pm_float(row[field])
+                if isinstance(row[field], bool) or price is None or not math.isfinite(price) or not 0 <= price <= 1:
+                    return False
+        if "outcome_prices" in row:
+            prices = row["outcome_prices"]
+            if not isinstance(prices, list) or any(
+                    isinstance(p, bool) or _pm_float(p) is None or not math.isfinite(float(p))
+                    or not 0 <= float(p) <= 1 for p in prices):
+                return False
+    return True
+
+
+def _pm_cache_bytes(payload: dict) -> bytes:
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True, allow_nan=False).encode("utf-8")
+
+
+def _pm_read_cache(root: Path | None, query_key: str, now: str) -> dict | None:
+    if root is None or not re.fullmatch(r"[0-9a-f]{64}", query_key):
+        return None
+    path = root / f"{query_key}.json"
+    try:
+        if path.is_symlink() or path.stat().st_size > _PM_CACHE_MAX_BYTES:
+            return None
+        envelope = json.loads(path.read_text(encoding="utf-8"))
+        if (not isinstance(envelope, dict) or envelope.get("schema") != _PM_CACHE_SCHEMA
+                or envelope.get("query_key") != query_key):
+            return None
+        payload = envelope.get("payload")
+        if not isinstance(payload, dict) or payload.get("query_key") != query_key or payload.get("backtest"):
+            return None
+        status = payload.get("status")
+        if (not isinstance(status, dict) or status.get("state") != "fresh"
+                or status.get("stale") or status.get("cache_hit") or payload.get("no_relevant_markets")
+                or _pm_cache_age(payload, now) is None or not _pm_cache_rows_valid(payload.get("markets"))):
+            return None
+        if hashlib.sha256(_pm_cache_bytes(payload)).hexdigest() != envelope.get("sha256"):
+            return None
+        return payload
+    except (OSError, ValueError, TypeError, OverflowError, RecursionError):
+        return None
+
+
+def _pm_write_cache(root: Path | None, query_key: str, payload: dict, now: str) -> None:
+    """Only fresh nonempty collector successes are ever offered for persistence."""
+    if (root is None or not query_key or payload.get("status", {}).get("state") != "fresh"
+            or _pm_cache_age(payload, now) is None or not _pm_cache_rows_valid(payload.get("markets"))):
+        return
+    try:
+        digest = hashlib.sha256(_pm_cache_bytes(payload)).hexdigest()
+        envelope = {"schema": _PM_CACHE_SCHEMA, "query_key": query_key, "payload": payload, "sha256": digest}
+        text = json.dumps(envelope, ensure_ascii=False, indent=2, allow_nan=False)
+        if len(text.encode("utf-8")) > _PM_CACHE_MAX_BYTES:
+            return
+        root.mkdir(parents=True, exist_ok=True)
+        _atomic_write_text(root / f"{query_key}.json", text)
+    except (OSError, ValueError, TypeError, OverflowError, RecursionError):
+        pass  # Cache persistence never voids a successful live snapshot.
+
+
+def _pm_publish_collection(out_dir: Path, report: str, meta: dict, payload: dict,
+                           attempted_at: str, *, cache_root: Path | None = None,
+                           query_key: str = "", transport_failure: bool = False,
+                           cacheable: bool = False) -> dict:
+    """Publish explicit availability; only a failed live transport may reuse prices."""
+    now = _utcnow()
+    status = dict(payload.get("status") or {})
+    cache_hit = False
+    if transport_failure and not payload.get("markets"):
+        cached = _pm_read_cache(cache_root, query_key, now)
+        if cached is not None:
+            payload = {**cached, "status": status, "refresh_queries": payload.get("queries", []),
+                       "reason": "live transport unavailable; using last-good snapshot"}
+            cache_hit = True
+    markets = payload.get("markets") or []
+    stale = bool(markets) and (cache_hit or bool(status.get("stored_only")))
+    historical = bool(payload.get("backtest"))
+    if not markets:
+        payload["fetched_at"] = None
+        if not payload.get("backtest"):
+            payload["as_of"] = None
+    else:
+        payload.setdefault("fetched_at", payload.get("as_of"))
+    payload["query_key"] = query_key or None
+    age = _pm_cache_age(payload, now, bounded=False) if markets else None
+    status.update(state=("historical" if historical else "stale" if stale else "fresh")
+                  if markets else "unavailable",
+                  as_of=payload.get("as_of"), fetched_at=payload.get("fetched_at"),
+                  age_seconds=age, undated=bool(markets) and age is None, historical=historical,
+                  cache_hit=cache_hit, stale=stale, attempted_at=attempted_at,
+                  selected_count=len(markets))
+    if markets:
+        status["empty_reason"] = None
+        payload.pop("no_relevant_markets", None)
+    payload["status"] = status
+    payload["cache"] = {"age_seconds": status["age_seconds"], "stale": stale, "hit": cache_hit}
+    if cacheable and not cache_hit:
+        _pm_write_cache(cache_root, query_key, payload, now)
+    _atomic_write_text(out_dir / PREDICTION_MARKETS_FILENAME,
+                       json.dumps(payload, ensure_ascii=False, indent=2))
+    meta["prediction_markets_count"] = len(markets)
+    meta["prediction_markets_as_of"] = payload.get("as_of")
+    meta["prediction_markets_status"] = dict(status)
+    base_report = _strip_markdown_h2_section(report, _PM_SECTION_HEADING)
+    if markets:
+        section = _pm_render_section(markets, payload["as_of"], stale=stale, historical=historical)
+        new_report = base_report.rstrip() + "\n\n" + section + "\n"
+        _atomic_write_text(out_dir / REPORT_FILENAME, new_report)
+        meta["report_chars"] = len(new_report)
+    elif base_report != report:
+        # Never leave an earlier fresh-looking table beside an unavailable result.
+        _atomic_write_text(out_dir / REPORT_FILENAME, base_report)
+        meta["report_chars"] = len(base_report)
+    return payload
+
+
 def _collect_prediction_markets(out_dir: Path, question: str, report: str,
                                 meta: dict, plog: "ProgressLog",
                                 model_name: str = "claude") -> None:
@@ -16851,7 +17056,11 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
     调用方包 try/except；本函数内部对「无 key/无结果」也只记一行日志（degrade-safe）。
     PM-4：这是「刷新」快照——用更好的 actor/热点/LLM 检索词重取，作为最终表格输出。
     """
+    attempted_at = _utcnow()
     if not _env_flag("PREDICTION_MARKETS_ENABLED", True):
+        _pm_publish_collection(out_dir, report, meta, {
+            "source": "polymarket", "queries": [], "markets": [], "no_relevant_markets": True,
+            "status": {"attempted": False, "empty_reason": "disabled"}}, attempted_at)
         plog.write("warn", "prediction markets skipped (PREDICTION_MARKETS_ENABLED=false)")
         return
     try:
@@ -16861,8 +17070,7 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
                    "no_relevant_markets": True, "reason": f"backtest policy unusable: {exc}"[:300],
                    "status": {"attempted": False, "query_count": 0, "candidate_count": 0,
                               "selected_count": 0, "empty_reason": "backtest_policy_unusable"}}
-        _atomic_write_text(out_dir / PREDICTION_MARKETS_FILENAME, json.dumps(payload, ensure_ascii=False, indent=2))
-        meta["prediction_markets_count"] = 0
+        _pm_publish_collection(out_dir, report, meta, payload, attempted_at)
         plog.write("warn", f"prediction markets skipped: backtest policy unusable ({type(exc).__name__})")
         return
     # Backtest mode stamps every artifact with the cutoff, never the retrieval time.
@@ -16888,9 +17096,19 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
                     actor_names += [n for n in ctx_names if n and n not in actor_names]
     except Exception:  # noqa: BLE001 — actors.json 只是查询词的可选增强
         pass
+    cache_root = _pm_cache_root(out_dir) if backtest is None else None
+    query_key = _pm_cache_key(question, hot_topics, actor_names, model_name) if cache_root is not None else ""
     # Agent-tool candidates carry live prices: a backtest never reads them.
     tool_candidates = [] if backtest is not None else _load_tool_market_candidates(out_dir)
-    if _PM_TRANSPORT_UNAVAILABLE and not tool_candidates:
+    attempt_time = _pm_cache_time(attempted_at)
+    if attempt_time is not None:
+        before = len(tool_candidates)
+        tool_candidates = [row for row in tool_candidates if not any(
+            (observed_time := _pm_cache_time(row.get(key))) is not None and observed_time > attempt_time
+            for key in ("captured_at", "fetched_at", "as_of", "price_as_of"))]
+        if before != len(tool_candidates):
+            meta["prediction_markets_rejected_future_rows"] = before - len(tool_candidates)
+    if _PM_TRANSPORT_UNAVAILABLE and not tool_candidates and backtest is None:
         payload = {
             "as_of": stamp or _utcnow(),
             "source": "polymarket",
@@ -16912,11 +17130,8 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
         # TRANSPORT-DIAG: additive——前置快照留下的错误类别计数（如 {"HTTPError:403": 16}）。
         if _PM_TRANSPORT_ERROR_CLASSES:
             payload["status"]["transport_error_classes"] = dict(_PM_TRANSPORT_ERROR_CLASSES)
-        _atomic_write_text(
-            out_dir / PREDICTION_MARKETS_FILENAME,
-            json.dumps(payload, ensure_ascii=False, indent=2),
-        )
-        meta["prediction_markets_count"] = 0
+        _pm_publish_collection(out_dir, report, meta, payload, attempted_at,
+                               cache_root=cache_root, query_key=query_key, transport_failure=True)
         plog.write(
             "warn",
             "prediction markets: pre-pass transport circuit is open; "
@@ -16939,9 +17154,7 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
                    "status": {"attempted": True, "query_count": 0,
                               "tool_observation_count": 0, "candidate_count": 0,
                               "selected_count": 0, "empty_reason": "no_derivable_queries"}}
-        _atomic_write_text(out_dir / PREDICTION_MARKETS_FILENAME,
-                           json.dumps(payload, ensure_ascii=False, indent=2))
-        meta["prediction_markets_count"] = 0
+        _pm_publish_collection(out_dir, report, meta, payload, attempted_at, query_key=query_key)
         plog.write("warn", f"prediction markets: no derivable queries; wrote {PREDICTION_MARKETS_FILENAME} no_relevant_markets marker")
         return
     max_total, min_volume, max_per_event = _pm_env_caps()
@@ -17101,25 +17314,32 @@ def _collect_prediction_markets(out_dir: Path, question: str, report: str,
                 f"(error classes: {_cls_txt or 'unknown'})")
         elif not combined_candidates:
             payload["reason"] = "catalog reachable but no active markets matched the queries"
-        _atomic_write_text(out_dir / PREDICTION_MARKETS_FILENAME,
-                           json.dumps(payload, ensure_ascii=False, indent=2))
-        meta["prediction_markets_count"] = 0
-        plog.write("warn", f"wrote {PREDICTION_MARKETS_FILENAME} (no_relevant_markets marker; no report section appended)")
+        published = _pm_publish_collection(out_dir, report, meta, payload, attempted_at,
+                                           cache_root=cache_root, query_key=query_key,
+                                           transport_failure=all_queries_failed and backtest is None)
+        plog.write("warn", f"wrote {PREDICTION_MARKETS_FILENAME} ({published['status']['state']})")
         return
-    _atomic_write_text(out_dir / PREDICTION_MARKETS_FILENAME,
-                       json.dumps(payload, ensure_ascii=False, indent=2))
-    # 追加确定性 markdown 节到已落盘的 research_report.md（下游合成/报告阶段读文件即得）。
-    # Upsert, not append: a report re-read from disk (extract-only salvage,
-    # resumed engines) may already carry an earlier machine-owned PM section;
-    # appending again would leave a stale table with outdated prices above it.
-    section = _pm_render_section(markets, as_of)
-    base_report = _strip_markdown_h2_section(report, _PM_SECTION_HEADING)
-    new_report = base_report.rstrip() + "\n\n" + section + "\n"
-    _atomic_write_text(out_dir / REPORT_FILENAME, new_report)
-    # 注册进 meta（与 sources_count/quantitative_count 同一「artifact 登记」模式）。
-    meta["report_chars"] = len(new_report)
-    meta["prediction_markets_count"] = len(markets)
-    meta["prediction_markets_as_of"] = as_of
+    payload["fetched_at"] = _utcnow()
+    # Rows not refreshed keep their capture time; a collector run is not a re-fetch.
+    if backtest is None:
+        refreshed_ids = {row.get("market_id") for row in refreshed_markets}
+        for row in markets:
+            if degraded_stage or row.get("market_id") in refreshed_ids:
+                row.update(fetched_at=payload["fetched_at"], as_of=as_of)
+            else:
+                row["fetched_at"] = row.get("fetched_at") or row.get("captured_at")
+                row["as_of"] = row.get("as_of") or row.get("price_as_of") or row["fetched_at"]
+                payload["status"]["stored_only"] = True
+        if all(_pm_cache_age(row, payload["fetched_at"], bounded=False) is not None for row in markets):
+            for field in ("as_of", "fetched_at"):
+                payload[field] = min((row[field] for row in markets), key=_pm_cache_time)
+        else:
+            payload["as_of"] = payload["fetched_at"] = None
+    _pm_publish_collection(out_dir, report, meta, payload, attempted_at,
+                           cache_root=cache_root, query_key=query_key,
+                           cacheable=(backtest is None and not tool_candidates
+                                      and refresh_diagnostics.get("successful_query_count", 0) > 0
+                                      and not refresh_diagnostics.get("transport_failure_count", 0)))
     plog.write("ok", f"wrote {PREDICTION_MARKETS_FILENAME} ({len(markets)} markets, "
                      f"{len(queries)} queries) + appended report section")
     # Peer removal applies to live history charts. Historical research still
@@ -18487,6 +18707,11 @@ def main() -> int:
     parser.add_argument("--out-dir", required=True, help="Directory to write the handoff contract into.")
     parser.add_argument("--model", default=os.environ.get("DEERFLOW_RESEARCH_MODEL", "claude"), help="Model name from config.yaml (default: claude).")
     parser.add_argument("--depth", default="standard", choices=list(DEPTH_PRESETS.keys()))
+    parser.add_argument(
+        "--forecast-authority", choices=("target-first-v1",), default=None,
+        help=("Pin typed forecast authority and require the v3 research engine. "
+              "Omit to retain existing engine selection and forecast behavior."),
+    )
     parser.add_argument("--thread-id", default=None, help="Thread id (default: random).")
     parser.add_argument("--target-language", default=os.environ.get("DEERFLOW_RESEARCH_LANGUAGE") or None, help="Language for the report/JSON (e.g. 'Chinese'). Default: model's choice.")
     parser.add_argument("--no-actors", action="store_true", help="Skip the structured actors.json extraction pass.")
@@ -18509,8 +18734,19 @@ def main() -> int:
               "merged source ledger. Produces one global dossier/extraction run."),
     )
     args = parser.parse_args()
+    target_first = args.forecast_authority == "target-first-v1"
     if args.evidence_only and args.synthesis_manifest:
         parser.error("--evidence-only and --synthesis-manifest are mutually exclusive")
+    legacy_only_mode = _legacy_only_mode(args)
+    if target_first and legacy_only_mode:
+        parser.error(
+            f"--forecast-authority {args.forecast_authority} is incompatible with "
+            f"{legacy_only_mode}; typed forecasts require a full v3 research run"
+        )
+    # Only explicitly admitted target runs acquire this key. Legacy metadata and
+    # callers that omit the flag retain their existing identity/defaults.
+    authority_meta = ({"forecast_authority": args.forecast_authority}
+                      if target_first else {})
     os.environ["RESEARCH_EVIDENCE_ONLY"] = (
         "true" if args.evidence_only else "false")
 
@@ -18524,6 +18760,19 @@ def main() -> int:
         return 3
 
     out_dir = Path(args.out_dir).expanduser().resolve()
+    if not target_first:
+        try:
+            prior = json.loads((out_dir / META_FILENAME).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            prior = None
+        if isinstance(prior, dict) and prior.get("forecast_authority") == "target-first-v1":
+            # Check the pin independently of engine/status: even a pre-dispatch
+            # failure owns its authority. Omitted flags must not silently turn
+            # a typed handoff into legacy research, including full resumes.
+            parser.error(
+                "this handoff is pinned to target-first-v1; use "
+                "--forecast-authority target-first-v1 or a fresh --out-dir"
+            )
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Always write the requirement immediately so the contract has it even on failure.
@@ -18536,6 +18785,7 @@ def main() -> int:
         runtime_skill_sync = runtime_skill_sync_telemetry()
     except Exception as skill_sync_error:  # noqa: BLE001 — integrity boundary
         failure = {
+            **authority_meta,
             "status": "failed",
             "question": question,
             "model": args.model,
@@ -18585,11 +18835,16 @@ def main() -> int:
             "runtime skill bundle is not orchestrator-verified "
             f"(outcome={runtime_skill_sync.get('outcome')})",
         )
-    # Engine selection is a pure env decision made before any work so that the
-    # meta, the resume planner and the dispatch below all agree on it.
-    requested_engine = _resolve_research_engine(plog)
-    legacy_only_mode = _legacy_only_mode(args)
+    # Explicit typed authority selects v3 even for standalone CLI calls with no
+    # RESEARCH_ENGINE. Otherwise preserve the historical environment resolver.
+    requested_engine = "v3" if target_first else _resolve_research_engine(plog)
     use_v3_engine = requested_engine == "v3" and not legacy_only_mode
+    spending = _context_module("run_spending")
+    if spending.required() and not use_v3_engine:
+        # Only linear_research.run admits the fixed private request. Reject
+        # legacy paths before context prefetch, FMP or a DeerFlow client exists.
+        plog.close()
+        spending.deny("unsupported_route")
     if requested_engine == "v3" and legacy_only_mode:
         plog.write(
             "stage",
@@ -18601,6 +18856,7 @@ def main() -> int:
     backtest_refusal = _backtest_engine_refusal(use_v3_engine, legacy_only_mode)
     if backtest_refusal:
         _atomic_write_text(out_dir / META_FILENAME, json.dumps({
+            **authority_meta,
             "status": "failed", "question": question, "model": args.model, "depth": args.depth,
             "target_language": args.target_language, "started_at": _utcnow(), "finished_at": _utcnow(),
             "error": backtest_refusal}, ensure_ascii=False, indent=2))
@@ -18699,6 +18955,7 @@ def main() -> int:
             plog.write("resume", f"--resume 但无法续跑（{_plan['reason']}）→ 全量重启")
     started_at = _utcnow()
     meta: dict[str, Any] = {
+        **authority_meta,
         "status": "running",
         "thread_id": thread_id,
         "model": args.model,

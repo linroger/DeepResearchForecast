@@ -1,0 +1,102 @@
+{
+  "capturedAt": "2026-10-28T04:10:31.640364+00:00",
+  "final_source_sha256": {
+    "backend/app/services/forecast_library.py": "4e75eed517e4ffc80951159162f6edf249a018e8bfaf60d4176326dbff0a4ffc",
+    "backend/tests/test_forecast_library.py": "c684b6c104961d8a716843f1e18fb202c1802994e09ce3132ab7bd4a19c65493",
+    "backend/scripts/main_offline_pytest.py": "5046cf820fa468d8e8ffb2e3fdade1d20fca2f0bd56ee15eabdff51c223c02be"
+  },
+  "unchanged_since_peer_dispatch": true,
+  "all_python_drift_during_composed": {},
+  "runs": {
+    "red": {
+      "tests": 62,
+      "failures": [
+        "test_unbound_journal_learning_fails_closed[named_source_event-actor-write]",
+        "test_unbound_journal_learning_fails_closed[named_source_event-actor-select]",
+        "test_unbound_journal_learning_fails_closed[named_source_event-mechanism-write]",
+        "test_unbound_journal_learning_fails_closed[named_source_event-mechanism-select]",
+        "test_unbound_journal_learning_fails_closed[official_data_binary-actor-write]",
+        "test_unbound_journal_learning_fails_closed[official_data_binary-actor-select]",
+        "test_unbound_journal_learning_fails_closed[official_data_binary-mechanism-write]",
+        "test_unbound_journal_learning_fails_closed[official_data_binary-mechanism-select]",
+        "test_verbatim_named_event_text_is_not_typed_actor_behaviour_proof",
+        "test_parameter_basis_cannot_claim_journal_validation[False-observed]",
+        "test_parameter_basis_cannot_claim_journal_validation[False-assumed]",
+        "test_parameter_basis_cannot_claim_journal_validation[True-observed]",
+        "test_parameter_basis_cannot_claim_journal_validation[True-assumed]"
+      ],
+      "errors": [],
+      "test_sha256": "c684b6c104961d8a716843f1e18fb202c1802994e09ce3132ab7bd4a19c65493",
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      },
+      "processes": 1,
+      "all_shutdown": true,
+      "all_identity": true,
+      "source_drift": [],
+      "receipt_sha256": "0a8867c181370d91422555a386294b1130a749aee55b671377954d6b6ab0bc8a",
+      "junit_sha256": "0067c001ae7e6d94d1dd950174eadea37293631f7ad14d1391d0f536285c4a73"
+    },
+    "green": {
+      "tests": 62,
+      "failures": [],
+      "errors": [],
+      "test_sha256": "c684b6c104961d8a716843f1e18fb202c1802994e09ce3132ab7bd4a19c65493",
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      },
+      "processes": 1,
+      "all_shutdown": true,
+      "all_identity": true,
+      "source_drift": [],
+      "receipt_sha256": "70af6404dc8b467da81aac9d6c2211badc565b8a1c5ec0c9e55d12ce5781fd7a",
+      "junit_sha256": "0a972a3a95fb57aaf3f777a0330338d3c8b8672cb880f5d22b507ae743ae262b"
+    },
+    "composed": {
+      "tests": 291,
+      "failures": [],
+      "errors": [],
+      "test_sha256": "c684b6c104961d8a716843f1e18fb202c1802994e09ce3132ab7bd4a19c65493",
+      "events": {
+        "redirect:app.config": 6,
+        "redirect:app.utils.logger": 6,
+        "redirect:app.services.simulation_manager": 6,
+        "allowed:guarded_child": 5
+      },
+      "processes": 6,
+      "all_shutdown": true,
+      "all_identity": true,
+      "source_drift": [],
+      "receipt_sha256": "ec9e7a6e2b4af49d4f25698696a5d7d01bc7b943423aee4923e2f8145c4f752f",
+      "junit_sha256": "fa5fac9931f850f21c78b176f0d811f4441f127c79222ac7d9663fe9a6191abf"
+    }
+  },
+  "peer_review": {
+    "reviewer": "Lagrange",
+    "agent_id": "01a180b2-6471-7693-8522-b89a478a44d3",
+    "verdict": "No findings in assigned FBL1 repair",
+    "tests_passed": 62,
+    "seconds": 1.91,
+    "receipt": "/private/tmp/drf-fbl1-peer-review-20261028-cedar/completed.json",
+    "receipt_sha256": "18cc9cdd17401190af4ba07f4aa55c93d412487544ecbaa7cc71b17e6be57eff",
+    "source_sha256": {
+      "backend/app/services/forecast_library.py": "4e75eed517e4ffc80951159162f6edf249a018e8bfaf60d4176326dbff0a4ffc",
+      "backend/tests/test_forecast_library.py": "c684b6c104961d8a716843f1e18fb202c1802994e09ce3132ab7bd4a19c65493",
+      "backend/scripts/main_offline_pytest.py": "5046cf820fa468d8e8ffb2e3fdade1d20fca2f0bd56ee15eabdff51c223c02be"
+    },
+    "exit_code": 0,
+    "shutdown_complete": true,
+    "identity_preserved": true,
+    "events": {
+      "redirect:app.config": 1,
+      "redirect:app.utils.logger": 1,
+      "redirect:app.services.simulation_manager": 1
+    },
+    "contained_library_probes": {},
+    "source_drift": []
+  }
+}

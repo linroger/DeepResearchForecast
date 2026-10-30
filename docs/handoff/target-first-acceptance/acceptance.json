@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "target-first-operational-acceptance/v1",
+  "checkedAt": "2026-10-28T11:13:58.177202+00:00",
+  "scope": "saved specimens, concrete source fixes, free transport probe and live readiness",
+  "checks": {
+    "cast_reclassification": {
+      "status": "passed",
+      "actors": {
+        "CrowdStrike": [
+          "individual_leader",
+          "firm"
+        ],
+        "Anthropic": [
+          "regulator_agency",
+          "firm"
+        ],
+        "Munich Re": [
+          "research_institution",
+          "financial_institution"
+        ]
+      },
+      "basis": "retained ontology declarations; actual generator, seed, world state and decision rights"
+    },
+    "conditional_replay": {
+      "status": "partial",
+      "retainedActions": 199,
+      "localActionChecks": 64,
+      "deliveryAttemptsChecked": 53,
+      "acceptanceActionsChecked": 11,
+      "matchedHistoricalLapses": 16,
+      "currentGraceWouldPreserve": 16,
+      "fullTrajectoryReplay": false
+    },
+    "historical_raw_arbiter_replay": {
+      "status": "unavailable",
+      "reason": "Both original specimens lack raw captures and complete pre-arbiter states",
+      "responsesReplayed": 0
+    },
+    "original_graph_projection_benchmark": {
+      "status": "unavailable",
+      "reason": "Original cybersecurity run predates forecast_case.json; no synthetic replacement is presented as original-source proof"
+    },
+    "task_context": {
+      "status": "passed",
+      "systemInstructions": "dedicated JSON-only unchanged",
+      "userContext": "bounded admitted question/world/time fields"
+    },
+    "market_transport": {
+      "status": "failed",
+      "gamma": "TLS handshake timeout before HTTP",
+      "clob": "untested: no returned market token"
+    },
+    "whole_run_spending": {
+      "status": "blocked",
+      "issue": "https://github.com/linroger/DeepResearchForecast/issues/11",
+      "plan": "spending-PLANS.md",
+      "approval": "code implementation approved2026-10-29; paid execution not authorized",
+      "paidCalls": 0
+    },
+    "preservation": {
+      "status": "passed",
+      "originalFiles": 100,
+      "snapshotFiles": 100
+    },
+    "regression": {
+      "status": "passed",
+      "tests": 718,
+      "failed": 0,
+      "skipped": 0,
+      "sourceHashes": 552
+    }
+  },
+  "empiricalIssue": "https://github.com/linroger/DeepResearchForecast/issues/10"
+}

@@ -4,11 +4,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 from pathlib import Path
 import tempfile
 from contextlib import contextmanager
 
-from .contracts import ENGINE, WorldError, canonical_json, clone, digest, require, validate_preparation_pin, validate_spec
+from .contracts import ENGINE, WorldError, anchor_enabled, canonical_json, clone, digest, require, validate_preparation_pin, validate_spec
 from .kernel import validate_mechanisms
 
 
@@ -70,12 +71,60 @@ def file_digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _read_anchor_preparation(path):
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, 'O_NONBLOCK', 0))
+    except OSError:
+        raise WorldError('anchor_binding_mismatch', 'Anchor preparation is missing or indirect') from None
+    try:
+        info = os.fstat(fd)
+        require(stat.S_ISREG(info.st_mode) and info.st_size <= 16 * 1024 * 1024,
+                'anchor_binding_mismatch', 'Invalid anchor preparation file')
+        chunks, remaining = [], 16 * 1024 * 1024 + 1
+        while remaining:
+            chunk = os.read(fd, min(65536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b''.join(chunks)
+        require(len(raw) == info.st_size, 'anchor_binding_mismatch', 'Anchor preparation changed during read')
+        return raw
+    except OSError:
+        raise WorldError('anchor_binding_mismatch', 'Anchor preparation could not be read safely') from None
+    finally:
+        os.close(fd)
+
+
+def _write_anchor_preparation(path, raw):
+    fd, temporary = tempfile.mkstemp(prefix='.anchor-preparation-', dir=path.parent)
+    try:
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
 def input_manifest(spec: dict) -> dict:
-    return {'schemaVersion': 'world-input-manifest/v1', 'engine': ENGINE,
+    result = {'schemaVersion': 'world-input-manifest/v1', 'engine': ENGINE,
             'simulationId': spec['simulationId'], 'generationId': spec['generationId'],
             'specHash': digest(spec),
             'specSha256': hashlib.sha256((canonical_json(spec) + '\n').encode('utf-8')).hexdigest(),
             'sourceBindings': spec['sourceBindings']}
+    if anchor_enabled(spec):
+        result['worldAnchor'] = clone(spec['sourceBindings']['worldAnchor']['pin'])
+        result['worldAnchorPreparation'] = {'path': 'world_anchor_preparation.json',
+            'sha256': spec['sourceBindings']['worldAnchor']['preparationSha256']}
+    return result
 
 
 def validate_preparation_binding(bundle, *, expected_sources=None, research_generation_id=None):
@@ -111,7 +160,7 @@ def load_preparation(directory: Path, spec: dict):
     return validate_preparation_binding(bundle, research_generation_id=bindings.get('researchGenerationId'))
 
 
-def seal_inputs(directory: Path, spec: dict, *, preparation_context=None) -> dict:
+def seal_inputs(directory: Path, spec: dict, *, preparation_context=None, anchor_context=None) -> dict:
     directory = Path(directory)
     spec = validate_spec(spec)
     validate_mechanisms(spec)
@@ -123,6 +172,12 @@ def seal_inputs(directory: Path, spec: dict, *, preparation_context=None) -> dic
             expected_sources=pin['source'], research_generation_id=spec['sourceBindings']['researchGenerationId'])
         require(preparation_context['content_sha256'] == pin['contentSha256'],
                 'invalid_preparation_context', 'Native preparation bundle fingerprint differs from its pin')
+    if anchor_enabled(spec) or anchor_context is not None:
+        from .compiler import anchor_preparation_bytes, validate_world_anchor
+        validate_world_anchor(spec, anchor_context)
+        preparation = anchor_preparation_bytes(spec)
+    else:
+        preparation = None
     path = directory / 'world_spec.json'
     manifest_path = directory / 'world_input_manifest.json'
     with exclusive_file(directory / 'world_prepare.lock'):
@@ -134,6 +189,10 @@ def seal_inputs(directory: Path, spec: dict, *, preparation_context=None) -> dic
                 load_preparation(directory, spec)  # Never replace an existing generation or repair partial proof.
             else:
                 write_preparation_context(directory, preparation_context)
+        if preparation is not None:
+            require(not (directory / 'world_anchor_preparation.json').exists(),
+                    'generation_exists', 'Anchor preparation is immutable')
+            _write_anchor_preparation(directory / 'world_anchor_preparation.json', preparation)
         atomic_json(path, spec)
         manifest = input_manifest(spec)
         atomic_json(manifest_path, manifest)
@@ -141,7 +200,7 @@ def seal_inputs(directory: Path, spec: dict, *, preparation_context=None) -> dic
 
 
 def load_inputs(directory: Path, *, simulation_id: str | None = None,
-                expected_manifest_sha256: str | None = None) -> tuple[dict, dict]:
+                expected_manifest_sha256: str | None = None, anchor_context=None) -> tuple[dict, dict]:
     directory = Path(directory)
     path = directory / 'world_spec.json'
     manifest_path = directory / 'world_input_manifest.json'
@@ -159,4 +218,24 @@ def load_inputs(directory: Path, *, simulation_id: str | None = None,
             and (simulation_id is None or simulation_id == spec['simulationId']),
             'input_binding_mismatch', 'World inputs do not match their prepared generation')
     load_preparation(directory, spec)
+    if anchor_enabled(spec):
+        from .compiler import restore_anchor_preparation
+        require(manifest.get('worldAnchor') == spec['sourceBindings']['worldAnchor']['pin'],
+                'anchor_binding_mismatch', 'Prepared world anchor pin changed')
+        if anchor_context is None:
+            from ..world_anchor import load_runtime_anchor
+            anchor_context = load_runtime_anchor({'simulation_id': spec['simulationId'],
+                                                  'world_anchor': manifest['worldAnchor']}, directory)
+        entry = manifest.get('worldAnchorPreparation')
+        require(isinstance(entry, dict) and set(entry) == {'path', 'sha256'}
+                and entry['path'] == 'world_anchor_preparation.json'
+                and entry['sha256'] == spec['sourceBindings']['worldAnchor']['preparationSha256'],
+                'anchor_binding_mismatch', 'Prepared world candidate binding is missing')
+        preparation = _read_anchor_preparation(directory / entry['path'])
+        require(hashlib.sha256(preparation).hexdigest() == entry['sha256'],
+                'anchor_binding_mismatch', 'Prepared world candidate bytes changed')
+        spec = restore_anchor_preparation(spec, preparation, anchor_context)
+    else:
+        require('worldAnchor' not in manifest and 'worldAnchorPreparation' not in manifest and anchor_context is None,
+                'anchor_binding_mismatch', 'An unpinned world cannot acquire anchor mode during reuse')
     return spec, manifest

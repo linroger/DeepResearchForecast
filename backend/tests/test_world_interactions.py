@@ -13,6 +13,7 @@ in the briefs, the digest, the arbiter prompt and the round record.  Mirror-imag
 are recorded as a counter-offer, never as an agreement (``world_model.terms_restate_offer``).
 """
 
+import calendar
 import os
 import sys
 
@@ -22,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.services import world_model as wm  # noqa: E402
 from app.services import world_update as wu  # noqa: E402
-from app.services.agent_decision import build_decision_prompt, build_option_menu, parse_decision  # noqa: E402
+from app.services.agent_decision import build_decision_prompt, build_option_menu, catalog_for, parse_decision  # noqa: E402
 
 
 def _world():
@@ -34,19 +35,34 @@ def _world():
     return w
 
 
-def _decision(agent_id, option_id, *, targets=(), terms="", statement="", kind="coalition", lag=1, status="ok"):
-    return {"agent_id": agent_id, "option": {"id": option_id, "label": option_id.replace("_", " "), "kind": kind,
-                                             "cost": 1, "lag": lag, "reversibility": "reversible"},
+def _decision(agent_id, option_id, *, targets=(), terms="", statement="", status="ok"):
+    """Old fixtures invented cost/lag; C11 requires canonical class and bound-answer metadata."""
+    agency_class = ("sovereign_government", "regulator_agency", "labor_union")[agent_id]
+    if ":" in option_id:
+        verb = option_id.partition(":")[0]
+        option = {"id": option_id, "label": option_id, "kind": "coalition" if verb in ("accept", "counter") else "communication",
+                  "cost": 0 if verb == "defer" else 1, "lag": 1 if verb == "accept" else 0,
+                  "reversibility": "sticky" if verb == "accept" else "reversible"}
+    else:
+        option = next(t.to_option(label=option_id.replace("_", " "))
+                      for t in catalog_for(agency_class) if t.id == option_id)
+    return {"agent_id": agent_id, "option": option,
             "targets": list(targets), "magnitude": 0.6, "public_statement": statement, "terms": terms,
             "status": status}
 
 
 def _round(w, n, decisions):
-    return wu.deterministic_round_update(w, n, {"label": w.period_labels.get(n, f"period {n}")}, decisions, [], None)
+    """Old label-only rounds ignored term dates; C11 needs the actual monthly calendar for deadlines."""
+    label = w.period_labels[n]
+    year, month = map(int, label.split("-"))
+    period = {"label": label, "period_start": f"{label}-01",
+              "period_end": f"{label}-{calendar.monthrange(year, month)[1]:02d}"}
+    return wu.deterministic_round_update(w, n, period, decisions, [], None)
 
 
 # ----------------------------------------------------------------------------- opening and answering
 def test_proposal_opens_an_offer_the_recipient_must_answer():
+    """Old raw proposal metadata was trusted; C11 uses canonical metadata without changing consent."""
     w = _world()
     det = _round(w, 1, [_decision(0, "open_talks", targets=["Agency"], terms="Lift the ban in exchange for audits")])
     assert len(det["offers_opened"]) == 1 and "[i1_1]" in det["offers_opened"][0]
@@ -76,16 +92,18 @@ def test_proposal_opens_an_offer_the_recipient_must_answer():
 
 
 def test_accept_binds_both_parties_and_moves_the_relationship():
+    """Old acceptance lag set deadlines; C11 parses December terms and uses canonical action metadata."""
     w = _world()
     _round(w, 1, [_decision(0, "form_alliance", targets=["Agency"], terms="Joint task force by December")])
     w.commit_round(1)
-    det = _round(w, 2, [_decision(1, "accept:i1_1", statement="We accept the joint task force.", lag=1)])
+    det = _round(w, 2, [_decision(1, "accept:i1_1", statement="We accept the joint task force.")])
     inter = w.interactions["i1_1"]
     assert inter.status == "accepted" and inter.resolved_round == 2 and inter.response.startswith("We accept")
     assert len(det["offers_answered"]) == 1 and det["offers_answered"][0].startswith("Agreement [i1_1]: Agency accepted")
     for aid in (0, 1):
         pend = w.actors[aid].pending_commitments()
         assert len(pend) == 1 and pend[0]["source"] == "agreement:i1_1" and pend[0]["due_round"] == 3
+        assert pend[0]["due_basis"] == "terms" and pend[0]["due_date"] == "2026-12-31"
         assert pend[0]["counterparty"] == 1 - aid and "Honour the agreement with" in pend[0]["description"]
     assert set(inter.obligations) == {w.actors[0].commitments[0]["id"], w.actors[1].commitments[0]["id"]}
     rel = w._relationship_between(0, 1)
@@ -96,13 +114,13 @@ def test_accept_binds_both_parties_and_moves_the_relationship():
     assert "Offers and agreements:" in digest and "Agreement [i1_1]" in digest
     # Unrelated statements do not deliver the obligation; it stays due this period.
     w.commit_round(2)
-    _round(w, 3, [_decision(0, "public_statement", kind="communication", lag=0),
-                  _decision(1, "public_statement", kind="communication", lag=0)])
+    _round(w, 3, [_decision(0, "public_statement"), _decision(1, "public_statement")])
     assert all(c["status"] == "due" for a in (0, 1) for c in w.actors[a].commitments)
     assert not w.events_in_round(3, ("breach",))
 
 
 def test_reject_counter_and_defer():
+    """Old arbitrary answer costs/lags passed; C11 admits canonical answers and rejects stale ones."""
     w = _world()
     _round(w, 1, [_decision(0, "open_talks", targets=["Agency"], terms="A"),
                   _decision(2, "bargain", targets=["Agency"], terms="B")])
@@ -128,10 +146,12 @@ def test_reject_counter_and_defer():
     w.commit_round(4)
     _round(w, 5, [_decision(0, "accept:i1_1")])
     assert w.interactions["i1_1"].status == "rejected"
-    assert any("no longer open" in e.description for e in w.events_in_round(5, ("system",)))
+    assert w.actors[0].last_action["status"] == "invalid"
+    assert w.actors[0].capacity_used == 0
 
 
 def test_unanswered_offers_lapse_after_the_ttl():
+    """Old menus pinned a common first option; C11 rotates choices but drops expired answers."""
     w = _world()
     _round(w, 1, [_decision(0, "open_talks", targets=["Agency"], terms="T")])
     for n in (2, 3):
@@ -142,14 +162,17 @@ def test_unanswered_offers_lapse_after_the_ttl():
     det = _round(w, 4, [])
     assert w.interactions["i1_1"].status == "lapsed" and det["offers_lapsed"] == ["Ministry → Agency: T"]
     assert any("lapsed unanswered" in e.description for e in w.events_in_round(4, ("offer",)))
-    assert build_option_menu(w.actors[1], w, 4)[0]["id"].startswith(("plan_", "public_statement", "respond_"))
+    menu = build_option_menu(w.actors[1], w, 4)
+    assert not any(o["id"].endswith(":i1_1") for o in menu)
+    assert menu[-1]["id"] == "hold_position"
 
 
 def test_lapsed_obligation_and_withdrawal_are_breaches():
+    """Old deadlines used answer lag; C11 uses dated terms plus grace, while withdrawal stays immediate."""
     w = _world()
     _round(w, 1, [_decision(0, "sign_agreement", targets=["Agency"], terms="Deliver audits in November")])
     w.commit_round(1)
-    _round(w, 2, [_decision(1, "accept:i1_1", lag=1)])                 # obligations due round 3
+    _round(w, 2, [_decision(1, "accept:i1_1")])                 # obligations due round 3
     w.commit_round(2)
     rep_before = w.actors[1].reputation
     w.start_round(3, {"label": "2026-12"})
@@ -164,7 +187,10 @@ def test_lapsed_obligation_and_withdrawal_are_breaches():
     assert not problems
     w.apply_arbiter_update(3, update)  # Ministry delivers; Agency still owes its own obligation.
     w.commit_round(3)
-    det = _round(w, 4, [])                                               # Agency's obligation lapses → breach
+    grace = _round(w, 4, [])
+    assert grace["breaches"] == [] and w.actors[1].commitments[0]["status"] == "due"
+    w.commit_round(4)
+    det = _round(w, 5, [])                                               # Grace exhausted → Agency breaches
     assert w.interactions["i1_1"].status == "breached"
     assert len(det["breaches"]) == 1 and det["breaches"][0].startswith("Breach [i1_1]: Agency broke its agreement with Ministry")
     assert w.actors[1].reputation < rep_before
@@ -174,7 +200,7 @@ def test_lapsed_obligation_and_withdrawal_are_breaches():
     w2 = _world()
     _round(w2, 1, [_decision(0, "form_alliance", targets=["Union"], terms="Pact")])
     w2.commit_round(1)
-    _round(w2, 2, [_decision(2, "accept:i1_1", lag=3)])
+    _round(w2, 2, [_decision(2, "accept:i1_1")])
     w2.commit_round(2)
     det = _round(w2, 3, [_decision(0, "break_alliance", targets=["Union"])])
     assert w2.interactions["i1_1"].status == "breached" and len(det["breaches"]) == 1
@@ -183,29 +209,33 @@ def test_lapsed_obligation_and_withdrawal_are_breaches():
 
 
 def test_answering_an_unrelated_offer_does_not_discharge_a_due_obligation():
-    """New consent is distinct from delivery of the actor's earlier accepted promise."""
+    """Old lag-based debt breached next round; C11 uses terms and grace, but unrelated consent never delivers."""
     w = _world()
     _round(w, 1, [_decision(0, "sign_agreement", targets=["Agency"], terms="Deliver audits in November"),
                   _decision(2, "open_talks", targets=["Agency"], terms="Joint hearing in December")])
     w.commit_round(1)
-    _round(w, 2, [_decision(1, "accept:i1_1", lag=1)])                 # Agency's obligation to Ministry due round 3
+    _round(w, 2, [_decision(1, "accept:i1_1")])                 # Agency's obligation to Ministry due round 3
     w.commit_round(2)
     assert w.actors[1].pending_commitments()[0]["due_round"] == 3
     # round 3: the Ministry acts; the Agency's only move is its answer to the Union's open offer
-    det = _round(w, 3, [_decision(0, "public_statement", kind="communication", lag=0),
-                        _decision(1, "accept:i1_2", lag=1)])
+    det = _round(w, 3, [_decision(0, "public_statement"), _decision(1, "accept:i1_2")])
     assert w.interactions["i1_2"].status == "accepted"
     assert all(c["status"] == "due" for c in w.actors[1].commitments if c.get("source") == "agreement:i1_1")
     assert not det["breaches"] and not w.events_in_round(3, ("breach",))
     w.commit_round(3)
-    det4 = _round(w, 4, [_decision(0, "public_statement", kind="communication", lag=0),
-                         _decision(1, "public_statement", kind="communication", lag=0)])
-    assert w.interactions["i1_1"].status == "breached" and det4["breaches"]
+    det4 = _round(w, 4, [_decision(0, "public_statement"), _decision(1, "public_statement")])
+    assert w.interactions["i1_1"].status == "accepted" and det4["breaches"] == []
+    w.commit_round(4)
+    det5 = _round(w, 5, [])
+    assert w.interactions["i1_1"].status == "breached" and len(det5["breaches"]) == 2
+    assert all(c["status"] == "breached" for aid in (0, 1) for c in w.actors[aid].commitments
+               if c.get("source") == "agreement:i1_1")
     assert w.interactions["i1_2"].status == "accepted"
 
 
 # ----------------------------------------------------------------------------- contract, prompt, persistence
 def test_decision_contract_carries_terms_and_bound_answers_parse():
+    """Old raw offer metadata was trusted; C11 needs canonical offers before testing bound answer parsing."""
     w = _world()
     _round(w, 1, [_decision(0, "open_talks", targets=["Agency"], terms="T")])
     w.commit_round(1)
@@ -228,6 +258,7 @@ def test_decision_contract_carries_terms_and_bound_answers_parse():
 
 
 def test_arbiter_prompt_lists_offers_and_state_round_trips():
+    """Old raw action metadata passed unchecked; C11 persists the same offer using canonical admission."""
     w = _world()
     det = _round(w, 1, [_decision(0, "open_talks", targets=["Agency"], terms="T")])
     prompt = wu.build_arbiter_prompt(w, 1, {"label": "2026-10"}, [], det, w.scenarios)
@@ -235,7 +266,7 @@ def test_arbiter_prompt_lists_offers_and_state_round_trips():
     assert "Ministry made an offer to Agency [i1_1]: T" in prompt and "Still open: Ministry → Agency [i1_1]: T" in prompt
     w.commit_round(1)
     before = w.snapshot()
-    _round(w, 2, [_decision(1, "accept:i1_1", lag=1)])
+    _round(w, 2, [_decision(1, "accept:i1_1")])
     diff = w.diff(before)
     assert diff["interactions_changed"] == [{"id": "i1_1", "from": "open", "to": "accepted", "kind": "proposal",
                                              "proposer": "Ministry", "recipient": "Agency", "terms": "T"}]
@@ -280,6 +311,7 @@ def test_terms_restate_offer_compares_cjk_text_as_character_bigrams():
 
 
 def test_accept_on_materially_different_terms_is_recorded_as_a_counter():
+    """Old fixtures invented coalition costs; C11 canonical costs retain the mirror-image consent rule."""
     w = _world()
     _round(w, 1, [_decision(2, "open_talks", targets=["Agency"], terms=_OFFER)])
     w.commit_round(1)
@@ -311,7 +343,7 @@ def test_accept_on_materially_different_terms_is_recorded_as_a_counter():
     assert [o["id"] for o in build_option_menu(w.actors[2], w, 3)][:4] == ["accept:i2_2", "counter:i2_2", "reject:i2_2", "defer:i2_2"]
     assert not any(":" in o["id"] for o in build_option_menu(w.actors[1], w, 3))
     # accepting the counter as it stands binds both sides to the acceptor's terms
-    det = _round(w, 3, [_decision(2, "accept:i2_2", lag=1)])
+    det = _round(w, 3, [_decision(2, "accept:i2_2")])
     assert w.interactions["i2_2"].status == "accepted"
     assert det["offers_answered"][0].startswith("Agreement [i2_2]: Union accepted Agency's offer — The Secretariat records")
     for aid in (1, 2):
@@ -323,10 +355,11 @@ def test_accept_on_materially_different_terms_is_recorded_as_a_counter():
                                    "Agreed — joint task force by December.", "Accepted as proposed.",
                                    "We accept your offer [i1_1]."])
 def test_accept_with_empty_or_restated_terms_binds_as_an_acceptance(terms):
+    """Old fixtures invented coalition costs; C11 canonical admission still binds only the offered terms."""
     w = _world()
     _round(w, 1, [_decision(0, "form_alliance", targets=["Agency"], terms="Joint task force by December")])
     w.commit_round(1)
-    det = _round(w, 2, [_decision(1, "accept:i1_1", terms=terms, lag=1)])
+    det = _round(w, 2, [_decision(1, "accept:i1_1", terms=terms)])
     inter = w.interactions["i1_1"]
     assert inter.status == "accepted" and len(inter.obligations) == 2 and len(w.interactions) == 1
     assert det["offers_opened"] == [] and len(det["offers_answered"]) == 1

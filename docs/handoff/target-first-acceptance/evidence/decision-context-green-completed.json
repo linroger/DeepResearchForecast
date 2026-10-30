@@ -1,0 +1,36 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 83282,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "blocked:network:socket.__new__": 1,
+    "blocked:process:subprocess.Popen": 4,
+    "quarantine:oasis_import_cwd": 1,
+    "blocked:external_read": 20,
+    "redirect:app.services.simulation_manager": 1
+  },
+  "source_sha256": {
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/scripts/main_offline_pytest.py": "5046cf820fa468d8e8ffb2e3fdade1d20fca2f0bd56ee15eabdff51c223c02be",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/tests/test_context_audit_simulation.py": "2dcc5bd74d8a63ca0a6bc32198a04dc5e9542c17dd0af36c5c82eba9c2063ffd",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/tests/test_agent_decision.py": "098d30d67971f5857d2665a4068e02fbc8363e1df26dc4758349fa3e75145d79",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/app/config.py": "406cf338c01c218cecf9db7dda0bfcc05201b534c18c18e995862f58fd0a2032",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/Users/rogerlin/Downloads/DeepResearchForecast/backend/.venv/lib/python3.12/site-packages/oasis/__init__.py": "63f941d057c4d45f79db84986701917756c45b4c060c6b8d2c509216700e2c33",
+    "/Users/rogerlin/.codex/worktrees/first-ten-remedies/DeepResearchForecast/backend/app/services/simulation_manager.py": "bb0a5d95cc52f5e07531993db31863e819c21e9e622846cdc59b8f16bd6cc33a"
+  },
+  "contained_library_probes": {
+    "fc-list": 1,
+    "system_profiler": 1,
+    "font_directory_scan": 18
+  },
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {},
+  "children": {},
+  "identity_preserved": true
+}

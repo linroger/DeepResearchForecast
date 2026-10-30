@@ -10,7 +10,7 @@ and shows the actor what the others actually did one period later.
 import json
 
 from app.services import world_update as wu
-from app.services.agent_decision import build_option_menu, parse_decision
+from app.services.agent_decision import HOLD_TEMPLATE, build_option_menu, catalog_for, parse_decision
 from app.services.world_model import WorldModel
 
 
@@ -31,20 +31,30 @@ def _world():
     return WorldModel.from_seed(seed, cfgs)
 
 
-def _move(agent_id, name, option_id="public_statement", kind="communication", *, targets=(), statement="",
+def _move(agent_id, name, option_id="public_statement", *, targets=(), statement="",
           commitment=None, expected=(), status="ok"):
+    """Old cost-1/lag-0 stand-ins bypassed admission; C11 fixtures use actual catalogue metadata."""
+    agency_class = ("regulator_agency", "labor_union", "industry_coalition")[agent_id]
+    if option_id == "hold_position":
+        option = HOLD_TEMPLATE.to_option()
+    elif option_id.startswith("accept:"):
+        option = {"id": option_id, "label": option_id, "kind": "coalition", "cost": 1, "lag": 1,
+                  "reversibility": "sticky"}
+    else:
+        option = next(t.to_option(label=option_id.replace("_", " "))
+                      for t in catalog_for(agency_class) if t.id == option_id)
     return {"agent_id": agent_id, "actor_name": name,
-            "option": {"id": option_id, "label": option_id.replace("_", " "), "kind": kind, "cost": 1, "lag": 0},
+            "option": option,
             "targets": list(targets), "magnitude": 0.7, "public_statement": statement, "commitment": commitment,
             "expected_reactions": [{"actor": a, "reaction": r} for a, r in expected], "status": status}
 
 
 def _hold(agent_id, name):
-    return _move(agent_id, name, "hold_position", "wait")
+    return _move(agent_id, name, "hold_position")
 
 
 def _two_promises_one_kept(world):
-    """Two stored promises: confirmed delivery of the first, then lapse of the second."""
+    """Old due-3 promise lapsed at 4; C11 allows grace4 and records its lapse at 5."""
     world.start_round(1, None)
     world.register_decisions(1, [_move(1, "Dockworkers Union", commitment={"description": "Return to work", "due_periods": 1})])
     actor = world.actors[1]
@@ -69,9 +79,13 @@ def _two_promises_one_kept(world):
     world.register_decisions(3, [_hold(1, "Dockworkers Union")])
     world.start_round(4, None)
     world.lapse_overdue_commitments(4)
+    assert actor.commitments[1]["status"] == "due"
+    world.start_round(5, None)
+    world.lapse_overdue_commitments(5)
 
 
 def test_track_record_counts_kept_lapsed_and_broken_commitments():
+    """Old lapse was counted in round 4; C11 counts it after grace in round 5."""
     world = _world()
     _two_promises_one_kept(world)
     rec = world.track_record(1)
@@ -83,16 +97,18 @@ def test_track_record_counts_kept_lapsed_and_broken_commitments():
 
 
 def test_breaking_an_agreement_shows_in_the_public_track_record_first():
+    """Old resolution invented a non-mover's outcome; C11 requires a current canonical move before credit."""
     world = _world()
     world.start_round(1, None)
-    world.register_decisions(1, [_move(0, "Port Authority", "open_talks", "coalition", targets=["Dockworkers Union"],
+    world.register_decisions(1, [_move(0, "Port Authority", "open_talks", targets=["Dockworkers Union"],
                                        statement="Talks on overtime pay.")])
     (offer_id,) = list(world.interactions)
     world.start_round(2, None)
-    world.register_decisions(2, [_move(1, "Dockworkers Union", f"accept:{offer_id}", "coalition")])
+    world.register_decisions(2, [_move(1, "Dockworkers Union", f"accept:{offer_id}")])
     world.start_round(3, None)
-    world.register_decisions(3, [_move(1, "Dockworkers Union", "break_alliance", "coalition",
-                                       targets=["Port Authority"], statement="We walk away.")])
+    world.register_decisions(3, [_move(1, "Dockworkers Union", "break_alliance",
+                                       targets=["Port Authority"], statement="We walk away."),
+                                 _move(2, "Shipping Alliance", statement="We propose a revised shipping timetable.")])
     world.apply_arbiter_update(3, {"action_resolutions": [{"actor": "Shipping Alliance", "outcome": "blocked"},
                                                           {"actor": "Dockworkers Union", "outcome": "success"}]})
     union = world.track_record(1)
@@ -107,21 +123,24 @@ def test_breaking_an_agreement_shows_in_the_public_track_record_first():
 
 
 def test_the_arbiter_weighs_moves_by_track_record():
+    """Old prompt saw a round-4 lapse; C11 weighs the same record once grace expires in round 5."""
     world = _world()
     _two_promises_one_kept(world)
-    rows = [_move(1, "Dockworkers Union", "strike_action", "coercive", statement="Strike extended.")]
-    world.register_decisions(4, rows)
-    prompt = wu.build_arbiter_prompt(world, 4, None, rows, {}, ["Deal", "Long strike"])
+    rows = [_move(1, "Dockworkers Union", "strike_action", targets=["Port Authority"],
+                  statement="Strike extended.")]
+    world.register_decisions(5, rows)
+    prompt = wu.build_arbiter_prompt(world, 5, None, rows, {}, ["Deal", "Long strike"])
     assert "Track record: kept 1 of 2 commitments (1 lapsed); moves 1 succeeded." in prompt
     assert "weigh each actor's word by its track record" in prompt
     assert "self-fulfilling" in prompt and "self-defeating" in prompt
 
 
 def test_expectations_are_stored_and_compared_one_period_later():
+    """Old ruling/strike fixtures discounted cost and lag; canonical C11 moves retain private expectation checks."""
     world = _world()
     world.start_round(1, None)
     world.register_decisions(1, [
-        _move(0, "Port Authority", "issue_ruling", "legal", targets=["Dockworkers Union"],
+        _move(0, "Port Authority", "issue_ruling", targets=["Dockworkers Union"],
               expected=[("Dockworkers Union", "back down and return to work"),
                         ("Nobody Corp", "ignored: not in the cast"),
                         ("Port Authority", "ignored: about itself")]),
@@ -131,7 +150,7 @@ def test_expectations_are_stored_and_compared_one_period_later():
                                              "reaction": "back down and return to work"}]
     world.start_round(2, None)
     world.register_decisions(2, [
-        _move(1, "Dockworkers Union", "strike_action", "coercive", targets=["Port Authority"],
+        _move(1, "Dockworkers Union", "strike_action", targets=["Port Authority"],
               statement="We escalate the strike."),
         _hold(0, "Port Authority"),
     ])
@@ -148,15 +167,19 @@ def test_expectations_are_stored_and_compared_one_period_later():
     assert world.expectation_checks(0, 3) == []                  # only the period right after counts
 
 
-def test_the_arbiter_sees_the_expectations_in_play():
+def test_the_arbiter_excludes_private_expectations_in_play():
+    """Old arbiter prompts exposed expectations; C8 keeps them only in actor-private state."""
     world = _world()
     world.start_round(1, None)
-    rows = [_move(0, "Port Authority", "issue_ruling", "legal", targets=["Dockworkers Union"],
+    rows = [_move(0, "Port Authority", "issue_ruling", targets=["Dockworkers Union"],
                   expected=[("Dockworkers Union", "return to work")])]
     world.register_decisions(1, rows)
     prompt = wu.build_arbiter_prompt(world, 1, None, rows, {}, [])
-    assert "## Expectations in play" in prompt
-    assert "- Port Authority expects Dockworkers Union: return to work" in prompt
+    assert "## Expectations in play" not in prompt
+    assert "return to work" not in prompt
+    assert world.actors[0].expectations == [
+        {"round": 1, "about": "Dockworkers Union", "reaction": "return to work"},
+    ]
 
 
 def test_typed_non_decisions_record_no_expectations():
@@ -167,6 +190,7 @@ def test_typed_non_decisions_record_no_expectations():
 
 
 def test_records_and_expectations_survive_a_json_round_trip():
+    """Old persisted lapse appeared at round 4; C11 preserves the same record after round-5 grace expiry."""
     world = _world()
     _two_promises_one_kept(world)
     world.actors[0].outcomes = {"partial": 2}

@@ -62,11 +62,16 @@ import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable, ContextManager, Iterator, Mapping, Sequence, TypeVar
 from urllib.parse import quote, urlsplit, urlunsplit
+
+if __package__:
+    from . import run_spending as _spending
+else:
+    import run_spending as _spending
 
 T = TypeVar("T")
 
@@ -819,6 +824,8 @@ def _as_mapping(value: Any) -> Mapping[str, Any] | None:
     if callable(dump):
         try:
             dumped = dump()
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — foreign object; treat as absent
             return None
         return dumped if isinstance(dumped, Mapping) else None
@@ -1243,9 +1250,184 @@ def without_sdk_retries(model: Any) -> Any:
         if isinstance(state, dict):
             for name in _LAZY_CLIENT_ATTRS:
                 state.pop(name, None)
+    except _spending.SpendingStop:
+        raise
     except Exception:  # noqa: BLE001 — an uncopyable model still works, with SDK retries
         return model
     return clone
+
+
+def _check_bound_callbacks() -> None:
+    """No inherited or environment-selected callback may export a bound prompt."""
+    def enabled(name: str) -> bool:
+        return str(os.environ.get(name, "")).strip().lower() not in {"", "0", "false", "off", "no"}
+    if any(enabled(name) for name in ("LANGCHAIN_TRACING", "LANGCHAIN_TRACING_V2",
+                                     "LANGSMITH_TRACING", "LANGSMITH_TRACING_V2")):
+        _spending.deny("unsupported_route")
+    try:
+        from langchain_core.runnables.config import var_child_runnable_config
+        from langchain_core.tracers.context import _configure_hooks, _tracing_v2_is_enabled
+        from langsmith.run_helpers import get_tracing_context
+    except ImportError:
+        _spending.deny("unsupported_route")
+    inherited = var_child_runnable_config.get() or {}
+    tracing = get_tracing_context()
+    if (_tracing_v2_is_enabled() or inherited.get("callbacks") or tracing.get("enabled")
+            or tracing.get("parent") or tracing.get("client")
+            or any(var.get() is not None or (env and enabled(env)) for var, _, _, env in _configure_hooks)):
+        _spending.deny("unsupported_route")
+
+
+def _model_route(model: Any) -> str | None:
+    """Verify the actual closed ChatOpenAI transport, including its SDK resource.
+
+    Legacy retry suppression remains best effort. Required runs admit only an
+    inspectable chat-completions client with no SDK/HTTP retry or redirect path.
+    """
+    if _spending.check_context() is None:
+        return None
+    try:
+        from langchain_openai import ChatOpenAI
+    except ImportError:
+        _spending.deny("unsupported_route")
+    if type(model) is not ChatOpenAI:
+        _spending.deny("unsupported_route")
+    _check_bound_callbacks()
+    endpoint = str(getattr(model, "openai_api_base", None) or "")
+    name = str(getattr(model, "model_name", None) or "")
+    credential = getattr(model, "openai_api_key", None)
+    if callable(getattr(credential, "get_secret_value", None)):
+        credential = credential.get_secret_value()
+    if not isinstance(credential, str) or not credential:
+        _spending.deny("unsupported_route")
+    route_id = _spending.qualify_route("openai_chat", endpoint, name,
+        account_sha256=hashlib.sha256(credential.encode("utf-8")).hexdigest())
+    if (type(getattr(model, "max_retries", None)) is not int or model.max_retries != 0
+            or getattr(model, "streaming", None) is not False
+            or getattr(model, "cache", None) is not False
+            or type(getattr(model, "n", None)) is not int or model.n != 1
+            or getattr(model, "use_responses_api", None) is not False
+            or getattr(model, "retry_max_attempts", 1) != 1
+            or any(getattr(model, key, None) for key in
+                   ("model_kwargs", "default_headers", "default_query", "extra_body", "callbacks"))
+            or any(key in getattr(model, "__dict__", {}) for key in
+                   ("invoke", "_generate", "_get_request_payload", "bind", "bind_tools", "model_copy"))):
+        _spending.deny("unsupported_route")
+    root = getattr(model, "root_client", None)
+    resource = getattr(model, "client", None)
+    if (root is None or resource is None
+            or resource is not getattr(getattr(root, "chat", None), "completions", None)
+            or getattr(resource, "_client", None) is not root
+            or type(getattr(root, "max_retries", None)) is not int or root.max_retries != 0
+            or getattr(root, "api_key", None) != credential
+            or getattr(root, "organization", None) or getattr(root, "project", None)
+            or not callable(getattr(getattr(resource, "with_raw_response", None), "create", None))
+            or str(getattr(root, "base_url", "")).rstrip("/") != endpoint.rstrip("/")):
+        _spending.deny("unsupported_route")
+    http = getattr(root, "_client", None)
+    pool = getattr(getattr(http, "_transport", None), "_pool", None)
+    if (http is None or getattr(http, "follow_redirects", None) is not False
+            or getattr(pool, "_retries", None) != 0
+            or getattr(http, "auth", None) is not None
+            or any((getattr(http, "event_hooks", {}) or {}).values())
+            or any(value is not None for value in (getattr(http, "_mounts", {}) or {}).values())
+            or getattr(root, "_custom_query", None) or getattr(root, "_custom_headers", None)):
+        _spending.deny("unsupported_route")
+    return route_id
+
+
+def _model_wire_body(payload: dict) -> dict:
+    """Chat completions JSON after SDK options are removed and extra_body merged."""
+    body = dict(payload)
+    body.pop("timeout", None)
+    extra = body.pop("extra_body", None) or {}
+    if not isinstance(extra, dict) or set(extra) - {"thinking", "reasoning_effort", "max_tokens", "clear_thinking"}:
+        _spending.deny("unsupported_route")
+    body.update(extra)
+    return body
+
+
+def _model_spending_request(model: Any, messages: list, params: dict,
+                            tools: Sequence[Any] | None) -> tuple[str, dict] | None:
+    route_id = _model_route(model)
+    if route_id is None:
+        return None
+    # These are local function declarations. Each execution has its own priced
+    # Firecrawl admission; hosted tools and other schemas are not supported.
+    if tools and list(tools) != AGENT_TOOLS_SCHEMA:
+        _spending.deny("unsupported_route")
+    serializer = getattr(model, "_get_request_payload", None)
+    if not callable(serializer):
+        _spending.deny("unsupported_route")
+    wire_params = dict(params)
+    if tools:
+        wire_params["tools"] = list(tools)
+    payload = serializer(messages, **wire_params)
+    allowed = {"messages", "model", "stream", "n", "max_tokens", "max_completion_tokens",
+               "tools", "temperature", "top_p", "frequency_penalty", "presence_penalty",
+               "stop", "seed", "reasoning_effort", "extra_body", "timeout"}
+    if (not isinstance(payload, dict) or set(payload) - allowed
+            or payload.get("model") != model.model_name or payload.get("stream", False) is not False
+            or payload.get("n", 1) != 1 or payload.get("tools") != wire_params.get("tools")):
+        _spending.deny("unsupported_route")
+    extra = payload.get("extra_body") or {}
+    if (not isinstance(extra, dict)
+            or set(extra) - {"thinking", "reasoning_effort", "max_tokens", "clear_thinking"}):
+        _spending.deny("unsupported_route")
+    cap = params["max_tokens"]
+    caps = [payload[key] for key in ("max_tokens", "max_completion_tokens") if key in payload]
+    if "max_tokens" in extra:
+        caps.append(extra["max_tokens"])
+    if not caps or any(type(value) is not int or value != cap for value in caps):
+        _spending.deny("invalid_request")
+    route = _spending.get_route(route_id)
+    request = {"endpoint": route["endpoint"], "model": model.model_name,
+               "input_tokens": route["input_ceiling"], "max_output_tokens": cap,
+               "tool_units": 0, "payload_sha256": _spending.hash_payload(_model_wire_body(payload))}
+    _spending.quote_request(route_id, request)
+    return route_id, request
+
+
+def _raw_model_usage(body: Any) -> dict | None:
+    """Read reported HTTP JSON counters before SDK/LangChain message conversion."""
+    raw = body.get("usage") if isinstance(body, dict) else None
+    usage: dict[str, Any] = {"kind": "provider_reported"}
+    if isinstance(raw, Mapping):
+        for source, target in (("prompt_tokens", "input_tokens"), ("completion_tokens", "output_tokens")):
+            if raw.get(source) is not None:
+                usage[target] = raw[source]
+    return usage if len(usage) > 1 else None
+
+
+class _BoundRawCompletion:
+    """One concrete SDK send, matching the admitted JSON, with raw usage capture."""
+    def __init__(self, resource: Any, request: dict, observed: dict) -> None:
+        self.resource, self.request, self.observed = resource, request, observed
+
+    def create(self, **kwargs: Any) -> Any:
+        _spending.check_context()
+        if self.observed["calls"] or _spending.hash_payload(_model_wire_body(kwargs)) != self.request["payload_sha256"]:
+            _spending.deny("invalid_request")
+        self.observed["calls"] += 1
+        raw = self.resource.with_raw_response.create(**kwargs)
+        response = raw.http_response
+        if not 200 <= response.status_code < 300:
+            raise RuntimeError("model_transport_status")
+        self.observed["response"] = True
+        try:
+            body = response.json()
+        except (ValueError, TypeError):
+            body = None
+        self.observed["usage"] = _raw_model_usage(body)
+        return raw
+
+
+class _BoundCompletion:
+    def __init__(self, resource: Any, request: dict, observed: dict) -> None:
+        self.with_raw_response = _BoundRawCompletion(resource, request, observed)
+
+    def create(self, **kwargs: Any) -> Any:
+        return self.with_raw_response.create(**kwargs).parse()
 
 
 # How much longer than a call's own timeout the gateway waits for it.  A bound
@@ -1334,7 +1516,13 @@ class _ModelSlot:
 
     def __init__(self, name: str, model: Any) -> None:
         self.name = name
-        self.model = without_sdk_retries(model)
+        if _spending.check_context() is not None:
+            # Bound clients are constructed with retries disabled. Never try a
+            # best-effort SDK reconstruction before validating their route.
+            _model_route(model)
+            self.model = model
+        else:
+            self.model = without_sdk_retries(model)
         self.profile = detect_profile(self.model)
         self.level = 0
         self.disabled_reason: str | None = None
@@ -1432,6 +1620,8 @@ class ModelGateway:
                  sleep: Callable[[float], None] = time.sleep,
                  clock: Callable[[], float] = time.monotonic,
                  max_attempts: int = 5) -> None:
+        if _spending.check_context() is not None and fallback_model is not None:
+            _spending.deny("unsupported_route")
         if model is None:
             raise ValueError("ModelGateway requires a model")
         self.plog = plog
@@ -1486,6 +1676,8 @@ class ModelGateway:
             return
         try:
             self.plog.write(kind, message)
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — telemetry must never break a call
             pass
 
@@ -1521,6 +1713,7 @@ class ModelGateway:
         outcomes, and ``ValueError`` for caller bugs (unknown kind, empty or
         system-only messages, a non-integer ``max_tokens``).
         """
+        _spending.check_context()
         if kind not in CALL_KINDS:
             raise ValueError(f"unknown call kind {kind!r}; expected one of {CALL_KINDS}")
         messages = list(messages or ())
@@ -1570,6 +1763,8 @@ class ModelGateway:
         ``announce`` is False once the primary is sticky-disabled (that event
         was already logged once), so routine fallback calls stay quiet.
         """
+        if _spending.check_context() is not None:
+            _spending.deny("unsupported_route")
         if self._fallback is None:  # unreachable: callers route here only with a fallback
             raise primary_error
         if request.deadline is not None and request.deadline.expired():
@@ -1639,10 +1834,50 @@ class ModelGateway:
                     params = slot.profile.call_params(request.kind, level=level, timeout=timeout)
                     if cap is not None:
                         _apply_output_cap(params, cap)
+                    admission = _model_spending_request(slot.model, wire_messages, params, request.tools)
+                    observed = {"calls": 0, "response": False, "usage": None}
+                    if admission is not None:
+                        # Never mutate the shared model/client across fan-out jobs.
+                        clone = slot.model.model_copy(update={
+                            "client": _BoundCompletion(slot.model.client, admission[1], observed),
+                            "cache": False, "callbacks": []})
+                        if type(clone) is not type(slot.model) or clone is slot.model:
+                            _spending.deny("unsupported_route")
+                        base = clone.bind_tools(request.tools) if request.tools else clone
                     runnable = base.bind(**params)
+                except _spending.SpendingStop:
+                    raise
                 except Exception as exc:  # noqa: BLE001 — re-raised unchanged by the caller
                     raise _PreparationError(exc) from exc
-                message = _call_within(lambda: runnable.invoke(wire_messages), timeout + CALL_WAIT_GRACE_S)
+                if admission is None:
+                    message = _call_within(lambda: runnable.invoke(wire_messages), timeout + CALL_WAIT_GRACE_S)
+                else:
+                    route_id, envelope = admission
+                    unparsed = object()
+                    def invoke_bound():
+                        _spending.check_context()
+                        _check_bound_callbacks()
+                        return runnable.invoke(wire_messages, config={"callbacks": []})
+                    def send():
+                        try:
+                            value = _call_within(invoke_bound, timeout + CALL_WAIT_GRACE_S)
+                        except (_spending.SpendingStop, ProviderCallTimeout):
+                            raise
+                        except Exception:
+                            if observed["response"]:
+                                return unparsed
+                            raise
+                        if observed["calls"] != 1 or not observed["response"]:
+                            _spending.deny("unsupported_route")
+                        return value
+                    # The outer wait belongs inside dispatch: an abandoned worker
+                    # must latch unknown before the caller can retry or fall back.
+                    _spending.check_context()
+                    with _spending.operation("research:" + request.phase,
+                                             request.label + ":" + envelope["payload_sha256"]):
+                        message = _spending.dispatch(route_id, envelope, send, usage=lambda _: observed["usage"])
+                    if message is unparsed:
+                        raise _PreparationError(BadRequest("The provider returned an unusable response."))
                 return message, int(params["max_tokens"])
 
     def _widened_cap(self, slot: _ModelSlot, request: _Request, cap: int | None, latency: float) -> int:
@@ -1699,12 +1934,16 @@ class ModelGateway:
                 request.deadline.check(request.label)
             self._check_budget(request, slot.profile)
             level = max(slot.level, degraded_to)
+            if _spending.check_context() is not None and request.tools and list(request.tools) != AGENT_TOOLS_SCHEMA:
+                _spending.deny("unsupported_route")
             base = slot.runnable(request.tools)
             started = self._clock()
             try:
                 message, sent_cap = self._provider_call(slot, request, base, wire_messages, level, cap)
             except _PreparationError as prep:
                 raise prep.error from prep.error.__cause__
+            except _spending.SpendingStop:
+                raise
             except Exception as exc:  # noqa: BLE001 — classified below, never swallowed
                 category = classify_exception(exc)
                 if self._maybe_degrade(slot, level, category, exc, request):
@@ -1940,6 +2179,7 @@ class ModelGateway:
         budget or the deadline cannot cover it.  Never raises: priming is an
         optimization, so every failure returns ``False``.
         """
+        _spending.check_context()
         if kind not in CALL_KINDS:
             raise ValueError(f"unknown call kind {kind!r}; expected one of {CALL_KINDS}")
         messages = list(messages or ())
@@ -1967,6 +2207,8 @@ class ModelGateway:
                 raise prep.error from prep.error.__cause__
             self._build_result(message, slot, request, 1, self._clock() - started, output_cap=sent_cap)
             return True
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — priming must never fail the caller
             self._log("warn", f"gateway: {request.label}: cache priming skipped "
                               f"({_error_summary(exc, 160)})")
@@ -1982,6 +2224,7 @@ class ModelGateway:
         (``KeyboardInterrupt``/``SystemExit``) propagate.  No worker thread
         outlives this call.
         """
+        _spending.check_context()
         jobs = list(jobs or ())
         results: list[Any] = [None] * len(jobs)
         if not jobs:
@@ -1990,6 +2233,8 @@ class ModelGateway:
         def run(index: int) -> None:
             try:
                 results[index] = jobs[index]()
+            except _spending.SpendingStop:
+                raise
             except Exception as exc:  # noqa: BLE001 — returned to the caller by contract
                 results[index] = exc
 
@@ -2001,7 +2246,9 @@ class ModelGateway:
         if remaining:
             pool_size = max(1, min(len(remaining), int(workers or self.max_concurrency)))
             with ThreadPoolExecutor(max_workers=pool_size, thread_name_prefix="gateway-fanout") as pool:
-                futures = [pool.submit(run, index) for index in remaining]
+                # A fresh Context per worker preserves the required run binding
+                # without sharing a Context concurrently or putting it in prompts.
+                futures = [pool.submit(contextvars.copy_context().run, run, index) for index in remaining]
                 for future in futures:
                     future.result()
         return results
@@ -2374,6 +2621,77 @@ def _fallback_valid_url(url: str) -> bool:
 
 
 _VALID_TIERS = ("S1", "S2", "S3")
+_EVIDENCE_TIERS = ("primary", "secondary", "social", "unknown")
+_PUBLICATION_FIELDS = ("published_at", "published_date", "publishedDate", "publishedAt",
+                       "datePublished", "publication_date", "published", "date")
+_ISO_SOURCE_DATE_RE = re.compile(
+    r"\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:\d{2})?)?")
+# Publication types come only from provider result/envelope metadata, never
+# model tool arguments, titles, snippets, page prose or the legacy S1/S2 tiers.
+_PUBLICATION_TIERS = {
+    "official_dataset": "primary", "official_statistics": "primary",
+    "statistical_release": "primary", "government_report": "primary",
+    "regulatory_filing": "primary", "company_filing": "primary",
+    "newsarticle": "secondary", "news_article": "secondary", "news_snippet": "secondary",
+    "socialmediaposting": "social", "social_post": "social",
+}
+
+
+def _source_iso_date(value: Any) -> str | None:
+    """Retain an explicit ISO calendar date/instant; never infer or substitute."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not _ISO_SOURCE_DATE_RE.fullmatch(value):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if "T" in value and parsed.tzinfo is None:
+        return None  # A local clock time is not a known publication instant.
+    return value
+
+
+def _source_metadata(metadata: Mapping[str, Any] | None) -> dict:
+    """Project provider fields (top-level or ``metadata``), ignoring tier claims.
+
+    ``origin_cluster`` or ``original_origin`` names an explicitly supplied
+    upstream origin; ``original_url`` is canonicalized when supplied instead.
+    A publisher/domain alone does not establish independent reporting: every
+    unresolved source shares the same ``unknown`` cluster.
+    """
+    raw = metadata if isinstance(metadata, Mapping) else {}
+    nested = raw.get("metadata")
+    fields = {**raw, **nested} if isinstance(nested, Mapping) else raw
+    published = next((value for key in _PUBLICATION_FIELDS
+                      if (value := _source_iso_date(fields.get(key))) is not None), None)
+    origin = "unknown"
+    for key in ("origin_cluster", "original_origin", "original_url"):
+        value = fields.get(key)
+        if not isinstance(value, str) or not value.strip() or len(value) > 500:
+            continue
+        value = value.strip()
+        if value.casefold() in ("unknown", "unknown_independence", "none", "null", "n/a"):
+            continue
+        if _fallback_valid_url(value):
+            value = canonical_url(value)
+        elif key == "original_url" or "://" in value:
+            continue
+        # Do not turn removed instructions or truncated text into an identity.
+        clean = _collapse(_clean_web_text(value), 500)
+        if clean and INSTRUCTION_REMOVED not in clean:
+            origin = clean
+            break
+    tier = "unknown"
+    for key in ("publication_type", "source_type", "@type", "kind"):
+        value = fields.get(key)
+        if isinstance(value, str):
+            tier = _PUBLICATION_TIERS.get(value.strip().casefold(), "unknown")
+            if tier != "unknown":
+                break
+    return {"published_at": published, "retrieved_at": _source_iso_date(fields.get("retrieved_at")),
+            "origin_cluster": origin, "evidence_tier": tier}
 
 
 _CONTEXT_EVIDENCE_FIELDS = (
@@ -2448,15 +2766,23 @@ class SourceLedger:
     reloaded from ``path``).  Rows are deduplicated by :func:`canonical_url`.
     Disk writes are atomic and debounced (at most once per second; the engine
     calls :meth:`flush` at phase end).
+
+    ``capture_evidence=True`` opts into target-first provenance and selected
+    passages. The default preserves legacy row shapes and metadata behavior.
     """
 
     FLUSH_INTERVAL_S = 1.0
+    MAX_PASSAGES = 8
+    MAX_PASSAGE_CHARS = 8000
+    MAX_PASSAGES_CHARS = 32000
 
     def __init__(self, path: str | os.PathLike[str], *, bridge: Any = None,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 clock: Callable[[], float] = time.monotonic,
+                 capture_evidence: bool = False) -> None:
         self.path = Path(path)
         self._bridge = bridge
         self._clock = clock
+        self.capture_evidence = capture_evidence
         self._lock = threading.RLock()
         self._rows: dict[int, dict[str, Any]] = {}
         self._by_canonical: dict[str, int] = {}
@@ -2495,6 +2821,16 @@ class SourceLedger:
                 clean["title"] = _clean_title(clean["title"]) or _display_domain(url)
             if clean.get("tier") not in _VALID_TIERS:
                 clean["tier"] = self._tier(url)
+            if self.capture_evidence:
+                clean["published_at"] = _source_iso_date(clean.get("published_at"))
+                clean["retrieved_at"] = (_source_iso_date(clean.get("retrieved_at"))
+                                         or _source_iso_date(clean.get("fetched_at")))
+                clean["origin_cluster"] = _source_metadata(clean)["origin_cluster"]
+                if clean.get("evidence_tier") not in _EVIDENCE_TIERS:
+                    clean["evidence_tier"] = "primary" if clean.get("dataset") else "unknown"
+                if clean.get("source_metadata_status") == "conflict":
+                    clean["evidence_tier"] = "unknown"
+                clean["passages"] = self._bounded_passages(clean.get("passages"))
             self._rows[sid] = clean
             self._by_canonical.setdefault(canonical, sid)
         if self._rows:
@@ -2506,6 +2842,8 @@ class SourceLedger:
         if callable(tier_fn):
             try:
                 tier = tier_fn(url)
+            except _spending.SpendingStop:
+                raise
             except Exception:  # noqa: BLE001 — tiering is advisory metadata
                 tier = None
             if tier in ("S1", "S2"):
@@ -2514,6 +2852,8 @@ class SourceLedger:
         if callable(default_fn):
             try:
                 tier = default_fn()
+            except _spending.SpendingStop:
+                raise
             except Exception:  # noqa: BLE001
                 tier = None
             if tier in _VALID_TIERS:
@@ -2525,15 +2865,18 @@ class SourceLedger:
         if callable(check):
             try:
                 return bool(check(url))
+            except _spending.SpendingStop:
+                raise
             except Exception:  # noqa: BLE001
                 return False
         return _fallback_valid_url(url)
 
     def register(self, url: Any, title: Any = "", snippet: Any = "", via: str = "search",
-                 by: str = "") -> dict | None:
+                 by: str = "", *, metadata: Mapping[str, Any] | None = None) -> dict | None:
         """Register (or find) the row for ``url``; returns a copy, or ``None``
         for an invalid URL.  Empty title/snippet fields are filled by later
-        sightings; every other field keeps its first-seen value."""
+        sightings. When capture is enabled, additive evidence fields accept
+        provider metadata only; legacy fields keep their first-seen values."""
         url = str(url or "").strip()
         if not url or not self.valid_url(url):
             return None
@@ -2554,9 +2897,10 @@ class SourceLedger:
                 if clean_snippet and not row.get("snippet"):
                     row["snippet"] = clean_snippet
                     changed = True
+                changed = self._merge_metadata(row, metadata) or changed
                 if changed:
                     self._touch()
-                return dict(row)
+                return self._copy_row(row)
             sid = self._next_sid
             self._next_sid += 1
             domain = _display_domain(url)
@@ -2575,20 +2919,117 @@ class SourceLedger:
                 "snippet": clean_snippet,
                 "first_seen_by": str(by or ""),
             }
+            if self.capture_evidence:
+                row.update(_source_metadata(metadata), passages=[])
+                row["retrieved_at"] = row["retrieved_at"] or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                self._merge_metadata(row, metadata)
             self._rows[sid] = row
             self._by_canonical[canonical] = sid
             self._touch()
-            return dict(row)
+            return self._copy_row(row)
+
+    def _copy_row(self, row: Mapping[str, Any]) -> dict:
+        # The new mutable collection must not let consumers mutate the ledger.
+        copied = dict(row)
+        if self.capture_evidence and isinstance(row.get("passages"), list):
+            copied["passages"] = list(row["passages"])
+        if isinstance(row.get("source_metadata_receipts"), list):
+            copied["source_metadata_receipts"] = [dict(item) for item in row["source_metadata_receipts"]]
+        return copied
+
+    def _merge_metadata(self, row: dict, metadata: Mapping[str, Any] | None) -> bool:
+        if not self.capture_evidence:
+            return False
+        changed = False
+        raw = metadata if isinstance(metadata, Mapping) else {}
+        nested = raw.get("metadata")
+        fields = {**raw, **nested} if isinstance(nested, Mapping) else raw
+        if fields.get("source_metadata_version") == "world-anchor-source-metadata/v1":
+            allowed = (*_PUBLICATION_FIELDS, "publication_type", "source_type", "@type", "kind",
+                       "origin_cluster", "original_origin", "original_url", "source_metadata_origin", "source_metadata_version")
+            receipt = {key: fields[key] for key in allowed if isinstance(fields.get(key), str) and 0 < len(fields[key]) <= 2048}
+            receipts = list(row.get("source_metadata_receipts") or [])
+            tiers = {row.get("evidence_tier", "unknown")}
+            for item in [*receipts, receipt]:
+                tiers.update(_PUBLICATION_TIERS.get(item[key].strip().casefold(), "unknown")
+                             for key in ("publication_type", "source_type", "@type", "kind") if isinstance(item.get(key), str))
+            tiers.discard("unknown")
+            if receipt not in receipts:
+                # Keep the first classifications and the latest raw receipt;
+                # overflow is itself closed and cannot regain primary status.
+                if len(receipts) >= 8:
+                    receipts = receipts[:7]
+                    row["source_metadata_overflow"] = True
+                receipts.append(receipt)
+                row["source_metadata_receipts"] = receipts
+                changed = True
+            conflict = row.get("source_metadata_status") == "conflict" or len(tiers) > 1 or row.get("source_metadata_overflow") is True
+            status = "conflict" if conflict else "consistent"
+            if row.get("source_metadata_status") != status:
+                row["source_metadata_status"] = status
+                changed = True
+            if conflict and row.get("evidence_tier") != "unknown":
+                row["evidence_tier"] = "unknown"
+                changed = True
+        for key, value in _source_metadata(metadata).items():
+            if key == "evidence_tier" and row.get("source_metadata_status") == "conflict":
+                continue
+            if value in (None, "unknown"):
+                continue
+            if (key == "retrieved_at" or row.get(key) in (None, "", "unknown")) and row.get(key) != value:
+                row[key] = value
+                changed = True
+        return changed
+
+    @classmethod
+    def _bounded_passages(cls, passages: Any) -> list[str]:
+        if not isinstance(passages, list):
+            return []
+        kept: list[str] = []
+        total = 0
+        for passage in passages:
+            if not isinstance(passage, str):
+                continue
+            passage = passage[:cls.MAX_PASSAGE_CHARS].strip()
+            if not passage or passage in kept:
+                continue
+            if len(kept) >= cls.MAX_PASSAGES or total + len(passage) > cls.MAX_PASSAGES_CHARS:
+                break
+            kept.append(passage)
+            total += len(passage)
+        return kept
+
+    def note_passage(self, sid: int, passage: str) -> None:
+        """Retain the sanitized, model-visible fetch body, most recent first.
+
+        Exact duplicates are free; at most eight excerpts / 32k characters are
+        kept (8k per excerpt). This is evidence actually shown, not a prefix
+        guessed from a long page. Full pinned bytes remain in ``page_text``.
+        """
+        if not self.capture_evidence:
+            return
+        if not isinstance(passage, str) or not passage.strip() or passage.strip() == INSTRUCTION_REMOVED:
+            return
+        with self._lock:
+            row = self._rows.get(_as_int(sid) or 0)
+            if row is None or not row.get("fetched"):
+                return
+            passages = self._bounded_passages([passage, *row.get("passages", [])])
+            if passages != row.get("passages"):
+                row["passages"] = passages
+                self._touch()
 
     def register_context(self, item: Mapping[str, Any], *, by: str = "") -> dict | None:
         """Keep discovery provenance without treating a snippet as a fetched page."""
-        row = self.register(item.get("url"), item.get("title"), item.get("snippet"), by=by)
+        row = self.register(item.get("url"), item.get("title"), item.get("snippet"), by=by, metadata=item)
         if row is None:
             return None
         with self._lock:
             stored = self._rows[row["sid"]]
             for name in ("provider", "kind", "published_at", "retrieved_at", "publisher",
                          "native_id", "language"):
+                if self.capture_evidence and name in ("published_at", "retrieved_at"):
+                    continue
                 value = item.get(name)
                 if value is None:
                     stored.setdefault(name, None)
@@ -2602,10 +3043,11 @@ class SourceLedger:
                 stored.setdefault("context_evidence_sha256", item.get("evidence_sha256"))
             stored["eligibility"] = {"context_only": True, "anchor": False, "resolution": False}
             self._touch()
-            return dict(stored)
+            return self._copy_row(stored)
 
     def mark_fetched(self, sid: int, *, content_sha256: str, chars: int, page_path: str,
-                     title: str | None = None, backtest: Mapping[str, Any] | None = None) -> dict | None:
+                     title: str | None = None, backtest: Mapping[str, Any] | None = None,
+                     metadata: Mapping[str, Any] | None = None) -> dict | None:
         with self._lock:
             row = self._rows.get(int(sid))
             if row is None:
@@ -2622,6 +3064,10 @@ class SourceLedger:
             row["content_sha256"] = str(content_sha256)
             row["chars"] = int(chars)
             row["page_path"] = str(page_path)
+            if self.capture_evidence:
+                self._merge_metadata(row, metadata)
+                if not row.get("retrieved_at"):
+                    row["retrieved_at"] = row["fetched_at"]
             clean_title = _clean_title(title) if title else ""
             if clean_title:
                 row["title"] = clean_title
@@ -2630,7 +3076,7 @@ class SourceLedger:
                 # archive capture), so a reader can audit what reached the model.
                 row["backtest"] = dict(backtest)
             self._touch()
-            return dict(row)
+            return self._copy_row(row)
 
     def register_fmp(self, item: Mapping[str, Any], *, by: str = "") -> dict:
         """A distinct source for one captured response, never the mutable MCP URL."""
@@ -2672,15 +3118,17 @@ class SourceLedger:
                               (parts.query + "&" if parts.query else "")
                               + "drf_series=" + quote(str(series["series"]), safe=""), ""))
         with self._lock:
-            row = self.register(identity, title, via="data", by=agent_id)
+            row = self.register(identity, title, via="data", by=agent_id, metadata=series)
             if row is None:
                 return None
             stored = self._rows[row["sid"]]
             stored.update(via="data", tier=tier if tier in _VALID_TIERS else "S1",
                           dataset={key: series.get(key, "") for key in
                                    ("series", "provider", "units", "frequency", "slug", "source_url")})
+            if self.capture_evidence:
+                stored["evidence_tier"] = "primary"
             self._touch()
-            return dict(stored)
+            return self._copy_row(stored)
 
     def forget_dataset(self, sid: int) -> bool:
         """Drop a dataset row that was never marked fetched (its evidence write
@@ -2702,17 +3150,17 @@ class SourceLedger:
     def get(self, sid: int) -> dict | None:
         with self._lock:
             row = self._rows.get(_as_int(sid) or 0)
-            return dict(row) if row is not None else None
+            return self._copy_row(row) if row is not None else None
 
     def find(self, url: Any) -> dict | None:
         """Row for ``url`` by canonical identity, or ``None``."""
         with self._lock:
             sid = self._by_canonical.get(canonical_url(url))
-            return dict(self._rows[sid]) if sid is not None else None
+            return self._copy_row(self._rows[sid]) if sid is not None else None
 
     def rows(self) -> list[dict]:
         with self._lock:
-            return [dict(self._rows[sid]) for sid in sorted(self._rows)]
+            return [self._copy_row(self._rows[sid]) for sid in sorted(self._rows)]
 
     def __len__(self) -> int:
         with self._lock:
@@ -3641,6 +4089,8 @@ CONTEXT_TOOLS_SCHEMA = [
 
 def context_tool_names(env: Mapping[str, Any]) -> tuple[str, ...]:
     """Trusted feature switches only; credential presence is the provider owner's job."""
+    if _spending.check_context() is not None:
+        return ()
     if str(env.get("DRF_BACKTEST_POLICY") or "").strip():
         return ()  # Current news/quotes have no point-in-time admissibility contract.
     def on(name: str, default: str = "true") -> bool:
@@ -3779,6 +4229,8 @@ def _data_hint(api: Any, request: str, code: str) -> str:
     hint = getattr(getattr(api, "DataSources", None), "_hint", None)
     try:
         return str(hint(request, code)) if callable(hint) else ""
+    except _spending.SpendingStop:
+        raise
     except Exception:  # noqa: BLE001 — the hint is optional text
         return ""
 
@@ -3915,7 +4367,7 @@ def _run_coroutine_blocking(factory: Callable[[], Any]) -> Any:
     except RuntimeError:
         return asyncio.run(factory())
     with ThreadPoolExecutor(max_workers=1, thread_name_prefix="gateway-async") as pool:
-        return pool.submit(lambda: asyncio.run(factory())).result()
+        return pool.submit(contextvars.copy_context().run, lambda: asyncio.run(factory())).result()
 
 
 def _default_search_fn(query: str, max_results: int) -> str:
@@ -3952,6 +4404,41 @@ def _json_object(text: str) -> dict | None:
     except ValueError:
         return None
     return value if isinstance(value, dict) else None
+
+
+def _fetch_payload(raw: Any) -> tuple[str, Mapping[str, Any] | None, Mapping[str, Any] | None]:
+    """Unwrap provider ``content``/``text``/``markdown`` plus metadata.
+
+    Accept a mapping or JSON string, optionally under ``data``. Keep the
+    outer error/control envelope for failure checks; do not cite metadata as
+    page text. Plain-text fetches retain their existing behavior.
+    """
+    text = raw if isinstance(raw, str) else str(raw or "")
+    envelope = raw if isinstance(raw, Mapping) else _json_object(text)
+    if envelope is None:
+        return text, None, None
+    data = envelope.get("data")
+    payload = data if isinstance(data, Mapping) else envelope
+    metadata = {}
+    for layer in (envelope, payload):
+        metadata.update(layer)
+        nested = layer.get("metadata")
+        if isinstance(nested, Mapping):
+            metadata.update(nested)
+    metadata.pop("metadata", None)
+    # Nested provider errors must not become successful fetched evidence.
+    if payload is not envelope and (payload.get("error") or payload.get("status") == "already_available"):
+        envelope = {**envelope, "error": envelope.get("error") or payload.get("error"),
+                    "status": payload.get("status")}
+    for key in ("markdown", "content", "text"):
+        if isinstance(payload.get(key), str):
+            return payload[key], envelope, metadata
+    metadata_fields = (*_PUBLICATION_FIELDS, "retrieved_at", "origin_cluster", "original_origin",
+                       "original_url", "publication_type", "source_type", "@type", "kind", "evidence_tier")
+    if ("metadata" in envelope or isinstance(data, Mapping)
+            or any(key in metadata for key in (*metadata_fields, "markdown", "content", "text"))):
+        text = ""
+    return text, envelope, metadata
 
 
 def _page_title(text: str) -> str:
@@ -4001,12 +4488,15 @@ class ResearchTools:
     backtest_capable = True
 
     def __init__(self, ledger: SourceLedger, pages_dir: str | os.PathLike[str], *,
-                 search_fn: Callable[[str, int], str] | None = None,
-                 fetch_fn: Callable[[str], str] | None = None,
+                 search_fn: Callable[[str, int], Any] | None = None,
+                 fetch_fn: Callable[[str], Any] | None = None,
                  bridge: Any = None, plog: Any = None,
                  limits: ToolLimits | None = None, data_sources: Any = None,
                  context_client: Any = None, backtest: Any = None, fmp_store: Any = None,
                  archive_get: Callable[[str, float], str] | None = None) -> None:
+        if _spending.check_context() is not None and any(value is not None for value in
+                (search_fn, fetch_fn, data_sources, context_client, backtest, archive_get, fmp_store)):
+            _spending.deny("unsupported_route")
         self.ledger = ledger
         self.pages_dir = Path(pages_dir)
         self.pages_dir.mkdir(parents=True, exist_ok=True)
@@ -4059,6 +4549,8 @@ class ResearchTools:
     def fmp_query(self, name: str, *, query: Any = "", tool: Any = "", arguments: Any = None,
                   agent_id: str, deadline: Deadline | None = None) -> str:
         """FMP calls share the existing search/fetch quotas and research deadline."""
+        if _spending.check_context() is not None:
+            _spending.deny("unsupported_route")
         if self.backtest is not None:
             return "FMP_UNAVAILABLE[disabled]: historical/backtest FMP is unsupported."
         if self.fmp_store is None:
@@ -4156,6 +4648,8 @@ class ResearchTools:
         ContextClient owns shared attempt/network budgets and provider singleflight.
         Gateway caches/replays consume neither provider nor local search admission.
         """
+        if _spending.check_context() is not None:
+            _spending.deny("unsupported_route")
         if self.backtest is not None:
             return "CONTEXT_UNAVAILABLE[backtest_unsupported]: historical context is not admissible."
         if name not in CONTEXT_TOOL_METHODS or not isinstance(query, str) or not query.strip():
@@ -4313,6 +4807,8 @@ class ResearchTools:
 
     def data_search(self, query: Any, *, provider: str | None = None,
                     agent_id: str, deadline: Deadline | None = None) -> str:
+        if _spending.check_context() is not None:
+            _spending.deny("unsupported_route")
         if not isinstance(query, str) or not query.strip() or (provider is not None and not isinstance(provider, str)):
             return "DATA_UNAVAILABLE[invalid_input]: data_search needs a non-empty query string; provider is optional."
         # An empty optional argument means "not given" (models often send "").
@@ -4337,6 +4833,8 @@ class ResearchTools:
         seeder (:data:`DATA_SEEDER`) passes the KIQs whose data needs it
         serves, and its gets count toward the prefetch cap.
         """
+        if _spending.check_context() is not None:
+            _spending.deny("unsupported_route")
         if not isinstance(series, str) or any(value is not None and not isinstance(value, str)
                                              for value in (start, end, transform)):
             return "DATA_UNAVAILABLE[invalid_input]: series, start, end and transform must be strings."
@@ -4409,6 +4907,8 @@ class ResearchTools:
         is immutable for the run, so long histories and projection horizons
         must be requested here.  Answers are keyed by the IDs as passed.
         """
+        if _spending.check_context() is not None:
+            _spending.deny("unsupported_route")
         outputs: dict[str, str] = {}
         pending: dict[str, tuple[str, tuple[str | None, str | None]]] = {}
         links: dict[str, list[str]] = {}
@@ -4475,6 +4975,8 @@ class ResearchTools:
                 for job in jobs:
                     try:
                         merged.update(job.result())
+                    except _spending.SpendingStop:
+                        raise
                     except Exception:  # noqa: BLE001 — one window group never voids the others
                         pass
             return merged
@@ -4484,6 +4986,8 @@ class ResearchTools:
             # Leave a bounded margin to receive and persist those results.
             provider_seconds = max(0.0, remaining - min(5.0, remaining * 0.2))
             results = _call_within(lambda: batch(provider_seconds), remaining)
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — bounded batch failure, no raw provider text
             results = {}
         with self._data_lock:
@@ -4520,6 +5024,8 @@ class ResearchTools:
         commit under the data lock.  ``identity`` marks a dataset get (else a
         search); ``flight`` is the singleflight key, shared by every window of
         one series so concurrent agents never fetch it twice."""
+        if _spending.check_context() is not None:
+            _spending.deny("unsupported_route")
         with self._singleflight(self._inflight_data, flight,
                                 wait=deadline.remaining() if deadline else 90.0) as owner:
             with self._data_lock:
@@ -4554,6 +5060,8 @@ class ResearchTools:
                 # Only the API read runs in the daemon. Late returns cannot
                 # mutate the ledger, run datasets, pages or sealed exhibits.
                 result = _call_within(lambda: fetch(provider_seconds), bound)
+            except _spending.SpendingStop:
+                raise
             except Exception as exc:  # noqa: BLE001 — provider/file failures are optional enrichment
                 result = exc
             with self._data_lock:
@@ -4630,6 +5138,8 @@ class ResearchTools:
                                          {**series.to_dict(), "slug": persisted["slug"]}, agent_id)
             self.ledger.mark_fetched(sid, content_sha256=digest, chars=len(page), page_path=page_path)
             self.ledger.flush()
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — a failed write never becomes evidence
             if sid is not None:
                 self.ledger.forget_dataset(sid)
@@ -4667,6 +5177,8 @@ class ResearchTools:
         try:
             manifest = _data_api().write_dataset_files([series], self.pages_dir.parent,
                                                        citations={series.series: sid})
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — links are advisory; the writer never raises by contract
             manifest = {"error": "unavailable"}
         if manifest.get("error"):
@@ -4697,7 +5209,14 @@ class ResearchTools:
         # Line 1 is the row header the engine reads; a note never precedes it.
         header = (f"[S{sid}] {row.get('title', '')} — {row.get('domain', '')} (tier 1)"
                   f" — dataset {series.series}, {series.units}, {series.frequency}")
-        body = delimit_untrusted("official dataset", neutralize_citation_markers(page))
+        visible = neutralize_citation_markers(page)
+        body = delimit_untrusted("official dataset", visible)
+        if body and self.ledger.capture_evidence:
+            # data_get and prefetch_data both render through this path after
+            # storage. Capture only the pinned page body actually returned,
+            # excluding generated headers/window notes, before returning it.
+            self.ledger.note_passage(sid, neutralize_instructions(visible).strip())
+            self.ledger.flush()
         return "\n".join(part for part in (header, note, body) if part)
     # ---------------------------------------------------------------- helpers
     def _log(self, kind: str, message: str) -> None:
@@ -4705,6 +5224,8 @@ class ResearchTools:
             return
         try:
             self.plog.write(kind, message)
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — logging must not break a tool call
             pass
 
@@ -4761,6 +5282,7 @@ class ResearchTools:
     # ----------------------------------------------------------------- search
     def search(self, query: Any, *, agent_id: str) -> str:
         """Model-visible search result text for one query."""
+        _spending.check_context()
         agent_id = str(agent_id or "agent")
         clean = " ".join(str(query or "").split())
         if len(clean.replace(" ", "")) < 2:
@@ -4788,7 +5310,13 @@ class ResearchTools:
             self._log("result", "web_search → SEARCH_BUDGET_EXHAUSTED")
             return MSG_SEARCH_BUDGET
         try:
-            raw = self._search_fn(clean, SEARCH_RESULTS_PER_QUERY)
+            if _spending.check_context() is None:
+                raw = self._search_fn(clean, SEARCH_RESULTS_PER_QUERY)
+            else:
+                with _spending.operation("research:search", _spending.hash_payload({"agent": agent_id, "query": clean})):
+                    raw = self._search_fn(clean, SEARCH_RESULTS_PER_QUERY)
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — tools never raise into the agent loop
             self._failure(agent_id)
             self._log("result", f"web_search → SEARCH_TEMPORARILY_UNAVAILABLE ({type(exc).__name__})")
@@ -4837,7 +5365,8 @@ class ResearchTools:
                 continue
             snippet = _collapse(_clean_web_text(item.get("content") or item.get("snippet") or ""),
                                 SEARCH_SNIPPET_CHARS)
-            row = self.ledger.register(item.get("url"), item.get("title"), snippet, "search", agent_id)
+            row = self.ledger.register(item.get("url"), item.get("title"), snippet, "search", agent_id,
+                                       metadata=item)
             if row is None:
                 continue
             entry = f"[S{row['sid']}] {row['title']} — {row['domain']} ({tier_label(row['tier'])})"
@@ -4899,6 +5428,7 @@ class ResearchTools:
     # ------------------------------------------------------------------ fetch
     def fetch(self, url: Any, *, focus: str = "", agent_id: str, kiq_text: str = "") -> str:
         """Model-visible, query-focused excerpt of one page."""
+        _spending.check_context()
         agent_id = str(agent_id or "agent")
         url = str(url or "").strip()
         if "drf_fmp_capture=" in url:
@@ -5040,12 +5570,17 @@ class ResearchTools:
         if self.backtest is not None:
             return self._fetch_as_of(url, key, terms, context_terms, agent_id)
         try:
-            raw = self._fetch_fn(url)
+            if _spending.check_context() is None:
+                raw = self._fetch_fn(url)
+            else:
+                with _spending.operation("research:fetch", _spending.hash_payload({"agent": agent_id, "url": url})):
+                    raw = self._fetch_fn(url)
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001 — tools never raise into the agent loop
             self._remember_failure(key, type(exc).__name__, transient=True)
             return self._fetch_failed(agent_id, type(exc).__name__)
-        text = raw if isinstance(raw, str) else str(raw or "")
-        envelope = _json_object(text)
+        text, envelope, metadata = _fetch_payload(raw)
         if envelope is not None and envelope.get("error") == "research_budget_exhausted":
             self._failure(agent_id)
             self._log("result", "web_fetch → FETCH_BUDGET_EXHAUSTED (research budget)")
@@ -5071,7 +5606,7 @@ class ResearchTools:
             self._failed_fetches.pop(key, None)
         row = self.ledger.mark_fetched(
             row["sid"], content_sha256=digest, chars=len(stripped), page_path=page_path,
-            title=_page_title(stripped) or None) or row
+            title=_page_title(stripped) or None, metadata=metadata) or row
         return self._render_page(row, stripped, terms, context_terms, cached=False)
 
     def _fetch_as_of(self, url: str, key: str, terms: list[str], context_terms: list[str],
@@ -5079,6 +5614,8 @@ class ResearchTools:
         """Backtest mode's fetch: the archive capture at or before the cutoff when
         there is a readable one, else the live page; refused unless its date
         verdict admits it.  Mirrors :meth:`_fetch_uncached` otherwise."""
+        if _spending.check_context() is not None:
+            _spending.deny("unsupported_route")
         bt = _backtest_api()
         policy = self.backtest
         if _source_policy_rejection(url):
@@ -5088,23 +5625,27 @@ class ResearchTools:
             return self._fetch_failed(agent_id, "source_quality_rejected")
         snapshot, archive_status = bt.lookup_snapshot(url, policy, http_get=self._archive_get)
         text: str | None = None
+        metadata = None
         if snapshot is not None:
             try:
                 raw = self._fetch_fn(snapshot.url)
+            except _spending.SpendingStop:
+                raise
             except Exception:  # noqa: BLE001 — an unreadable capture falls back to the live page
                 raw = None
-            candidate = raw if isinstance(raw, str) else str(raw or "")
-            if raw is not None and self._failure_reason(candidate, _json_object(candidate)) is None:
+            candidate, envelope, metadata = _fetch_payload(raw)
+            if raw is not None and self._failure_reason(candidate, envelope) is None:
                 text = candidate.strip()
         via = "archive" if text is not None else "live"
         if text is None:
             try:
                 raw = self._fetch_fn(url)
+            except _spending.SpendingStop:
+                raise
             except Exception as exc:  # noqa: BLE001 — tools never raise into the agent loop
                 self._remember_failure(key, type(exc).__name__, transient=True)
                 return self._fetch_failed(agent_id, type(exc).__name__)
-            candidate = raw if isinstance(raw, str) else str(raw or "")
-            envelope = _json_object(candidate)
+            candidate, envelope, metadata = _fetch_payload(raw)
             if envelope is not None and envelope.get("error") == "research_budget_exhausted":
                 self._failure(agent_id)
                 self._log("result", "web_fetch → FETCH_BUDGET_EXHAUSTED (research budget)")
@@ -5120,6 +5661,7 @@ class ResearchTools:
             with self._lock:
                 spans = list(self._hit_dates.get(canonical_url(url), []))
             spans += bt.page_dates(text)
+            spans += bt.result_dates({"published_at": _source_metadata(metadata)["published_at"]})
             url_span = bt.url_date(url)
             if url_span is not None:
                 spans.append(url_span)
@@ -5152,21 +5694,21 @@ class ResearchTools:
             self._failed_fetches.pop(key, None)
         row = self.ledger.mark_fetched(
             row["sid"], content_sha256=digest, chars=len(text), page_path=page_path,
-            title=_page_title(text) or None, backtest=detail) or row
+            title=_page_title(text) or None, backtest=detail, metadata=metadata) or row
         return self._render_page(row, text, terms, context_terms, cached=False)
 
     @staticmethod
     def _failure_reason(text: str, envelope: Mapping[str, Any] | None) -> str | None:
         stripped = text.strip()
-        if not stripped:
-            return "empty"
-        if stripped.startswith("Error:"):
-            return _slug(stripped[len("Error:"):]) if stripped[len("Error:"):].strip() else "error"
         if envelope is not None:
             if envelope.get("error"):
                 return _slug(envelope.get("error"))
             if envelope.get("status") == "already_available":
                 return "already_available"
+        if not stripped:
+            return "empty"
+        if stripped.startswith("Error:"):
+            return _slug(stripped[len("Error:"):]) if stripped[len("Error:"):].strip() else "error"
         if len(stripped) < FETCH_MIN_CHARS:
             return "too_short"
         if len(stripped) < _BLOCKED_PAGE_MAX_CHARS:
@@ -5193,8 +5735,12 @@ class ResearchTools:
                       "different focus to read other parts.")
         # The precise model-directed filter (D7), not the bridge's legacy
         # sanitizer, which blanks ordinary policy prose ("override the veto").
-        body = (delimit_untrusted(_WEB_EXCERPT_LABEL, neutralize_citation_markers(excerpt))
-                or "(no readable text on this page)")
+        visible = neutralize_citation_markers(excerpt)
+        body = delimit_untrusted(_WEB_EXCERPT_LABEL, visible)
+        if body and self.ledger.capture_evidence:
+            self.ledger.note_passage(row["sid"], neutralize_instructions(visible).strip())
+        if not body:
+            body = "(no readable text on this page)"
         suffix = " (stored copy)" if cached else ""
         self._log("result", f"web_fetch → {kept}/{total} chars [S{row['sid']}]{suffix}")
         return f"{header}\n{body}"

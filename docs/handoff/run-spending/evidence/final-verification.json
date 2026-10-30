@@ -1,0 +1,178 @@
+{
+  "gates": [
+    {
+      "evidence": "/private/tmp/run-spending-composed-final-20261029-a",
+      "junit": {
+        "tests": 1201,
+        "failures": 1,
+        "errors": 0,
+        "skipped": 0
+      },
+      "exit_code": 1,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "all_process_events": {
+        "redirect:app.config": 5,
+        "redirect:app.utils.logger": 5,
+        "redirect:app.services.simulation_manager": 5,
+        "allowed:guarded_child": 11,
+        "blocked:process:subprocess.Popen": 2,
+        "blocked:network:socket.__new__": 1
+      },
+      "durable_copy": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/run-spending-acceptance-20261029T060017Z/run-spending-composed-final-20261029-a"
+    },
+    {
+      "evidence": "/private/tmp/run-spending-composed-final-20261029-b",
+      "junit": {
+        "tests": 1201,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "all_process_events": {
+        "redirect:app.config": 5,
+        "redirect:app.utils.logger": 5,
+        "redirect:app.services.simulation_manager": 5,
+        "allowed:guarded_child": 11,
+        "blocked:process:subprocess.Popen": 2,
+        "blocked:network:socket.__new__": 1
+      },
+      "durable_copy": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/run-spending-acceptance-20261029T060017Z/run-spending-composed-final-20261029-b"
+    },
+    {
+      "evidence": "/private/tmp/run-spending-workflow-current-20261029-05",
+      "junit": {
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "all_process_events": {
+        "blocked:network:socket.__new__": 8,
+        "blocked:process:subprocess.Popen": 8,
+        "redirect:app.config": 5,
+        "redirect:app.utils.logger": 5,
+        "redirect:app.services.simulation_manager": 5,
+        "allowed:guarded_child": 8
+      },
+      "durable_copy": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/run-spending-acceptance-20261029T060017Z/run-spending-workflow-current-20261029-05"
+    },
+    {
+      "evidence": "/private/tmp/run-spending-import-isolation-green-20261029-a",
+      "junit": {
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "all_process_events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      },
+      "durable_copy": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/run-spending-acceptance-20261029T060017Z/run-spending-import-isolation-green-20261029-a"
+    },
+    {
+      "evidence": "/private/tmp/run-spending-launcher-final-lint-20261029-a",
+      "junit": {
+        "tests": 86,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "exit_code": 0,
+      "shutdown_complete": true,
+      "identity_preserved": true,
+      "source_drift": [],
+      "all_process_events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      },
+      "durable_copy": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/run-spending-acceptance-20261029T060017Z/run-spending-launcher-final-lint-20261029-a"
+    }
+  ],
+  "production_sha256": {
+    ".env.example": "e36ffb27546bd1cd909cbc3f27477b9bf4853bc8c6f6a2ba8d1d254ac09f90c5",
+    "setup.sh": "25d925fdb0bac4819bfdc30664d03807372cdb9be0ebecee1fa5de7e331480ee",
+    "backend/app/api/research.py": "38276efdd90fee13caf3c7deeb8577dd4192dc97fdf602a940e8b6255ad58dbf",
+    "backend/app/api/sdk.py": "3d80b5f1a1b23d778670b97ed027776c0766bad714e5cd491340ab874c52a58c",
+    "backend/app/services/run_spending.py": "796a7a2ec63001b1bd62e077db527956be4211f2f94a80123e393f90660ac01a",
+    "backend/app/services/pipeline_orchestrator.py": "38d0800566d78a7df2dca810abd4e2a36ba77bc2eacb1e36c667898b36d09bc7",
+    "backend/app/services/forecast_tournament.py": "91e0236fe37ec633bd17ce0f16a6b420c2100607b96dc2e418d7ce13a7f5ad91",
+    "backend/app/services/target_pipeline.py": "27d18001122197222a498b67ab048b9af1924740801df4aa6e29d202dc714b44",
+    "backend/app/services/target_simulation.py": "90adc288b569cc5822117effe274fe5660a281ed97b41ce19ec65a66381e0903",
+    "backend/app/utils/llm_client.py": "206874c1d4b1515c6e22e5804c49a0c384c5cc24f94dfe8140acea70658df878",
+    "backend/scripts/target_acceptance_run.py": "478b2ba636c437c3e707d39453b66ee73bf43e40b84dad09aacb5cf3d2c25612",
+    "backend/scripts/main_offline_pytest.py": "5046cf820fa468d8e8ffb2e3fdade1d20fca2f0bd56ee15eabdff51c223c02be",
+    "deerflow_bridge/run_spending.py": "b54cac7c001c5f46106e3593e7a5ad4f66a6711488bd5679fee0f35ec889f9d5",
+    "deerflow_bridge/research_gateway.py": "dd678ec3961cc0f1ab6d2380182403ee3a93ec4bbe428150fe732a25a743b7fa",
+    "deerflow_bridge/search_tools.py": "5a21e658d4445be846aea3c99fad6079923e637775fe6be30627620c0add4009",
+    "deerflow_bridge/cached_fetch.py": "2fa98dcf79fdc6f24cee74b7d7c4c299d6e943a4947ed63e95b8205d1b58b94e",
+    "deerflow_bridge/linear_research.py": "54c489fbe41e424689fc2722cf2376a8eb0f934c2abdd0bdb611932378bde44c"
+  },
+  "lint": {
+    "exit": 0,
+    "files": [
+      "backend/app/api/research.py",
+      "backend/app/api/sdk.py",
+      "backend/app/services/forecast_tournament.py",
+      "backend/app/services/pipeline_orchestrator.py",
+      "backend/app/services/run_spending.py",
+      "backend/app/services/target_pipeline.py",
+      "backend/app/services/target_simulation.py",
+      "backend/app/utils/llm_client.py",
+      "backend/scripts/target_acceptance_run.py",
+      "backend/tests/fixtures/run_spending_child.py",
+      "backend/tests/fixtures/run_spending_workflow_child.py",
+      "backend/tests/test_run_spending_child_transports.py",
+      "backend/tests/test_run_spending_launcher.py",
+      "backend/tests/test_run_spending_lifecycle.py",
+      "backend/tests/test_run_spending_parent_transport.py",
+      "backend/tests/test_run_spending_store.py",
+      "backend/tests/test_run_spending_workflow.py",
+      "backend/tests/test_target_simulation.py",
+      "deerflow_bridge/cached_fetch.py",
+      "deerflow_bridge/linear_research.py",
+      "deerflow_bridge/research_gateway.py",
+      "deerflow_bridge/run_spending.py",
+      "deerflow_bridge/search_tools.py"
+    ]
+  },
+  "setup_bash_syntax": "pass",
+  "source_unchanged": true,
+  "private_evidence_root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/run-spending-acceptance-20261029T060017Z",
+  "copy_manifest_sha256": "ff88fdca9f8ce236d7acbf1d726f4316e6949d080d2242eddde193b556c6df9e",
+  "scope": "Offline implementation acceptance only; no real provider/billing/deployment proof.",
+  "startup09": {
+    "production_current": true,
+    "real_private_interpreter": true,
+    "actual_linear_admission": true,
+    "research_engine": "bounded SDK exercise substitute",
+    "http": "MockTransport",
+    "attempts": 8,
+    "retained_microusd": 66112,
+    "blocked_socket_probes": 2,
+    "blocked_process_probes": 2
+  },
+  "test_only_changes_after_broad_gate": {
+    "launcher_comments_ast_identical": true,
+    "affected_current_byte_gate": 86,
+    "lint_annotation_locations": 3
+  },
+  "replay_limits": "Copied closed ledgers/receipts retain their original paths and authorization; no relocated execution or reopening is claimed.",
+  "independent_review": "Accepted: no remaining technical gate for frozen approved offline scope"
+}

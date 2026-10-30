@@ -1,0 +1,9 @@
+{
+  "before_and_after_match": true,
+  "sha256": {
+    "backend/app/services/agency_classification.py": "9405c796d19d43fc0d52e0f272e5531d4d4667df9a6e6a7904fb87739242b4ba",
+    "backend/app/services/simulation_config_generator.py": "8de3804f77f7bfd49b7d4a514e508ffaece36ecce159e349f2ba654475d1c541",
+    "backend/app/services/world_model_seed.py": "30832cbf1f70afe49d74c225dbce3f25f0f77c531c51b0d15bd4425cff64d606",
+    "backend/tests/test_agency_classification.py": "a95dc5409f399580240f205b98910830a944abca390bd39337d3b388f3ea73ec"
+  }
+}

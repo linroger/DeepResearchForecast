@@ -10,10 +10,15 @@ LLM客户端封装
 """
 
 import contextvars
+from copy import deepcopy
+import hashlib
 import json
+import logging
+import math
 import os
 import re
 import subprocess
+import sys
 import threading
 import time
 from contextlib import contextmanager
@@ -24,6 +29,36 @@ from .llm_errors import describe_llm_error, is_content_filter_error, is_thinking
 from .logger import get_logger
 
 logger = get_logger('mirofish.llm_client')
+
+
+def _spending():
+    # One fixed-root import identity owns the process latch, context and stop type.
+    from ..services.official_data import bridge_module
+    return bridge_module("run_spending")
+
+
+def _raise_spending_stop(exc, *, during_import=False):
+    """Preserve the shared stop, including one wrapped by the installed SDK."""
+    # Before LLMClient is defined, importing services.official_data would run
+    # services/__init__ and import LLMClient back. An optional SDK import failure
+    # may only consult an already-loaded shared exception identity.
+    spending = sys.modules.get("deerflow_bridge.run_spending") if during_import else _spending()
+    if spending is None:
+        return
+    seen = set()
+    pending = [exc]
+    while pending:
+        current = pending.pop()
+        if current is None or id(current) in seen:
+            continue
+        seen.add(id(current))
+        if spending.is_spending_stop(current):
+            raise current from None
+        pending.extend((current.__context__, current.__cause__))
+
+
+class _ObservedThinkingRefusal(Exception):
+    """A recognized HTTP 400 response, with its full quote already retained."""
 
 # 单次 CLI 调用超时（秒）。从 300 降到 180 以便在模拟中卡住的 agent 调用更快释放并发槽；
 # 仍足够长，可容纳报告章节这类长文生成。可用 LLM_CLI_TIMEOUT 覆盖（模拟密集场景可设 120）。
@@ -59,7 +94,8 @@ try:
         _openai.APIConnectionError,
         _openai.InternalServerError,
     )
-except Exception:  # noqa: BLE001 — openai 不可导入时退化为仅重试 RuntimeError
+except Exception as exc:  # noqa: BLE001 — openai 不可导入时退化为仅重试 RuntimeError
+    _raise_spending_stop(exc, during_import=True)
     _RETRYABLE_API_ERRORS = ()
 
 
@@ -140,7 +176,8 @@ def _note_failover(exc: Optional[BaseException], note: str) -> None:
     try:
         if not any(str(n).startswith("fallback") for n in (getattr(exc, "__notes__", None) or [])):
             exc.add_note(note)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        _raise_spending_stop(exc)
         pass
 
 
@@ -310,6 +347,8 @@ class LLMClient:
         self.base_url = base_url or Config.LLM_BASE_URL
         self.model = model or Config.LLM_MODEL_NAME
 
+        self._qualified_spending_route()
+
         if self.provider not in CLI_PROVIDERS and self.provider not in OPENAI_COMPATIBLE_PROVIDERS:
             _supported = " / ".join(repr(p) for p in (*CLI_PROVIDERS, *OPENAI_COMPATIBLE_PROVIDERS))
             raise ValueError(
@@ -319,7 +358,11 @@ class LLMClient:
         # 仅在使用 OpenAI 兼容提供方（openai/kimi）时才创建 OpenAI 客户端（CLI 模式无需 API Key）
         self._openai_client = None
         if self.provider in OPENAI_COMPATIBLE_PROVIDERS:
-            self._openai_client = self._build_openai_client(self.provider, self.api_key, self.base_url)
+            if _spending().required():
+                self._openai_client = self._build_openai_client(
+                    self.provider, self.api_key, self.base_url, model=self.model)
+            else:
+                self._openai_client = self._build_openai_client(self.provider, self.api_key, self.base_url)
 
         # EXECPLAN2 I-6-2: 当 fast tier 指向一个完全不同的 OpenAI 兼容提供方时，按需懒构建
         # 的第二个客户端（如本地廉价抽取 + 远端旗舰合成）。仅在 tiered routing 开启且配齐
@@ -329,12 +372,34 @@ class LLMClient:
         self._is_fallback = False
 
     @staticmethod
-    def _build_openai_client(provider: str, api_key: Optional[str], base_url: Optional[str]):
+    def _build_openai_client(provider: str, api_key: Optional[str], base_url: Optional[str], *, model=None):
         """构造一个 OpenAI 兼容客户端（供主客户端与 fast-tier 第二客户端复用）。"""
-        from openai import OpenAI
+        spending = _spending()
+        bound = spending.required()
+        if bound:
+            spending.check_context()
+            if provider not in OPENAI_COMPATIBLE_PROVIDERS:
+                spending.deny("unsupported_route")
+            if type(api_key) is not str or api_key != Config.LLM_API_KEY:
+                spending.deny("unsupported_route")
+            spending.qualify_route("openai_chat", base_url, model or Config.LLM_MODEL_NAME,
+                                   account_sha256=hashlib.sha256(api_key.encode("utf-8")).hexdigest())
+        try:
+            from openai import OpenAI
+        except Exception as exc:
+            _raise_spending_stop(exc)
+            if bound:
+                spending.deny("unsupported_route")
+            raise
         if not api_key:
+            if bound:
+                spending.deny("invalid_request")
             raise ValueError(f"LLM_PROVIDER={provider} 时必须配置 LLM_API_KEY")
         client_kwargs: Dict[str, Any] = {"api_key": api_key, "base_url": base_url}
+        if bound:
+            # Independent of HTTP/2/custom-client availability. Ambient account
+            # headers cannot silently change the reviewed private route.
+            client_kwargs.update(max_retries=0, organization="", project="")
         # GLM-run 2026-09-18: an explicit hard timeout on EVERY call. Without
         # it (HTTP/2 path off), a provider stream that dies mid-read can wedge
         # the calling pipeline thread forever — observed live on the report
@@ -353,11 +418,20 @@ class LLMClient:
         # 更大 keepalive 池）并把 SDK 自带重试关掉（max_retries=0，由 chat() 的退避循环统一负责）。
         # 默认（未配置 LLM_HTTP2 / 为 false）返回 None → 沿用 OpenAI SDK 自带 httpx 客户端，
         # 行为与现状逐字节一致（degrade-safe）。
-        http_client = LLMClient._build_http_client()
-        if http_client is not None:
-            client_kwargs["http_client"] = http_client
-            client_kwargs["max_retries"] = 0
-        return OpenAI(**client_kwargs)
+        try:
+            http_client = LLMClient._build_http_client()
+            if bound and http_client is None:
+                from openai import DefaultHttpxClient
+                http_client = DefaultHttpxClient(follow_redirects=False, trust_env=False)
+            if http_client is not None:
+                client_kwargs["http_client"] = http_client
+                client_kwargs["max_retries"] = 0
+            return OpenAI(**client_kwargs)
+        except Exception as exc:
+            _raise_spending_stop(exc)
+            if bound:
+                spending.deny("invalid_request")
+            raise
 
     @staticmethod
     def _build_http_client():
@@ -377,7 +451,8 @@ class LLMClient:
             return None
         try:
             import httpx
-        except Exception:  # httpx 理应随 openai 安装；缺失则回退 SDK 默认客户端
+        except Exception as exc:  # httpx 理应随 openai 安装；缺失则回退 SDK 默认客户端
+            _raise_spending_stop(exc)
             return None
         keepalive = int(getattr(Config, "LLM_HTTP_KEEPALIVE", 128) or 128)
         limits = httpx.Limits(
@@ -386,15 +461,35 @@ class LLMClient:
         )
         # 连接快、读/写慢：长文生成需要大读超时，避免 httpx 默认 5s 腰斩。
         timeout = httpx.Timeout(600.0, connect=10.0)
+        strict_http = {"follow_redirects": False, "trust_env": False} if _spending().required() else {}
         try:
-            return httpx.Client(http2=True, limits=limits, timeout=timeout)
+            return httpx.Client(http2=True, limits=limits, timeout=timeout, **strict_http)
         except Exception as exc:  # h2 未安装或协商失败 → 回退 HTTP/1.1（不影响管线运行）
-            logger.warning(f"HTTP/2 客户端构建失败，回退 HTTP/1.1: {exc}")
+            _raise_spending_stop(exc)
+            logger.warning("HTTP/2 client construction failed; trying HTTP/1.1: %s",
+                           type(exc).__name__ if strict_http else str(exc))
             try:
-                return httpx.Client(http2=False, limits=limits, timeout=timeout)
+                return httpx.Client(http2=False, limits=limits, timeout=timeout, **strict_http)
             except Exception as exc2:  # 极端情况下连 http1 调优客户端也失败 → 回退 SDK 默认
-                logger.warning(f"调优 httpx 客户端构建失败，回退 SDK 默认客户端: {exc2}")
+                _raise_spending_stop(exc2)
+                logger.warning("HTTP client construction failed; using SDK default: %s",
+                               type(exc2).__name__ if strict_http else str(exc2))
                 return None
+
+    def _qualified_spending_route(self, *, model=None, endpoint=None):
+        spending = _spending()
+        if not spending.required():
+            return None
+        spending.check_context()
+        if (self.provider not in OPENAI_COMPATIBLE_PROVIDERS
+                or getattr(self, "_is_fallback", False)
+                or getattr(Config, "LLM_TIERED_ROUTING", False)
+                or type(self.api_key) is not str or self.api_key != Config.LLM_API_KEY):
+            spending.deny("unsupported_route")
+        return spending.qualify_route(
+            "openai_chat", self.base_url if endpoint is None else endpoint,
+            self.model if model is None else model,
+            account_sha256=hashlib.sha256(self.api_key.encode("utf-8")).hexdigest())
 
     # ------------------------------------------------------------------
     # EXECPLAN2 I-6-2: 双层模型路由（fast / strong）
@@ -426,6 +521,8 @@ class LLMClient:
         为 OpenAI 兼容；缺任一则回退为「同提供方切模型」（返回 None）。构建失败同样回退 None，
         绝不让 fast tier 的误配置把整条调用打挂（graceful degradation）。
         """
+        if _spending().required():
+            _spending().deny("unsupported_route")
         fp = getattr(Config, "LLM_FAST_PROVIDER", None)
         fb = getattr(Config, "LLM_FAST_BASE_URL", None)
         fk = getattr(Config, "LLM_FAST_API_KEY", None)
@@ -435,6 +532,7 @@ class LLMClient:
             try:
                 self._fast_openai_client = self._build_openai_client(fp, fk, fb)
             except Exception as exc:  # 误配置不应中断调用，记录后回退主客户端
+                _raise_spending_stop(exc)
                 logger.warning(f"fast-tier 第二客户端构建失败，回退主客户端: {exc}")
                 return None
         return self._fast_openai_client
@@ -462,11 +560,17 @@ class LLMClient:
         模型/提供方；CLI 订阅提供方与关闭路由时一律 no-op（graceful degradation）。
         """
         # EXECPLAN2 I-6-2: 解析本次调用实际使用的模型（fast/strong）。关闭路由时 = self.model。
+        bound = self._qualified_spending_route() is not None
         model = self._model_for_tier(tier)
         # EXECPLAN2 I-6-0/I-5-0/I-5-3: 内容寻址缓存命中直接返回；否则正常调用后记录
         # token/延迟/成本计量并做预算检查。计量默认开（开销极小），缓存/预算默认关。
         from .telemetry import LLMMeter, LLMCache, get_run_context, check_budget, estimate_tokens
         run_id, stage = get_run_context()
+        if bound:
+            # Reuse the caller's durable binding even if observational telemetry
+            # context was not copied. Never invent a spending/global run identity.
+            run_id = _spending().current_binding()["pipeline_id"]
+            stage = _spending().current_operation()["stage"]
         cache_key = None
         if Config.LLM_CACHE_ENABLED:
             # 缓存键纳入解析后的 model，避免 fast/strong 两档结果互相串档。
@@ -519,6 +623,9 @@ class LLMClient:
                 _cb_reset(self.provider)  # primary succeeded → clear its 422/429 streaks
                 break
             except (RuntimeError, *_RETRYABLE_API_ERRORS) as exc:
+                _raise_spending_stop(exc)
+                if bound and not isinstance(exc, EmptyCompletionError):
+                    _spending().deny("invalid_request")
                 last_error = exc
                 if _is_deterministic_auth_error(exc):
                     logger.warning(
@@ -535,6 +642,9 @@ class LLMClient:
                     )
                     time.sleep(delay)
             except Exception as exc:  # noqa: BLE001 — non-retryable (e.g. 422 content-filter): stop retrying, try fallback
+                _raise_spending_stop(exc)
+                if bound:
+                    _spending().deny("invalid_request")
                 last_error = exc
                 if _is_content_filter(exc):
                     _cb_record_422(self.provider)  # count toward tripping the breaker
@@ -553,6 +663,8 @@ class LLMClient:
                     )
                 break
         if result is None:
+            if bound:
+                _spending().deny("invalid_request")
             # QUALITY-OPT S9: provider failover. On exhausted quota (429) or a content-filter
             # rejection (422 new_sensitive) the same provider will keep failing; retry the SAME
             # request once on a configured fallback provider so the run recovers instead of
@@ -570,12 +682,13 @@ class LLMClient:
             usage = self._last_usage
             if usage:
                 pt, ct = int(usage.get("prompt_tokens", 0)), int(usage.get("completion_tokens", 0))
-            else:
+            elif not bound:
                 # 无精确 usage（CLI 提供方）→ 按文本长度粗估
                 pt = sum(estimate_tokens(str(m.get("content", ""))) for m in messages)
                 ct = estimate_tokens(result)
             # 用解析后的 model 计量，使 by_model 维度区分 fast/strong 用量与成本。
-            LLMMeter.record(self.provider, model, pt, ct, latency_ms, cached=False, stage=stage, run_id=run_id)
+            if usage or not bound:
+                LLMMeter.record(self.provider, model, pt, ct, latency_ms, cached=False, stage=stage, run_id=run_id)
         if Config.LLM_CACHE_ENABLED and cache_key is not None:
             LLMCache.put(cache_key, result)
         if Config.LLM_RUN_BUDGET_TOKENS or Config.LLM_RUN_BUDGET_USD:
@@ -588,6 +701,10 @@ class LLMClient:
         """QUALITY-OPT S9: retry the request once on a configured fallback provider when the
         primary exhausts retries / hits a content-filter. Off unless LLM_FALLBACK_PROVIDER is
         set; never recurses (the fallback client has failover disabled). Returns text or None."""
+        if primary_error is not None:
+            _raise_spending_stop(primary_error)
+        if _spending().required():
+            _spending().deny("unsupported_route")
         if getattr(self, "_is_fallback", False):
             return None  # the fallback client never recurses (its error is reported by the primary)
         fb_provider = (os.environ.get("LLM_FALLBACK_PROVIDER", "") or "").strip().lower()
@@ -652,6 +769,7 @@ class LLMClient:
             logger.info(f"回退提供方 {fb_provider} 成功接管本次调用")
             return out
         except Exception as e:  # noqa: BLE001 — fallback failed too; caller raises the primary error
+            _raise_spending_stop(e)
             # 确定性失败（401 凭据坏 / 400 invalid-model 类）进入进程级冷却：重试修不好，
             # 并行 worker 不该反复对同一注定失败的回退发起昂贵调用。服务重启或修好配置自然清零。
             if _is_deterministic_auth_error(e) or _is_deterministic_invalid_request_error(e):
@@ -694,6 +812,8 @@ class LLMClient:
                 return parsed
             if attempt == 0:
                 logger.warning("chat_json 解析失败，降温重发一次")
+        if _spending().required():
+            raise ValueError("LLM returned invalid JSON") from None
         raise ValueError(f"LLM返回的JSON格式无效: {last_response[:500]}")
 
     # ------------------------------------------------------------------
@@ -712,6 +832,9 @@ class LLMClient:
         RPT-10: 提供方处于 422/429 熔断冷却时也返回 False——chat_with_tools 无法失败转移到 CLI
         回退（CLI 无 tools=），审查风暴期直接走 ReAct（其底层 chat() 自带回退链）。
         """
+        if _spending().required():
+            _spending().check_context()
+            return False
         if not (getattr(Config, "REPORT_NATIVE_TOOLS", False)
                 and self.provider in OPENAI_COMPATIBLE_PROVIDERS
                 and self._openai_client is not None):
@@ -744,6 +867,8 @@ class LLMClient:
         Raises:
             RuntimeError: 非原生提供方调用 / SDK 失败。
         """
+        if _spending().required():
+            _spending().deny("unsupported_route")
         if self._openai_client is None:
             raise RuntimeError("chat_with_tools 仅支持 OpenAI 兼容提供方")
         # LLM-1/RPT-10: 熔断预检——冷却期内直接抛错（调用方 report_agent 捕获后降级 ReAct，
@@ -785,6 +910,7 @@ class LLMClient:
                 _cb_reset(self.provider)
                 break
             except (RuntimeError, *_RETRYABLE_API_ERRORS) as exc:
+                _raise_spending_stop(exc)
                 last_error = exc
                 if _is_quota(exc):
                     _cb_record_429(self.provider)
@@ -795,6 +921,7 @@ class LLMClient:
                     )
                     time.sleep(delay)
             except Exception as exc:  # noqa: BLE001 — 不可重试（如 422 内容审查）：记熔断后快速失败
+                _raise_spending_stop(exc)
                 last_error = exc
                 if _is_content_filter(exc):
                     _cb_record_422(self.provider)
@@ -810,7 +937,8 @@ class LLMClient:
                 LLMMeter.record(self.provider, model, _pt, _ct,
                                 (time.monotonic() - _started) * 1000.0,
                                 cached=False, stage=_stage, run_id=_run_id)
-            except Exception:  # noqa: BLE001 — 计量失败不影响返回
+            except Exception as exc:  # noqa: BLE001 — 计量失败不影响返回
+                _raise_spending_stop(exc)
                 pass
         if Config.LLM_RUN_BUDGET_TOKENS or Config.LLM_RUN_BUDGET_USD:
             check_budget(_run_id)  # 超预算抛 BudgetExceeded
@@ -991,19 +1119,175 @@ class LLMClient:
         for this process (``Config.note_thinking_refused``), so later calls for the same model send
         the accepted body straight away; any other error propagates unchanged."""
         try:
-            return client.chat.completions.create(**kwargs)
+            return self._physical_completion(client, kwargs)
         except Exception as exc:  # noqa: BLE001 — only the thinking refusal is handled here
-            if not (Config.disables_thinking(kwargs.get("extra_body")) and is_thinking_required_error(exc)):
+            _raise_spending_stop(exc)
+            observed = isinstance(exc, _ObservedThinkingRefusal)
+            if not (observed or (not _spending().required()
+                    and Config.disables_thinking(kwargs.get("extra_body"))
+                    and is_thinking_required_error(exc))):
                 raise
             model = kwargs.get("model") or self.model
             if Config.note_thinking_refused(self.provider, model):
                 logger.warning(
                     "%s/%s refuses requests that disable reasoning (%s); resending with reasoning on "
                     "at the lowest accepted effort, and later calls do the same",
-                    self.provider, model, _err_brief(exc))
+                    self.provider, model, "observed HTTP 400" if observed else _err_brief(exc))
         extra_body = self._apply_reasoning_options(kwargs, max_tokens)
         kwargs["temperature"] = self._coerce_temperature(temperature, extra_body)
-        return client.chat.completions.create(**kwargs)
+        return self._physical_completion(client, kwargs)
+
+    def _check_spending_sdk(self, client, model):
+        """Reject hidden sends and overrides in the closed synchronous SDK profile."""
+        import httpcore
+        import httpx
+        from openai import DefaultHttpxClient, OpenAI
+
+        spending = _spending()
+        if type(client) is not OpenAI:
+            spending.deny("unsupported_route")
+        route_id = self._qualified_spending_route(model=model, endpoint=str(client.base_url))
+        http = client._client
+        expected_headers = {"User-Agent": Config.LLM_USER_AGENT} if self.provider == "kimi" else {}
+        if (client.max_retries != 0 or client.default_query
+                or client._custom_headers != expected_headers
+                or client.organization or client.project
+                or client._api_key_provider is not None or client.api_key != self.api_key
+                or type(http) not in {httpx.Client, DefaultHttpxClient}
+                or http._trust_env is not False
+                or http.follow_redirects is not False or http.auth is not None
+                or http.params or http.cookies
+                or set(http.headers) - {"accept", "accept-encoding", "connection", "user-agent"}
+                or any(http.event_hooks.values()) or any(http._mounts.values())
+                or self._unsafe_transport_logging()):
+            spending.deny("unsupported_route")
+        # Follow the existing strict world-policy transport proof without changing
+        # that policy. An arbitrary transport/subclass can hide more than one send.
+        transport = http._transport
+        if (type(transport) not in {httpx.HTTPTransport, httpx.MockTransport}
+                or (type(transport) is httpx.HTTPTransport
+                    and (type(transport._pool) is not httpcore.ConnectionPool
+                         or transport._pool._retries != 0))):
+            spending.deny("unsupported_route")
+        return route_id
+
+    @staticmethod
+    def _unsafe_transport_logging():
+        # SDK debug logs contain request bodies, httpcore debug traces include
+        # headers/errors, and httpx INFO includes a provider-controlled reason
+        # phrase. Reject these settings; never mutate shared legacy log levels.
+        names = set(logging.Logger.manager.loggerDict) | {"openai", "httpcore", "httpx"}
+        for name in names:
+            for prefix, level in (("openai", logging.DEBUG), ("httpcore", logging.DEBUG),
+                                  ("httpx", logging.INFO)):
+                if (name == prefix or name.startswith(prefix + ".")) and logging.getLogger(name).isEnabledFor(level):
+                    return True
+        return False
+
+    @staticmethod
+    def _spending_usage(response, *, model):
+        """Raw provider counts only; no text estimator, absent-as-zero or invoice."""
+        if isinstance(response, _ObservedThinkingRefusal):
+            return None
+        from openai.types.chat import ChatCompletion, ChatCompletionMessage
+        from openai.types.completion_usage import CompletionUsage
+
+        usage = getattr(response, "usage", None)
+        counts = {}
+        for raw_name, field in (("prompt_tokens", "input_tokens"),
+                                ("completion_tokens", "output_tokens")):
+            value = getattr(usage, raw_name, None)
+            if value is not None:
+                counts[field] = value
+        observation = {"kind": "provider_reported" if counts else "missing", **counts}
+        request_id = getattr(response, "id", None)
+        if request_id is not None:
+            observation["provider_request_id"] = request_id
+        # SDK construction is permissive: even HTTP 200 {"error": ...} can
+        # become a ChatCompletion. Preserve any usage but mark malformed or
+        # unqualified response envelopes unknown before application parsing.
+        choices = getattr(response, "choices", None)
+        message = getattr(choices[0], "message", None) if isinstance(choices, list) and len(choices) == 1 else None
+        if (not isinstance(response, ChatCompletion) or getattr(response, "model", None) != model
+                or not isinstance(message, ChatCompletionMessage)
+                or getattr(message, "role", None) != "assistant"
+                or (getattr(message, "content", None) is not None and not isinstance(message.content, str))
+                or getattr(message, "tool_calls", None) or getattr(message, "function_call", None)
+                or getattr(response, "error", None) is not None
+                or (usage is not None and not isinstance(usage, CompletionUsage))):
+            observation["outcome"] = "unknown"
+        return observation
+
+    def _physical_completion(self, client, kwargs):
+        spending = _spending()
+        if not spending.required():
+            return client.chat.completions.create(**kwargs)
+        spending.check_context()
+        try:
+            # Freeze nested inputs so the hash, quote and physical body use the
+            # same request even if a caller later mutates its message list.
+            wire = deepcopy(kwargs)
+            allowed = {"model", "messages", "temperature", "max_tokens",
+                       "response_format", "extra_body", "timeout"}
+            if set(wire) - allowed:
+                spending.deny("unsupported_route")
+            messages = wire.get("messages")
+            if (not isinstance(messages, list) or not messages
+                    or any(not isinstance(m, dict) or set(m) != {"role", "content"}
+                           or m["role"] not in {"system", "user", "assistant"}
+                           or not isinstance(m["content"], str) for m in messages)):
+                spending.deny("unsupported_route")
+            output = wire.get("max_tokens")
+            if type(output) is not int or output <= 0:
+                spending.deny("invalid_request")
+            for field in ("temperature", "timeout"):
+                value = wire.get(field)
+                if field in wire and (type(value) not in (int, float) or not math.isfinite(value)
+                                      or (field == "timeout" and value <= 0)):
+                    spending.deny("invalid_request")
+            if "response_format" in wire and wire["response_format"] != {"type": "json_object"}:
+                spending.deny("unsupported_route")
+            extra = wire.get("extra_body", {})
+            if (not isinstance(extra, dict)
+                    or set(extra) - {"thinking", "reasoning_effort", "enable_thinking"}
+                    or ("thinking" in extra and extra["thinking"] not in
+                        ({"type": "enabled"}, {"type": "disabled"}))
+                    or ("enable_thinking" in extra and type(extra["enable_thinking"]) is not bool)
+                    or ("reasoning_effort" in extra and extra["reasoning_effort"] not in
+                        {"minimal", "low", "medium", "high", "max"})):
+                spending.deny("unsupported_route")
+            route_id = self._check_spending_sdk(client, wire.get("model"))
+            route = spending.get_route(route_id)
+            # Extra JSON wins in the SDK. Only checked reasoning keys may be
+            # merged; transport timeout is not part of the physical JSON body.
+            body = {k: v for k, v in wire.items() if k not in {"extra_body", "timeout"}}
+            body.update(extra)
+            request = {"endpoint": str(client.base_url), "model": wire["model"],
+                       "input_tokens": route["input_ceiling"], "max_output_tokens": output,
+                       "tool_units": 0, "payload_sha256": spending.hash_payload(body)}
+        except Exception as exc:
+            _raise_spending_stop(exc)
+            spending.deny("invalid_request")
+
+        def send():
+            from openai import BadRequestError
+
+            try:
+                return client.chat.completions.create(**wire)
+            except Exception as exc:
+                _raise_spending_stop(exc)
+                if (isinstance(exc, BadRequestError) and exc.status_code == 400
+                        and getattr(getattr(exc, "response", None), "status_code", None) == 400
+                        and Config.disables_thinking(wire.get("extra_body"))
+                        and is_thinking_required_error(exc)):
+                    return _ObservedThinkingRefusal("reasoning_parameter_refused")
+                raise
+
+        response = spending.dispatch(route_id, request, send,
+                                     usage=lambda raw: self._spending_usage(raw, model=wire["model"]))
+        if isinstance(response, _ObservedThinkingRefusal):
+            raise response from None
+        return response
 
     # ------------------------------------------------------------------
     # openai 提供方
@@ -1018,6 +1302,7 @@ class LLMClient:
     ) -> str:
         # EXECPLAN2 I-6-2: 解析本次实际模型与客户端。fast tier 指向不同提供方时用第二客户端，
         # 否则同提供方仅切模型名；关闭路由时 model=self.model、client=self._openai_client。
+        self._qualified_spending_route()
         model = self._model_for_tier(tier)
         client = self._openai_client
         if (not self._is_fallback
@@ -1050,11 +1335,17 @@ class LLMClient:
         try:
             _u = getattr(response, "usage", None)
             if _u is not None:
-                self._last_usage = {
-                    "prompt_tokens": int(getattr(_u, "prompt_tokens", 0) or 0),
-                    "completion_tokens": int(getattr(_u, "completion_tokens", 0) or 0),
-                }
-        except Exception:
+                if _spending().required():
+                    pt, ct = getattr(_u, "prompt_tokens", None), getattr(_u, "completion_tokens", None)
+                    self._last_usage = ({"prompt_tokens": pt, "completion_tokens": ct}
+                                        if type(pt) is int and type(ct) is int else None)
+                else:
+                    self._last_usage = {
+                        "prompt_tokens": int(getattr(_u, "prompt_tokens", 0) or 0),
+                        "completion_tokens": int(getattr(_u, "completion_tokens", 0) or 0),
+                    }
+        except Exception as exc:
+            _raise_spending_stop(exc)
             self._last_usage = None
         choice = response.choices[0]
         content = choice.message.content
@@ -1062,6 +1353,9 @@ class LLMClient:
         # 明确报错而不是把空串交给下游 JSON 解析，便于定位与重试。
         if content is None or not content.strip():
             finish = getattr(choice, "finish_reason", None)
+            if _spending().required():
+                raise EmptyCompletionError("Provider returned empty content", provider=self.provider,
+                                           finish_reason=finish if finish in {"stop", "length"} else None)
             # kimi/minimax keep their own switches; deepseek/qwen/glm share LLM_DISABLE_THINKING
             # (Config.reasoning_extra_body).  Some gateways still emit reasoning tokens with
             # thinking disabled (glm-5.3 on the coding plan, 2026-10-18) and those count against
@@ -1116,6 +1410,8 @@ class LLMClient:
         prompt 经 stdin 传入而非 argv：报告后期的长 prompt 会超 Linux 的 ARG_MAX
         （E2BIG），且 argv 会把 prompt 暴露在进程列表里。
         """
+        if _spending().required():
+            _spending().deny("unsupported_route")
         prompt = self._flatten_prompt(messages, response_format)
 
         # Pin the model when one is configured (e.g. LLM_MODEL_NAME=claude-opus-4-8) so the
@@ -1195,6 +1491,8 @@ class LLMClient:
         response_format: Optional[Dict] = None
     ) -> str:
         """通过 Codex CLI 调用。"""
+        if _spending().required():
+            _spending().deny("unsupported_route")
         prompt = self._flatten_prompt(messages, response_format)
 
         try:

@@ -185,6 +185,15 @@ class Config:
     # 至多降一级 confidence；概率不闭合、缺兜底情景和最终工件完整性缺陷写入 hard_issues，
     # 由最终只读审计阻止 completed 发布。默认开；关闭仅跳过结构化预测门。
     REPORT_PUBLISH_GATE = os.environ.get('REPORT_PUBLISH_GATE', 'True').strip().lower() == 'true'
+    # Target-first remedy policy. Authority/aggregation are pinned per admitted run.
+    REPORT_PUBLISH_GATE_MODE = os.environ.get('REPORT_PUBLISH_GATE_MODE', 'grade').strip().lower()
+    REPORT_SPINE_RESEARCH_PRIOR = os.environ.get('REPORT_SPINE_RESEARCH_PRIOR', 'true').strip().lower() == 'true'
+    REPORT_TOURNAMENT = os.environ.get('REPORT_TOURNAMENT', 'true').strip().lower() == 'true'
+    FORECAST_BINARIES_SOURCE = os.environ.get('FORECAST_BINARIES_SOURCE', 'tree').strip().lower()
+    FORECAST_MARKET_NEAR_RESOLUTION = os.environ.get('FORECAST_MARKET_NEAR_RESOLUTION', 'true').strip().lower() == 'true'
+    REPORT_PREMORTEM = os.environ.get('REPORT_PREMORTEM', 'false').strip().lower() == 'true'
+    TARGET_DECISION_MAX_CALLS = int(os.environ.get('TARGET_DECISION_MAX_CALLS', '128') or '128')
+
     REPORT_PUBLISH_GATE_MIN_COVERAGE = float(os.environ.get('REPORT_PUBLISH_GATE_MIN_COVERAGE', '0.75') or '0.75')
     # A single generic source repeated throughout a long report is usually a
     # provenance-collapse signal, not stronger evidence.  The final audit blocks
@@ -294,9 +303,9 @@ class Config:
     # i8（LOOP-017 尾巴「resolution monitor never ran」）：脚本此前没有任何调度方——判定
     # 账本/价格轨迹永远是空的。>0 时后端进程内以该小时数为周期在后台跑一次
     # `scripts/resolution_monitor.py run --all-recent`（子进程隔离，失败只记日志）。
-    # 默认 0=关：行为与今日逐字节一致；开启是 owner 的一行 env 决定（keyless 公共
-    # Gamma 重报价，无 LLM/付费调用）。仅 run.py 生产入口启动，测试进程绝不自启。
-    RESOLUTION_MONITOR_AUTORUN_HOURS = float(os.environ.get('RESOLUTION_MONITOR_AUTORUN_HOURS', '0') or '0')
+    # 源码默认每日 24 小时；部署已有的 0 覆盖仍关闭调度。只有 run.py 生产入口
+    # 才启动实际调度，测试进程不自启；本次源码交付不启动服务或付费任务。
+    RESOLUTION_MONITOR_AUTORUN_HOURS = float(os.environ.get('RESOLUTION_MONITOR_AUTORUN_HOURS', '24') or '24')
     # NEXTSTEPS P3-8：把已实现关系按价投影一个「到预测时点的轨迹」（allied→likely_persists /
     # adversarial→persists_or_escalates / transactional→contingent），喂进报告信号包帮助情景分叉
     # 分析（contingent 纽带=支点）。**模型先验非证据**，块内显式标注。默认关（保守，避免被当成证据）。
@@ -1237,9 +1246,18 @@ class Config:
     # commits ONE world update per paired round (deterministic kernel + bounded arbiter LLM call)
     # that every agent observes next round. false → legacy in-band scenario evolution, byte-identical.
     SIM_WORLD_MODEL = os.environ.get('SIM_WORLD_MODEL', 'true').strip().lower() == 'true'
+    # Read only at new-run admission; persisted absence remains off on reuse.
+    SIM_WORLD_ANCHOR = os.environ.get('SIM_WORLD_ANCHOR', 'false').strip().lower() == 'true'
     # Arbiter LLM call that resolves contested moves / moves state variables; false = mechanical
     # updates only (capacity, commitments, relationship nudges, due effects, scheduled events).
     SIM_WORLD_ARBITER = os.environ.get('SIM_WORLD_ARBITER', 'true').strip().lower() == 'true'
+    # Atomic rejection/correction is the default. Field/round compatibility is
+    # explicit and is pinned into a simulation's saved settings.
+    SIM_WORLD_ARBITER_REPAIR = os.environ.get('SIM_WORLD_ARBITER_REPAIR', 'atomic').strip().lower()
+    SIM_SHARE_PRIOR = os.environ.get('SIM_SHARE_PRIOR', 'uniform').strip().lower()
+    SIM_SHARE_SOURCE = os.environ.get('SIM_SHARE_SOURCE', 'auto').strip().lower()
+    SIM_AGENCY_CLASS_SOURCE = os.environ.get('SIM_AGENCY_CLASS_SOURCE', 'ontology').strip().lower()
+
     # Seconds a platform waits for the other platform's round before committing with what it has.
     SIM_WORLD_BARRIER_TIMEOUT_S = float(os.environ.get('SIM_WORLD_BARRIER_TIMEOUT_S', '1800') or '1800')
     # Cap on deciding actors per round (principals first, then active named actors by influence).
@@ -1848,6 +1866,16 @@ class Config:
     def validate(cls):
         """验证必要配置"""
         errors = []
+        for name, choices in {
+            "REPORT_PUBLISH_GATE_MODE": {"grade", "fail"},
+            "FORECAST_BINARIES_SOURCE": {"tree", "prose"},
+            "SIM_WORLD_ARBITER_REPAIR": {"atomic", "field", "round"},
+            "SIM_SHARE_PRIOR": {"uniform", "research"},
+            "SIM_SHARE_SOURCE": {"auto", "votes", "power_votes", "predicates"},
+            "SIM_AGENCY_CLASS_SOURCE": {"ontology", "legacy"},
+        }.items():
+            if getattr(cls, name) not in choices:
+                errors.append(f"{name} must be one of {', '.join(sorted(choices))}")
 
         if cls.LLM_PROVIDER not in cls.SUPPORTED_LLM_PROVIDERS:
             errors.append(

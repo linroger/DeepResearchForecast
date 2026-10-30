@@ -20,6 +20,7 @@ import pytest
 
 from app.config import Config
 from app.services import world_update as wu
+from app.services.agent_decision import build_option_menu
 from tests.test_world_model_downstream import _bare_report_agent, _world_state_payload, _write_world
 from tests.test_world_reflexivity import SCENARIOS, _Arbiter, _decision, _world
 
@@ -161,18 +162,25 @@ def _reflexive_run(sim_dir):
         {"narrative": "Washington walks away.", "scenario_pressure": {"Escalation": "up"}},
     ])
     us, cn = "United States Government", "China Ministry of Commerce"
+
+    def response(round_num, option_id, *, statement, scenario=None):
+        option = next(o for o in build_option_menu(world.actors[1], world, round_num)
+                      if o["id"] == option_id)
+        return _decision(1, cn, option["id"], option["kind"], targets=[us], statement=statement,
+                         scenario=scenario, option=option)
+
     plan = [
         ("2026-04", lambda: [_decision(0, us, "impose_measure", "policy", targets=[cn],
                                        statement="Tariffs on Chinese goods rise to 145% from Thursday.",
                                        expected=[(cn, "back down and seek talks")], scenario="Escalation")]),
-        ("2026-05", lambda: [_decision(1, cn, "impose_measure", "policy", targets=[us],
+        ("2026-05", lambda: [response(2, "respond_1_counter",
                                        statement="Counter-tariffs of 125% take effect.", scenario="Escalation"),
                              _decision(0, us, "hold_position", "wait")]),
         ("2026-06", lambda: [_decision(0, us, "open_talks", "coalition", targets=[cn],
                                        statement="We propose a 90-day pause.",
                                        terms="Both sides cut tariffs to 10% for 90 days", scenario="Truce")]),
-        ("2026-07", lambda: [_decision(1, cn, f"accept:{next(i for i, it in world.interactions.items() if it.is_open())}",
-                                       "coalition", statement="Agreed."),
+        ("2026-07", lambda: [response(4, f"accept:{next(i for i, it in world.interactions.items() if it.is_open())}",
+                                     statement="Agreed."),
                              _decision(0, us, "break_alliance", "coalition", targets=[cn],
                                        statement="We withdraw from the pause.")]),
     ]
@@ -226,7 +234,7 @@ def test_the_kernel_run_reaches_the_report_block(tmp_path, monkeypatch):
     assert lines[head + 1] == ("· 2026-04: United States Government crossed China Ministry of Commerce's red line: "
                                "No tariffs above 100% on Chinese goods — 145% announced")
     rec = lines.index("承诺履约（推演内记录，非现实信誉评估）：")
-    assert lines[rec + 1:-1] == ["· United States Government：兑现 0/1，违约 1"]     # China's obligation was released
+    assert lines[rec + 1:-1] == ["· United States Government：兑现 0/2，违约 1，失效 1"]  # tariff pledge lapsed; China released
     assert "%" not in "".join(lines[rec:-1])                                           # no shares, no probabilities
 
 
@@ -253,7 +261,7 @@ def test_the_round_headline_counts_red_line_crossings(tmp_path):
     _reflexive_run(str(tmp_path / "sim_headline"))
     with open(tmp_path / "sim_headline" / "world_state_history.jsonl", encoding="utf-8") as f:
         headlines = [json.loads(line)["headline"] for line in f]
-    assert headlines[0].startswith("2026-04: 1 decisions · 1 facts changed · 0 events · 1 red line crossed · "
+    assert headlines[0].startswith("2026-04: 1 decisions · 0 facts changed · 0 events · 1 red line crossed · "
                                    "arbiter=applied · ")
     assert all("red line" not in h.split(" · arbiter=")[0] for h in headlines[1:])
     record = {"deterministic": {"decisions": 2}, "diff": {}, "arbiter_status": "applied",
@@ -284,10 +292,15 @@ def test_the_panel_fixture_is_what_the_api_returns(client, tmp_path):
         pytest.skip("frontend tests are not part of this copy")
     _reflexive_run(str(tmp_path / "sim_reflexive"))
     data = client.get("/api/simulation/sim_reflexive/world-state?rows=48").get_json()["data"]
+    # Export the actual API payload inside pytest's evidence root. Copy this file
+    # deliberately after review; DRF_WRITE_FIXTURES still requires a repo write.
+    actual_fixture = tmp_path / "world_state.reflexive.actual.json"
+    actual_fixture.write_text(json.dumps(data, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
+                              encoding="utf-8")
     if os.environ.get("DRF_WRITE_FIXTURES") == "1":
         os.makedirs(os.path.dirname(FIXTURE), exist_ok=True)
         with open(FIXTURE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=1, sort_keys=True)
             f.write("\n")
     with open(FIXTURE, encoding="utf-8") as f:
-        assert json.load(f) == data, "regenerate with DRF_WRITE_FIXTURES=1 after a deliberate change"
+        assert json.load(f) == data, f"review the actual API export at {actual_fixture} before updating the fixture"

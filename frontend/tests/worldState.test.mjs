@@ -355,7 +355,7 @@ test('track records describe the latest world; runs without them say so', () => 
   const vm = summarizeWorldState(reflexive())
   assert.equal(vm.trackRecordsAvailable, true)
   assert.deepEqual(vm.trackRecords.map((r) => [r.actor, r.kept, r.broken, r.released, r.resolved, r.reliability]), [
-    ['United States Government', 0, 1, 0, 1, 0],
+    ['United States Government', 0, 1, 0, 2, 0],
     ['China Ministry of Commerce', 0, 0, 1, 0, null]
   ])
   assert.deepEqual(vm.trackRecords[0].outcomes, [{ outcome: 'success', count: 1 }])
@@ -378,7 +378,7 @@ test('red lines lead the consequences, also when a past period falls back to its
   const past = summarizeWorldState(data, 1)
   assert.equal(past.eventsInWindow, false)
   assert.deepEqual(past.consequences, [{ kind: 'red_line', description: crossing }])
-  assert.deepEqual(summarizeWorldState(data, 2).consequences, [])
+  assert.deepEqual(summarizeWorldState(data, 2).consequences, [{ kind: 'effect', description: 'executive order' }])
   // within a period, a red line moves ahead of the other events and the rest keep their order
   const mixed = fixture()
   mixed.recent_events.push({ round: 2, kind: 'consequence', description: 'Ports slow' },

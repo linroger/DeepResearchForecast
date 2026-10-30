@@ -37,9 +37,11 @@ from __future__ import annotations
 import calendar
 import copy
 import json
+from copy import deepcopy
 import math
 import re
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from ..utils.actors import (
@@ -303,12 +305,12 @@ def derive_v3_red_lines(actor: Optional[Dict[str, Any]], limit: int = MAX_RED_LI
     return _dedupe(out, limit)
 
 
-def _declared_outcome_power(actor: Optional[Dict[str, Any]], cfg: Dict[str, Any]) -> Optional[float]:
+def _declared_outcome_power(actor: Optional[Dict[str, Any]], cfg: Dict[str, Any], *, strict: bool = False) -> Optional[float]:
     """Only an explicitly declared power counts (I-3); visibility is never reused."""
     for source in (cfg, actor or {}):
         if not isinstance(source, dict):
             continue
-        for key in ("outcome_power", "power"):
+        for key in (("outcome_power",) if strict else ("outcome_power", "power")):
             raw = source.get(key)
             if isinstance(raw, bool) or raw is None:
                 continue
@@ -1098,11 +1100,15 @@ def build_world_model_seed(
     temporal_timeline: Any = None,
     audience_entity_type: str = "Audience",
     ontology_classes: Optional[Dict[str, str]] = None,
+    agency_classifications: Optional[Dict[str, Dict[str, Any]]] = None,
     max_variables: int = DEFAULT_MAX_VARIABLES,
     arbiter_enabled: bool = True,
     max_change_ratio: float = 0.5,
     barrier_timeout_s: float = 1800.0,
     pressure_weight: Optional[float] = None,
+    forecast_case: Optional[Dict[str, Any]] = None,
+    share_source: Optional[str] = None,
+    anchor_context: Any = None,
 ) -> Dict[str, Any]:
     """The sealed ``world_model`` block; legacy inputs degrade to a smaller block.
 
@@ -1116,6 +1122,8 @@ def build_world_model_seed(
     dossiers keep their filtered legacy qualitative baseline, labelled by
     ``qualitative_context`` (unsealed_research / unverified / model_assumption)
     on the seed, actors and relationships. They never become research_claims.
+    An enabled anchor is validated before legacy catches and fails closed on
+    missing authority, unsupported mappings or mismatched final-case values.
 
     ``pressure_weight`` (backtest ablation) pins ``settings.pressure_weight``, the
     world channel's weight the runner reads before SIM_WORLD_PRESSURE_WEIGHT;
@@ -1131,6 +1139,9 @@ def build_world_model_seed(
         if actor_context_packs is not None:
             expected["actor_context_packs_sha256"] = ac.canonical_json_sha256(actor_context_packs)
         validate_preparation_context(preparation_context, expected_sources=expected)
+    anchor = None
+    if anchor_context is not None:
+        anchor = build_anchor_runtime_projection(anchor_context, forecast_case)
     block: Dict[str, Any] = {
         "schema_version": WORLD_MODEL_SEED_VERSION,
         "question": _clean(question, 400),
@@ -1248,6 +1259,43 @@ def build_world_model_seed(
         except Exception:  # noqa: BLE001
             block["state_variables"] = []
 
+    # A supplied typed identity takes precedence over incidental dossier facts.
+    # The kernel owns propagation; this adapter never evaluates expressions or
+    # substitutes a convenient quantitative row for the settlement target.
+    if forecast_case is not None:
+        from deerflow_bridge.forecast_case import simulation_projection
+        try:
+            projection = simulation_projection(forecast_case)
+            target = projection["resolution"]["targetNodeId"]
+            writers = {m["outputNodeId"]: m for m in projection["mechanisms"]}
+            if target not in writers:
+                block["target_projection_reason"] = "missing_target_identity"
+            elif next(n for n in projection["nodes"] if n["nodeId"] == target).get("visibility") != "public":
+                block["target_projection_reason"] = "private_target_unavailable"
+            else:
+                typed_variables = []
+                for node in sorted(projection["nodes"], key=lambda n: n["nodeId"] != target):
+                    # Private nodes are retained only in the kernel projection,
+                    # never in legacy actor-visible variables or their briefs.
+                    if node.get("visibility") != "public":
+                        continue
+                    variable = {"id": node["nodeId"], "name": node["nodeId"], "kind": "numeric",
+                                "value": node["value"], "unit": node["units"], "as_of": node["vintage"],
+                                "provenance": "research", "rationale": "Typed structural input; not an assessment."}
+                    if node["nodeId"] in writers:
+                        mechanism = writers[node["nodeId"]]
+                        variable.update(read_only=True, identity={
+                            "mechanismId": mechanism["mechanismId"], "kind": mechanism["kind"],
+                            "inputs": list(mechanism["inputNodeIds"]), "parameters": deepcopy(mechanism["parameters"])})
+                    typed_variables.append(variable)
+                # Do not apply the incidental-fact cap to a resolution DAG: it
+                # would silently remove identity inputs. The case bounds size.
+                block["state_variables"] = typed_variables
+                block["target_projection"] = projection
+                block["target_projection_reason"] = "typed_identity_pending_kernel_propagation"
+        except (ValueError, KeyError, TypeError, StopIteration):
+            block["target_projection_reason"] = "invalid_forecast_case"
+
     # actors ------------------------------------------------------------------------------
     name_to_agent: Dict[str, int] = {}
     rows: List[Dict[str, Any]] = []
@@ -1272,7 +1320,14 @@ def build_world_model_seed(
             actor = match_actor(name, actor_source) if actor_source else None
             actor = actor if isinstance(actor, dict) else None
             ontology_class = (ontology_classes or {}).get(entity_type, "") if ontology_classes else ""
-            agency = resolve_agency_class(actor, entity_type, ontology_class)
+            declaration = None
+            if agency_classifications is not None:
+                from .agency_classification import agency_classification_for
+                declaration = agency_classification_for(agency_classifications, _cfg_get(cfg, "entity_uuid"))
+            if declaration is not None and declaration["agency_class"] is not None:
+                agency = declaration["agency_class"]
+            else:
+                agency = resolve_agency_class(actor, entity_type, ontology_class)
             canonical = bool(actor and _is_canonical(actor))
             own_claims = [r for r in public_claims if actor and r.get("actor_id") == ac.actor_id_for(actor)]
             if canonical or canonical_dossier:
@@ -1345,7 +1400,8 @@ def build_world_model_seed(
                     "collective" if agency == "public_collective" else "actor"),
                 "capacity_per_round": default_capacity(agency),
                 "outcome_power": _declared_outcome_power(actor, cfg if isinstance(cfg, dict) else {
-                    "outcome_power": _cfg_get(cfg, "outcome_power")}),
+                    "outcome_power": _cfg_get(cfg, "outcome_power")},
+                    strict=forecast_case is not None or share_source in {"auto", "power_votes", "predicates"}),
                 "posture": "" if canonical or canonical_dossier else _clean(_cfg_get(cfg, "stance", ""), 60),
                 "documented_plans": plans,
                 "red_lines": red_lines,
@@ -1359,6 +1415,8 @@ def build_world_model_seed(
                 row["research_claims"] = copy.deepcopy(own_claims)
             elif legacy_prepared:
                 row["qualitative_context"] = dict(_LEGACY_CONTEXT)
+            if declaration is not None:
+                row["agency_class_basis"] = declaration["basis"]
             rows.append(row)
             name_to_agent[normalize_name(name)] = aid
             for alias in aliases:
@@ -1419,7 +1477,339 @@ def build_world_model_seed(
         preparation_gaps.insert(0, {"kind": "legacy_context_unverified", "subject": "qualitative context",
                                    "note": "Legacy actor and relationship context is unverified modeling assumptions, not canonical sourced evidence."})
     block["gaps"] = (preparation_gaps + shock_gaps + seed_gaps(block))[:MAX_SEED_GAPS]
+    if anchor is not None:
+        # Replace every legacy research-derived seed channel, not just numbers.
+        # The authenticated engine projection stays privileged; actor evidence
+        # is re-projected by UUID and observation time at the actual call boundary.
+        from .agency_classification import agency_classification_for
+        from .world_anchor import actor_ref_for
+        if "target_projection" not in block:
+            raise ValueError("world anchor modeling_gap: admitted forecast case projection required")
+        clean_rows = []
+        for cfg in agent_configs or []:
+            if _cfg_get(cfg, "entity_type") == audience_entity_type:
+                continue
+            uuid = _cfg_get(cfg, "entity_uuid")
+            actor_ref = actor_ref_for(anchor_context, uuid)
+            declaration = agency_classification_for(agency_classifications, uuid)
+            if declaration is None or declaration["agency_class"] is None:
+                raise ValueError("world anchor missing_authority: resolved C5 UUID class required")
+            clean_rows.append({
+                "agent_id": int(_cfg_get(cfg, "agent_id")), "name": _clean(_cfg_get(cfg, "entity_name"), 160),
+                "agency_class": declaration["agency_class"], "agency_class_basis": declaration["basis"],
+                "entity_uuid": uuid, "actor_ref": actor_ref, "archetype": "actor",
+                "capacity_per_round": default_capacity(declaration["agency_class"]), "outcome_power": None,
+                "posture": "", "documented_plans": [], "red_lines": [], "goals": [], "incentives": {},
+                "aliases": [], "allies": [], "rivals": [],
+            })
+        metadata = {v["node_id"]: v for v in anchor["variables"]}
+        block["state_variables"] = [
+            {**v, "anchor_metadata": metadata[v["id"]]}
+            for v in block["state_variables"] if v["id"] in metadata
+        ]
+        block.update(actors=clean_rows, relationships=[], shocks=anchor["shocks"], scenario_indicators=[],
+                     world_anchor=anchor["pin"], anchor_runtime=anchor,
+                     gaps=[{"kind": "world_anchor", "gap_id": gap} for gap in anchor["projection"]["gap_ids"]])
+        block["scenarios"] = [row["scenarioId"] for row in block["target_projection"].get("scenarios", [])]
+        block["as_of_date"] = anchor["projection"]["scope"]["cutoff"][:10]
+        block["horizon_date"] = anchor["projection"]["scope"]["horizon"]["end"]
     return block
+
+
+def build_anchor_runtime_projection(context: Any, forecast_case: Optional[Dict[str, Any]], *,
+                                    case_projection: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Compile the closed, authenticated oasis adapter; unsupported mappings fail.
+
+    The supplied final case remains numerical authority. This adapter checks its
+    bindings, then uses existing target propagation, event and shock primitives.
+    """
+    from .world_anchor import validate_anchor_context, engine_projection, anchor_config_pin
+    from deerflow_bridge.forecast_case import simulation_projection
+    validate_anchor_context(context, engine="oasis-legacy")
+    projection = engine_projection(context, engine="oasis-legacy")
+    if forecast_case is None and case_projection is None:
+        raise ValueError("world anchor missing_contract: forecast_case required")
+    case = simulation_projection(forecast_case) if forecast_case is not None else deepcopy(case_projection)
+    from .target_mechanisms import compile_model
+    if forecast_case is not None:
+        compile_model(forecast_case)
+    target = case["resolution"]["targetNodeId"]
+    nodes = {n["nodeId"]: n for n in case["nodes"]}
+    derived = {m["outputNodeId"] for m in case["mechanisms"]}
+    requirements = {r["origin_pointer"]: r for r in context.requirements["requirements"]}
+    bindings = {b["requirement_id"]: b for b in projection["bindings"]}
+    observations = {o["observation_id"]: o for o in projection["observations"]}
+
+    def fail(note):
+        raise ValueError("world anchor modeling_gap: " + note)
+
+    adapter_version = "world-anchor-reflexive/v1"
+    variable_units = {v["node_id"]: v["identity"]["unit"] for v in projection["variables"]}
+
+    def require_consumer(consumer, template_version=None):
+        rules = [rule for rule in context.policy["consumer_rules"]
+                 if all(rule[key] == consumer[key] for key in ("engine", "role", "object_id", "field"))]
+        if not any(rule["adapter_version"] == adapter_version
+                   and (template_version is None or template_version in rule["template_versions"]) for rule in rules):
+            fail("consumer policy does not support this installed adapter")
+
+    selected_requirements = {b["requirement_id"] for b in projection["bindings"]}
+    for requirement in requirements.values():
+        if requirement["requirement_id"] in selected_requirements:
+            for consumer in requirement["consumers"]:
+                if consumer["engine"] == "oasis-legacy":
+                    require_consumer(consumer)
+
+    def dimensionless(unit):
+        return (isinstance(unit, dict) and unit.get("id") in {"1", "fraction"}
+                and unit.get("dimension") == "dimensionless" and unit.get("scale") == "1"
+                and unit.get("currency") is None and unit.get("price_basis") == "not_applicable"
+                and unit.get("base_period") is None)
+
+    def predicate_threshold(value):
+        try:
+            if not isinstance(value, str):
+                fail("predicate threshold must be an admitted decimal string")
+            number = Decimal(value)
+            if not number.is_finite() or not math.isfinite(float(number)):
+                fail("predicate threshold must be finite")
+            return number
+        except (InvalidOperation, ValueError, OverflowError):
+            fail("invalid predicate threshold")
+
+    def validate_predicate(predicate):
+        if not isinstance(predicate, dict):
+            fail("unsupported null or malformed predicate")
+        op = predicate.get("operator")
+        if not isinstance(op, str) or not isinstance(predicate.get("node_id"), str):
+            fail("unsupported predicate identity or operator")
+        expected_keys = {"node_id", "operator", "low", "high"} if op == "between" else {"node_id", "operator", "value"}
+        if set(predicate) != expected_keys or op not in {"lt", "lte", "gt", "gte", "between"}:
+            fail("unsupported predicate grammar")
+        node = nodes.get(predicate["node_id"])
+        if node is None or node.get("visibility") != "public" or predicate["node_id"] not in variable_units:
+            fail("predicate requires a mapped public runtime variable")
+        if op == "between":
+            low, high = predicate_threshold(predicate["low"]), predicate_threshold(predicate["high"])
+            if low > high:
+                fail("predicate interval is reversed")
+            return (low, high)
+        return (predicate_threshold(predicate["value"]),)
+
+    if len({slugify(node) for node in nodes}) != len(nodes):
+        fail("ambiguous runtime node identifiers")
+
+    if target != context.requirements["contract"]["settlement"]["target_node_id"]:
+        fail("anchor/case target mismatch")
+    if case["resolution"]["horizon"] != projection["scope"]["horizon"]["end"]:
+        fail("anchor/case horizon mismatch")
+    if case["asOf"] != projection["scope"]["cutoff"][:10]:
+        fail("anchor/case information cutoff mismatch")
+    mechanisms = {m["mechanismId"]: m for m in case["mechanisms"]}
+    if set(mechanisms) != {m["mechanism_id"] for m in projection["mechanisms"]}:
+        fail("anchor/case mechanism identity mismatch")
+    for mechanism in projection["mechanisms"]:
+        actual = mechanisms[mechanism["mechanism_id"]]
+        if (actual["kind"] != mechanism["template"] or actual["inputNodeIds"] != mechanism["input_node_ids"]
+                or actual["outputNodeId"] != mechanism["output_node_id"]):
+            fail("anchor/case mechanism mapping mismatch")
+        if mechanism["template_version"] != "v1":
+            fail("unsupported mechanism template version")
+        for consumer in mechanism["consumers"]:
+            if consumer["engine"] == "oasis-legacy":
+                require_consumer(consumer, mechanism["template_version"])
+        if mechanism["lag_requirement_origin"] is not None or mechanism["applicability_requirement_origins"]:
+            fail("mechanism lag or applicability is not implemented by this adapter")
+        expected_slots = {
+            "growth": [], "sum": [], "product": [], "supply_demand": [],
+            "linear": ["coefficient:" + node for node in mechanism["input_node_ids"]] + ["intercept"],
+            "adoption": ["rate"], "regulatory_milestone": ["milestonePeriod", "before", "after"],
+        }.get(mechanism["template"])
+        supplied_slots = [slot["name"] for slot in mechanism["parameters"]]
+        if expected_slots is None or len(supplied_slots) != len(expected_slots) or set(supplied_slots) != set(expected_slots):
+            fail("mechanism parameter slots do not cover the native contract exactly")
+
+    def binding_value(binding):
+        if not isinstance(binding, dict) or binding.get("status") != "bound":
+            fail("unbound runtime requirement")
+        if binding.get("assumption") is not None:
+            return binding["assumption"]["value"], None, "assumed"
+        rows = [observations[o] for o in binding["observation_ids"]]
+        if not rows or any(r["value"] != rows[0]["value"] for r in rows):
+            fail("non-unique runtime value")
+        return rows[0]["value"], rows[0], rows[0]["value_kind"]
+
+    def bound(origin):
+        req = requirements.get(origin)
+        if req is None:
+            fail("unknown requirement origin")
+        return req, *binding_value(bindings.get(req["requirement_id"]))
+
+    def scalar(value):
+        if value.get("kind") == "number":
+            number = float(value["value"])
+            if not math.isfinite(number):
+                fail("nonfinite scalar")
+            return number
+        if value.get("kind") in {"text", "boolean"}:
+            return value["value"]
+        fail("range cannot become an initial point or event size")
+
+    def consumers(req, role):
+        return [c for c in req["consumers"] if c["engine"] == "oasis-legacy" and c["role"] == role]
+
+    def effects(origins, role):
+        out = []
+        for origin in origins:
+            req, value, _, _ = bound(origin)
+            mappings = consumers(req, role)
+            if len(mappings) != 1:
+                fail("ambiguous effect mapping")
+            item = mappings[0]
+            node = nodes.get(item["object_id"])
+            if (node is None or node.get("visibility") != "public" or item["object_id"] in derived
+                    or item["field"] not in {"set", "add", "mul"}):
+                fail("unsupported effect target or operation")
+            if value["kind"] != "number":
+                fail("numeric target effect requires a numeric binding")
+            unit = (req.get("identity") or {}).get("unit")
+            if item["field"] == "mul":
+                if not dimensionless(unit):
+                    fail("multiplicative effect requires an unscaled dimensionless operand")
+            elif unit != variable_units.get(item["object_id"]):
+                fail("effect unit or scale differs from the target variable")
+            out.append({"variable_id": slugify(item["object_id"]), "op": item["field"], "value": scalar(value)})
+        return out
+
+    for mechanism in projection["mechanisms"]:
+        actual = mechanisms[mechanism["mechanism_id"]]["parameters"]
+        for slot in mechanism["parameters"]:
+            req, value, _, _ = bound(slot["requirement_origin"])
+            name = slot["name"]
+            unit = (req.get("identity") or {}).get("unit")
+            if unit != slot["unit"]:
+                fail("parameter slot unit differs from its admitted binding")
+            output_unit = variable_units.get(mechanism["output_node_id"])
+            if name.startswith("coefficient:"):
+                input_node = name.split(":", 1)[1]
+                index = mechanism["input_node_ids"].index(input_node)
+                current = actual.get("coefficients", [])[index]
+                if variable_units.get(input_node) != output_unit or not dimensionless(unit):
+                    fail("unsupported linear coefficient units")
+            else:
+                current = actual.get(name)
+                if name == "rate":
+                    if not dimensionless(unit):
+                        fail("adoption rate requires an unscaled dimensionless unit")
+                elif name == "milestonePeriod":
+                    if unit != {"id": "period", "dimension": "count", "scale": "1", "currency": None,
+                                "price_basis": "not_applicable", "base_period": None}:
+                        fail("milestone period requires the supported period-count unit")
+                elif unit != output_unit:
+                    fail("parameter unit or scale differs from the output variable")
+            if value["kind"] == "number":
+                expected = scalar(value)
+                matches = (current.get("low") == current.get("high") == expected if isinstance(current, dict)
+                           else current == expected)
+            elif value["kind"] == "range":
+                matches = (isinstance(current, dict) and current.get("low") == float(value["low"])
+                           and current.get("high") == float(value["high"]))
+            else:
+                matches = False
+            if not matches:
+                fail("anchor/case parameter mismatch")
+
+    variables = []
+    by_binding = {b["binding_id"]: b for b in projection["bindings"]}
+    for variable in projection["variables"]:
+        node = nodes.get(variable["node_id"])
+        if node is None or variable["identity"]["unit"]["id"] != node["units"]:
+            fail("anchor/case node or unit mismatch")
+        if (variable["writable"] is not (variable["node_id"] not in derived)
+                or variable["producer_mechanism_id"] != next((m["mechanismId"] for m in case["mechanisms"]
+                                                              if m["outputNodeId"] == variable["node_id"]), None)):
+            fail("anchor/case derived authority mismatch")
+        metadata = deepcopy(variable)
+        if variable["node_id"] not in derived:
+            value, observation, kind = binding_value(by_binding.get(variable["binding_id"]))
+            if scalar(value) != node["value"]:
+                fail("anchor/case value mismatch")
+            metadata.update(value_kind=kind, observation=deepcopy(observation))
+        else:
+            metadata.update(value_kind="simulated", observation=None)
+        variables.append(metadata)
+    if target not in {v["node_id"] for v in variables} or target not in derived:
+        fail("derived target missing")
+    if set(nodes) != {v["node_id"] for v in variables}:
+        fail("case inputs missing anchor bindings")
+    calendar = []
+    for event in projection["calendar"]:
+        if event["classification"] != "scheduled":
+            continue  # Intentions/history never become future accomplished effects.
+        _, event_value, _, _ = bound(event["requirement_origin"])
+        _, time_value, observation, _ = bound(event["time_requirement_origin"])
+        when = scalar(time_value) if time_value["kind"] == "text" else (observation or {}).get("effective_at", {}).get("value")
+        try:
+            if not isinstance(when, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z)?", when):
+                fail("scheduled event requires canonical ISO time")
+            date.fromisoformat(when[:10])
+            if len(when) > 10:
+                datetime.strptime(when, "%Y-%m-%dT%H:%M:%SZ")
+        except (TypeError, ValueError):
+            fail("scheduled event has no supported effective date")
+        if when[:10] <= projection["scope"]["cutoff"][:10]:
+            fail("historical event cannot enter the future effect queue")
+        calendar.append({"id": event["event_id"], "date": when[:10], "description": str(scalar(event_value)),
+                         "effects": effects(event["effect_requirement_origins"], "calendar")})
+    shocks = []
+    for hazard in projection["hazards"]:
+        req, probability, _, _ = bound(hazard["likelihood_requirement_origin"])
+        if (not req.get("identity") or req["identity"]["unit"]["id"] != "1/day"
+                or not any(c["field"] == "hazard_per_day" and c["object_id"] == hazard["hazard_id"] for c in consumers(req, "calendar"))):
+            fail("hazard needs an admitted native daily process rate")
+        recurrence_req, recurring, _, _ = bound(hazard["recurrence_requirement_origin"])
+        if not any(c["field"] == "recurring" and c["object_id"] == hazard["hazard_id"] for c in consumers(recurrence_req, "calendar")):
+            fail("hazard recurrence mapping missing")
+        if probability["kind"] != "number" or recurring["kind"] != "boolean" or scalar(probability) < 0:
+            fail("invalid hazard rate or recurrence")
+        if req["identity"]["unit"] != {"id": "1/day", "dimension": "frequency", "scale": "1", "currency": None,
+                                      "price_basis": "not_applicable", "base_period": None}:
+            fail("hazard rate scale is not the supported native daily process")
+        if hazard["trigger"] is not None:
+            validate_predicate(hazard["trigger"])
+        hazard_effects = effects(hazard["effect_requirement_origins"], "calendar")
+        if len(hazard_effects) > 4:
+            fail("hazard effect count exceeds the supported runtime limit of four")
+        shocks.append({"id": hazard["hazard_id"], "event": hazard["hazard_id"],
+                       "hazard_per_day": scalar(probability), "recurring": recurring["value"],
+                       "effects": hazard_effects,
+                       "source": "world_anchor", "trigger": deepcopy(hazard["trigger"])})
+    if len(shocks) > 8:
+        fail("shock count exceeds supported runtime bound")
+    indicators = deepcopy(projection["indicators"])
+    for indicator in indicators:
+        req, threshold, _, _ = bound(indicator["requirement_origin"])
+        if indicator["node_id"] not in nodes or nodes[indicator["node_id"]].get("visibility") != "public":
+            fail("indicator requires a public mapped node")
+        if indicator["consumer"] != {"engine": "oasis-legacy", "role": "observation",
+                                     "object_id": indicator["node_id"], "field": "value"}:
+            fail("unsupported indicator observation consumer")
+        values = validate_predicate(indicator["trigger"])
+        if indicator["trigger"]["node_id"] != indicator["node_id"]:
+            fail("indicator trigger and observed node differ")
+        if (req.get("identity") or {}).get("unit") != variable_units.get(indicator["node_id"]):
+            fail("indicator threshold unit differs from its observed variable")
+        mappings = consumers(req, "observation")
+        if len(mappings) != 1 or mappings[0]["object_id"] != indicator["node_id"] or mappings[0]["field"] != "threshold":
+            fail("unsupported indicator threshold mapping")
+        expected = ((predicate_threshold(threshold["value"]),) if threshold["kind"] == "number" else
+                    (predicate_threshold(threshold["low"]), predicate_threshold(threshold["high"]))
+                    if threshold["kind"] == "range" else ())
+        if values != expected:
+            fail("indicator predicate differs from its admitted threshold")
+    return {"schema_version": "world-anchor-reflexive/v1", "pin": anchor_config_pin(context),
+            "projection": projection, "variables": variables, "calendar": calendar,
+            "shocks": shocks, "indicators": indicators}
 
 
 MAX_SEED_GAPS = 32

@@ -1,0 +1,12 @@
+{
+  "status": "delivered_offline_implementation",
+  "commit": "c2736d3648f323d0fd2cc83b9ba53966f5484f3f",
+  "remote": "legacy",
+  "branch": "codex/target-run-spending",
+  "remote_verified": true,
+  "issue": 11,
+  "issue_state": "closed",
+  "live_provider_authorized": false,
+  "deployed": false,
+  "next_issue": 12
+}

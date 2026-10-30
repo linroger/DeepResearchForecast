@@ -1,0 +1,285 @@
+{
+  "schema": "world-anchor-main-merge-verification/v1",
+  "status": "accepted_offline",
+  "parents": {
+    "main": "f773f61bee4eed6e2c3be23e546d114ff2a786e8",
+    "feature": "43efe06defc78de9bedda73d1708ba4c750a6150"
+  },
+  "unique_passing_backend_cases": 4582,
+  "unclosed_failing_case_ids": [],
+  "skipped_without_pass": {
+    "tests.test_agency_classification::test_prechange_serialized_bytes_when_staged": "pre-change sources not staged in this guard run",
+    "tests.test_agency_classification::test_frozen_private_specimen_when_staged": "private frozen snapshot not staged in this guard run"
+  },
+  "gates": [
+    {
+      "name": "composed",
+      "counts": {
+        "passed": 4442,
+        "failed": 1,
+        "skipped": 2
+      },
+      "seconds": 1170.69,
+      "exit_code": 1,
+      "source_drift": [],
+      "identity_preserved": true,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 5,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20,
+        "allowed:guarded_child": 52,
+        "allow:directory_traversal": 114
+      },
+      "registered_source_pins": 294,
+      "durable_receipt_root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-composed-20261030-01",
+      "completed_sha256": "dbbdfdf909478c84d2ee8c171cb61349d7269bb115a61182041496335e89c439",
+      "junit_sha256": "1d08b47e65c4ed6e1ad11c9df2d8b419245ee508ebe99ae364b80d9d077ca3ee"
+    },
+    {
+      "name": "producer-close",
+      "counts": {
+        "passed": 148,
+        "failed": 0,
+        "skipped": 0
+      },
+      "seconds": 71.792,
+      "exit_code": 0,
+      "source_drift": [],
+      "identity_preserved": true,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:process:subprocess.Popen": 2
+      },
+      "registered_source_pins": 8,
+      "durable_receipt_root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-producer-close-20261030-01",
+      "completed_sha256": "5db5e9b2a0896a50974946cc9032fd9a3b18714dcaae4ad7b2085edfeefcb434",
+      "junit_sha256": "7f0ac496aab71e844e601aed33f0adc3b79c110557e5cb70884e233578f97d2e"
+    },
+    {
+      "name": "target-fmp",
+      "counts": {
+        "passed": 282,
+        "failed": 0,
+        "skipped": 1
+      },
+      "seconds": 138.016,
+      "exit_code": 0,
+      "source_drift": [],
+      "identity_preserved": true,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "allowed:guarded_child": 2
+      },
+      "registered_source_pins": 24,
+      "durable_receipt_root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-target-fmp-acceptance-20261030-01",
+      "completed_sha256": "68b25ccb652c9719629bdcf535e5735be8b2feb6ad76fed78db78561fb0a052d",
+      "junit_sha256": "b0b7ac72df9780f000bf27d37362e04f6c562739d25982a369ab882d621608ee"
+    },
+    {
+      "name": "cast-preflight",
+      "counts": {
+        "passed": 96,
+        "failed": 0,
+        "skipped": 0
+      },
+      "seconds": 50.59,
+      "exit_code": 0,
+      "source_drift": [],
+      "identity_preserved": true,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20
+      },
+      "registered_source_pins": 177,
+      "durable_receipt_root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-cast-preflight-20261030-02",
+      "completed_sha256": "e1bd477bfdf932381a726111dcfea503f618d8b1acfc519e7c2d97fe93d05856",
+      "junit_sha256": "a33ba4e1d7e1514c53705404e32bd63344df254b2f667ce3366815fabfa485f7"
+    },
+    {
+      "name": "reflexive-709",
+      "counts": {
+        "passed": 709,
+        "failed": 0,
+        "skipped": 0
+      },
+      "seconds": 212.672,
+      "exit_code": 0,
+      "source_drift": [],
+      "identity_preserved": true,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20
+      },
+      "registered_source_pins": 212,
+      "durable_receipt_root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-reflexive-review-final-20261030-01",
+      "completed_sha256": "af0f5532aed0a84f72d5831a2538182ae48707aaa4cd4607a578df7148a61ec0",
+      "junit_sha256": "b75f231cf056853183b4c030598eb26a46f91f8f32a5cea31d181066e64738ff"
+    },
+    {
+      "name": "r5-required-key",
+      "counts": {
+        "passed": 69,
+        "failed": 0,
+        "skipped": 0
+      },
+      "seconds": 99.055,
+      "exit_code": 0,
+      "source_drift": [],
+      "identity_preserved": true,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1,
+        "blocked:network:socket.__new__": 1,
+        "blocked:process:subprocess.Popen": 4,
+        "quarantine:oasis_import_cwd": 1,
+        "blocked:external_read": 20
+      },
+      "registered_source_pins": 27,
+      "durable_receipt_root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-review-r5-missing-key-green-20261030-07",
+      "completed_sha256": "b9b565321b28b7292d192ebd52622b4e4581b9343da1960f7b449b7ccc6fe29f",
+      "junit_sha256": "e5697f668b3e7ad9293f296bdddd2fb980cefe54b0ef3bb9a6bb5796d81e67e5"
+    },
+    {
+      "name": "parent-controls",
+      "counts": {
+        "passed": 50,
+        "failed": 0,
+        "skipped": 0
+      },
+      "seconds": 3.355,
+      "exit_code": 0,
+      "source_drift": [],
+      "identity_preserved": true,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      },
+      "registered_source_pins": 8,
+      "durable_receipt_root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-parent-controls-20261030-01",
+      "completed_sha256": "8d50eb7ed7eae6901865dfd0e9c33bf37a7334172219f5fc32c2e3b59a52904b",
+      "junit_sha256": "f815221cdc8b1996047a75db660a40adbbfe741134bdde95fd00356bd034ce38"
+    },
+    {
+      "name": "budget",
+      "counts": {
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      "seconds": 2.576,
+      "exit_code": 0,
+      "source_drift": [],
+      "identity_preserved": true,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      },
+      "registered_source_pins": 5,
+      "durable_receipt_root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-budget-20261030-01",
+      "completed_sha256": "577dc2340c692bfc26c4051fa92f23bedf5b6e83d88ee08f43c5161315881829",
+      "junit_sha256": "fd09de39bca83e541250747919eedfe4da1894a29f384aa97cc1dae159ddb959"
+    },
+    {
+      "name": "private-specimen",
+      "counts": {
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      "seconds": 2.373,
+      "exit_code": 0,
+      "source_drift": [],
+      "identity_preserved": true,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1
+      },
+      "registered_source_pins": 4,
+      "durable_receipt_root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-private-20261030-01",
+      "completed_sha256": "0d96b11c4312d6d6af837a7468cb01d54a304c65855df509c8879614098de559",
+      "junit_sha256": "986df2a3d38e12bfaf650921691def6bae8a4a438da05085549e02d2cea0db8e"
+    },
+    {
+      "name": "target-off",
+      "counts": {
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      "seconds": 1.607,
+      "exit_code": 0,
+      "source_drift": [],
+      "identity_preserved": true,
+      "shutdown_complete": true,
+      "events": {
+        "redirect:app.config": 1,
+        "redirect:app.utils.logger": 1,
+        "redirect:app.services.simulation_manager": 1
+      },
+      "registered_source_pins": 5,
+      "durable_receipt_root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-target-off-20261030-01",
+      "completed_sha256": "4ebffe9e3d4fa40a4943aced4110eb9513ae1df2e40a92a3f3b98ada660a9c15",
+      "junit_sha256": "a70f6d7d329c8ac577a996c25a5920d6a276e51ab75223c17878f569b4d6bd39"
+    }
+  ],
+  "source_pins": 866,
+  "final_709_follow_up": [
+    "backend/app/services/world_model.py",
+    "backend/tests/test_world_anchor_merge_owned_commitments_review.py"
+  ],
+  "review_sha256": {
+    "coordinator-review.md": "aa259e7cd8c11bf7d3e90f2f98d67f7c6b07f9c055dd18b9245102a9559f8cf7",
+    "report-native-review.md": "bf305ffec46e32d6d5f97c6060754f1b7e43b5b8cdbdd4f6d1bb62f32ced99fd",
+    "reflexive-review.md": "152e6e303046b3408623c010ad1e20090ee3341c6a8301fa25a9b5a05b617df7"
+  },
+  "frontend": {
+    "passed": 390,
+    "build": "passed",
+    "excluded": "one temporary dev-server listener scenario; three static configuration controls passed",
+    "evidence": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/frontend/verification-summary.json"
+  },
+  "primary_preservation": {
+    "primary_head": true,
+    "files": true,
+    "index_sha256": true,
+    "staged_diff_sha256": true
+  },
+  "limits": [
+    "Guard uses CPython audit hooks, not an OS sandbox. Blocked probes remain disclosed.",
+    "Initial composed scalar case stopped with storage_unavailable; unchanged spending core passed isolated and full148-case producer closure. Original low-level exception unavailable; contention is a hypothesis.",
+    "Two optional historical C5 checks lack staged inputs; current main/historical off comparison and private World Anchor specimen are separately covered.",
+    "Standalone replay_saved_world.py five-file bundle lacks authenticated anchor context and remains unsupported for anchored replay.",
+    "No live provider, production deployment, scheduler or primary checkout adoption."
+  ],
+  "review_disposition": "All coordinator, report/native and reflexive findings closed on final source hashes."
+}

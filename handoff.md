@@ -1,3 +1,5 @@
+> Current source integration: [World Anchor merge to main](docs/handoff/world-anchor-main-merge/handoff.md). The isolated merge combines authenticated research anchoring with main preparation, atomic arbiter and model-led translation contracts. Merged-source offline verification and remote delivery are in progress; this does not update the running primary checkout.
+
 > Current root correction: [typed forecast tasks, atomic arbiter transactions and parsed grounding](docs/handoff/root-workflow-contracts/handoff.md). Final1431-case source and1630-case peer-runtime gates passed; the backend is active and both authorized pipelines resumed with retained-stage proof.
 
 > Current run repair: [forecast horizon, arbiter and translation contracts](docs/handoff/run-horizon-arbiter-translation/handoff.md). Work is isolated from the shared application checkout; saved run artifacts remain historical.
@@ -9,6 +11,14 @@
 > Simulation/report boundary — ADR 0003: [ADR](docs/adr/0003-simulation-after-action-record-and-report-bridge.md), [S0 design](docs/handoff/simulation-after-action-record/design.md), [topic handoff](docs/handoff/simulation-after-action-record/handoff.md). S0 contains constants, simulated chart titles, brief disclosure, leakage removal, attribution rules, header alignment, default-off sensitivity and what-if labels. Later S1–S4 changes on the separate implementation branch are outside this named-branch merge.
 
 ### Research-grounded branch history retained during main merge
+
+> Active implementation: [durable run spending](docs/handoff/run-spending/handoff.md), approved for code and offline tests only.
+
+> Current stage: [saved-specimen acceptance and operational readiness](docs/handoff/target-first-acceptance/handoff.md).
+
+> First-ten request reconciliation: [current handoff](docs/handoff/first-ten-remedies/handoff.md). Completed and remotely delivered on codex/first-ten-remedies; 5,306 backend checks pass with two known vendor-snapshot skips. The topic handoff records exact scope and empirical limits.
+
+> Target-first forecasting implementation: [current handoff and verification](docs/handoff/target-first-forecast/handoff.md), [architecture and API](docs/handoff/target-first-forecast/architecture.md). Work is isolated on `codex/target-first-forecast`; the original deployment checkout and saved runs are preserved.
 
 > Simulation/report boundary — complete and delivered: [completion and evidence](docs/handoff/simulation-after-action-record/completion.md), [ADR 0003](docs/adr/0003-simulation-after-action-record-and-report-bridge.md), and [current handoff](docs/handoff/simulation-after-action-record/handoff.md). The verified feature is on `codex/simulation-report-boundary`; active source preserves the separate Mandarin work. Fresh-provider calibration/acceptance remains a separate exercise.
 

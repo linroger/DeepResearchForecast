@@ -13,7 +13,7 @@ from typing import Any
 
 from .contracts import (
     CAUSAL_ORDER_POLICY, WorldError, actors_by_id, add_days, canonical_json, causal_order_key, clone, decimal, identifier,
-    initial_snapshot, parse_time, period_for, quantity, require, stable_id,
+    initial_snapshot, parse_time, period_for, quantity, record_anchor_changes, require, stable_id,
     templates_by_id, time_text, validate_snapshot, validate_spec, visibility, visible_to,
 )
 
@@ -46,7 +46,7 @@ def _config(ok: bool, message: str) -> None:
 def _basis(record: dict) -> None:
     value = record.get("basis")
     _config(isinstance(value, dict) and value.get("kind") in {
-        "scenario_assumption", "source_claim", "report_excerpt", "simulation_event"
+        "scenario_assumption", "source_claim", "report_excerpt", "simulation_event", "anchor_evidence"
     } and isinstance(value.get("refs"), list) and bool(value["refs"]), "Mechanism requires provenance")
 
 
@@ -1211,5 +1211,6 @@ def resolve_round(spec: dict, snapshot: dict, decisions: list, round_index: int)
             queue = state.setdefault("interactionQueueState", {})
             for aid, seen in presented.items():
                 queue.setdefault(aid, {}).update(seen)
+        record_anchor_changes(spec, snapshot, state, at=period["end"], round_index=round_index)
         _state_check(spec, state)
         return {"snapshot": state, "events": events, "resolutions": resolutions}

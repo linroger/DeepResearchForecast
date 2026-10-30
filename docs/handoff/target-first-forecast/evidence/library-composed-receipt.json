@@ -1,0 +1,60 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 32735,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1,
+    "allowed:guarded_child": 5
+  },
+  "source_sha256": {
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/scripts/main_offline_pytest.py": "5046cf820fa468d8e8ffb2e3fdade1d20fca2f0bd56ee15eabdff51c223c02be",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/tests/test_forecast_library.py": "c684b6c104961d8a716843f1e18fb202c1802994e09ce3132ab7bd4a19c65493",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/tests/test_target_feedback_extensions.py": "291e6eada0e1443b18b52313f2db84242e14b77cac46027b3b95fb4ab4a00b35",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/tests/test_target_inputs_health_probe.py": "f3da0076c456486ae73c283291627b2b5e875e15cd6bddc97b6bd904a2b1a56a",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/tests/test_forecast_ledger.py": "9152a93b58856ded0182742f75c2b5446fa6aaf037fc76f56ab5e340fa5e06be",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/tests/test_forecast_feedback_ledger.py": "34e7f4f852fc9c93efa7dacb3abf556bf34cda5e93601e065ecd8f2aa9eb52ed",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/tests/test_forecast_feedback_workflow.py": "5d59df92dcb0a8cbcc7800e72fdfe9c991ee0cb22f8226de3e6d73f757b6459f",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/tests/test_forecast_feedback_sdk.py": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/tests/test_resolution_autorun.py": "cce4e9c6a28b7d0a09c3a55dc4e7bb49bb6337f248ae42eb4d266c9f60da2e3e",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/tests/test_resolution_monitor.py": "6924482eacb5b4d099cd69091f84b280fddce09793d4e373fdbfc21ba156a19c",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/app/config.py": "68767aa258765bb905fd41dc12bb65c8230e47d7bf4f58afa8caf05f7b64e414",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/app/services/simulation_manager.py": "15df37d1a3b92eff72a1aa3d062f1414de1ebd9b845aacd2053e0a9d525b40e1"
+  },
+  "contained_library_probes": {},
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/tests/test_forecast_feedback_sdk.py": "65feee980bfa286d52836c37a57b2f75b7f2e6db25a03a554139038c47527fec",
+    "/private/tmp/drf-fbl1-repair-20261028-composed/pytest-tmp/test_separate_guarded_processe0/publish_child.py": "fd11b412bd1edd076836425edd3456d0e3b3955a01a82f8e9b6de13708c86d71",
+    "/private/tmp/drf-fbl1-repair-20261028-composed/pytest-tmp/test_published_forecast_native0/restart.py": "071eb5e2d2e0985d43e8fd8ffb0bcfb3194b4e02a2318f0400aeac63aef0743a"
+  },
+  "children": {
+    "32893": {
+      "exit_code": 0,
+      "receipt": "process-32893.json"
+    },
+    "32894": {
+      "exit_code": 0,
+      "receipt": "process-32894.json"
+    },
+    "32895": {
+      "exit_code": 0,
+      "receipt": "process-32895.json"
+    },
+    "33017": {
+      "exit_code": 0,
+      "receipt": "process-33017.json"
+    },
+    "33402": {
+      "exit_code": 0,
+      "receipt": "process-33402.json"
+    }
+  },
+  "identity_preserved": true
+}

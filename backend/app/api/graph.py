@@ -4,9 +4,14 @@
 """
 
 import os
+import json
+import hashlib
+import re
+import stat
 import traceback
 import threading
 from flask import request, jsonify
+from werkzeug.exceptions import BadRequest, Conflict, NotFound
 
 from . import graph_bp
 from ..config import Config
@@ -20,6 +25,163 @@ from ..models.project import ProjectManager, ProjectStatus
 
 # 获取日志器
 logger = get_logger('mirofish.api')
+
+
+def _target_id(value, prefix):
+    if not isinstance(value, str) or not re.fullmatch(prefix + r'[A-Za-z0-9_-]{1,100}', value):
+        raise BadRequest('Invalid target artifact identifier')
+    return value
+
+
+def _target_read_json(root, *parts, expected_sha256=None):
+    """Read only fixed local artifacts, without following directory/file symlinks."""
+    if any(not part or part in {'.', '..'} or '/' in part or '\\' in part for part in parts):
+        raise BadRequest('Invalid target artifact path')
+    directory = None
+    try:
+        directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        for part in parts[:-1]:
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        with os.fdopen(fd, 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 32 * 1024 * 1024:
+                raise Conflict('Invalid target artifact file')
+            raw = stream.read(32 * 1024 * 1024 + 1)
+            if len(raw) > 32 * 1024 * 1024:
+                raise Conflict('Target artifact exceeds read limit')
+        if expected_sha256 is not None and hashlib.sha256(raw).hexdigest() != expected_sha256:
+            raise Conflict('Target artifact hash differs from its pipeline manifest')
+        def invalid_constant(value):
+            raise ValueError('Non-finite JSON')
+        def unique_pairs(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError('Duplicate JSON key')
+                result[key] = value
+            return result
+        data = json.loads(raw, parse_constant=invalid_constant, object_pairs_hook=unique_pairs)
+        if not isinstance(data, dict):
+            raise ValueError('Expected an object')
+        json.dumps(data, allow_nan=False)  # Also catches numeric exponents that overflow to infinity.
+        return data
+    except FileNotFoundError:
+        raise NotFound('Target artifact is not available yet') from None
+    except (OSError, ValueError, UnicodeError):
+        raise Conflict('Target artifact is invalid or is not a local regular file') from None
+    finally:
+        if directory is not None:
+            os.close(directory)
+
+
+def _target_artifact(pipeline_id, name, root, *parts):
+    """Verify the bytes read against the owner seal without trusting its path."""
+    manifest = _target_read_json(Config.PIPELINE_DATA_DIR, pipeline_id, 'handoff', 'manifest.json')
+    entry = manifest.get(name)
+    if entry is None:
+        raise NotFound('Target artifact has not been sealed yet')
+    expected_path = os.path.abspath(os.path.join(root, *parts))
+    if (not isinstance(entry, dict) or entry.get('path') != expected_path or
+            not isinstance(entry.get('sha256'), str) or
+            not re.fullmatch(r'[a-f0-9]{64}', entry['sha256'])):
+        raise Conflict('Target artifact manifest does not match its owner or known path')
+    return _target_read_json(root, *parts, expected_sha256=entry['sha256'])
+
+
+def _target_pipeline(pipeline_id):
+    _target_id(pipeline_id, 'pipe_')
+    state = _target_read_json(Config.PIPELINE_DATA_DIR, pipeline_id, 'pipeline_state.json')
+    if (state.get('pipeline_id') != pipeline_id or
+            not isinstance(state.get('options'), dict) or
+            state['options'].get('forecast_authority') != 'target-first-v1'):
+        raise Conflict('Pipeline does not own a target-first forecast')
+    # Deliberately ignore persisted artifact pointers and shared fork handoffs.
+    # Target reads may only use this owner's known local handoff files.
+    expected = os.path.abspath(os.path.join(Config.PIPELINE_DATA_DIR, pipeline_id, 'handoff'))
+    handoff_dir = state.get('handoff_dir')
+    if handoff_dir is not None and (not isinstance(handoff_dir, str) or
+                                    os.path.abspath(handoff_dir) != expected):
+        raise Conflict('Target handoff does not belong to this pipeline')
+    return state
+
+
+def _target_case(pipeline_id, owner):
+    from ..services.official_data import bridge_module
+    fc = bridge_module('forecast_case')
+    try:
+        case = fc.validate_case(_target_artifact(
+            pipeline_id, 'forecast_case', Config.PIPELINE_DATA_DIR,
+            pipeline_id, 'handoff', 'forecast_case.json'))
+        digest = fc.case_hash(case)
+        prompt = owner.get('prompt')
+        if not isinstance(prompt, str) or prompt.strip() != case['question'].strip():
+            raise Conflict('Target case question differs from its pipeline')
+        question_hash = hashlib.sha256(json.dumps(prompt, sort_keys=True, ensure_ascii=False,
+                                                  separators=(',', ':')).encode()).hexdigest()
+        expected_binding = {'authority': 'target-first-v1', 'caseId': case['caseId'],
+                            'caseHash': digest, 'questionHash': question_hash, 'policyVersion': 1}
+        if owner['options'].get('target_case_binding') != expected_binding:
+            raise Conflict('Target case differs from its frozen pipeline binding')
+        return case, digest
+    except ValueError:
+        raise Conflict('Target forecast case is invalid') from None
+
+
+@graph_bp.before_request
+def _serve_target_graph():
+    """Keep all target graph reads on the deterministic local projection."""
+    graph_id = (request.view_args or {}).get('graph_id', '')
+    if not graph_id.startswith('target_graph_'):
+        return None
+    try:
+        if request.method != 'GET':
+            raise Conflict('Target graphs are read-only pipeline artifacts')
+        pipeline_id = graph_id.removeprefix('target_graph_')
+        state = _target_pipeline(pipeline_id)
+        if state.get('graph_id') != graph_id:
+            raise Conflict('Graph does not match its pipeline owner')
+        case, _ = _target_case(pipeline_id, state)
+        from ..services.official_data import bridge_module
+        projection = _target_artifact(pipeline_id, 'target_graph', Config.PIPELINE_DATA_DIR,
+                                      pipeline_id, 'handoff', 'target_graph.json')
+        expected = bridge_module('forecast_case').graph_projection(case)
+        # The coordinator may add the public graph ID, but cannot redirect the read.
+        if {k: v for k, v in projection.items() if k != 'graph_id'} != expected:
+            raise Conflict('Target graph projection does not match its forecast case')
+        if projection.get('graph_id', graph_id) != graph_id:
+            raise Conflict('Target graph identity mismatch')
+        data = {**projection, 'graph_id': graph_id,
+                'node_count': len(projection['nodes']), 'edge_count': len(projection['edges'])}
+        endpoint = (request.endpoint or '').split('.')[-1]
+        if endpoint == 'get_graph_data':
+            return jsonify(success=True, data=data)
+        if endpoint in {'get_graph_node_detail', 'get_graph_edge_detail'}:
+            is_node = endpoint == 'get_graph_node_detail'
+            key = 'node_uuid' if is_node else 'edge_uuid'
+            row = next((item for item in data['nodes' if is_node else 'edges']
+                        if item.get('uuid') == request.view_args[key]), None)
+            if row is None:
+                raise NotFound('Target graph item not found')
+            return jsonify(success=True, data=row)
+        if endpoint == 'get_graph_neighbors':
+            selected = {request.view_args['node_uuid']}
+            if not any(item.get('uuid') in selected for item in data['nodes']):
+                raise NotFound('Target graph node not found')
+            depth = max(1, min(request.args.get('depth', 1, type=int), 3))
+            for _ in range(depth):
+                selected |= {value for edge in data['edges']
+                             if edge['source_node_uuid'] in selected or edge['target_node_uuid'] in selected
+                             for value in (edge['source_node_uuid'], edge['target_node_uuid'])}
+            data['nodes'] = [n for n in data['nodes'] if n['uuid'] in selected]
+            data['edges'] = [e for e in data['edges'] if e['source_node_uuid'] in selected and e['target_node_uuid'] in selected]
+            data['node_count'], data['edge_count'] = len(data['nodes']), len(data['edges'])
+            return jsonify(success=True, data=data)
+        raise Conflict('This operation is not supported for target graphs')
+    except (BadRequest, Conflict, NotFound) as exc:
+        return jsonify(success=False, error=exc.description), exc.code
 
 
 def allowed_file(filename: str) -> bool:

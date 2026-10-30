@@ -1,0 +1,7 @@
+{
+  "path": "backend/app/config.py",
+  "before_sha256": "68767aa258765bb905fd41dc12bb65c8230e47d7bf4f58afa8caf05f7b64e414",
+  "after_sha256": "aae32fcbaea902e426e7ae542026eefd831d90074438c3fe35a529c995d5ceca",
+  "ast_identical": true,
+  "change": "Correct the monitor cadence comment to the already-tested 24-hour source default."
+}

@@ -13,6 +13,7 @@ from test_world_model_loop import _WorldLLM, _patch_world, _world_config, rps
 from app.services import research_preparation as prep
 from app.services import world_paths as paths
 from app.services.world_update import replay_world_round
+from app.services.agent_decision import DECISION_SYSTEM_PROMPT
 
 
 @pytest.fixture(autouse=True)
@@ -61,7 +62,8 @@ def coordinator(tmp_path, monkeypatch, cfg=None):
 async def step(coord, round_num, *, lookup=None, actions=None):
     period = coord._period_for(round_num)
     await coord.decide("twitter", round_num, period, [0, 1],
-                       lookup or (lambda aid: f"STATIC_PERSONA_{aid}"), [])
+                       lookup or (lambda aid: "BEGIN UNTRUSTED DOSSIER DATA\n"
+                                  f"STATIC_PERSONA_{aid}\nEND UNTRUSTED DOSSIER DATA"), [])
     await coord._commit_round(round_num, {"period": period, "events": [], "actions": actions or []})
 
 
@@ -99,10 +101,16 @@ def test_branch_local_decisions_late_personas_discourse_shares_and_replay(tmp_pa
     calls = [c for c in _WorldLLM.calls if c["kind"] == "decision"]
     later = [c for c in calls if c["round"] == 2 and c["actor"] in ("Actor2", "Actor3")]
     assert len(later) == 2
-    assert all("PATH0_ORGANIC_SECRET" not in c["content"] and "PATH0_EVOLVING" not in c["system"] for c in later)
-    assert all(c["system"] == f"STATIC_PERSONA_{2 if c['actor'] == 'Actor2' else 3}" for c in later)
-    third = [c for c in calls if c["round"] == 3 and c["system"] == "STATIC_PERSONA_0"][0]
-    assert "LOCAL_LOW" in third["content"] and "PATH0_ORGANIC_SECRET" not in third["content"]
+    assert all(
+        "PATH0_ORGANIC_SECRET" not in c["system"] + c["content"]
+        and "PATH0_EVOLVING" not in c["system"] + c["content"]
+        for c in later
+    )
+    assert all(c["system"].startswith(DECISION_SYSTEM_PROMPT) for c in later)
+    assert all(f"STATIC_PERSONA_{2 if c['actor'] == 'Actor2' else 3}" in c["content"] for c in later)
+    third = [c for c in calls if c["round"] == 3 and "STATIC_PERSONA_0" in c["content"]][0]
+    assert "LOCAL_LOW" in third["content"]
+    assert "PATH0_ORGANIC_SECRET" not in third["system"] + third["content"]
     assert branch["shares"]["B"] > coord._ws.shares["B"]
     assert all(d["scenario"] == "B" for d in branch["records"][1]["actor_decisions"])
     history = [json.loads(line) for line in (tmp_path / "world_state_history.jsonl").read_text().splitlines()]
@@ -132,7 +140,7 @@ def test_budget_reserved_then_restored_and_environment_cannot_expand_it(tmp_path
     assert saved["decision_attempts_used"] == 3
     assert saved["paths"][0]["stop_reason"] == "decision_budget_exhausted"
     assert [len(r["actor_decisions"]) for r in saved["paths"][0]["records"]] == [2, 1]
-    assert saved["personas"]["2"] == "STATIC_PERSONA_2"
+    assert saved["personas"]["2"] == "BEGIN UNTRUSTED DOSSIER DATA\nSTATIC_PERSONA_2\nEND UNTRUSTED DOSSIER DATA"
 
 
 def test_private_prior_decision_and_discourse_survive_restart_locally(tmp_path, monkeypatch):
@@ -144,7 +152,7 @@ def test_private_prior_decision_and_discourse_survive_restart_locally(tmp_path, 
     asyncio.run(first())
     resumed = coordinator(tmp_path, monkeypatch, cfg)
     asyncio.run(step(resumed, 2, lookup=lambda aid: "PRIMARY_EVOLVING_SYSTEM"))
-    branch_calls = [c for c in _WorldLLM.calls if c["kind"] == "decision" and c["system"].startswith("STATIC_PERSONA_")]
+    branch_calls = [c for c in _WorldLLM.calls if c["kind"] == "decision" and "STATIC_PERSONA_" in c["content"]]
     assert len(branch_calls) == 4
     for call in branch_calls:
         assert "Your private reasoning: PRIVATE_LOW" in call["content"]
@@ -157,7 +165,7 @@ def test_budget_is_global_across_siblings_and_failed_calls_count(tmp_path, monke
     coord = coordinator(tmp_path, monkeypatch, cfg)
     original = coord._llm.chat_json
     def failing(messages, **kwargs):
-        if messages[0].get("content", "").startswith("STATIC_PERSONA_") and coord._branch_inflight:
+        if "STATIC_PERSONA_" in messages[-1].get("content", "") and coord._branch_inflight:
             raise RuntimeError("scripted branch model unavailable")
         return original(messages, **kwargs)
     monkeypatch.setattr(coord._llm, "chat_json", failing)
@@ -325,7 +333,7 @@ def test_final_checkpoint_failure_latches_through_platform_delivery(tmp_path, mo
     async def run():
         period = coord._period_for(0)
         await coord.begin_round("twitter", 0, period)
-        await coord.decide("twitter", 0, period, [0, 1], lambda aid: f"STATIC_PERSONA_{aid}", [])
+        await coord.decide("twitter", 0, period, [0, 1], lambda aid: f"BEGIN UNTRUSTED DOSSIER DATA\nSTATIC_PERSONA_{aid}\nEND UNTRUSTED DOSSIER DATA", [])
         with pytest.raises(rps.WorldContextMismatch):
             await coord.deliver("twitter", 0, period, [], [])
         assert not coord._is_committed(0)
@@ -377,7 +385,7 @@ def test_branch_capacity_resets_before_actual_next_decision_menu(tmp_path, monke
         await step(coord, 1, lookup=lambda _: "PRIMARY_SYSTEM")
     asyncio.run(run())
     call = next(c for c in _WorldLLM.calls if c["kind"] == "decision" and c["round"] == 2
-                and c["actor"] == "Actor0" and c["system"] == "STATIC_PERSONA_0")
+                and c["actor"] == "Actor0" and "STATIC_PERSONA_0" in c["content"])
     assert "Capacity this period: 3/3 action units" in call["content"]
     assert coord._paths[0]["records"][1]["actor_decisions"][0]["status"] == "ok"
 
@@ -423,7 +431,7 @@ def test_adaptive_dual_delivery_waits_for_durable_commit(tmp_path, monkeypatch):
     async def run():
         period = coord._period_for(0)
         await coord.begin_round("twitter", 0, period)
-        await coord.decide("twitter", 0, period, [0, 1], lambda aid: f"STATIC_PERSONA_{aid}", [])
+        await coord.decide("twitter", 0, period, [0, 1], lambda aid: f"BEGIN UNTRUSTED DOSSIER DATA\nSTATIC_PERSONA_{aid}\nEND UNTRUSTED DOSSIER DATA", [])
         first = asyncio.create_task(coord.deliver("twitter", 0, period, [], []))
         await asyncio.sleep(0)
         assert not first.done() and not coord._is_committed(0)

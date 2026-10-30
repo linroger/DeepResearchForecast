@@ -28,17 +28,19 @@ import json
 import logging
 import random
 import math
+import re
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from ..utils.llm_errors import classify_llm_error, error_code, error_status
 from .agent_decision import LANGUAGE_MISMATCH, AgentDecision
 from .world_model import (FULFILLMENT_PREFIX, MAX_ACTION_RESOLUTIONS, RESPONSE_PREFIXES, WorldModel, _bound_lines, _text, format_value, is_kind_name_unit,
                           normalize_label, slugify)
+from .world_text_budgets import STATEMENT_ARBITER_MAX_CHARS, STATEMENT_DIGEST_MAX_CHARS
 
 logger = logging.getLogger(__name__)
 
 WORLD_UPDATE_VERSION = "world-update/v1"
-ARBITER_STATUSES = ("applied", "failed", "invalid", "skipped")
+ARBITER_STATUSES = ("applied", "applied_partial", "failed", "invalid", "skipped")
 RESOLUTION_OUTCOMES = ("success", "partial", "blocked", "pending", "failed")
 PRESSURE_WORDS = ("up", "down", "flat")
 
@@ -73,6 +75,15 @@ def _action_bindings(world: WorldModel, round_num: int) -> List[Dict[str, Any]]:
             action_round = round_num
         bindings.append({"actor": actor.name, "agent_id": actor.agent_id, "option_id": action.get("option_id"),
                          "commitment_id": commitment_id, "action_round": action_round})
+    existing = {(b["agent_id"], b["commitment_id"]) for b in bindings}
+    for actor in world.actors.values():
+        for commitment in actor.commitments:
+            cid = commitment.get("id")
+            if ((actor.agent_id, cid) not in existing
+                    and world.delivery_resolution_target(actor.agent_id, cid, round_num, round_num) is not None):
+                bindings.append({"actor": actor.name, "agent_id": actor.agent_id,
+                                 "option_id": FULFILLMENT_PREFIX + cid,
+                                 "commitment_id": cid, "action_round": round_num})
     return bindings
 
 
@@ -115,7 +126,8 @@ def build_arbiter_contract(world: WorldModel, scenarios: Sequence[str] = ()) -> 
                                 "rationale": rationale}) for v in world.variables.values()]
     effects_base = {"description": text(220, nonempty=True),
                     "due_periods": {"type": "integer", "minimum": 1, "maximum": 12},
-                    "probability": {**number, "minimum": 0, "maximum": 1}, "targets": actors}
+                    "probability": {**number, "minimum": 0, "maximum": 1}, "targets": actors,
+                    "caused_by": {"anyOf": [actor, {"type": "null"}]}}
     effects = [obj({**effects_base, "variable_id": {"type": "null"}}, ("description",))]
     for var in world.variables.values():
         shape = typed_change(var, effects_base)
@@ -244,6 +256,9 @@ def deterministic_round_update(world: WorldModel, round_num: int, period: Option
     lapsed = world.lapse_overdue_commitments(round_num)
     lapsed_offers = world.lapse_expired_interactions(round_num)   # OFFERS: unanswered offers expire first
     action_events = world.register_decisions(round_num, rows)
+    # Canonical cost and timing belong exclusively to kernel admission. Never
+    # rewrite them from raw rows: an omitted field or rejected duplicate can
+    # otherwise replace the admitted action's lag with zero.
     fired = world.fire_due_effects(round_num, rng)
     # EXOGENOUS SHOCKS: rolled after the due effects, so a world without shocks draws exactly as before
     shocks = world.fire_shocks(round_num, rng)
@@ -322,23 +337,43 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
     lines.append("## Moves this period")
     rows = _decision_rows(decisions)
     moved = 0
-    for d in rows:
+    public_rows = []
+    seen_moves = set()
+    for supplied in rows:
+        d = supplied
+        aid = world.resolve_actor(d.get("agent_id"))
+        actor = world.actors.get(aid)
+        action = actor.last_action if actor is not None else None
+        if action and action.get("round") == round_num:
+            if aid in seen_moves:
+                continue
+            seen_moves.add(aid)
+            # Adjudicate what admission recorded, never rejected duplicate text
+            # or omitted raw metadata that the kernel canonically restored.
+            d = {"agent_id": aid, "actor_name": actor.name, "status": action.get("status"),
+                 "targets": action.get("targets", []), "magnitude": action.get("magnitude", 0),
+                 "public_statement": action.get("statement", ""),
+                 "option": {"id": action.get("option_id"), "label": action.get("label"),
+                            "kind": action.get("kind"), "lag": action.get("lag", 0)}}
         if d.get("status") != "ok" or (d.get("option") or {}).get("id") == "hold_position":
             continue
+        public_rows.append(d)
         opt = d.get("option") or {}
-        tgt = f" → {', '.join(d.get('targets') or [])}" if d.get("targets") else ""
-        stmt = f' Statement: "{_text(d.get("public_statement"), 240)}"' if d.get("public_statement") else ""
-        aid = world.resolve_actor(d.get("agent_id"))
+        tgt = f" → {', '.join(world.actor_name(t) for t in d.get('targets') or [])}" if d.get("targets") else ""
+        stmt = f' Statement: "{_text(d.get("public_statement"), STATEMENT_ARBITER_MAX_CHARS)}"' if d.get("public_statement") else ""
         record = world.track_record_text(aid) if aid is not None else ""
         lines.append(f"- {d.get('actor_name')}: {opt.get('label')} (kind={opt.get('kind')}, "
                      f"magnitude={d.get('magnitude')}){tgt}.{stmt}"
+                     + (f" Implementation lag: {opt['lag']} period(s); the action's direct effect cannot land "
+                        f"before round {round_num + opt['lag']}." if type(opt.get("lag")) is int and opt["lag"] > 0 else "")
                      + (f" Track record: {record}." if record else ""))
         moved += 1
     if not moved:
         lines.append("- (no actor made a consequential move; the world drifts on its own momentum)")
     bindings = _action_bindings(world, round_num)
-    attempts = [(world.actors[b["agent_id"]], world.actors[b["agent_id"]].last_action)
-                for b in bindings if b["commitment_id"] is not None]
+    attempts = [(actor, c) for actor in world.actors.values() for c in actor.commitments
+                if (c.get("last_fulfillment_attempt") or {}).get("round") == round_num
+                and (c.get("last_fulfillment_attempt") or {}).get("outcome") == "unverified"]
     lines.extend(["", "## Action resolution bindings",
                   "Resolve only the registered moves listed below. Copy agent_id, commitment_id and action_round "
                   "without inventing or inferring bindings. Do not resolve held, invalid or rejected moves, "
@@ -353,16 +388,11 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
                       "new agreements, announcements and partial progress are not fulfilment. Use success only "
                       "for full delivery; otherwise use partial, pending, blocked or failed. Return the exact "
                       "commitment_id AND action_round in that actor's resolution, with a concrete delivery rationale."])
-        for actor, action in attempts:
-            lines.append(f"- actor={actor.name}; commitment_id={action['commitment_id']}; action_round={round_num}; "
-                         f"promise={action.get('commitment_description')}; counterparty={', '.join(action.get('targets') or []) or '(self)'}")
-    expectations = [(a.name, e) for a in world.actors.values() for e in a.expectations
-                    if int(e.get("round") or 0) == int(round_num)]
-    if expectations:
-        lines.append("")
-        lines.append("## Expectations in play (what this period's movers expect others to do next)")
-        lines.extend(f"- {name} expects {e.get('about')}: {e.get('reaction')}" for name, e in expectations[:8])
-    stakes = _red_lines_at_stake(world, rows)
+        for actor, commitment in attempts:
+            lines.append(f"- actor={actor.name}; commitment_id={commitment['id']}; action_round={round_num}; "
+                         f"promise={commitment.get('description')}; counterparty="
+                         f"{', '.join(world.delivery_targets(actor.agent_id, commitment)) or '(self)'}")
+    stakes = _red_lines_at_stake(world, public_rows)
     if stakes:
         lines.append("")
         lines.append("## Red lines at stake (documented by each actor; report a crossing only when a move this "
@@ -408,7 +438,11 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         "For [boolean], use true/false; for [categorical] or [text], use a string new_value. "
         "delta is only for numeric variables. Name caused_by "
         "only when a mover's own move this period sets the new value (an announced tariff, rate, quota or "
-        f"price it states): a stated figure takes effect in full{_clamp_rule(world)}.",
+        "price it states), for every variable kind. Direct implementation effects respect the stated action lag; "
+        "an announcement is not completed implementation. Immediate expectation or market reactions need their "
+        "own distinct rationale and variable. For a move with zero implementation lag, "
+        f"a stated figure takes effect in full{_clamp_rule(world)}. Delayed effects retain the kernel's "
+        "per-period, reversion and cumulative drift bounds when they land.",
         '- "new_variables": [{"name": "...", "value": ..., "unit": "...", "kind": "numeric|categorical|boolean|text", '
         '"rationale": "..."}] — at most 3, only when a move creates a new fact the world must now track.',
         '- "events": [{"description": "...", "kind": "emergent|consequence|resolution", "actors": ["<cast name>"], '
@@ -416,7 +450,7 @@ def build_arbiter_prompt(world: WorldModel, round_num: int, period: Optional[Dic
         '- "relationship_changes": [{"source": "<cast name>", "target": "<cast name>", "direction": "closer|farther|flat", '
         '"rationale": "..."}].',
         '- "pending_effects": [{"description": "...", "due_periods": 1-12, "variable_id": "<id or null>", '
-        '"new_value": ... OR "delta": ..., "probability": 0-1}] — delayed consequences that land later; '
+        '"new_value": ... OR "delta": ..., "probability": 0-1, "caused_by": "<cast name>" | null}] — delayed consequences that land later; '
         'the same variable kind and finite-number rules apply.',
         '- "action_resolutions": [{"agent_id": <integer from resolution bindings>, '
         '"outcome": "success|partial|blocked|pending|failed", "rationale": "...", '
@@ -499,13 +533,11 @@ def _red_lines_at_stake(world: WorldModel, rows: List[Dict[str, Any]]) -> List[T
 def _num(value: Any) -> Optional[float]:
     if isinstance(value, bool):
         return None
-    if isinstance(value, (int, float)):
-        out = float(value)
-        return out if math.isfinite(out) else None
     try:
-        out = float(str(value).replace(",", "").replace("%", "").strip())
+        out = (float(value) if isinstance(value, (int, float))
+               else float(str(value).replace(",", "").replace("%", "").strip()))
         return out if math.isfinite(out) else None
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -523,7 +555,7 @@ _BOOL_FALSE_WORDS = {
 }
 
 
-def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str] = (), *,
+def _validate_arbiter_fields(raw: Any, world: WorldModel, scenarios: Sequence[str] = (), *,
                             strict: bool = False) -> Tuple[Dict[str, Any], List[str]]:
     """Bound and type-check the arbiter payload; returns ``(update, problems)``.
 
@@ -538,17 +570,18 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
         problems = _contract_problems(raw, contract)
         if problems:
             return {}, problems
-        bindings = {b["agent_id"]: b for b in contract["x-action-bindings"]}
+        bindings = {(b["agent_id"], b["commitment_id"]): b for b in contract["x-action-bindings"]}
         resolved = set()
         for index, row in enumerate(raw.get("action_resolutions", [])):
             aid, _ = world.resolution_actor(row)
-            binding = bindings.get(aid)
-            if (binding is None or aid in resolved
+            key = (aid, row.get("commitment_id"))
+            binding = bindings.get(key)
+            if (binding is None or key in resolved
                     or row.get("commitment_id") != binding["commitment_id"]
                     or type(row.get("action_round")) is not type(binding["action_round"])
                     or row.get("action_round") != binding["action_round"]):
                 problems.append(f"$.action_resolutions[{index}]: not an exact current action binding")
-            resolved.add(aid)
+            resolved.add(key)
         variable_ids = set(world.variables)
         for index, row in enumerate(raw.get("new_variables", [])):
             vid = slugify(row["name"])
@@ -556,12 +589,12 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
                 problems.append(f"$.new_variables[{index}].name: variable identity already exists")
             variable_ids.add(vid)
         for index, row in enumerate(raw.get("red_line_crossings", [])):
-            if world.resolve_actor(row["by"], exact=True) not in bindings:
+            if world.resolve_actor(row["by"], exact=True) not in {key[0] for key in bindings}:
                 problems.append(f"$.red_line_crossings[{index}].by: no current registered move")
         if problems:
             return {}, problems[:12]
-        update, legacy_problems = validate_arbiter_update(raw, world, scenarios)
-        if legacy_problems:
+        update, legacy_problems = _validate_arbiter_fields(raw, world, scenarios)
+        if any(not p.startswith("deferred ") for p in legacy_problems):
             # Legacy diagnostics include candidate strings. Expose only fixed,
             # bounded section paths at the runtime boundary.
             return {}, ["$: semantic validation rejected proposal"]
@@ -582,8 +615,12 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
         for output, original in zip(update["variable_changes"], raw.get("variable_changes", [])):
             if original.get("caused_by") is not None:
                 output["caused_by"] = world.resolve_actor(original["caused_by"], exact=True)
+        for output, original in zip(update["pending_effects"], raw.get("pending_effects", []), strict=False):
+            if original.get("caused_by") is not None:
+                output["caused_by"] = world.resolve_actor(original["caused_by"], exact=True)
         update["scenario_pressure"] = dict(raw.get("scenario_pressure", {}))
-        return update, []
+        _defer_action_effects(update, world, legacy_problems)
+        return update, legacy_problems
     problems: List[str] = []
     update: Dict[str, Any] = {"narrative": "", "variable_changes": [], "new_variables": [], "events": [],
                               "relationship_changes": [], "pending_effects": [], "action_resolutions": [],
@@ -606,12 +643,15 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
             if var is None:
                 problems.append(f"unknown variable '{vid}'")
                 continue
+            if world.is_derived_variable(var.id):
+                problems.append("write to derived or private target variable rejected")
+                continue
             if var.id in changed_ids:
                 problems.append(f"duplicate change for '{var.id}'")
                 continue
             row: Dict[str, Any] = {"variable_id": var.id, "rationale": _text(ch.get("rationale"), 200)}
             cause = ch.get("caused_by")
-            if cause not in (None, "") and var.kind == "numeric":
+            if cause not in (None, ""):
                 # ANNOUNCED SETTINGS: the kernel lifts the clamp only when this actor's own move
                 # this period stated the figure (WorldModel._announced_by); here it must be cast
                 cause_id = world.resolve_actor(cause)
@@ -656,18 +696,32 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
         for nv in new_vars[:MAX_NEW_VARIABLES]:
             if not isinstance(nv, dict) or not _text(nv.get("name"), 140):
                 continue
+            if world.is_derived_variable(nv.get("name")) or world.is_derived_variable(nv.get("id")):
+                problems.append("creation of derived or private target variable rejected")
+                continue
             raw_kind = _text(nv.get("kind"), 16).casefold()
             kind = raw_kind or "numeric"
             if kind not in ("numeric", "categorical", "boolean", "text"):
                 kind = "text"
             if kind == "numeric" and _num(nv.get("value")) is None:
                 kind = "text"
+            value = nv.get("value")
+            if kind == "numeric":
+                value = _num(value)
+            elif kind == "boolean" and not isinstance(value, bool):
+                word = _text(value, 40).casefold().strip(" .!?。，")
+                if word not in _BOOL_TRUE_WORDS | _BOOL_FALSE_WORDS:
+                    problems.append(f"non-boolean new variable '{_text(nv['name'], 80)}'")
+                    continue
+                value = word in _BOOL_TRUE_WORDS
+            elif kind != "boolean":
+                value = _text(value, 160)
             unit = _text(nv.get("unit"), 24)
             # a unit belongs to numeric facts only; models echo the kind ("boolean", "date")
             # into the unit field, which would otherwise render as "yes boolean"
             if kind != "numeric" or unit.casefold() in (kind, raw_kind) or is_kind_name_unit(unit):
                 unit = ""
-            update["new_variables"].append({"name": _text(nv["name"], 140), "value": nv.get("value"),
+            update["new_variables"].append({"name": _text(nv["name"], 140), "value": value,
                                             "unit": unit, "kind": kind,
                                             "rationale": _text(nv.get("rationale"), 200)})
         if len(new_vars) > MAX_NEW_VARIABLES:
@@ -724,14 +778,21 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
         for fx in effects[:MAX_PENDING_EFFECTS]:
             if not isinstance(fx, dict) or not _text(fx.get("description"), 220):
                 continue
+            if world.is_derived_variable(fx.get("variable_id")):
+                problems.append("pending write to derived or private target variable rejected")
+                continue
             try:
                 due = max(1, min(12, int(fx.get("due_periods", 1) or 1)))
-            except (TypeError, ValueError):
-                due = 1
+            except (TypeError, ValueError, OverflowError):
+                problems.append("pending effect with invalid due_periods")
+                continue
             vid = fx.get("variable_id")
             vid = str(vid) if vid and str(vid) in world.variables else None
             row = {"description": _text(fx["description"], 220), "due_periods": due, "variable_id": vid,
                    "targets": _names(fx.get("targets"))}
+            cause = world.resolve_actor(fx.get("caused_by"))
+            if cause is not None:
+                row["caused_by"] = world.actor_name(cause)
             prob = _num(fx.get("probability"))
             row["probability"] = max(0.0, min(1.0, prob)) if prob is not None else 1.0
             if vid is not None:
@@ -744,6 +805,15 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
                         row["delta"] = dl
                     else:
                         row["variable_id"] = None
+                elif var.kind == "boolean":
+                    value = fx.get("new_value")
+                    if not isinstance(value, bool):
+                        word = _text(value, 40).casefold().strip(" .!?。，")
+                        if word not in _BOOL_TRUE_WORDS | _BOOL_FALSE_WORDS:
+                            problems.append(f"non-boolean pending effect for '{vid}'")
+                            continue
+                        value = word in _BOOL_TRUE_WORDS
+                    row["new_value"] = value
                 else:
                     row["new_value"] = _text(fx.get("new_value"), 160) or None
                     if row["new_value"] is None:
@@ -756,21 +826,22 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
             res = []
         # Duplicates must be detected before filtering malformed outcomes or
         # truncating: conflicting attestations cannot become a single success.
-        counts: Dict[int, int] = {}
+        counts: Dict[Tuple[int, Optional[str]], int] = {}
         for r in res:
             if isinstance(r, dict):
-                _, implicated = world.resolution_actor(r)
-                for aid in implicated:
-                    counts[aid] = counts.get(aid, 0) + 1
+                _, implicated = world.resolution_key(r)
+                for key in implicated:
+                    counts[key] = counts.get(key, 0) + 1
         for r in res:
             if not isinstance(r, dict):
                 continue
-            aid, _ = world.resolution_actor(r)
+            key, _ = world.resolution_key(r)
             outcome = _text(r.get("outcome"), 16).casefold()
-            if aid is None or outcome not in RESOLUTION_OUTCOMES:
+            if key is None or outcome not in RESOLUTION_OUTCOMES:
                 problems.append("resolution with unknown actor or outcome")
                 continue
-            if counts[aid] != 1:
+            aid, cid = key
+            if counts[key] != 1:
                 problems.append("duplicate actor resolutions")
                 continue
             row = {"actor": world.actor_name(aid), "outcome": outcome, "rationale": _text(r.get("rationale"), 200)}
@@ -812,11 +883,70 @@ def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str
     return update, problems
 
 
+def validate_arbiter_update(raw: Any, world: WorldModel, scenarios: Sequence[str] = (), *, strict: bool = False) -> Tuple[Dict[str, Any], List[str]]:
+    """Repair fields independently while preserving duplicate-resolution guards.
+
+    A malformed field cannot discard valid changes in another field. Resolution
+    rows remain a batch so conflicting attestations cannot be repaired into a
+    false success. Missing/rejected values leave deterministic state untouched.
+    """
+    if strict:
+        return _validate_arbiter_fields(raw, world, scenarios, strict=True)
+    update, problems = _validate_arbiter_fields({}, world, scenarios)
+    if not isinstance(raw, dict):
+        return update, ["payload is not an object"]
+    for field in update:
+        if field not in raw:
+            continue
+        expected = str if field == "narrative" else dict if field == "scenario_pressure" else list
+        if not isinstance(raw[field], expected):
+            problems.append(f"invalid {field}: expected {expected.__name__}")
+            continue
+        try:
+            validated, rejected = _validate_arbiter_fields({field: raw[field]}, world, scenarios)
+            update[field] = validated[field]
+            problems.extend(rejected)
+        except (TypeError, ValueError, OverflowError, KeyError) as exc:
+            problems.append(f"invalid {field}: {type(exc).__name__}")
+    _defer_action_effects(update, world, problems)
+    return update, problems
+
+
+def _defer_action_effects(update: Dict[str, Any], world: WorldModel, problems: List[str]) -> None:
+    """Enforce a recorded lag on direct, attributed implementation effects."""
+    def remaining(row: Dict[str, Any]) -> int:
+        return world.action_effect_due(row.get("caused_by"), world.round) - world.round
+
+    for effect in update["pending_effects"]:
+        effect["due_periods"] = max(effect["due_periods"], remaining(effect))
+    immediate = []
+    for change in update["variable_changes"]:
+        delay = remaining(change)
+        if not delay:
+            immediate.append(change)
+            continue
+        effect = {"description": change.get("rationale") or "Delayed action implementation",
+                  "due_periods": delay, "variable_id": change["variable_id"],
+                  "probability": 1.0, "caused_by": change["caused_by"]}
+        key = "new_value" if "new_value" in change else "delta"
+        effect[key] = change[key]
+        # Models sometimes repeat the same delayed effect in both channels.
+        if not any(fx.get("variable_id") == effect["variable_id"] and fx.get(key) == effect[key]
+                   and fx.get("caused_by") == effect["caused_by"]
+                   and fx.get("due_periods") == effect["due_periods"]
+                   and fx.get("probability") == effect["probability"]
+                   and (not change.get("rationale") or fx.get("description") == change["rationale"])
+                   for fx in update["pending_effects"]):
+            update["pending_effects"].append(effect)
+        problems.append(f"deferred '{change['variable_id']}' for action lag ({delay} periods)")
+    update["variable_changes"] = immediate
+
+
 def run_arbiter(llm: Any, world: WorldModel, round_num: int, period: Optional[Dict[str, Any]],
                 decisions: Iterable[Any], deterministic: Dict[str, Any], scenarios: Sequence[str], *,
                 language: str = "", temperature: float = 0.3, max_tokens: int = 2200,
-                attempts: Optional[List[Dict[str, Any]]] = None,
-                preparation_context=None,
+                attempts: Optional[List[Dict[str, Any]]] = None, preparation_context=None,
+                repair_mode: Optional[str] = None, evidence: Optional[Dict[str, Any]] = None
                 ) -> Tuple[str, Dict[str, Any], List[str]]:
     """Validate a whole proposal, with at most one constrained content correction.
 
@@ -825,8 +955,12 @@ def run_arbiter(llm: Any, world: WorldModel, round_num: int, period: Optional[Di
     client; an exception never causes an additional arbiter call. JSON-only
     legacy clients remain supported. No rejected body enters logs or feedback.
     """
+    if repair_mode not in (None, "field", "round"):
+        raise ValueError("SIM_WORLD_ARBITER_REPAIR must be field or round")
+    capture = evidence if evidence is not None else {}
     if llm is None:
         return "skipped", {}, ["no llm"]
+    transactional = repair_mode is None
     prompt = build_arbiter_prompt(world, round_num, period, decisions, deterministic, scenarios, language=language,
                                   preparation_context=preparation_context)
     source_hash = _arbiter_hash(prompt)
@@ -848,23 +982,51 @@ def run_arbiter(llm: Any, world: WorldModel, round_num: int, period: Optional[Di
                              "problems": [detail]})
             logger.warning("world arbiter failed in round %s: %s", round_num, detail)
             return "failed", {}, [f"llm error: {detail}"]
+        if not transactional:
+            capture["raw"] = copy.deepcopy(candidate)
+            capture.setdefault("raw_attempts", []).append(copy.deepcopy(candidate))
         receipt = {"attempt": attempt + 1, "source_hash": source_hash,
                    "candidate_hash": _arbiter_hash(candidate)}
         try:
-            raw = json.loads(candidate, object_pairs_hook=_unique_json_object) if isinstance(candidate, str) else candidate
+            if isinstance(candidate, str):
+                body = candidate
+                if not transactional:
+                    body = re.sub(r"^```(?:json)?\s*\n?", "", body.strip(), flags=re.IGNORECASE)
+                    body = re.sub(r"\n?```\s*$", "", body).strip()
+                raw = json.loads(body, object_pairs_hook=_unique_json_object)
+            else:
+                raw = candidate
         except (ValueError, TypeError, RecursionError):
             update, problems = {}, ["$: malformed JSON object"]
         else:
             try:
-                update, problems = validate_arbiter_update(raw, world, scenarios, strict=True)
+                update, problems = validate_arbiter_update(raw, world, scenarios, strict=transactional)
             except Exception as exc:  # noqa: BLE001 — do not expose candidate-derived exception text
                 receipt.update(status="invalid", problems=[f"validation error: {type(exc).__name__}"])
                 receipts.append(receipt)
                 return "invalid", {}, receipt["problems"]
-        receipt.update(status="invalid" if problems else "valid", problems=problems[:12])
+        capture["validated"] = copy.deepcopy(update)
+        rejected = [p for p in problems if not p.startswith("deferred ")]
+        if not transactional and problems != ["$: malformed JSON object"]:
+            # Compatibility validation keeps its field coercion and filtering,
+            # but its diagnostics may quote rejected candidate values. Preserve
+            # those only in private evidence; public receipts use fixed text.
+            capture["private_problems"] = list(problems)
+            problems = ["deferred effect for action lag" if p.startswith("deferred ") else
+                        "$: semantic validation rejected proposal" for p in problems]
+            receipt.update(status="invalid" if rejected else "valid", problems=problems[:12])
+            receipts.append(receipt)
+            if rejected and repair_mode == "round":
+                return "invalid", {}, problems
+            if rejected:
+                return ("applied_partial" if any(update.values()) else "invalid"), update, problems
+            return "applied", update, problems
+        receipt.update(status="invalid" if rejected else "valid", problems=problems[:12])
         receipts.append(receipt)
-        if not problems:
-            return "applied", update, []
+        if not rejected:
+            if transactional:
+                capture["raw"] = copy.deepcopy(raw)
+            return "applied", update, problems
         logger.warning("world arbiter rejected round %s attempt %s: %s", round_num, attempt + 1,
                        json.dumps(receipt, ensure_ascii=True))
         if not attempt:
@@ -929,8 +1091,8 @@ def build_round_digest(world: WorldModel, round_num: int, previous: Optional[Dic
         lines.append("Moves:")
         for d in moves[:8]:
             opt = d.get("option") or {}
-            tgt = f" (→ {', '.join(d.get('targets') or [])})" if d.get("targets") else ""
-            stmt = f': "{_text(d.get("public_statement"), 2400)}"' if d.get("public_statement") else ""
+            tgt = f" (→ {', '.join(world.actor_name(t) for t in d.get('targets') or [])})" if d.get("targets") else ""
+            stmt = f': "{_text(d.get("public_statement"), STATEMENT_DIGEST_MAX_CHARS)}"' if d.get("public_statement") else ""
             lines.append(f"- {d.get('actor_name')}: {opt.get('label')}{tgt}{stmt}")
     holders = [d.get("actor_name") for d in rows if d.get("status") == "ok"
                and (d.get("option") or {}).get("id") == "hold_position"]
@@ -1030,7 +1192,8 @@ def world_update_headline(world: WorldModel, round_num: int, record: Dict[str, A
 def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str, Any]],
                     decisions: Iterable[Any], fired_events: Iterable[Dict[str, Any]], *, llm: Any, rng: Any,
                     scenarios: Sequence[str] = (), arbiter_enabled: bool = True, language: str = "",
-                    arbiter_temperature: float = 0.3, preparation_context=None) -> Dict[str, Any]:
+                    arbiter_temperature: float = 0.3, preparation_context=None,
+                    arbiter_repair: Optional[str] = None) -> Dict[str, Any]:
     """Deterministic update → arbiter → commit → digest.  Returns the round record.
 
     ``arbiter_temperature`` stays at the arbiter's default for the path the agents live in; the
@@ -1038,6 +1201,8 @@ def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str
     if preparation_context is not None:
         from .research_preparation import validate_preparation_context
         validate_preparation_context(preparation_context)
+    if arbiter_repair not in (None, "field", "round"):
+        raise ValueError("SIM_WORLD_ARBITER_REPAIR must be field or round")
     rows = _decision_rows(decisions)
     fired_events = list(fired_events or [])
     replay_before = copy.deepcopy(world.to_dict())
@@ -1047,13 +1212,18 @@ def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str
     deterministic_state = copy.deepcopy(world.to_dict())
     status, update, problems = ("skipped", {}, [])
     arbiter_summary: Dict[str, Any] = {}
+    evidence: Dict[str, Any] = {}
     arbiter_attempts: List[Dict[str, Any]] = []
     if arbiter_enabled:
         status, update, problems = run_arbiter(llm, world, round_num, period, rows, deterministic, scenarios,
                                                language=language, temperature=arbiter_temperature,
-                                               attempts=arbiter_attempts, preparation_context=preparation_context)
-        if status == "applied" and update:
-            checkpoint = copy.deepcopy(world.__dict__)
+                                               attempts=arbiter_attempts, preparation_context=preparation_context,
+                                               repair_mode=arbiter_repair, evidence=evidence)
+        if status in ("applied", "applied_partial") and update:
+            # The authenticated context is an immutable authority handle with
+            # an opaque index; copy mutable state without cloning that issuer.
+            authority = world._anchor_context
+            checkpoint = copy.deepcopy(world.__dict__, {id(authority): authority} if authority is not None else {})
             try:
                 arbiter_summary = world.apply_arbiter_update(round_num, update)
             except Exception as exc:  # noqa: BLE001 — a kernel bug must not break the loop
@@ -1065,7 +1235,7 @@ def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str
                 problems.append(f"apply error: {type(exc).__name__}")
     world.commit_round(round_num)
     diff = world.diff(before)
-    narrative = str(update.get("narrative") or "") if status == "applied" else ""
+    narrative = str(update.get("narrative") or "") if status in ("applied", "applied_partial") else ""
     digest = build_round_digest(world, round_num, before, rows, narrative)
     record: Dict[str, Any] = {
         "schema_version": WORLD_UPDATE_VERSION,
@@ -1080,9 +1250,17 @@ def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str
         "deterministic": deterministic,
         "arbiter_status": status,
         "arbiter_problems": problems[:12],
+        "arbiter_problem_details": [{"code": "effect_deferred" if p.startswith("deferred ") else
+                                     "provider_failure" if p.startswith("llm error:") else "field_rejected",
+                                     "message": p} for p in problems],
+        "arbiter_private_problems": evidence.get("private_problems", []),
+        "arbiter_repair": arbiter_repair or "atomic",
+        "arbiter_raw": evidence.get("raw"),
+        "arbiter_raw_attempts": evidence.get("raw_attempts", []),
+        "arbiter_validated": evidence.get("validated", {}),
         "arbiter_attempts": arbiter_attempts,
         "arbiter": arbiter_summary,
-        "scenario_pressure": dict(update.get("scenario_pressure") or {}) if status == "applied" else {},
+        "scenario_pressure": dict(update.get("scenario_pressure") or {}) if status in ("applied", "applied_partial") else {},
         "narrative": narrative,
         "diff": diff,
         "digest": digest,
@@ -1097,7 +1275,7 @@ def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str
         "period": copy.deepcopy(period), "before": replay_before,
         "decisions": copy.deepcopy(rows), "fired_events": copy.deepcopy(fired_events),
         "rng_before": rng_before, "deterministic_state": deterministic_state,
-        "accepted_arbiter_update": copy.deepcopy(update) if status == "applied" else {},
+        "accepted_arbiter_update": copy.deepcopy(update) if status in ("applied", "applied_partial") else {},
         "arbiter_status": status, "arbiter_temperature": arbiter_temperature,
         "preparation_sha256": preparation_context["content_sha256"] if preparation_context else None,
         "after": copy.deepcopy(world.to_dict()),
@@ -1108,8 +1286,12 @@ def run_world_round(world: WorldModel, round_num: int, period: Optional[Dict[str
     return record
 
 
-def replay_world_round(replay, *, preparation_context=None):
-    """Reproduce an accepted transition without a provider call; reject drift."""
+def replay_world_round(replay, *, preparation_context=None, anchor_context=None):
+    """Reproduce a transition with host-authenticated authority; reject drift.
+
+    Anchored callers supply the context from their authenticated host loader.
+    Serialized replay metadata never establishes its own restore authority.
+    """
     from .actor_context import canonical_json_sha256
     from .research_preparation import validate_preparation_context
     if not isinstance(replay, dict) or replay.get("schema_version") != "world-replay/v1":
@@ -1126,14 +1308,14 @@ def replay_world_round(replay, *, preparation_context=None):
         return tuple(tuples(x) for x in value) if isinstance(value, (list, tuple)) else value
     rng = random.Random()
     rng.setstate(tuples(replay["rng_before"]))
-    world = WorldModel.from_dict(copy.deepcopy(replay["before"]))
+    world = WorldModel.from_dict(copy.deepcopy(replay["before"]), anchor_context=anchor_context)
     deterministic_round_update(world, replay["round"], replay["period"],
                                replay["decisions"], replay["fired_events"], rng)
     if canonical_json_sha256(world.to_dict()) != canonical_json_sha256(replay["deterministic_state"]):
         raise ValueError("World replay deterministic transition drifted")
     update = replay["accepted_arbiter_update"]
     if update:
-        if replay["arbiter_status"] != "applied":
+        if replay["arbiter_status"] not in ("applied", "applied_partial"):
             raise ValueError("Rejected update cannot be replayed")
         world.apply_arbiter_update(replay["round"], update)
     world.commit_round(replay["round"])

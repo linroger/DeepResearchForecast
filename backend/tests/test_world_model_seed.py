@@ -153,6 +153,7 @@ def test_resolve_agency_class_order():
 
 
 def test_build_seed_from_legacy_dossier():
+    """C11 raises new firm capacity from 2 to 3 so its full catalogue is reachable."""
     block = wms.build_world_model_seed(_legacy_actors(), _cfgs(), question="Will the permit unlock deployment?",
                                        official_data=_official(), temporal_timeline=_Timeline())
     assert block["schema_version"] == wms.WORLD_MODEL_SEED_VERSION
@@ -162,7 +163,7 @@ def test_build_seed_from_legacy_dossier():
     actors = {a["agent_id"]: a for a in block["actors"]}
     assert set(actors) == {0, 1, 2, 3}                                     # audience excluded
     alpha = actors[0]
-    assert alpha["agency_class"] == "firm" and alpha["capacity_per_round"] == 2
+    assert alpha["agency_class"] == "firm" and alpha["capacity_per_round"] == 3
     assert alpha["outcome_power"] == 1.5 and actors[1]["outcome_power"] is None
     assert alpha["documented_plans"] == ["Build the Aurora line by 2027", "File a permit response"]
     assert alpha["red_lines"] == ["No unfinanced mandate"] and alpha["goals"] == ["Shape the permit timetable"]

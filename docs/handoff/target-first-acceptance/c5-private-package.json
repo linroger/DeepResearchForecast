@@ -1,0 +1,11 @@
+{
+  "copiedAt": "2026-10-28T10:46:05.550005+00:00",
+  "privatePackage": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/c5-private65-package",
+  "manifestSHA256": "7dd41af9fc00963fe860fe99774c983df2a1d8e42fe4d8622650d774cf9c61b4",
+  "verified": {
+    "package": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/c5-private65-package",
+    "verified": true,
+    "original_tests": 65
+  },
+  "rawPrivateInputsCommitted": false
+}

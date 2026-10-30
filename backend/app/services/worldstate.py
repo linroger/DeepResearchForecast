@@ -16,6 +16,8 @@ a per-agent ``{scenario, magnitude, confidence}`` decision and persisting
 
 from __future__ import annotations
 
+from copy import deepcopy
+import math
 from typing import Any, Dict, List, Optional
 
 # ---------------------------------------------------------------------------
@@ -165,6 +167,90 @@ def pressure_commitments(pressure: Optional[Dict[str, Any]], shares: Dict[str, f
             for s, v in raw.items() if v > 0]
 
 
+SHARE_SOURCES = frozenset({"votes", "power_votes", "predicates"})
+
+
+def _finite_number(value: Any) -> bool:
+    try:
+        return type(value) in (int, float) and math.isfinite(value)
+    except OverflowError:
+        return False
+
+
+def _validate_share_predicates(scenarios, predicates, target_node_id):
+    """Reuse the typed classifier's grammar; never evaluate expression strings."""
+    from .target_actors import validate_scenarios
+
+    if (not isinstance(target_node_id, str) or not target_node_id.strip()
+            or not isinstance(predicates, dict) or not scenarios
+            or set(predicates) != set(scenarios)):
+        raise ValueError("missing target predicates")
+    if any(not isinstance(p, dict) or p.get("nodeId") != target_node_id for p in predicates.values()):
+        raise ValueError("scenario predicates must reference the target")
+    validate_scenarios({"nodes": [{"nodeId": target_node_id}], "scenarios": [
+        {"scenarioId": str(index), "predicate": predicates[name]}
+        for index, name in enumerate(scenarios)]})
+
+
+def build_world_state_seed(seed, *, share_prior="uniform", share_source="auto", forecast_case=None):
+    """Seal a fresh legacy seed policy without copying research weights into uniform shares.
+
+    Old saved seeds must not be sent through this fresh-run helper. Scenario names
+    match a supplied case's IDs or labels exactly; missing identities never become
+    an inferred numeric target. Predicate metadata is reducer-only, not actor input.
+    """
+    if share_prior not in {"uniform", "research"}:
+        raise ValueError("share_prior must be uniform or research")
+    if share_source not in SHARE_SOURCES | {None, "auto"}:
+        raise ValueError("invalid share_source")
+    result = deepcopy(seed)
+    scenarios = result.get("scenarios", [])
+    if (not isinstance(scenarios, list) or any(not isinstance(s, str) or not s.strip() for s in scenarios)
+            or len(set(scenarios)) != len(scenarios)):
+        raise ValueError("scenarios must be unique nonempty names")
+    result["share_prior"] = share_prior
+    if share_prior == "uniform":
+        result["base_rates"] = _norm_shares(dict.fromkeys(scenarios, 1.0))
+        result["uniform_prior"] = True
+    # Rebuild reducer metadata from the supplied identity, never stale seed keys.
+    for key in ("scenario_predicates", "target_node_id"):
+        result.pop(key, None)
+    predicates, target = {}, None
+    reason = "missing_forecast_case"
+    if forecast_case is not None:
+        from deerflow_bridge.forecast_case import simulation_projection
+        try:
+            projection = simulation_projection(forecast_case)
+            target = projection["resolution"]["targetNodeId"]
+            if target not in {m["outputNodeId"] for m in projection["mechanisms"]}:
+                reason = "missing_target_identity"
+            elif next(node for node in projection["nodes"] if node["nodeId"] == target).get("visibility") != "public":
+                reason = "private_target_unavailable"
+            else:
+                labels = {row["scenarioId"]: row["label"] for row in forecast_case["scenarios"]}
+                used = set()
+                for name in scenarios:
+                    matches = [row for row in projection["scenarios"]
+                               if name in (row["scenarioId"], labels[row["scenarioId"]])]
+                    if len(matches) != 1 or matches[0]["scenarioId"] in used:
+                        raise ValueError("scenario identity mismatch")
+                    used.add(matches[0]["scenarioId"])
+                    predicates[name] = matches[0]["predicate"]
+                if len(used) != len(projection["scenarios"]):
+                    raise ValueError("incomplete scenario mapping")
+                _validate_share_predicates(scenarios, predicates, target)
+                result.update(scenario_predicates=predicates, target_node_id=target)
+                reason = "validated_target_predicates"
+        except (ValueError, KeyError, TypeError):
+            reason = "invalid_target_predicates"
+    source = share_source
+    if source in {None, "auto"}:
+        source = "predicates" if "scenario_predicates" in result else "power_votes"
+    result["share_source"] = source
+    result["share_source_reason"] = reason if source != "votes" else "explicit_votes_rollback"
+    return result
+
+
 class WorldState:
     """A distribution over scenario names ∈ [0,1] summing to 1, evolved by commitments.
 
@@ -174,9 +260,30 @@ class WorldState:
     """
 
     def __init__(self, scenarios: List[str], base_rates: Optional[Dict[str, float]] = None,
-                 inertia: float = 0.7):
+                 inertia: float = 0.7, *, share_prior=None, share_source=None,
+                 scenario_predicates=None, target_node_id=None, share_source_reason=None):
         self.scenarios = [str(s) for s in (scenarios or []) if str(s).strip()]
+        if share_prior not in {None, "uniform", "research"}:
+            raise ValueError("invalid share_prior")
+        if share_source not in SHARE_SOURCES | {None, "auto"}:
+            raise ValueError("invalid share_source")
+        self._share_policy_explicit = share_prior is not None or share_source is not None
+        self.share_prior = share_prior
+        self.scenario_predicates = deepcopy(scenario_predicates or {})
+        self.target_node_id = target_node_id
+        if share_source == "auto":
+            try:
+                _validate_share_predicates(self.scenarios, self.scenario_predicates, target_node_id)
+                share_source = "predicates"
+            except ValueError:
+                share_source = "power_votes"
+        self.share_source = share_source or "votes"
+        self.share_source_reason = share_source_reason or (
+            "explicit_policy" if self._share_policy_explicit else "legacy_unconfigured")
+        self.last_share_update = {"source": self.share_source, "reason": "initial_seed"}
         self.inertia = max(0.0, min(1.0, float(inertia)))
+        if share_prior == "uniform":
+            base_rates = None
         seed: Dict[str, float] = {}
         for s in self.scenarios:
             try:
@@ -201,6 +308,95 @@ class WorldState:
         self.converged_at: Optional[int] = None
         # Foglamp WP1 (1C/I-16): per-round validity statuses, in step order.
         self.round_statuses: List[str] = []
+
+    def step_from_source(self, decisions, *, weight_by_agent=None, resolutions=None,
+                         target_values=None, target_reason=None, **step_options):
+        """Explicit-policy reducer. Unavailable inputs freeze, including the EWMA.
+
+        Power/resolutions are trusted runtime maps keyed by exact agent IDs, not
+        fields supplied by an actor. An omitted map never grants uniform power.
+        Predicates classify public, mechanism-produced target values independently
+        of actor votes. A list of value maps represents equally weighted paths;
+        any unavailable, overlapping or unmatched path freezes the whole update.
+        """
+        if self.share_source == "votes":
+            self.last_share_update = {"source": "votes", "reason": "legacy_votes"}
+            return self.step(commitments_from_decisions(decisions, weight_by_agent), **step_options)
+
+        def freeze(reason, **details):
+            self.last_share_update = {"source": self.share_source, "reason": reason, **details}
+            options = dict(step_options)
+            status = options.get("round_status")
+            options["round_status"] = (status if status in KNOWN_ROUND_STATUSES - VALID_ROUND_STATUSES
+                                       else ROUND_STATUS_SILENT)
+            return self.step([], **options)
+
+        if self.share_source == "predicates":
+            from .target_actors import predicate_matches
+            try:
+                _validate_share_predicates(self.scenarios, self.scenario_predicates, self.target_node_id)
+            except ValueError:
+                return freeze("invalid_target_predicates")
+            paths = target_values if isinstance(target_values, list) else [target_values]
+            if not paths or any(not isinstance(path, dict)
+                                or not _finite_number(path.get(self.target_node_id)) for path in paths):
+                return freeze("target_unavailable", target_reason=str(target_reason or "missing_target_value")[:160])
+            counts = dict.fromkeys(self.scenarios, 0)
+            for path in paths:
+                matched = [name for name, predicate in self.scenario_predicates.items()
+                           if predicate_matches(predicate, {self.target_node_id: path[self.target_node_id]})]
+                if len(matched) != 1:
+                    return freeze("target_outside_scenario_partition")
+                counts[matched[0]] += 1
+            commitments = [{"scenario": name, "magnitude": count / len(paths), "weight": 1.0}
+                           for name, count in counts.items()]
+            self.last_share_update = {"source": "predicates", "reason": "target_predicate_mass", "paths": len(paths)}
+            # Actor silence is irrelevant to a successfully propagated target.
+            # Only inertia smooths typed outcomes; no fabricated entropy mass.
+            options = {**step_options, "round_status": ROUND_STATUS_COMMITTED, "entropy_mix_days": None}
+            return self.step(commitments, **options)
+
+        powers, resolved = weight_by_agent or {}, resolutions or {}
+        commitments = []
+        skipped = {"unknown_power": 0, "unknown_resolution": 0, "zero_effect": 0, "invalid_decision": 0}
+        factors = {"success": 1.0, "partial": 0.5, "blocked": 0.0, "failed": 0.0, "pending": 0.0}
+        for decision in decisions or []:
+            if not isinstance(decision, dict) or decision.get("scenario") not in self.scenarios:
+                continue
+            aid = decision.get("agent_id")
+            if not isinstance(aid, (int, str)) or isinstance(aid, bool):
+                skipped["invalid_decision"] += 1
+                continue
+            power = powers.get(aid)
+            if not _finite_number(power) or power < 0:
+                skipped["unknown_power"] += 1
+                continue
+            resolution = resolved.get(aid)
+            if not isinstance(resolution, str) or resolution not in factors:
+                skipped["unknown_resolution"] += 1
+                continue
+            magnitude, confidence = decision.get("magnitude", 1.0), decision.get("confidence", 1.0)
+            if not _finite_number(magnitude) or not _finite_number(confidence):
+                skipped["invalid_decision"] += 1
+                continue
+            weight = power * max(0.0, min(1.0, confidence)) * factors[resolution]
+            mass = weight * max(0.0, magnitude)
+            if not _finite_number(mass):
+                skipped["invalid_decision"] += 1
+            elif mass > 0:
+                commitments.append({"scenario": decision["scenario"], "magnitude": max(0.0, magnitude), "weight": weight})
+            else:
+                skipped["zero_effect"] += 1
+        if not commitments:
+            reason = next((key for key, value in skipped.items() if value), "no_eligible_decisions")
+            return freeze(reason, skipped=skipped)
+        if not math.isfinite(sum(c["magnitude"] * c["weight"] for c in commitments)):
+            return freeze("invalid_total_power")
+        status = step_options.get("round_status")
+        if status is not None and status not in VALID_ROUND_STATUSES:
+            return freeze("invalid_round_status", round_status=status)
+        self.last_share_update = {"source": "power_votes", "reason": "resolved_declared_power", "skipped": skipped}
+        return self.step(commitments, **step_options)
 
     def step(self, commitments: List[Dict[str, Any]],
              inertia: Optional[float] = None,
@@ -335,7 +531,7 @@ class WorldState:
         real-world evidence, and must be presented as such downstream.
         """
         ranked = sorted(self.shares.items(), key=lambda kv: -kv[1])
-        return {
+        result = {
             "shares": dict(self.shares),
             "leader": ranked[0][0] if ranked else None,
             "leader_share": round(ranked[0][1], 4) if ranked else 0.0,
@@ -348,3 +544,9 @@ class WorldState:
             "round_accounting": self.round_accounting(),     # Foglamp 1C/I-16
             "epistemic_status": "elicited_model_projection",  # Foglamp 1D/I-11
         }
+        if self._share_policy_explicit:
+            result.update(share_prior=self.share_prior or ("uniform" if self.uniform_prior else "research"),
+                          share_source=self.share_source, share_source_reason=self.share_source_reason,
+                          share_update_reason=self.last_share_update["reason"],
+                          share_update=deepcopy(self.last_share_update))
+        return result

@@ -110,6 +110,7 @@ def test_mixed_invalid_proposal_is_repaired_before_any_apply(monkeypatch):
 ])
 def test_repeated_numeric_rejection_is_deterministic_only(bad_change, monkeypatch):
     world = _world()
+    world.start_round(3, {"label": "period-3"})
     move = _parse(world, 0, 3, "public_statement", public_statement="We released the assessment.")
     bad = _proposal(variable_changes=[{"variable_id": "talks_status", "new_value": "signed"},
                                       {"variable_id": "recent_momentum", **bad_change}],
@@ -296,6 +297,7 @@ def test_native_llm_client_content_budget_is_two_not_four(monkeypatch):
 
 def test_apply_exception_rolls_back_before_deterministic_commit(monkeypatch, caplog):
     world = _world()
+    world.start_round(3, {"label": "period-3"})
     move = _parse(world, 0, 3, "public_statement", public_statement="The assessment was published.")
     original = WorldModel.apply_arbiter_update
 

@@ -280,7 +280,9 @@ def test_structured_forecast_and_real_api_publish_without_bypass(report_case, mo
                               {"name": "Stress", "probability": 0.4,
                                "resolution_criteria": "The official review records the alternative stress outcome at the horizon."}],
                 "binary_forecasts": binaries, "binary_quality": fe._binary_quality(binaries, min_count=10)}
-    assert forecast["binary_quality"]["passed"], forecast["binary_quality"]
+    # F1: the binary scorecard reports sharpness; the final publication gate
+    # owns passed. Retain the historical metric check through legacy_passed.
+    assert forecast["binary_quality"].get("legacy_passed", forecast["binary_quality"].get("passed")), forecast["binary_quality"]
     agent._forecast_spine = forecast
     (folder / "forecast.json").write_text(json.dumps(forecast))
     report.markdown_content = "# Labor market outlook\n\n## Official data\n\nThe stored series provides the historical baseline.\n"

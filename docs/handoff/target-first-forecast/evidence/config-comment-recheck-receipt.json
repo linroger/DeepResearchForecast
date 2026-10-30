@@ -1,0 +1,27 @@
+{
+  "schema": "main-offline/v1",
+  "pid": 36230,
+  "status": "completed",
+  "exit_code": 0,
+  "boundary": "CPython audit hooks; not an OS sandbox",
+  "shutdown_complete": true,
+  "events": {
+    "redirect:app.config": 1,
+    "redirect:app.utils.logger": 1,
+    "redirect:app.services.simulation_manager": 1
+  },
+  "source_sha256": {
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/scripts/main_offline_pytest.py": "5046cf820fa468d8e8ffb2e3fdade1d20fca2f0bd56ee15eabdff51c223c02be",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/tests/test_resolution_autorun.py": "cce4e9c6a28b7d0a09c3a55dc4e7bb49bb6337f248ae42eb4d266c9f60da2e3e",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/tests/test_target_pipeline.py": "97fdce271b283351df3be6a7dfb03dff8eddbc56a69d5d03a65a9100e2c7b660",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/app/config.py": "aae32fcbaea902e426e7ae542026eefd831d90074438c3fe35a529c995d5ceca",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/app/utils/logger.py": "cdc5f5a87b9cc1d7ccd2145c65cfd014197be50a6519deface787deb9ed5fa19",
+    "/Users/rogerlin/.codex/worktrees/target-first-forecast/DeepResearchForecast/backend/app/services/simulation_manager.py": "15df37d1a3b92eff72a1aa3d062f1414de1ebd9b845aacd2053e0a9d525b40e1"
+  },
+  "contained_library_probes": {},
+  "probe_note": "Blocked fc-list/system_profiler/font-directory discovery remains denied; nonzero counts are attempts, not zero probes.",
+  "source_drift": [],
+  "allowed_scripts": {},
+  "children": {},
+  "identity_preserved": true
+}

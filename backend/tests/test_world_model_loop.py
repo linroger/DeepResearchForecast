@@ -150,6 +150,7 @@ def _read_jsonl(path):
 # A1 + artifacts: single platform, three rounds
 # ===========================================================================
 def test_world_model_round_loop_is_reflexive(tmp_path, monkeypatch):
+    """Old calls used OASIS role templates; C11 uses the actor's dedicated JSON system prompt."""
     sim_dir = str(tmp_path)
     envs = []
     _patch_world(monkeypatch, sim_dir, envs)
@@ -162,7 +163,8 @@ def test_world_model_round_loop_is_reflexive(tmp_path, monkeypatch):
     arbiters = [c for c in _WorldLLM.calls if c["kind"] == "arbiter"]
     assert [c["round"] for c in decisions if c["actor"] == "Actor0"] == [1, 2, 3]
     assert len(arbiters) == 3
-    assert all(c["system"].startswith("You are Actor") for c in decisions)   # the sealed role brief is the system turn
+    assert all(c["system"].startswith("You make one structured strategic decision") for c in decisions)
+    assert all(c["actor"] in c["system"] and "tool calling" not in c["system"].lower() for c in decisions)
 
     # ---- reflexivity: round-2 WORLD CLOCK carries the committed world of round 1 ----
     notes = _world_clock_notes(env)

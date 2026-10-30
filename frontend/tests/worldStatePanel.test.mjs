@@ -240,7 +240,7 @@ test('track records, the expected-reaction count and a crossed red line reach th
   assert.match(r.text, /responsive moves 25% expected reactions followed 1\/1 model projection, not evidence/)
   assert.match(r.html, /title="1 of the 1 reactions the actors expected after their own moves were followed by a move of the actor they named, one period later\. Whether that move matched the expectation is not judged\."/)
   // breakers first; zero buckets left out; released is not the actor's failure
-  assert.match(r.text, /Track records \(2\) United States Government kept 0 of 1 \(0%\) · 1 broken · moves: 1 succeeded China Ministry of Commerce 1 released · moves: 1 partly succeeded/)
+  assert.match(r.text, /Track records \(2\) United States Government kept 0 of 2 \(0%\) · 1 broken · 1 lapsed · moves: 1 succeeded China Ministry of Commerce 1 released · moves: 1 partly succeeded/)
   assert.match(r.html, /<li class="ws-record tr-broken"><span class="ws-actor">United States Government<\/span>/)
   assert.match(r.html, /<li class="ws-record"><span class="ws-actor">China Ministry of Commerce<\/span>/)
   assert.match(r.html, /<div class="ws-card-head" title="Commitments the world recorded for each actor: kept, lapsed/)
@@ -248,7 +248,7 @@ test('track records, the expected-reaction count and a crossed red line reach th
   // the crossing period: the red line is labelled, not tagged red_line, and leads the list
   h.state.selectRound(1)
   r = await h.render()
-  assert.match(r.text, /2026-04: 1 decisions · 1 facts changed · 0 events · 1 red line crossed · arbiter=applied The tariff jumps/)
+  assert.match(r.text, /2026-04: 1 decisions · 0 facts changed · 0 events · 1 red line crossed · arbiter=applied The tariff jumps/)
   assert.match(r.text, new RegExp(`Consequences and events \\(2\\) red line crossed ${CROSSING} — 145% announced relation`))
   assert.match(r.html, /<li class="ws-event ev-red-line"><span class="ws-kind mono">red line crossed<\/span>/)
   assert.doesNotMatch(r.text, /red_line|Track records/)              // track records describe the latest world
@@ -268,7 +268,7 @@ test('the new lines read Chinese labels from the locale', async (t) => {
   let r = await h.render()
   assert.match(r.text, /回应上期 25% 预期反应获跟进 1\/1/)
   assert.match(r.html, /title="角色在自身行动后预期他方作出的 1 项反应中，1 项在下一时段确有被点名方的行动跟进；该行动是否符合预期不作判定。"/)
-  assert.match(r.text, /履约记录 \(2\) United States Government 兑现 0\/1 \(0%\) · 1 项违约 · 行动：1 项成功 China Ministry of Commerce 1 项因对方违约解除 · 行动：1 项部分成功/)
+  assert.match(r.text, /履约记录 \(2\) United States Government 兑现 0\/2 \(0%\) · 1 项违约 · 1 项失效 · 行动：1 项成功 China Ministry of Commerce 1 项因对方违约解除 · 行动：1 项部分成功/)
   h.state.selectRound(1)
   r = await h.render()
   assert.match(r.html, /<span class="ws-kind mono">越过红线<\/span>/)

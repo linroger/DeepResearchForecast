@@ -24,6 +24,7 @@ from tests.conftest import FakeLLMClient
 
 def _world(*, duplicate_names=False):
     return WorldModel.from_seed({
+        "settings": {"action_policy": "affordable-menu-v2"},
         "question": "Will the parties deliver the agreed technical package?",
         "state_variables": [
             {"name": "Recent momentum", "value": 3.0, "kind": "numeric",
@@ -52,7 +53,7 @@ def _parse(world, aid, round_num, option_id, **fields):
     return parse_decision(
         {"option_id": option_id, "scenario_commitment": "abstain", **fields},
         actor=world.actors[aid], world=world,
-        options=build_option_menu(world.actors[aid], world, round_num),
+        options=build_option_menu(world.actors[aid], world, round_num, max_options=512),
         scenarios=(), round_num=round_num,
     )
 

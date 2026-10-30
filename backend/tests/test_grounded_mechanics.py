@@ -70,7 +70,7 @@ def test_no_discounted_plans_custom_overspend_or_forged_catalog_cost():
     assert w.last_decision_admissions[0]["status"] == "invalid"
 
 
-def test_valid_then_over_capacity_has_no_actor_mutations_and_legacy_is_unchanged():
+def test_valid_then_over_capacity_has_no_actor_mutations_in_pinned_and_unpinned_worlds():
     w = world(capacity=2)
     d = move(w, oid="custom", custom_action={"kind": "operational", "label": "Deliver supplies"})
     assert d["status"] == "ok"
@@ -81,9 +81,16 @@ def test_valid_then_over_capacity_has_no_actor_mutations_and_legacy_is_unchanged
     assert w.actors[0].to_dict() == before
     assert w.last_decision_admissions[0]["status"] == "invalid"
     old = world({}, capacity=1)
+    old_before = deepcopy(old.actors[0].to_dict())
     old.register_decisions(1, [d])
-    assert old.actors[0].capacity_used == 1 and old.actors[0].last_action["status"] == "ok"
-    assert "plan_1" in {o["id"] for o in ad.build_option_menu(old.actors[0], old, 1)}
+    # C11's unconditional feasibility fix supersedes the old unpinned cost
+    # clamp/plan discount. Explicit menu policy still owns fulfill semantics.
+    assert old.actors[0].capacity_used == old_before["capacity_used"]
+    assert old.actors[0].commitments == old_before["commitments"]
+    assert not old.relationships
+    assert old.actors[0].action_rejections and old.actors[0].last_action["status"] == "invalid"
+    assert old.last_decision_admissions[0]["status"] == "invalid"
+    assert "plan_1" not in {o["id"] for o in ad.build_option_menu(old.actors[0], old, 1)}
 
 
 def test_fair_menu_keeps_urgent_delivery_offer_choices_and_rotates_substantive_actions():

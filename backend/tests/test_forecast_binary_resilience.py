@@ -20,7 +20,7 @@ from tests.conftest import FakeLLMClient
 
 def test_fresh_binary_extraction_accepts_justified_ambiguity_without_forced_spread(monkeypatch):
     from app.services import forecast_extractor as fe
-    monkeypatch.setattr(fe, "_cfg", lambda name, default=None: default)
+    monkeypatch.setattr(fe, "_cfg", lambda name, default=None: "fail" if name == "REPORT_PUBLISH_GATE_MODE" else default)
     rows = [{"statement": f"Agency measure {i} exceeds 10 GW by 2027-06-30",
              "probability": 0.5, "resolution_criteria": "Agency measured operational capacity > 10 GW on 2027-06-30",
              "resolution_source": "Agency annual capacity register", "theme": "capacity"}
@@ -42,8 +42,9 @@ def test_fresh_binary_extraction_accepts_justified_ambiguity_without_forced_spre
     assert not fe._binary_quality(old, min_count=5)["passed"]
 
 
-def test_binary_quality_keeps_probability_and_policy_validation():
+def test_binary_quality_keeps_probability_and_policy_validation(monkeypatch):
     from app.services import forecast_extractor as fe
+    monkeypatch.setattr(fe, "_cfg", lambda name, default=None: "fail" if name == "REPORT_PUBLISH_GATE_MODE" else default)
     row = {"probability": 0.5, "criteria_sharp": True, "quality_policy": fe.BINARY_QUALITY_POLICY}
     assert not fe._binary_quality([{**row, "probability": 1.2}], min_count=1)["passed"]
     assert not fe._binary_quality([row, {**row, "quality_policy": "unknown/v99"}], min_count=1)["passed"]
@@ -98,7 +99,7 @@ def test_actual_chunked_recovery_requests_never_force_spread(monkeypatch):
 
 def test_explicit_legacy_requests_retain_old_distribution_policy(monkeypatch):
     from app.services import forecast_extractor as fe
-    monkeypatch.setattr(fe, "_cfg", lambda name, default=None: default)
+    monkeypatch.setattr(fe, "_cfg", lambda name, default=None: "fail" if name == "REPORT_PUBLISH_GATE_MODE" else default)
     client = FakeLLMClient(json_responses=[{"binary_forecasts": _balanced_rows()}, {"binary_forecasts": []}])
     result = fe.extract_binary_forecasts("Same fixed evidence.", client, min_count=5,
                                         binary_quality_policy=fe.LEGACY_BINARY_QUALITY_POLICY)
@@ -179,7 +180,8 @@ def test_chunked_retry_skips_filtered_chunks_and_merges_rows():
     assert res["recovery"]["primary_error"].startswith("_ContentFilterError")
     assert calls[0][1] == 10 and all(c[1] == 3 for c in calls[1:])                  # per-chunk minimum
     assert len(res["market_comparison"]["comparisons"]) >= 2
-    assert "passed" in res["binary_quality"]
+    # F1 moves the publication verdict out of the binary sharpness scorecard.
+    assert "sharpness" in res["binary_quality"] and "legacy_passed" in res["binary_quality"]
 
 
 def test_non_filter_errors_propagate_and_empty_results_pass_through():

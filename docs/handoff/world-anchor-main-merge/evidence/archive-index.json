@@ -1,0 +1,347 @@
+{
+  "schema": "world-anchor-main-merge-archives/v1",
+  "roots": [
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-budget-20261030-01",
+      "files": 59,
+      "omitted": 2,
+      "copy_manifest_sha256": "f9b745d50406ffee3c336acbf2b9ccc3338a80cbfe72e64f282f0c742436ece1"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-native-20261030-01",
+      "files": 2234,
+      "omitted": 84,
+      "copy_manifest_sha256": "077bac39d10a4b27f4ae0095ba18c89ed4a3bc3ad6e3b5f0bbf9510381fb702a"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-native-20261030-02",
+      "files": 2234,
+      "omitted": 84,
+      "copy_manifest_sha256": "c0d8efcedd7cc963a899af0c2ef403fc831b65c8525ce4300d4a87ab14ce66e4"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-off-final-20261030-02",
+      "files": 8,
+      "omitted": 1,
+      "copy_manifest_sha256": "ce3b04c54cceab11049e76d8652ee961f4089aaf4a2c197d6505a6490808d0d4"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-off-final-20261030-03",
+      "files": 8,
+      "omitted": 1,
+      "copy_manifest_sha256": "a2b4e60a3539125efb4753d8360b6bed929e2be76450de8ab3bc25ce613e5eba"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-off-main-20261030-01",
+      "files": 6,
+      "omitted": 0,
+      "copy_manifest_sha256": "ebdc525752eb9c53a78deda22acdc6be038c8d59e3e0576058cc838aebce4216"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-off-main-20261030-02",
+      "files": 6,
+      "omitted": 1,
+      "copy_manifest_sha256": "d197ec1c38df06403a94d7bf6f75d75d4710d0d91a84e4f8eb3b63f1e46b0242"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-off-merged-20261030-01",
+      "files": 6,
+      "omitted": 0,
+      "copy_manifest_sha256": "5f8c08da3eabef10fc43bbe3bbfec57377ee1402b58b14017ae63737317de207"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-parent-controls-20261030-01",
+      "files": 178,
+      "omitted": 16,
+      "copy_manifest_sha256": "f7b71b561edca991cfba0959287f2449691904815b49a588db385e2e75a0a400"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-preparation-20261030-01",
+      "files": 61,
+      "omitted": 7,
+      "copy_manifest_sha256": "73fa96030e4ca6391499b4b0754455aa86751055b5202d8502e4fcd4f38dffbf"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-preparation-20261030-02",
+      "files": 320,
+      "omitted": 7,
+      "copy_manifest_sha256": "f013c4b1a1002f14d686e3bb9efdbf1de7c5d89a9c29bc33c50505812e2be142"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-preparation-20261030-03",
+      "files": 245,
+      "omitted": 7,
+      "copy_manifest_sha256": "06f058b9dba15fc2fe1bf24057d9646102461c172035dd56dd26a50f44be0d92"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-preparation-20261030-04",
+      "files": 341,
+      "omitted": 7,
+      "copy_manifest_sha256": "1789f0a660c1e28c1e2936deedb1e1be1878863b2b50f6c59ca546ec6b151621"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-preparation-20261030-05",
+      "files": 805,
+      "omitted": 47,
+      "copy_manifest_sha256": "72733564f4910103bb8c0d0f97919df8842c1152ae435a805f98223f2768abba"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-preparation-20261030-06",
+      "files": 823,
+      "omitted": 16,
+      "copy_manifest_sha256": "9d3bd927513d2484b371f9d4e8cce7959f56155ad65d00890ccea6e91ca396ef"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-private-20261030-01",
+      "files": 137,
+      "omitted": 3,
+      "copy_manifest_sha256": "f0ab4f26654e0cdef3e4d593bc49e89cc5269681810e9f3f854702e0fd4a6b4c"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-reflexive-20261030-04",
+      "files": 312,
+      "omitted": 18,
+      "copy_manifest_sha256": "0270b8f42facbda821e531a7dcdb3d0ad4917df204fe65ba4af574510ec671ff"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-reflexive-20261030-05",
+      "files": 2534,
+      "omitted": 99,
+      "copy_manifest_sha256": "86e79d11c883654f772dd4ab24921c6580a6b3e504f2d6c8da515e33b49106c8"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-reflexive-20261030-06",
+      "files": 6,
+      "omitted": 1,
+      "copy_manifest_sha256": "da275a0bdd82f6ba0ebd751ca07a4ad173d21d08d02049bf4891deaa91b307c2"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-reflexive-20261030-07",
+      "files": 12,
+      "omitted": 2,
+      "copy_manifest_sha256": "188ff1f973b2e97bf5adad1f58d43c4469531a1605a7699de87284d05a04332f"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-reflexive-20261030-08",
+      "files": 2534,
+      "omitted": 99,
+      "copy_manifest_sha256": "886bf2651289064f0edca0d3443eaea8fa35988c7ce289cb043b021671299781"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-reflexive-20261030-09",
+      "files": 115,
+      "omitted": 4,
+      "copy_manifest_sha256": "26c344fa64fb922eb7be1b2e6bbe7c90438d827b2792b3184d6b285115acdacc"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-reflexive-20261030-10",
+      "files": 2597,
+      "omitted": 100,
+      "copy_manifest_sha256": "900824b10b78c39559bbebe1564927a61a7fff59b082122410996817f273b5e7"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-report-20261030-01",
+      "files": 3676,
+      "omitted": 97,
+      "copy_manifest_sha256": "f2e4e7e4c1b97ffb2879158f223a05c8417373cb9d6ef84fad196805730f050e"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-research-20261030-01",
+      "files": 140,
+      "omitted": 9,
+      "copy_manifest_sha256": "301a5c650efc461dd937f17952f7b4efaa4712331e6384c90a9f4a162786bf89"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-research-20261030-02",
+      "files": 5344,
+      "omitted": 165,
+      "copy_manifest_sha256": "6d61c42aa69b4b28ffb387d7388511c788066ea97ffac22395b05e379c497076"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-target-off-20261030-01",
+      "files": 6,
+      "omitted": 1,
+      "copy_manifest_sha256": "cb9e336fa29e0f95dda115696cd539eb6a5cc61aebb3a4b61dffcc4da2b87a9e"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/wa-main-merge-reflexive-feature-20261030-03",
+      "files": 701,
+      "omitted": 64,
+      "copy_manifest_sha256": "943ec7d32ebd1b9df18be26d026cd70423ac31d2bad5551ad5c32801def798f4"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/wa-main-merge-reflexive-initial-20261030-01",
+      "files": 98,
+      "omitted": 10,
+      "copy_manifest_sha256": "c7949de05b8e62e003eb0ed2e7ffee4a30bceed1b7c87bda61cc83d7d6f8b0b9"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/wa-main-merge-reflexive-repair-20261030-02",
+      "files": 98,
+      "omitted": 10,
+      "copy_manifest_sha256": "a4ba6ecf412f01ca8fc394e98d90c0992b368b7ec27177de71467e7c114449f9"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-cast-preflight-20261030-01",
+      "files": 98,
+      "omitted": 3,
+      "copy_manifest_sha256": "aa5f5b06983580de2360b5126ee0e3ef25277ab67c988b0e7bea4ca295844525"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-review-r1-r4-20261030-01",
+      "files": 897,
+      "omitted": 7,
+      "copy_manifest_sha256": "8fddd6b11e37f21e89fbb39cfb017376cdde21e0d18b638ada3d0341eb0833f4"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-review-r2-r3-red-20261030-01",
+      "files": 20,
+      "omitted": 3,
+      "copy_manifest_sha256": "b04df86086d7709fc69ba8caa988ffb983bcb9ff2105329b9740748328409726"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-review-r5-red-20261030-01",
+      "files": 1407,
+      "omitted": 9,
+      "copy_manifest_sha256": "eff1d624e1e9c19046bce97ff669de3752e2f87d4bffbca7f2dfe5253ac4bbac"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-target-fmp-red-20261030-01",
+      "files": 94,
+      "omitted": 5,
+      "copy_manifest_sha256": "06f16255edb570628bfd091c32b417041d0524fd9c40ed4f2eb65be572b523d7"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-target-fmp-red-20261030-02",
+      "files": 290,
+      "omitted": 5,
+      "copy_manifest_sha256": "d65fa8b312f9d166031f03d9af2d37d2721b669a5c4e1aa723b1777dbf35ed79"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-cast-preflight-20261030-02",
+      "files": 1009,
+      "omitted": 54,
+      "copy_manifest_sha256": "36458a71c4412763f944d20819c2f4a4d1525bf4b2716e3273fb79aea8ae8480"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-composed-20261030-01",
+      "files": 40418,
+      "omitted": 1236,
+      "copy_manifest_sha256": "133383cc8f3308549fd190a18099de8952244ca4b4a9a8f26d4de608a831e770"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-review-r1-r4-20261030-02",
+      "files": 1017,
+      "omitted": 7,
+      "copy_manifest_sha256": "9f42d428e9f7b41c7a25038299a28d55069af98958461d0f007b6c1a8d22c2b6"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-review-r1-r4-20261030-03",
+      "files": 1017,
+      "omitted": 7,
+      "copy_manifest_sha256": "4850a7e7e2c714f47bf40276f3a92b475537c16599176d33e9217291843cc8bf"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-review-r1-r4-20261030-04",
+      "files": 970,
+      "omitted": 6,
+      "copy_manifest_sha256": "6bcd588a108e415b106a7394918f0577f752c203fac09f1b62ef091d86720112"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-review-r2-r3-green-20261030-02",
+      "files": 353,
+      "omitted": 21,
+      "copy_manifest_sha256": "2d73b0d525fab87d19509551e2473fb25836ac957a54e693c8202c0f74b41b52"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-review-r5-green-20261030-04",
+      "files": 2145,
+      "omitted": 11,
+      "copy_manifest_sha256": "878dd79ceacf69a4b829e2c73819bbba94cc82ffad65acd1dfbf3e87824a59af"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-review-r5-legacy-control-20261030-05",
+      "files": 136,
+      "omitted": 3,
+      "copy_manifest_sha256": "226f15f73860153c4b141f8d95ed763ddb7453dede850b2883cb1fd9c5104187"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-review-r5-red-20261030-02",
+      "files": 1571,
+      "omitted": 11,
+      "copy_manifest_sha256": "f3de3e2cd1702a43eaa35b52d47ac95c57d54940ade1dd9632e3697f4f535e52"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-review-r5-red-20261030-03",
+      "files": 2145,
+      "omitted": 11,
+      "copy_manifest_sha256": "08c3536c25132e24b5899d066cdfc941d21138690dd1c50023fb74f645ef24a2"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-scalar-20261030-01",
+      "files": 150,
+      "omitted": 2,
+      "copy_manifest_sha256": "e8663bb7bdb9af78332c55902d2588002ce0bc807986ad4fc5dc6aedb0ba663e"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-target-fmp-fix-20261030-01",
+      "files": 1992,
+      "omitted": 74,
+      "copy_manifest_sha256": "aa352a9c25f3ef17e411916d452f73b344519768911451bfdadebfe6034ebaaa"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-target-fmp-fix-20261030-02",
+      "files": 2261,
+      "omitted": 78,
+      "copy_manifest_sha256": "da3c5d105f5907efded358a6462b85957495ba005add149b1fb8d06898a02926"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-producer-close-20261030-01",
+      "files": 2892,
+      "omitted": 82,
+      "copy_manifest_sha256": "4e50eae6d420518ffff12e30f7661893b0b21e0cc563ccfa11a50787ab37878c"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-reflexive-review-final-20261030-01",
+      "files": 5839,
+      "omitted": 119,
+      "copy_manifest_sha256": "3f94fa3e991c416da8beb87b7d68a5775764be63ff2a1d4d276ee1cf3c0c126d"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-review-r1-r4-20261030-05",
+      "files": 98,
+      "omitted": 3,
+      "copy_manifest_sha256": "4daf4a20f79640a540f015f50affd206de2d59df1dc242fbabaf1166b145ee15"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-review-r1-r4-20261030-06",
+      "files": 1062,
+      "omitted": 8,
+      "copy_manifest_sha256": "ae76c0a37c6b7f30f41c7aeca67a08d9dc6d791c734ffae5e0215fa58e31a759"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-review-r5-missing-key-green-20261030-07",
+      "files": 2646,
+      "omitted": 18,
+      "copy_manifest_sha256": "3d316ee1356016a74cafbbf5e083e7e781fe7e1886de026340797d66bd11925d"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-review-r5-missing-key-red-20261030-06",
+      "files": 382,
+      "omitted": 4,
+      "copy_manifest_sha256": "6f6de44bd8ed4a4665599f5fe85035574897c0fada8fa7304cb54f9f60d9bdab"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-target-fmp-acceptance-20261030-01",
+      "files": 5514,
+      "omitted": 140,
+      "copy_manifest_sha256": "3aaccd93e7e6156fb6e26ce70ac638f67643973a6e291060da71770806d4bdd0"
+    },
+    {
+      "root": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/receipts/world-anchor-main-merge-target-fmp-fix-20261030-03",
+      "files": 734,
+      "omitted": 18,
+      "copy_manifest_sha256": "9e7e7616c1130660a858c58f989cf3dd43c2983a841ebf4fb68d3f3620ea213a"
+    }
+  ]
+}

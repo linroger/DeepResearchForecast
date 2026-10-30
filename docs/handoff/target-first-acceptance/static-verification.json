@@ -1,0 +1,23 @@
+{
+  "ruffExit": 0,
+  "pythonFiles": [
+    "backend/app/api/simulation.py",
+    "backend/app/config.py",
+    "backend/app/services/agency_classification.py",
+    "backend/app/services/agent_decision.py",
+    "backend/app/services/pipeline_orchestrator.py",
+    "backend/app/services/simulation_config_generator.py",
+    "backend/app/services/simulation_manager.py",
+    "backend/app/services/world_model_seed.py",
+    "backend/scripts/replay_saved_world.py",
+    "backend/scripts/run_parallel_simulation.py",
+    "backend/tests/test_agency_classification.py",
+    "backend/tests/test_agency_preparation_consumers.py",
+    "backend/tests/test_context_audit_ensemble.py",
+    "backend/tests/test_context_audit_simulation.py",
+    "backend/tests/test_saved_world_replay.py",
+    "backend/tests/test_temporal_mode_contract.py"
+  ],
+  "sourceHashFiles": 552,
+  "sourceDrift": []
+}

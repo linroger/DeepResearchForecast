@@ -25,6 +25,7 @@ def test_publish_gate_passes_coherent_grounded_forecast():
 
 
 def test_publish_gate_demotes_on_low_coverage():
+    """F1: coverage previously failed; now discloses grade B and lowers confidence."""
     f = _gate({
         "confidence": "high",
         "citation_audit": {"coverage": 0.1},
@@ -33,9 +34,10 @@ def test_publish_gate_demotes_on_low_coverage():
             {"name": "维持现状", "probability": 0.4},
         ],
     })
-    assert f["quality"]["passed"] is False
+    assert f["quality"]["passed"] is True
+    assert f["quality"]["grade"] == "B"
     assert f["confidence"] == "medium"  # demoted exactly one level
-    assert any("覆盖率" in i for i in f["quality"]["issues"])
+    assert any("coverage" in i for i in f["quality"]["disclosures"])
 
 
 def test_publish_gate_flags_missing_residual_and_bad_sum():
@@ -61,6 +63,7 @@ def test_publish_gate_no_scenarios_is_vacuously_passing():
 
 
 def test_publish_gate_prefers_resolved_citation_coverage():
+    """F1 preserves measured resolved coverage while grading epistemic shortfalls."""
     f = _gate({
         "confidence": "high",
         "citation_audit": {
@@ -72,7 +75,8 @@ def test_publish_gate_prefers_resolved_citation_coverage():
             {"name": "Other / status quo", "probability": 0.4},
         ],
     })
-    assert f["quality"]["passed"] is False
+    assert f["quality"]["passed"] is True
+    assert f["quality"]["grade"] == "B"
     assert f["quality"]["citation_coverage"] == 0.0
     assert f["quality"]["citation_coverage_basis"] == "resolved_coverage"
     assert f["confidence"] == "medium"

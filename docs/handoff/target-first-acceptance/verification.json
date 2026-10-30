@@ -1,0 +1,52 @@
+{
+  "checkedAt": "2026-10-28T11:10:11.262677+00:00",
+  "base": "e0b233779a08493603360ddd4b5f4ba12a0183bf",
+  "branch": "codex/target-first-acceptance",
+  "tests": {
+    "passed": 718,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "modules": 25,
+    "seconds": 95.89,
+    "privateSpecimensIncluded": true
+  },
+  "frozenSourceFiles": 552,
+  "sourceDrift": [],
+  "guard": {
+    "exit_code": 0,
+    "shutdown_complete": true,
+    "identity_preserved": true,
+    "events": {
+      "redirect:app.config": 1,
+      "redirect:app.utils.logger": 1,
+      "redirect:app.services.simulation_manager": 1,
+      "blocked:network:socket.__new__": 1,
+      "blocked:process:subprocess.Popen": 4,
+      "quarantine:oasis_import_cwd": 1,
+      "blocked:external_read": 20
+    },
+    "contained_library_probes": {
+      "fc-list": 1,
+      "system_profiler": 1,
+      "font_directory_scan": 18
+    }
+  },
+  "privateEvidence": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z",
+  "review": "closed: no actionable P1/P2 in current source/evidence scope",
+  "liveProbe": "Gamma TLS handshake timeout; CLOB untested without token",
+  "paidModelCalls": 0,
+  "productionDeployment": false,
+  "schedulerActivated": false,
+  "spendingBoundaryImplementation": "approved for offline implementation on2026-10-29; not implemented by this acceptance slice",
+  "static": {
+    "ruffFE9": "passed on16changedPythonfiles",
+    "diffCheck": "passed",
+    "environmentDocumentation": "strict check passed"
+  },
+  "preservation": {
+    "originalFiles": 100,
+    "copiedFiles": 100,
+    "drift": []
+  }
+}

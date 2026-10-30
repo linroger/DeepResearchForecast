@@ -1,0 +1,11 @@
+{
+  "snapshot": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z",
+  "manifestSHA256": "b3557668a96a33c35ce967f60cf158f2852bee9ce45be4d88751ca0cdc14f31a",
+  "files": 100,
+  "bytes": 3149397,
+  "missing": [
+    "simulations/sim_2a4f7d0e73de/arbiter_raw.jsonl",
+    "simulations/sim_1838cf014c0b/arbiter_raw.jsonl",
+    "pipelines/pipe_9d9b84efcd3d/handoff/forecast_case.json"
+  ]
+}

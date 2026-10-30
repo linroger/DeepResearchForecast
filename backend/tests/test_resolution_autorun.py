@@ -1,6 +1,6 @@
 """i8 回归：MON-1 判定监测的进程内调度（LOOP-017「resolution monitor never ran」）。
 
-钉住：默认旋钮 0=关（start() 不起线程，今日行为逐字节保留）；开启后周期触发走
+钉住：源码默认每日 24 小时；显式 0 保留关闭行为；开启后周期触发走
 trigger_once 的在飞去重；手动端点 202/409 语义；子进程命令形状与超时降级。
 全离线：subprocess 一律 monkeypatch，零网络。
 """
@@ -26,8 +26,12 @@ def _drain_inflight(timeout: float = 2.0) -> None:
     assert not ra.is_inflight(), "in-flight 标志未在期限内复位"
 
 
-def test_default_knob_is_off_and_start_is_inert():
-    assert float(getattr(Config, "RESOLUTION_MONITOR_AUTORUN_HOURS", -1)) == 0.0
+def test_source_default_is_daily_and_explicit_disable_is_inert(monkeypatch):
+    """Approved daily source default replaces off; an existing env=0 still disables."""
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/config.py").read_text()
+    assert "RESOLUTION_MONITOR_AUTORUN_HOURS', '24'" in source
+    monkeypatch.setattr(Config, "RESOLUTION_MONITOR_AUTORUN_HOURS", 0)
     assert ra.start() is None
     assert ra.start(0) is None
     assert ra.start(-1) is None

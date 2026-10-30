@@ -107,17 +107,23 @@ class WorldSimulationService:
     @classmethod
     def prepare_model(cls, simulation_id, *, raw_spec, research_report, research_generation_id,
                       research_engine, actor_bundle=None, root=None, policy_spec=None,
-                      ontology=None, simulation_requirement='', preparation_context=None):
+                      ontology=None, simulation_requirement='', preparation_context=None, anchor_context=None):
         from .compiler import compile_world_spec
+        if anchor_context is not None:
+            from ..world_anchor import validate_anchor_context, validate_world_source_inputs
+            validate_anchor_context(anchor_context, engine=ENGINE)
+            validate_world_source_inputs(anchor_context, research_report=research_report,
+                                         actor_bundle=actor_bundle, research_engine=research_engine)
         directory = cls.directory(simulation_id, root)
         preparation = None
         generation_id = 'world_' + uuid.uuid4().hex
 
         def compile_candidate(raw):
+            anchor_options = {"anchor_context": anchor_context} if anchor_context is not None else {}
             return compile_world_spec(raw, simulation_id=simulation_id, generation_id=generation_id,
                 research_report=research_report, research_generation_id=research_generation_id,
                 research_engine=research_engine, actor_bundle=actor_bundle,
-                preparation_context=preparation_context)
+                preparation_context=preparation_context, **anchor_options)
 
         if raw_spec is None:
             from .modeler import generate_candidate
@@ -126,18 +132,20 @@ class WorldSimulationService:
             raw_spec, preparation = generate_candidate(directory, research_report=research_report,
                 research_generation_id=research_generation_id, research_engine=research_engine,
                 actor_bundle=actor_bundle, ontology=ontology, simulation_requirement=simulation_requirement,
-                policy_spec=policy_spec, validate=compile_candidate, preparation_context=preparation_context)
+                policy_spec=policy_spec, validate=compile_candidate, preparation_context=preparation_context,
+                **({"anchor_context": anchor_context} if anchor_context is not None else {}))
         spec = compile_candidate(raw_spec)
         # Pin scheduling semantics only for genuinely new preparation, never load/fork.
         spec['interactionQueuePolicy'] = 'presented-v1'
         if preparation is not None:
             spec['sourceBindings']['modelPreparation'] = preparation
-        manifest = seal_inputs(directory, spec, preparation_context=preparation_context)
+        anchor_options = {"anchor_context": anchor_context} if anchor_context is not None else {}
+        manifest = seal_inputs(directory, spec, preparation_context=preparation_context, **anchor_options)
         return {'spec': spec, 'manifest': manifest,
                 'manifest_sha256': file_digest(directory / 'world_input_manifest.json')}
 
     @classmethod
-    def _inputs(cls, simulation_id, root=None, expected_manifest_sha256=None):
+    def _inputs(cls, simulation_id, root=None, expected_manifest_sha256=None, *, anchor_context=None):
         directory = cls.directory(simulation_id, root)
         state_file = directory / 'state.json'
         state = read_json(state_file) if state_file.exists() else None
@@ -149,8 +157,9 @@ class WorldSimulationService:
             require(expected_manifest_sha256 is None or expected_manifest_sha256 == pinned,
                     'input_binding_mismatch', 'World admission uses a different manifest pin')
             expected_manifest_sha256 = pinned
+        anchor_options = {"anchor_context": anchor_context} if anchor_context is not None else {}
         spec, manifest = load_inputs(directory, simulation_id=simulation_id,
-                                     expected_manifest_sha256=expected_manifest_sha256)
+                                     expected_manifest_sha256=expected_manifest_sha256, **anchor_options)
         if state is not None:
             require(state.get('world_generation_id') == spec['generationId']
                     and state.get('world_spec_sha256') == manifest['specSha256'],
@@ -271,17 +280,28 @@ class WorldSimulationService:
         return load_frozen_result(directory)
 
     @classmethod
-    def fork(cls, simulation_id, new_simulation_id, *, root=None, seed=None):
-        original_directory, original = cls._inputs(simulation_id, root)
+    def fork(cls, simulation_id, new_simulation_id, *, root=None, seed=None, anchor_context=None):
+        original_directory, original = cls._inputs(simulation_id, root, anchor_context=anchor_context)
         from .artifacts import load_preparation
         preparation_context = load_preparation(original_directory, original)
-        spec = clone(original)
-        spec.update(simulationId=new_simulation_id, generationId='world_' + uuid.uuid4().hex)
         if seed is not None:
             require(type(seed) is int and seed >= 0, 'invalid_seed', 'Seed must be a nonnegative integer')
-            spec['seed'] = seed
         directory = cls.directory(new_simulation_id, root)
-        manifest = seal_inputs(directory, spec, preparation_context=preparation_context)
+        if 'worldAnchor' in original['sourceBindings'] and anchor_context is None:
+            from ..world_anchor import load_runtime_anchor
+            anchor_context = load_runtime_anchor({'simulation_id': simulation_id,
+                'world_anchor': original['sourceBindings']['worldAnchor']['pin']}, cls.directory(simulation_id, root))
+        if anchor_context is not None:
+            from .compiler import fork_anchored_world
+            spec = fork_anchored_world(original, anchor_context, simulation_id=new_simulation_id,
+                                      generation_id='world_' + uuid.uuid4().hex, seed=seed)
+        else:
+            spec = clone(original)
+            spec.update(simulationId=new_simulation_id, generationId='world_' + uuid.uuid4().hex)
+            if seed is not None:
+                spec['seed'] = seed
+        anchor_options = {"anchor_context": anchor_context} if anchor_context is not None else {}
+        manifest = seal_inputs(directory, spec, preparation_context=preparation_context, **anchor_options)
         return {'spec': spec, 'manifest': manifest,
                 'manifest_sha256': file_digest(directory / 'world_input_manifest.json')}
 

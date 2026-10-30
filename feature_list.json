@@ -427,5 +427,35 @@
       "Use the installed Codex skill with the same official client and validate bounded live financial/news calls."
     ],
     "passes": true
+  },
+  {
+    "id": "feature_private_run_spending_v1",
+    "category": "offline-runtime-safety",
+    "description": "The opt-in private target-first launcher and admitted model/Firecrawl transports share one immutable durable whole-run spending cap across physical attempts, children and supported completed-research parent resume; this is offline implementation coverage, not live billing qualification.",
+    "steps": [
+      "Validate exact request, source, route and credential-selection bindings before application/provider entry.",
+      "Exercise real SDK/tool mock-HTTP sends in parent and registered child processes and verify each has a prior retained maximum in the same ledger.",
+      "Reject changed request, missing context, unknown outcome, cancellation and exhausted balance before any later raw send.",
+      "Resume actual backend work in a fresh PID only after sealed completed research; retain prior maxima and reject child target-v3 resume without a reviewed checkpoint contract.",
+      "Execute the private copied interpreter and actual child admission with unchanged guards; record import origins, complete shutdown and blocked dependency probes honestly.",
+      "Run the final combined and process-composition gates, preserve source hashes and raw private evidence, and obtain independent closure."
+    ],
+    "passes": true
+  },
+  {
+    "id": "feature_world_anchor_v1",
+    "category": "research-world-integration",
+    "description": "An optional demand-driven World Anchor stage binds retained quantitative, qualitative and temporal research evidence to the existing reflexive, world-v1 and target-first consumers, with authenticated provenance, explicit gaps and unchanged forecast probability authority.",
+    "steps": [
+      "Derive requirements from an explicit forecast contract; inventory retained claims and authenticate source bytes, identities, units, periods, vintages and availability. Missing contracts and unsupported evidence remain named gaps.",
+      "Run bounded extraction and independent semantic review through the admitted producer, retain actual dispatch and budget receipts, and publish the complete pack, human anchor sheet and gaps before research closure.",
+      "Exercise supported baseline, action, mechanism, calendar, hazard and observation paths through actual consumers for all three runtimes; unsupported required mappings fail preparation.",
+      "Capture complete actual actor requests and enforce self-inference, rival-private, first-party probability and future-settlement exclusions while preserving authorized evidence and self-owned simulated commitments.",
+      "Revalidate external completion, source, cast and preparation seals on reload and reuse; reject tampering and mixed owners/generations, preserve parent artifacts on supported forks, and retain off-mode byte and RNG behavior.",
+      "Verify real parent/child mock-transport attempts share retained run and stage limits, including zero-call completion, denial before send, interruption and supported replay; no provider spend or deployment is implied.",
+      "Replay the private saved specimen honestly, preserve its 2026 third-party forecast and same-period vintages, disclose missing contract/data/cadence gaps, and record actual offline wall time.",
+      "Expose redacted initial/final world diagnostics and provenance without changing protected forecast inputs or probabilities; close independent findings and retain final composed source and evidence receipts."
+    ],
+    "passes": true
   }
 ]

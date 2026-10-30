@@ -1397,9 +1397,10 @@ _RUNTIME_SKILL_SYNC_HELPER_PATH = os.path.abspath(os.path.join(
 # setup.sh deploys the same set; test_deerflow_bridge_sync_guard pins the parity.
 _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
     "market_tools.py", "search_tools.py", "cached_fetch.py",
-    "research_budget.py", "linear_research.py", "research_gateway.py",
+    "research_budget.py", "run_spending.py", "linear_research.py", "research_gateway.py",
+    "world_anchor.py", "world_anchor_binding.py", "world_anchor_case.py", "world_anchor_publication.py",
     "data_mcp.py", "data_catalog.py", "data_sources.py", "data_tools.py",
-    "research_skills.py", "backtest_cutoff.py",
+    "research_skills.py", "backtest_cutoff.py", "forecast_case.py", "target_research.py",
     "news_signals.py", "news_tools.py", "market_intelligence.py",
     "fmp_mcp.py", "fmp_research.py", "fmp_tools.py",
 )
@@ -2258,9 +2259,13 @@ class DeerFlowResearchRunner:
             "flushed": False,
         }
         try:
-            return DeerFlowResearchRunner._run_attempt(
-                prompt, handoff_dir, model=model, budget_run_id=budget_run_id,
-                _spend=spend, **kwargs)
+            from .run_spending import research_child_scope
+            with research_child_scope(prompt, handoff_dir, model=model,
+                                      budget_run_id=budget_run_id, options=kwargs) as (binding, tracker):
+                return DeerFlowResearchRunner._run_attempt(
+                    prompt, handoff_dir, model=model, budget_run_id=budget_run_id,
+                    _spend=spend, **({"spending_binding": binding, "spending_tracker": tracker}
+                                   if binding is not None else {}), **kwargs)
         except PipelineCancelled:
             _flush_failed_research_attempt_spend(spend, "cancelled", run_id=budget_run_id)
             raise
@@ -2298,9 +2303,12 @@ class DeerFlowResearchRunner:
         evidence_only: bool = False,
         synthesis_manifest_path: Optional[str] = None,
         research_engine: Optional[str] = None,
+        forecast_authority: Optional[str] = None,
         backtest: Optional[dict[str, Any]] = None,
         context_question_sha256: Optional[str] = None,
         _spend: Optional[dict[str, Any]] = None,
+        spending_binding: Optional[dict[str, Any]] = None,
+        spending_tracker: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """运行研究子进程，阻塞直到结束。返回 handoff 摘要。
 
@@ -2387,6 +2395,10 @@ class DeerFlowResearchRunner:
             "--model", model or Config.DEERFLOW_MODEL,
             "--depth", depth or Config.DEERFLOW_RESEARCH_DEPTH,
         ]
+        if forecast_authority is not None:
+            from .target_pipeline import normalize_target_options
+            normalize_target_options(forecast_authority)
+            cmd += ["--forecast-authority", forecast_authority]
         lang = language if language is not None else Config.DEERFLOW_RESEARCH_LANGUAGE
         if lang:
             cmd += ["--target-language", lang]
@@ -2582,6 +2594,9 @@ class DeerFlowResearchRunner:
                     "——跳过 MCP 接线（研究照常运行）", kg_graph_id)
 
         logger.info(f"启动 DeerFlow 研究子进程: {' '.join(cmd[:1])} … (cwd={deerflow_dir})")
+        if spending_binding is not None:
+            from .run_spending import configure_child
+            cmd = configure_child(spending_binding, env, cmd, script)
         on_progress(2, "启动深度研究子进程…")
 
         proc = subprocess.Popen(
@@ -2594,6 +2609,8 @@ class DeerFlowResearchRunner:
             bufsize=1,
             start_new_session=True,  # 自成进程组，便于 os.killpg 连带清理孙子进程
         )
+        if spending_tracker is not None:
+            spending_tracker["process"] = proc
         DeerFlowResearchRunner._live_procs.add(proc)
         if on_spawn is not None:
             try:
@@ -2610,7 +2627,14 @@ class DeerFlowResearchRunner:
         def _watchdog():
             if proc.poll() is None:
                 timed_out["hit"] = True
-                _kill_process_group(proc)
+                if spending_binding is not None:
+                    from .run_spending import api as spending_api
+                    try:
+                        spending_api().halt(spending_binding, "unknown_outcome")
+                    finally:
+                        _kill_process_group(proc)
+                else:
+                    _kill_process_group(proc)
 
         watchdog = threading.Timer(budget, _watchdog)
         watchdog.daemon = True
@@ -7488,6 +7512,45 @@ def merge_market_snapshots(track_markets: list[Any], *, max_total: int = 20,
 
 
 
+def load_preparation_ontology(pipeline_id: str, handoff_dir: Optional[str] = None) -> Optional[dict]:
+    """Read only this pipeline's receipt-bound ontology for fresh preparation.
+
+    Older pipelines without this optional receipt retain legacy inference. A
+    present invalid receipt cannot silently grant different decision rights.
+    """
+    if getattr(Config, "SIM_AGENCY_CLASS_SOURCE", "ontology") == "legacy":
+        return None
+    root = handoff_dir or PipelineManager.handoff_dir(pipeline_id)
+    manifest_path = PipelineManager.artifact_manifest_path(pipeline_id)
+
+    def read_manifest():
+        if not os.path.lexists(manifest_path):
+            return None
+        raw_manifest = _research_data_read(os.path.dirname(manifest_path), "manifest.json", 4_000_000)
+        manifest = json.loads(raw_manifest)
+        if not isinstance(manifest, dict):
+            raise ValueError("Preparation ontology manifest is invalid")
+        return manifest
+
+    manifest = read_manifest()
+    if manifest is None or "ontology" not in manifest:
+        return None
+    entry = manifest["ontology"]
+    expected = os.path.realpath(os.path.join(root, "ontology.json"))
+    if (not isinstance(entry, dict) or not isinstance(entry.get("path"), str)
+            or os.path.realpath(entry["path"]) != expected or not entry.get("sha256")):
+        raise ValueError("Preparation ontology receipt is invalid")
+    raw = _research_data_read(root, "ontology.json", 4_000_000)
+    if hashlib.sha256(raw).hexdigest() != entry["sha256"]:
+        raise ValueError("Preparation ontology differs from its admitted receipt")
+    ontology = json.loads(raw)
+    if not isinstance(ontology, dict) or not isinstance(ontology.get("entity_types"), list):
+        raise ValueError("Preparation ontology has no valid entity type declarations")
+    if read_manifest() != manifest:
+        raise ValueError("Preparation ontology generation changed during read")
+    return ontology
+
+
 def load_research_dossier_for_simulation(simulation_id: Optional[str]) -> dict[str, Any]:
     """Read a simulation's consumed dossier; only genuinely unbound runs use legacy lookup.
 
@@ -7598,6 +7661,10 @@ def simulation_readiness(mode: str = "full", *, simulation_engine=UNSET) -> dict
     selection is deferred. Return only small metadata, never the resolved profile.
     POST uses the same resolver in start and does not trust this earlier snapshot.
     """
+    if simulation_engine == "target-first-v1":
+        return {"simulation_engine": "target-first-v1", "default_simulation_engine": Config.DEFAULT_SIMULATION_ENGINE,
+                "ready": True, "errors": [], "simulation_admission": {
+                    "version": "target-admission/v1", "status": "case-required", "simulationWeight": 0.0}}
     default = Config.DEFAULT_SIMULATION_ENGINE
     selected = default if simulation_engine is UNSET else simulation_engine
     result = {
@@ -8811,6 +8878,11 @@ class PipelineOrchestrator:
 
     @staticmethod
     def _simulation_engine(state: PipelineState) -> str:
+        from .target_pipeline import AUTHORITY, is_target
+        if is_target(state):
+            if state.options.get("simulation_engine") != AUTHORITY:
+                raise ValueError("Target forecast authority and simulation engine differ")
+            return AUTHORITY
         from .simulation_manager import validate_simulation_engine
         engine = validate_simulation_engine(state.options.get("simulation_engine", "oasis-legacy"))
         if state.simulation_id:
@@ -8852,6 +8924,10 @@ class PipelineOrchestrator:
         from .world_simulation.contracts import clone, digest, require
         from .world_simulation.service import WorldSimulationService
         require(self._simulation_engine(state) == "world-v1", "engine_mismatch", "World pipeline required")
+        from .world_anchor import require_completed, validate_anchor_context
+        anchor_context = require_completed(state)
+        if anchor_context is not None:
+            validate_anchor_context(anchor_context, engine="world-v1")
         manager = SimulationManager()
         sim = manager.get_simulation(state.simulation_id) if state.simulation_id else None
         prepare_reused = sim is not None and bool(sim.world_input_manifest_sha256)
@@ -8955,7 +9031,8 @@ class PipelineOrchestrator:
                     sim.simulation_id, raw_spec=raw_spec, research_report=report_md,
                     research_generation_id=generation, research_engine=engine,
                     actor_bundle=bundle, policy_spec=policy_spec,
-                    ontology=getattr(project, "ontology", None), simulation_requirement=state.prompt)
+                    ontology=getattr(project, "ontology", None), simulation_requirement=state.prompt,
+                    **({"anchor_context": anchor_context} if anchor_context is not None else {}))
             except WorldError as error:
                 # The stage error keeps only the message; keep the typed code
                 # (and its closed details, e.g. per-attempt modeler codes) too.
@@ -9034,6 +9111,9 @@ class PipelineOrchestrator:
         world_spec: Optional[dict] = None,
         world_policy_spec: Optional[dict] = None,
         backtest: Optional[dict] = None,
+        forecast_authority: Optional[str] = None,
+        target_simulation: Optional[dict] = None,
+        world_anchor: Optional[dict] = None,
     ) -> PipelineState:
         """创建管线记录并在后台线程启动。立即返回（含 pipeline_id / task_id）。
 
@@ -9045,11 +9125,20 @@ class PipelineOrchestrator:
         # Resolve before directories, tasks, state writes or thread registration.
         # Reuse this exact snapshot for persisted containment semantics.
         safety_policy = capture_safety_policy_v1("admission")
-        simulation_options = _fresh_simulation_options(
-            mode=mode, simulation_engine=simulation_engine, world_spec=world_spec,
-            world_policy_spec=world_policy_spec, max_rounds=max_rounds,
-            safety_policy=safety_policy,
-        )
+        from .target_pipeline import AUTHORITY, TargetPipelineError, normalize_target_options
+        target_options = normalize_target_options(forecast_authority, target_simulation)
+        if target_options:
+            if simulation_engine not in (UNSET, AUTHORITY) or world_spec is not None or world_policy_spec is not None:
+                raise TargetPipelineError("Target authority uses its case mechanisms, not an external world specification")
+            if backtest is not None:
+                raise TargetPipelineError("Target-first prospective mode does not admit outcome-bearing backtests")
+            simulation_options = target_options
+        else:
+            simulation_options = _fresh_simulation_options(
+                mode=mode, simulation_engine=simulation_engine, world_spec=world_spec,
+                world_policy_spec=world_policy_spec, max_rounds=max_rounds,
+                safety_policy=safety_policy,
+            )
         backtest_option = None
         if backtest is not None:
             backtest_option = normalize_backtest_request(backtest)
@@ -9057,7 +9146,32 @@ class PipelineOrchestrator:
                 raise BacktestRequestError("backtest mode needs the v3 research engine (RESEARCH_ENGINE)")
             if simulation_options.get("simulation_engine") == "world-v1":
                 raise BacktestRequestError("backtest mode supports the OASIS simulation engine only")
+        if target_options:
+            cap = getattr(Config, "TARGET_DECISION_MAX_CALLS", 128)
+            if type(cap) is not int or not 0 <= cap <= 2048:
+                raise TargetPipelineError("TARGET_DECISION_MAX_CALLS must be an integer in [0, 2048]")
+            target_options["target_decision_budget_v1"] = {"max_calls": cap}
+            target_options["target_tournament_enabled"] = bool(getattr(Config, "REPORT_TOURNAMENT", True))
         pipeline_id = f"pipe_{uuid.uuid4().hex[:12]}"
+        from . import run_spending as spending
+        from . import world_anchor as anchors
+        private_binding = spending.api().binding_from_environment() if spending.api().required() else None
+        anchor_option = anchors.new_run_option(world_anchor, private_binding=private_binding)
+        if anchor_option is not None and not (
+                private_binding and private_binding.get("schema") == "target-run-spending-binding/v2"):
+            raise anchors.WorldAnchorIntegrationError("anchor_profile_required")
+        spending_options = spending.bind_start(
+            pipeline_id, prompt, mode=mode, depth=depth or Config.DEERFLOW_RESEARCH_DEPTH,
+            language=language, model=model, forecast_authority=forecast_authority,
+            target_simulation=target_simulation, project_name=project_name, max_rounds=max_rounds,
+            **({"world_anchor": anchor_option} if anchor_option is not None else {}))
+        if spending_options:
+            admitted = spending_options[spending.REQUEST_KEY]
+            prompt, depth, language, model = (admitted["prompt"], admitted["depth"],
+                                               admitted["language"], admitted["model"])
+            # The public mode selector expands from private v2 authority during
+            # binding. Persist that admitted value, not the caller's selector.
+            anchor_option = admitted.get("world_anchor")
         PipelineManager.ensure_dirs(pipeline_id)
 
         task_manager = TaskManager()
@@ -9087,15 +9201,24 @@ class PipelineOrchestrator:
             "research_language": language,
             "research_model": model or None,
             **simulation_options,
+            **spending_options,
         })
+        if anchor_option is not None:
+            state.options[anchors.CONFIG_KEY] = anchor_option
+            state.options[anchors.LIFECYCLE_KEY] = anchors.pending_lifecycle(
+                pipeline_id, spending_options[spending.REQUEST_KEY])
         state.options["actor_intelligence_policy_v1"] = (
-            admission_actor_intelligence_policy_v1()
+            {"required": False, "research_engine": "v3", "source": AUTHORITY}
+            if target_options else admission_actor_intelligence_policy_v1()
         )
         # Foglamp WP1 (1B)：新管线在准入时钉住安全政策快照——服务重载/环境变量漂移
         # 不得让一条已准入的运行悄悄改变图谱反馈/种子/extremize/模拟影响语义。
         state.options["safety_policy_v1"] = safety_policy
         if backtest_option is not None:
             state.options[BACKTEST_OPTION] = backtest_option
+        from .forecast_aggregator import default_aggregation_policy
+        state.options["aggregation_policy_v1"] = default_aggregation_policy(
+            "research" if target_options else "spine")
         PipelineManager.save(state)
 
         cls._cancel_events[pipeline_id] = threading.Event()
@@ -9127,6 +9250,9 @@ class PipelineOrchestrator:
                 return {"ok": False, "status": "not_found"}
             if data.get("status") != "running":
                 return {"ok": False, "status": "not_running"}
+
+            from . import run_spending as spending
+            spending.cancel_bound(data)
 
             event = cls._cancel_events.get(pipeline_id)
             thread = cls._threads.get(pipeline_id)
@@ -9197,6 +9323,9 @@ class PipelineOrchestrator:
             data = PipelineManager.load(pipeline_id)
             if data is None:
                 return {"ok": False, "status": "not_found"}
+            from . import run_spending as spending
+            if spending.state_binding(data) is not None:
+                return {"ok": False, "status": "spending_authority_retained"}
             if not force:
                 deps = cls._dependent_forks(pipeline_id)
                 if deps:
@@ -9289,7 +9418,11 @@ class PipelineOrchestrator:
                            if _ph.get("status") in ("degraded", "failed") else "")
                     )
 
+            from . import run_spending as spending
+            rebound = spending.resume_bound(data)
             state = PipelineState.from_dict(data)
+            if rebound is not None:
+                state.options[spending.BINDING_KEY] = rebound
             PipelineManager.ensure_dirs(pipeline_id)
             bands = RESEARCH_ONLY_BANDS if state.mode == "research_only" else STAGE_BANDS
             for name in bands.keys():
@@ -9378,6 +9511,8 @@ class PipelineOrchestrator:
             data = PipelineManager.load(pipeline_id)
             if data is None:
                 raise FileNotFoundError("管线不存在")
+            from . import run_spending as spending
+            spending.reject_scope_change(data)
             _bad = PipelineManager.is_incompatible(data)  # I-4-4
             if _bad is not None:
                 raise IncompatiblePipelineSchema(pipeline_id, _bad)
@@ -9463,15 +9598,23 @@ class PipelineOrchestrator:
         base = PipelineManager.load(base_pipeline_id)
         if base is None:
             raise FileNotFoundError("基础管线不存在")
+        from . import run_spending as spending
+        spending.reject_scope_change(base)
         _bad = PipelineManager.is_incompatible(base)  # I-4-4
         if _bad is not None:
             raise IncompatiblePipelineSchema(base_pipeline_id, _bad)
         base_state = PipelineState.from_dict(base)
         engine = cls._simulation_engine(base_state)
+        if engine == "target-first-v1" and set(overlay or {}) - {"label", "seed"}:
+            raise ValueError("Target forks accept label and seed only; changed cases require new research")
         if engine == "world-v1" and set(overlay or {}) - {"label", "seed"}:
             raise ValueError("World forks accept label and seed; model changes require a new world_spec")
         if not base_state.graph_id:
             raise RuntimeError("基础管线尚未建图，无法分叉情景")
+        target_fork_source = None
+        if engine == "target-first-v1":
+            from .target_pipeline import capture_fork_source
+            target_fork_source = capture_fork_source(base_state)
 
         label = str((overlay or {}).get("label") or "情景").strip()
         new_id = f"pipe_{uuid.uuid4().hex[:12]}"
@@ -9500,7 +9643,10 @@ class PipelineOrchestrator:
         # safety context instead of silently adopting current process defaults.
         from copy import deepcopy
         for key in ("depth", "research_language", "research_model", "research_engine",
-                    "max_rounds", "safety_policy_v1"):
+                    "max_rounds", "safety_policy_v1", "forecast_authority", "target_simulation",
+                    "target_policy_version", "target_case_binding", "target_library_binding", "aggregation_policy_v1",
+                    "target_decision_budget_v1", "target_tournament_enabled", "target_estimators_binding", "target_evidence_binding",
+                    "target_library_publication_binding"):
             if key in base_state.options:
                 new_state.options[key] = deepcopy(base_state.options[key])
         _actor_policy = base_state.options.get("actor_intelligence_policy_v1")
@@ -9520,6 +9666,18 @@ class PipelineOrchestrator:
             new_state.options[BACKTEST_OPTION] = deepcopy(base_state.options[BACKTEST_OPTION])
 
         new_state.options["simulation_engine"] = engine
+        if engine == "target-first-v1":
+            new_state.options["target_fork_source"] = target_fork_source
+            new_state.project_id = None
+            from .target_pipeline import normalize_target_options
+            settings = deepcopy(new_state.options["target_simulation"])
+            if "seed" in (overlay or {}):
+                settings["seed"] = overlay["seed"]
+            new_state.options.update(normalize_target_options(engine, settings))
+            # The copied generation is resealed for the new owner before reuse.
+            for stage in new_state.stages.values():
+                stage.status = "pending"
+                stage.progress = 0
         if engine == "world-v1":
             for key in ("world_research_generation_id",):
                 if key in base_state.options:
@@ -9747,6 +9905,10 @@ class PipelineOrchestrator:
         if (not state.options.get("base_pipeline_id")
                 or PipelineOrchestrator._simulation_engine(state) == "world-v1"):
             return
+        from .target_pipeline import is_target, isolate_target_fork
+        if is_target(state):
+            isolate_target_fork(state)
+            return
         source = os.path.realpath(state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id))
         owner = os.path.realpath(PipelineManager._dir(state.pipeline_id))
         if os.path.commonpath([source, owner]) == owner:
@@ -9758,7 +9920,7 @@ class PipelineOrchestrator:
             _RESEARCH_CONTRACT_FILENAME, "ontology.json", "graph_priors.json",
             "graph_priors_structural.json", ACTOR_GRAPH_SEED_MANIFEST_FILENAME,
             "communities.json", "entity_merges.json", "graph_prune.json",
-            "cast_reconciliation.json",
+            "cast_reconciliation.json", "forecast_case.json", "target_graph.json", "target_library.json", "target_estimators.json", "target_evidence.json", "target_library_publication.json",
         }
         from .official_data import fmp_capture_artifacts
         fmp_artifacts = fmp_capture_artifacts(source)
@@ -10271,6 +10433,7 @@ class PipelineOrchestrator:
                     "graph_priors.json"))
             except Exception:  # noqa: BLE001
                 _graph_priors = None
+            preparation_ontology = load_preparation_ontology(state.pipeline_id, state.handoff_dir)
             sim_manager.prepare_simulation(
                 simulation_id=sim_id,
                 simulation_requirement=state.prompt,
@@ -10280,6 +10443,7 @@ class PipelineOrchestrator:
                 graph_priors=_graph_priors,  # W9-5: 与主路径一致（P3-7 中心度先验）
                 max_rounds=max_rounds,  # PREP-1: 集成种子跑同样按真实执行窗排期
                 research_language=state.options.get("research_language"),  # PREP-4
+                **({"ontology": preparation_ontology} if preparation_ontology is not None else {}),
             )
             run_kwargs: dict[str, Any] = {"platform": "parallel", "sim_seed": int(seed), "finalize_record": False}
             if max_rounds:
@@ -10372,6 +10536,7 @@ class PipelineOrchestrator:
         from .news_market_context import load_for_simulation as load_news_for_simulation
         _agent_kwargs["news_market_context"] = load_news_for_simulation(sim_id)
         _agent_kwargs["report_policy"] = state.options.get("safety_policy_v1")
+        _agent_kwargs["aggregation_policy"] = state.options.get("aggregation_policy_v1")
         _agent_kwargs.update(self._report_scenario_context(state))
         _consumed = load_research_dossier_for_simulation(sim_id)
         _agent_kwargs.update(_consumed.get("report_artifacts") or {})
@@ -10527,6 +10692,23 @@ class PipelineOrchestrator:
         states missing one endpoint degrade to a zero-duration bookkeeping
         interval rather than an invented multi-hour duration.
         """
+        from .target_pipeline import is_target, record_stage
+        anchor_research = stage == STAGE_RESEARCH and "world_anchor" in state.options
+        if anchor_research:
+            from .world_anchor import ANCHOR_ARTIFACTS, complete_research_anchor
+            complete_research_anchor(state)
+            manifest = PipelineManager.load_artifact_manifest(state.pipeline_id)
+            root = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
+            for name, relative in ANCHOR_ARTIFACTS:
+                path = os.path.join(root, relative)
+                entry = _manifest_entry_for(name, path, stage)
+                if entry is None or not entry.get("sha256") or os.path.islink(path):
+                    raise ValueError("Required World Anchor artifact is missing or indirect")
+                manifest[name] = entry
+                state.artifacts[name] = path
+            PipelineManager.write_artifact_manifest(state.pipeline_id, manifest)
+        if is_target(state):
+            record_stage(state, stage)
         strict_world = self._simulation_engine(state) == "world-v1" and stage in {STAGE_PREPARE, STAGE_RUN}
         if strict_world:
             SimulationManager().validate_prepared_simulation_config(state.simulation_id)
@@ -10554,7 +10736,8 @@ class PipelineOrchestrator:
             try:
                 self._record_stage_artifacts(state, stage)  # T6.3
             except Exception:
-                pass
+                if anchor_research:
+                    raise
         PipelineManager.save(state)
         # W9-3：阶段转换必落一版遥测账（重启只丢「上一次阶段边界之后」的增量）。
         self._flush_run_telemetry(state)
@@ -10975,6 +11158,9 @@ class PipelineOrchestrator:
         运行中临时产物发现（_discover_partial_artifacts）三处共用，避免三套各写一份文件名清单
         造成漂移。仅返回候选路径，不检查存在性（调用方按需过滤）。
         """
+        from .target_pipeline import is_target, stage_specs
+        if is_target(state):
+            return stage_specs(state, stage)
         engine = PipelineOrchestrator._simulation_engine(state)
         if engine == "world-v1" and stage in {STAGE_PREPARE, STAGE_RUN}:
             if not state.simulation_id:
@@ -10999,6 +11185,10 @@ class PipelineOrchestrator:
                           os.path.join(hd, "prediction_market_candidates.jsonl")))
             specs.append(("research_budget", os.path.join(hd, "research_budget.json")))
             specs.extend(PipelineOrchestrator._viz_artifact_specs(hd))
+            if "world_anchor" in state.options:
+                from .world_anchor import ANCHOR_ARTIFACTS, enabled
+                enabled(state.options)
+                specs.extend((name, os.path.join(hd, path)) for name, path in ANCHOR_ARTIFACTS)
         elif stage == STAGE_ONTOLOGY:
             specs.append(("ontology", os.path.join(hd, "ontology.json")))
         elif stage == STAGE_GRAPH:
@@ -11235,6 +11425,10 @@ class PipelineOrchestrator:
         供后续 resume 复用前做完整性校验（_validate_reuse）。清单写失败仅退化为「无清单」，
         不影响 T6.3 的深链登记。
         """
+        from .target_pipeline import is_target, record_stage
+        if is_target(state):
+            record_stage(state, stage)
+            return
         if self._simulation_engine(state) == "world-v1" and stage in {STAGE_PREPARE, STAGE_RUN}:
             manifest = PipelineManager.load_artifact_manifest(state.pipeline_id)
             registered = any(name in manifest or name in state.artifacts
@@ -11359,6 +11553,9 @@ class PipelineOrchestrator:
           - sha256 当时未能计算（None）→ 仅比字节数 + schema（无哈希可比时不因此误判）。
         仅在 Config.PIPELINE_VALIDATE_ARTIFACTS 开启时被调用（见各复用分支）。
         """
+        from .target_pipeline import is_target, validate_stage
+        if is_target(state):
+            return validate_stage(state, stage)
         if self._simulation_engine(state) == "world-v1" and stage in {STAGE_PREPARE, STAGE_RUN}:
             SimulationManager().validate_prepared_simulation_config(state.simulation_id)
             if stage == STAGE_RUN:
@@ -13592,6 +13789,25 @@ class PipelineOrchestrator:
 
     @classmethod
     def _run(cls, state: PipelineState) -> None:
+        from . import run_spending as spending
+        try:
+            with spending.pipeline_scope(state):
+                cls._run_impl(state)
+                spending.finish_pipeline(state)
+                if spending.state_binding(state) is not None:
+                    PipelineManager.save(state)
+        except Exception as error:
+            if not spending.api().is_spending_stop(error):
+                raise
+            spending.record_stop(state, error)
+            PipelineManager.save(state)
+            if state.task_id:
+                TaskManager().fail_task(state.task_id, state.error)
+            cls._threads.pop(state.pipeline_id, None)
+            cls._cancel_events.pop(state.pipeline_id, None)
+
+    @classmethod
+    def _run_impl(cls, state: PipelineState) -> None:
         self = cls()
         task_manager = TaskManager()
         # EXECPLAN2 I-5-0/I-5-2: 把本次管线所有 LLM 调用归属到该 pipeline_id（contextvars）。
@@ -13612,6 +13828,10 @@ class PipelineOrchestrator:
         try:
             self._simulation_engine(state)
             self._isolate_fork_handoff(state)
+            from .target_pipeline import is_target, run_target_pipeline
+            if is_target(state):
+                run_target_pipeline(self, state)
+                return
             # ---- Stage 0: RESEARCH ----
             upd = self._make_stage_updater(state, STAGE_RESEARCH)
             handoff_dir = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
@@ -14483,6 +14703,18 @@ class PipelineOrchestrator:
                 # ---- Stage 3: PREPARE ----
                 upd = self._make_stage_updater(state, STAGE_PREPARE)
                 sim_manager = SimulationManager()
+                from .world_anchor import require_completed, validate_anchor_context
+                anchor_context = require_completed(state)
+                anchor_case = None
+                if anchor_context is not None:
+                    validate_anchor_context(anchor_context, engine="oasis-legacy")
+                    from .official_data import bridge_module as anchor_bridge
+                    case_path = os.path.join(handoff_dir, "forecast_case.json")
+                    if os.path.isfile(case_path):
+                        anchor_case = anchor_bridge("forecast_case").read_case(case_path)
+                        anchor_bridge("world_anchor_case").validate_anchored_case(anchor_case,
+                            pack=anchor_context.pack, requirements=anchor_context.requirements,
+                            index=anchor_context.index, policy=anchor_context.policy)
                 prepare_stage_done = state.stages.get(STAGE_PREPARE) and state.stages[STAGE_PREPARE].status == "completed"
                 sim_state = sim_manager.get_simulation(state.simulation_id) if state.simulation_id else None
                 # I-4-3: 复用前校验 PREPARE 产物（simulation_config.json / personas）未被半写/篡改；
@@ -14575,6 +14807,7 @@ class PipelineOrchestrator:
                     # 粒度、绝不截断）；默认上限已由生成器自身读取，不在此注入。
                     _prep_mr = state.options.get("max_rounds") or (
                         None if _calendar_mode() else (Config.OASIS_DEFAULT_MAX_ROUNDS or None))
+                    preparation_ontology = load_preparation_ontology(state.pipeline_id, state.handoff_dir)
                     sim_manager.prepare_simulation(
                         simulation_id=sim_state.simulation_id,
                         simulation_requirement=state.prompt,
@@ -14585,6 +14818,9 @@ class PipelineOrchestrator:
                         graph_priors=_graph_priors,  # P3-7: 中心度先验（融入 salience 排序）
                         max_rounds=int(_prep_mr) if _prep_mr else None,
                         research_language=state.options.get("research_language"),  # PREP-4
+                        **({"ontology": preparation_ontology} if preparation_ontology is not None else {}),
+                        **({"anchor_context": anchor_context} if anchor_context is not None else {}),
+                        **({"forecast_case": anchor_case} if anchor_case is not None else {}),
                     )
                     _prepare_completion_message = "环境就绪"
 
@@ -14654,6 +14890,10 @@ class PipelineOrchestrator:
                             logger.info("[%s] PREPARE 兜底注入 forecast_inputs：%d 情景",
                                         state.pipeline_id, len(_fi_prep.get("scenarios") or []))
                         _seed = _ws_seed(actors)
+                        from .worldstate import build_world_state_seed
+                        _seed = build_world_state_seed(
+                            _seed, share_prior=getattr(Config, "SIM_SHARE_PRIOR", "uniform"),
+                            share_source=getattr(Config, "SIM_SHARE_SOURCE", "auto"))
                         if not _seed.get("scenarios"):
                             # 响亮信号：即便兜底解析后仍无情景分布，决策通道不会点火。
                             logger.warning(
@@ -15018,6 +15258,7 @@ class PipelineOrchestrator:
                     "actors": actors,
                     "sources": research.get("sources"),
                     "research_report": report_md,
+                    "aggregation_policy": state.options.get("aggregation_policy_v1"),
                     "scenario_label": _scenario_context["scenario_label"],
                     "base_simulation_id": _scenario_context["base_simulation_id"],
                 }
@@ -15116,8 +15357,12 @@ class PipelineOrchestrator:
             self._halt_for_provider_outage(state, task_manager, e)
         except Exception as e:  # noqa: BLE001
             logger.error(f"[{state.pipeline_id}] 管线失败: {e}", exc_info=True)
-            state.status = "failed"
-            state.error = str(e)
+            from . import run_spending as spending
+            if spending.api().is_spending_stop(e):
+                spending.record_stop(state, e)
+            else:
+                state.status = "failed"
+                state.error = str(e)
             if state.current_stage:
                 self._fail_stage(state, state.current_stage, str(e))
             PipelineManager.save(state)

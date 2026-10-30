@@ -1,0 +1,198 @@
+{
+  "independent-core-summary.json": {
+    "sha256": "44534a9434e11e258455db6e4ec7b7e33cdbcba3f9955659cb5853800a7b3a8c",
+    "original_sha256": "44534a9434e11e258455db6e4ec7b7e33cdbcba3f9955659cb5853800a7b3a8c",
+    "original_path": "/private/tmp/review-core-final-20261028-u4M5pt/final-summary.json",
+    "bytes": 1012
+  },
+  "independent-core-source-hashes.json": {
+    "sha256": "afc740def0967d66a0c8ebf6b4faf01c3516f9b8d1a65ab8d0f20eab583edeb9",
+    "original_sha256": "afc740def0967d66a0c8ebf6b4faf01c3516f9b8d1a65ab8d0f20eab583edeb9",
+    "original_path": "/private/tmp/review-core-final-20261028-u4M5pt/final-source-hashes.json",
+    "bytes": 17300
+  },
+  "library-verification-summary.json": {
+    "sha256": "c0d583385f11d33acd3eee0c2c31c81fb37d7f8691e0fd9f48ae107f4a51e8d0",
+    "original_sha256": "c0d583385f11d33acd3eee0c2c31c81fb37d7f8691e0fd9f48ae107f4a51e8d0",
+    "original_path": "/private/tmp/drf-fbl1-repair-20261028/verification-summary.json",
+    "bytes": 4563
+  },
+  "frontend-summary.json": {
+    "sha256": "ca1d342f3c96fd881f80b1822fa8b49807cc5a29c7dac54e719119cf9d70f932",
+    "original_sha256": "ca1d342f3c96fd881f80b1822fa8b49807cc5a29c7dac54e719119cf9d70f932",
+    "original_path": "/private/tmp/drf-target-ui-20261028-final/completed.json",
+    "bytes": 278
+  },
+  "frontend-source-hashes.json": {
+    "sha256": "6f999ee79954d6fc5eb37e3cd8787a4a2d5b29bb7108d572e925dc7a4fd40575",
+    "original_sha256": "6f999ee79954d6fc5eb37e3cd8787a4a2d5b29bb7108d572e925dc7a4fd40575",
+    "original_path": "/private/tmp/drf-target-ui-20261028-final/source-after.json",
+    "bytes": 8646
+  },
+  "frontend-tests.log.gz": {
+    "sha256": "f54929a3bdfbc00ce6120d6265c0e3c1bf11105b8fe5c4279ca8d0e8ba0e5be4",
+    "original_sha256": "dadfb501a800149dc77199705bbad5ef56b9eef383cbb29086a1f3d45145f164",
+    "original_path": "/private/tmp/drf-target-ui-20261028-final/unit.log",
+    "bytes": 14461
+  },
+  "environment-drift.json": {
+    "sha256": "27a58933e7c60a9e1da7e9b856c9085ddd9d8daaf55e636f89724579021cbbf7",
+    "original_sha256": "27a58933e7c60a9e1da7e9b856c9085ddd9d8daaf55e636f89724579021cbbf7",
+    "original_path": "/private/tmp/drf-target-env-drift-final.json",
+    "bytes": 6302
+  },
+  "independent-core-probes-receipt.json": {
+    "sha256": "db2c6d4056863f91603227450b6716b2f2bc9cc0cf8e689ea19938f1b3f48713",
+    "original_sha256": "db2c6d4056863f91603227450b6716b2f2bc9cc0cf8e689ea19938f1b3f48713",
+    "original_path": "/private/tmp/review-core-final-20261028-u4M5pt/final-probes/completed.json",
+    "bytes": 29886
+  },
+  "independent-core-probes-junit.xml.gz": {
+    "sha256": "d1c6021625de87dc1bad5c9c163caf5d738159ed3473d5a35f33e967dac535e7",
+    "original_sha256": "58c65bf44ce8694f12a38bf784410f65fc8b8869a2cfd2ea645ce0ca29bd3493",
+    "original_path": "/private/tmp/review-core-final-20261028-u4M5pt/final-probes/junit.xml",
+    "bytes": 431
+  },
+  "independent-core-suite-receipt.json": {
+    "sha256": "6f80c88bc40c3b7d897b2f42ae93c058f6aa0d8779ae2e24d88e9d9def2d6f1d",
+    "original_sha256": "6f80c88bc40c3b7d897b2f42ae93c058f6aa0d8779ae2e24d88e9d9def2d6f1d",
+    "original_path": "/private/tmp/review-core-final-20261028-u4M5pt/final-core-suite/completed.json",
+    "bytes": 3418
+  },
+  "independent-core-suite-junit.xml.gz": {
+    "sha256": "02013c65f4481bb696e11ff43a84f90ca7092a57d3916467c8883edadd040d97",
+    "original_sha256": "6114004ebf6120583dd00a2dfb64a1f467235583cc89a0486a8e73411e14dff7",
+    "original_path": "/private/tmp/review-core-final-20261028-u4M5pt/final-core-suite/junit.xml",
+    "bytes": 4791
+  },
+  "library-composed-receipt.json": {
+    "sha256": "ec9e7a6e2b4af49d4f25698696a5d7d01bc7b943423aee4923e2f8145c4f752f",
+    "original_sha256": "ec9e7a6e2b4af49d4f25698696a5d7d01bc7b943423aee4923e2f8145c4f752f",
+    "original_path": "/private/tmp/drf-fbl1-repair-20261028-composed/completed.json",
+    "bytes": 4096
+  },
+  "library-composed-junit.xml.gz": {
+    "sha256": "1a20939664f6e43f94feb26a4facc08d02a9aee4ccdc5a5bf780fdbc10da1e0c",
+    "original_sha256": "fa5fac9931f850f21c78b176f0d811f4441f127c79222ac7d9663fe9a6191abf",
+    "original_path": "/private/tmp/drf-fbl1-repair-20261028-composed/junit.xml",
+    "bytes": 5180
+  },
+  "broad-initial-receipt.json": {
+    "sha256": "25ea07e557d61ab9ec2a72c4127ab92b560cab0f61382f562e682889bef67d96",
+    "original_sha256": "25ea07e557d61ab9ec2a72c4127ab92b560cab0f61382f562e682889bef67d96",
+    "original_path": "/private/tmp/drf-target-broad-20261028-04/completed.json",
+    "bytes": 34922
+  },
+  "broad-initial-junit.xml.gz": {
+    "sha256": "141b0f0aed298dab5444d4b751b4a3484d8ef7f651b603d176ac5099a998d395",
+    "original_sha256": "0e85edc99ec4f664b5048266e22cad7d0fb243bbcc2c9984bff505ade055a6fd",
+    "original_path": "/private/tmp/drf-target-broad-20261028-04/junit.xml",
+    "bytes": 108140
+  },
+  "frontend-release-summary.json": {
+    "sha256": "e8468c16ef87c0c8ee7d9a815e825a931c9e805a85177b5d7215c29398340153",
+    "original_sha256": "e8468c16ef87c0c8ee7d9a815e825a931c9e805a85177b5d7215c29398340153",
+    "original_path": "/private/tmp/drf-target-ui-20261028-release/completed.json",
+    "bytes": 300
+  },
+  "frontend-release-source-hashes.json": {
+    "sha256": "5181c4e81fafa3b7238d4e7d38bb7d84a57fb9294c80c44a5e245495201814a9",
+    "original_sha256": "5181c4e81fafa3b7238d4e7d38bb7d84a57fb9294c80c44a5e245495201814a9",
+    "original_path": "/private/tmp/drf-target-ui-20261028-release/source-after.json",
+    "bytes": 11116
+  },
+  "frontend-release-tests.log.gz": {
+    "sha256": "74c0ca8c9838002545664b720887a2fb6de605a268b4632cb884d765e05afc41",
+    "original_sha256": "3fede350453bb896cae77e4fa1aaa4ab91cf50ad70ac888fb7e961a406499ac3",
+    "original_path": "/private/tmp/drf-target-ui-20261028-release/unit.log",
+    "bytes": 14547
+  },
+  "reader-fixture-semantic-diff.json": {
+    "sha256": "cb0c9866ba6c05e888b59373b3322d46e260ee4aa17d020d8ba0a9dd41e79a3e",
+    "original_sha256": "cb0c9866ba6c05e888b59373b3322d46e260ee4aa17d020d8ba0a9dd41e79a3e",
+    "original_path": "/private/tmp/drf-target-reader-signals-api-export-20261028T042500Z/fixture-semantic-diff.json",
+    "bytes": 24222
+  },
+  "backend-final-receipt.json": {
+    "sha256": "125592d3e3e55bb29beb02cb4c7211b8aa82828655fbb820e54176e4f84e54cf",
+    "original_sha256": "125592d3e3e55bb29beb02cb4c7211b8aa82828655fbb820e54176e4f84e54cf",
+    "original_path": "/private/tmp/drf-target-broad-20261028-final-05/completed.json",
+    "bytes": 35301
+  },
+  "backend-final-junit.xml.gz": {
+    "sha256": "890e113635df2d2e7a3fcf9e3f06390b58d38a26cdb2c8c3a1dee68506cdb290",
+    "original_sha256": "9e47dcedbb2850bd00f76e4b32cc1cef9f9839a407073f4a172959b58fa094c6",
+    "original_path": "/private/tmp/drf-target-broad-20261028-final-05/junit.xml",
+    "bytes": 102953
+  },
+  "backend-final-output.log.gz": {
+    "sha256": "f4da3545b6c426b1639e4d82accfc36dae217ee4526ce5fe8a8cfaef8cb179d6",
+    "original_sha256": "947e8bd72ef0410c2a68fcac0faad9f4940899ea1ee472815d8b3d1c19e19fd0",
+    "original_path": "/private/tmp/drf-target-broad-20261028-final-05-output.log",
+    "bytes": 355
+  },
+  "backend-final-source-before.json": {
+    "sha256": "f19e18f72eda2bad786cd7cfafb78b4add9192f431eaad1674e7b38d3fb99286",
+    "original_sha256": "f19e18f72eda2bad786cd7cfafb78b4add9192f431eaad1674e7b38d3fb99286",
+    "original_path": "/private/tmp/drf-target-broad-20261028-final-05-source-before.json",
+    "bytes": 61825
+  },
+  "backend-final-source-after.json": {
+    "sha256": "f19e18f72eda2bad786cd7cfafb78b4add9192f431eaad1674e7b38d3fb99286",
+    "original_sha256": "f19e18f72eda2bad786cd7cfafb78b4add9192f431eaad1674e7b38d3fb99286",
+    "original_path": "/private/tmp/drf-target-broad-20261028-final-05-source-after.json",
+    "bytes": 61825
+  },
+  "backend-final-command.json": {
+    "sha256": "2a77c43c6e7ed91c71264bd7fe4f9aa92aa991e5e160c6c5f55826fdd3e5817f",
+    "original_sha256": "2a77c43c6e7ed91c71264bd7fe4f9aa92aa991e5e160c6c5f55826fdd3e5817f",
+    "original_path": "/private/tmp/drf-target-broad-20261028-final-05-command.json",
+    "bytes": 7681
+  },
+  "backend-test-modules.txt": {
+    "sha256": "16ce8e6243fcc1ca7ef84898ab66bd2feea7a8651dd4e9f881759953c6fc88ce",
+    "original_sha256": "16ce8e6243fcc1ca7ef84898ab66bd2feea7a8651dd4e9f881759953c6fc88ce",
+    "original_path": "/private/tmp/drf-target-broad-test-selection.txt",
+    "bytes": 6553
+  },
+  "backend-final-child-receipts.json.gz": {
+    "sha256": "81f8d0bd563acdf155a1cfb8a95950ccff951990e5b9eb1354a2f426f0d20dd9",
+    "original_sha256": "f881cd6066e9ef319710f3561eb17525474a2ffed8c6ad392616dcaf56f48e11",
+    "bytes": 1447
+  },
+  "frontend-build.log.gz": {
+    "sha256": "9026c8762e611a2b3828e596577aa5e6c5848f3642055728ee448d015a80bd7c",
+    "original_sha256": "3dd29a904ec5ca1e9f6996c4739778ca70711bdf071a4ac6d72451040421d754",
+    "original_path": "/private/tmp/drf-target-ui-20261028-final/build.log",
+    "bytes": 10488
+  },
+  "frontend-release-build.log.gz": {
+    "sha256": "e8d49196b7c11b4e154b48e2acaf0f5c4f880d76947b8f13289d591e601ac3c9",
+    "original_sha256": "8f948dfe50ab33db71a88b6137793a707af3331ee3221dac6f48f8d3b26e63eb",
+    "original_path": "/private/tmp/drf-target-ui-20261028-release/build.log",
+    "bytes": 10494
+  },
+  "config-comment-proof.json": {
+    "sha256": "bd720904a0aa1689305f453e716f5f9f45b4ea97ca7e32992abebfe80e86af38",
+    "original_sha256": "bd720904a0aa1689305f453e716f5f9f45b4ea97ca7e32992abebfe80e86af38",
+    "original_path": "/private/tmp/drf-target-config-comment-proof.json",
+    "bytes": 333
+  },
+  "config-comment-recheck-receipt.json": {
+    "sha256": "e6aba90bb6fce56108b94ee7b87f6219d27000c3deba522a6c2458ba087ce750",
+    "original_sha256": "e6aba90bb6fce56108b94ee7b87f6219d27000c3deba522a6c2458ba087ce750",
+    "original_path": "/private/tmp/drf-target-config-comment-20261028-final/completed.json",
+    "bytes": 1722
+  },
+  "config-comment-recheck-junit.xml.gz": {
+    "sha256": "487786021d21f1e74ae9a66a84adc72905ea22a4bcc75cd1a569e17a934b39e7",
+    "original_sha256": "2b5346c8aed19d882cc5fa3d2b69096b2ae71042362695ea95c1e5ca20fd9be5",
+    "original_path": "/private/tmp/drf-target-config-comment-20261028-final/junit.xml",
+    "bytes": 1178
+  },
+  "delivery-source-hashes.json": {
+    "sha256": "3fba0d015ae4be6857aeae8d5020659fae1979205fd30cd7b0a39dc1b63f80b3",
+    "bytes": 61825,
+    "note": "537 delivery files; Config cadence comment has identical AST and a39-test affected recheck."
+  }
+}

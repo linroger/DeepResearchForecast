@@ -45,6 +45,7 @@ if _BACKEND_DIR not in sys.path:
 
 from app.config import Config  # noqa: E402
 from app.services import forecast_ledger as _ledger  # noqa: E402
+from app.services import forecast_feedback as _feedback  # noqa: E402
 from app.utils.logger import get_logger  # noqa: E402
 
 logger = get_logger("mirofish.resolution_monitor")
@@ -248,6 +249,14 @@ def binary_resolution_date(binary: Dict[str, Any]) -> Optional[str]:
     完整 ISO 日期；否则用 horizon_year 的年底（YYYY-12-31）作代理。都无 → None。"""
     if not isinstance(binary, dict):
         return None
+    contract = binary.get("resolution_contract") or {}
+    declared = contract.get("deadline") if isinstance(contract, dict) else None
+    declared = declared or binary.get("resolution_date")
+    if declared:
+        try:
+            return _feedback._instant(declared, date_end=True).date().isoformat()
+        except _feedback.ForecastFeedbackError:
+            return None
     for key in ("resolution_criteria", "resolution_source", "statement"):
         m = _ISO_DATE_RE.search(str(binary.get(key) or ""))
         if m:
@@ -334,7 +343,7 @@ def build_resolution_records(anchored: List[Dict[str, Any]],
         if market_p is None:
             market_p = _coerce_float(anchor.get("implied_yes_prob"))
         brier = round((model_p - y) ** 2, 4) if model_p is not None else None
-        records.append({
+        record = {
             "report_id": report_id,
             "forecast_id": b.get("id"),
             "market_id": mid,
@@ -344,7 +353,17 @@ def build_resolution_records(anchored: List[Dict[str, Any]],
             "market_p_at_research": market_p,
             "brier_contribution": brier,
             "resolved_at": resolved_at,
-        })
+        }
+        if anchor.get("resolution_equivalence") == "near":
+            if not _feedback.market_near_resolution_enabled():
+                continue
+            # Keep the full immutable identity and observed settlement flags.
+            # Validation, including recomputing the hash, belongs to the journal.
+            record.update(market_anchor=dict(anchor),
+                          forecast_contract_sha256=anchor.get("forecast_contract_sha256"),
+                          market_resolved=res.get("resolved"), market_closed=res.get("closed"),
+                          market_contract=res.get("market_contract"))
+        records.append(record)
     return records
 
 
@@ -819,9 +838,30 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
     if not resolutions and market_ids:
         # 未拿到任何终态（未启用/网络失败）：判定检查这一维退化。
         degraded = True
+    near_ids = [str(b["market_anchor"]["market_id"]) for b in anchored
+                if b["market_anchor"].get("resolution_equivalence") == "near"
+                and b["market_anchor"].get("market_contract_sha256")]
+    if near_ids and _feedback.market_near_resolution_enabled() and getattr(client, "enabled", True):
+        # fetch_resolutions intentionally strips settlement text. Obtain the
+        # actual Gamma source row through the same configured client's transport;
+        # never manufacture a proof by copying forecast/anchor text into it.
+        try:
+            from app.utils.prediction_markets import _parse_resolution
+            raw_rows = client._fetch_fresh_markets(near_ids)
+            for mid in near_ids:
+                raw = raw_rows.get(mid)
+                parsed = _parse_resolution(raw)
+                if parsed is not None and isinstance(raw, dict):
+                    parsed["market_contract"] = {"market_id": str(raw.get("id") or ""),
+                                                 "question": raw.get("question"),
+                                                 "description": raw.get("description"),
+                                                 "endDate": raw.get("endDate")}
+                    resolutions[mid] = parsed
+        except Exception as exc:  # optional proof missing => no near admission
+            logger.warning(f"Near-market settlement identity unavailable: {type(exc).__name__}")
+            degraded = True
     records = build_resolution_records(anchored, resolutions,
                                        report_id=report_id, resolved_at=as_of)
-    resolved_ids = {row["market_id"] for row in records}
 
     prior_data, prior_statuses, prior_ids = _recorded_official_outcomes(
         binaries, _ledger.read_data_resolutions(ledger_dir), report_id=report_id, as_of=as_of,
@@ -851,6 +891,10 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
             append_price_snapshot(report_folder,
                                   _price_snapshot(report_id, as_of, requoted))
         for rec in records:
+            if (rec.get("market_anchor") or {}).get("resolution_equivalence") == "near":
+                # New lane is journal-only. The legacy native writer drops the
+                # contract proof and must never masquerade as exact-market scores.
+                continue
             written = _ledger.append_market_resolution(
                 report_id=rec["report_id"], forecast_id=rec["forecast_id"],
                 market_id=rec["market_id"], resolved_outcome=rec.get("resolved_outcome"),
@@ -893,16 +937,20 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
     track_record = _ledger.production_track_record(d=ledger_dir)
 
     candidate_records = records + data_records
+    if retained is None:
+        # Journal-only candidates have no committed result for legacy/unregistered
+        # reports. Keep them in the candidate field and manual queue, never count
+        # or render them as resolved merely because the market itself settled.
+        records = [row for row in records if (row.get("market_anchor") or {}).get("resolution_equivalence") != "near"]
     if retained is not None:
         committed_outcomes = _ledger.read_published_resolutions(report_id, d=ledger_dir)
         records, data_records = [], []
         for outcome in committed_outcomes:
-            if outcome["kind"] not in ("market_binary", "official_data_binary"):
+            if outcome["kind"] not in ("market_binary", "market_binary_near", "official_data_binary"):
                 continue
             row = dict(outcome["evidence"], brier_contribution=outcome["score"]["brier"],
-                       model_p=outcome["score"]["probability"])
-            (records if outcome["kind"] == "market_binary" else data_records).append(row)
-        resolved_ids = {row["market_id"] for row in records}
+                       model_p=outcome["score"]["probability"], resolution_kind=outcome["kind"])
+            (data_records if outcome["kind"] == "official_data_binary" else records).append(row)
         admitted_data = {row["forecast_id"] for row in data_records}
         for status in data_statuses:
             if status["status"] == "resolved" and status["forecast_id"] not in admitted_data:
@@ -913,17 +961,21 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
     data_pending_ids = {row["forecast_id"] for row in data_statuses if row["status"] == "pending"}
     data_manual = {row["forecast_id"]: row for row in data_statuses if row["status"] == "manual"}
     degraded = degraded or bool(data_manual)
-    needs_manual = detect_needs_manual(binaries, resolved_ids, as_of_day)
+    # A market may anchor multiple different propositions. Only the admitted
+    # forecast identity suppresses manual review; market identity alone cannot.
+    settled_forecasts = ({row["forecast_id"] for row in committed_outcomes}
+                         if retained is not None else {row["forecast_id"] for row in records})
+    needs_manual = detect_needs_manual(binaries, set(), as_of_day)
     needs_manual = [row for row in needs_manual
-                    if row.get("forecast_id") not in data_resolved_ids | data_pending_ids]
+                    if row.get("forecast_id") not in data_resolved_ids | data_pending_ids | settled_forecasts]
+    if retained is not None:
+        settled = {row["forecast_id"] for row in committed_outcomes}
+        needs_manual = [row for row in needs_manual if row.get("forecast_id") not in settled]
     for row in needs_manual:
         if row.get("forecast_id") in data_manual:
             row["reason"] = data_manual[row["forecast_id"]]["reason"]
 
     # ── 汇总分数（账本读取；dry-run 也能读，只是不含本次未写入的新判定）──
-    calibration = _ledger.calibration_summary(ledger_dir)
-    market_brier = _ledger.market_brier_summary(ledger_dir)
-    data_brier = _ledger.data_brier_summary(ledger_dir) if data_statuses else {"n_resolved": 0, "mean_brier": None}
     if retained is not None:
         tracks = track_record["tracks"]
         calibration = {**tracks["scenario"], "calibration_error": None,
@@ -934,12 +986,39 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
         data_statuses.extend({"forecast_id": row["forecast_id"], "series": row["series"],
                               "status": "resolved", "reason": "Retained official outcome"}
                              for row in data_records if row["forecast_id"] not in data_status_ids)
+    else:
+        calibration = _ledger.calibration_summary(ledger_dir)
+        market_brier = _ledger.market_brier_summary(ledger_dir)
+        data_brier = _ledger.data_brier_summary(ledger_dir) if data_statuses else {"n_resolved": 0, "mean_brier": None}
 
     md = render_monitor_md(
         report_id=report_id, as_of=as_of_day, movers=movers,
-        resolution_records=records, needs_manual=needs_manual,
+        resolution_records=[row for row in records if row.get("resolution_kind") != "market_binary_near"],
+        needs_manual=needs_manual,
         calibration=calibration, market_brier=market_brier,
         anchored_count=len(anchored), degraded=degraded)
+    near_records = [row for row in records if row.get("resolution_kind") == "market_binary_near"]
+    if near_records:
+        lines = ["", "## Near-market outcomes (separate market_binary_near lane)", "",
+                 "These outcomes match the frozen and newly observed settlement terms exactly. "
+                 "They are excluded from the exact-market score above.", "",
+                 "| Forecast | Market | Outcome | Brier |", "|---|---|---|---|"]
+        for row in near_records:
+            lines.append("| " + " | ".join(_cell(row.get(key)) for key in (
+                "forecast_id", "market_id", "resolved_outcome", "brier_contribution")) + " |")
+        md += "\n".join(lines) + "\n"
+    if retained is not None:
+        manual_records = [row for row in committed_outcomes
+                          if row["kind"] in ("named_source_event", "unanchored_binary")]
+        if manual_records:
+            lines = ["", "## Manual adjudications", "",
+                     "| Forecast | Lane | Outcome | Brier | Source publication | Evidence |",
+                     "|---|---|---|---|---|---|"]
+            for row in manual_records:
+                lines.append("| " + " | ".join(_cell(value) for value in (
+                    row["forecast_id"], row["kind"], row["outcome"], row["score"]["brier"],
+                    row["evidence"]["published_at"], row["evidence"]["url"])) + " |")
+            md += "\n".join(lines) + "\n"
     if data_statuses:
         lines = ["", "## Official data outcomes", "",
                  "| Forecast | Series | Status | Evidence |", "|---|---|---|---|"]
@@ -985,6 +1064,12 @@ def run_monitor(report_id: str, *, forecast: Optional[Dict[str, Any]] = None,
         "monitor_report_path": report_path,
         "monitor_report_md": md,
     }
+    if retained is not None:
+        result["resolved_count"] = sum(row["forecast_id"] is not None for row in committed_outcomes)
+        result["market_near_brier"] = track_record["tracks"].get("market_binary_near", {
+            "n_forecasts": 0, "n_resolved": 0, "mean_brier": None})
+        result["manual_resolution_records"] = [row for row in committed_outcomes
+                                                if row["kind"] in ("named_source_event", "unanchored_binary")]
     if data_statuses:
         result.update(data_resolution_records=data_records,
                       data_resolution_status=data_statuses, data_brier=data_brier)

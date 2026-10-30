@@ -10,7 +10,7 @@ from :mod:`sim_provenance` or from this module's own bilingual label table.
 
 Input contract (design §3.1, tested by T15):
 
-* Only files inside the simulation directory are opened: ``world_state.json``,
+* Off mode opens only files inside the simulation directory: ``world_state.json``,
   ``world_state_history.jsonl``, ``world_digest.jsonl``, ``world_actions.jsonl``,
   ``decisions.jsonl``, ``world_state_trajectory.json``, ``world_paths.json``,
   ``run_summary.json``, ``simulation_config.json`` (its ``temporal_config``,
@@ -20,6 +20,10 @@ Input contract (design §3.1, tested by T15):
   containment, not through the world store).  The research dossier,
   ``sources.json``, the forecast spine, the market pack and ``forecast.json`` are
   never read.
+* Enabled World Anchor authenticates its externally pinned generation using the
+  host runtime loader, then emits only the public diagnostic projection. Raw
+  evidence/metadata never enters record synthesis. Saved runtime provenance is
+  privileged, not an audience grant.
 * From ``world_actions.jsonl`` only :data:`simulation_record_contract.ACTION_PUBLIC_FIELDS`
   are kept; ``private_rationale`` is dropped at load time by allowlist.
 * Scenario shares appear only under ``overall``; per-period sections carry none
@@ -51,7 +55,6 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ..config import Config
-from . import sim_provenance as _sp
 from . import simulation_record_contract as rc
 
 logger = logging.getLogger(__name__)
@@ -411,12 +414,51 @@ class _Artifacts:
         self.world_seed = config.get("world_state_seed") if isinstance(config.get("world_state_seed"), dict) else {}
         self.output_language = _text(config.get("output_language"), 40)
         self.config_as_of = _text(config.get("as_of_date"), 20)
+        self.anchor_diagnostics = rc.load_anchor_diagnostics(self.dir, config=config, world_state=self.world_state)
         self.history = self._jsonl("world_state_history.jsonl")
         self.actions = [self._public_action(r) for r in self._jsonl("world_actions.jsonl")]
         self.digest = self._jsonl("world_digest.jsonl")
         self.decisions = self._jsonl("decisions.jsonl")
         self.world_result: Dict[str, Any] = {}
         self.world_spec: Dict[str, Any] = {}
+        if self.anchor_diagnostics is not None and "engine" not in self.anchor_diagnostics:
+            self._public_anchor_artifacts(config)
+
+    def _public_anchor_artifacts(self, config):
+        """Keep privileged runtime metadata out of legacy record/prompt channels.
+
+        Sealed initial cast names and explicitly public numeric nodes are the
+        authority here. Unclassified runtime prose, private plans, free-form
+        causes and global gap counts cannot acquire public status by being saved.
+        """
+        from .world_model import slugify
+        allowed = {slugify(r["node_id"]): r for r in self.anchor_diagnostics["variables"]}
+        seed = config["world_model"]
+        variables = []
+        for variable in self.world.get("variables", []):
+            row = allowed.get(variable.get("id"))
+            if row is None:
+                continue
+            history = [{"round": h.get("round"), "value": h.get("value"), "source": "mechanism",
+                        "cause": "Public structural propagation"}
+                       for h in variable.get("history", []) if type(h.get("value")) in (int, float)
+                       and type(h.get("round")) is int
+                       and (row["initial_round"] is None or h.get("round", -1) >= row["initial_round"])]
+            variables.append({"id": variable["id"], "name": row["node_id"], "value": row["final"],
+                              "unit": row["unit"], "kind": "numeric", "history": history})
+        self.world.update(variables=variables, actors=[
+            {k: actor[k] for k in ("agent_id", "name", "agency_class", "aliases") if k in actor}
+            for actor in seed.get("actors", [])], events=[], interactions=[], shocks=[], seed_gaps=[])
+        for row in self.history:
+            diff = row.get("diff") or {}
+            clean = []
+            for change in diff.get("variables_changed", []):
+                variable = allowed.get(change.get("id"))
+                if variable and all(type(change.get(k)) in (int, float) for k in ("from", "to")):
+                    clean.append({"id": change["id"], "name": variable["node_id"],
+                                  "from": change["from"], "to": change["to"], "unit": variable["unit"]})
+            row.update(narrative="", diff={"variables_changed": clean}, deterministic={},
+                       arbiter={"status": (row.get("arbiter") or {}).get("status")})
 
     # containment: a constant basename joined under the realpath'd directory; symlinks refused
     def path(self, name: str) -> Optional[str]:
@@ -488,6 +530,17 @@ class _Artifacts:
         if raw and raw.get("view") != "public":
             self.errors.append("world_result.json is not a public projection")
         self.world_spec = self._json("world_spec.json")
+        if self.anchor_diagnostics is not None:
+            # Native visibility labels do not authorize privileged anchor bases.
+            # Retain only source-admitted scalar fields and committed timestamps.
+            allowed = {r["native_field"]["section"]: set() for r in self.anchor_diagnostics["variables"]}
+            for row in self.anchor_diagnostics["variables"]:
+                allowed[row["native_field"]["section"]].add(row["native_field"]["id"])
+            for snapshot in [self.world_result["world"], *self.world_result["trajectory"]]:
+                for bucket in ("metrics", "rules", "interactions", "commitments"):
+                    snapshot[bucket] = {key: {k: value[k] for k in ("value", "unit", "visibility") if k in value}
+                                        for key, value in snapshot.get(bucket, {}).items() if key in allowed.get(bucket, set())}
+            self.world_result["events"] = []
 
     @property
     def world(self) -> Dict[str, Any]:
@@ -879,7 +932,10 @@ def _paths_block(art: _Artifacts, scenarios: Sequence[str]) -> Dict[str, Any]:
             if isinstance(row, dict):
                 per_path.append({"path": row.get("path"), "leader": row.get("leader"),
                                  "arbiter_failed_rounds": row.get("arbiter_failed_rounds"),
-                                 "shocks_fired": [str(s) for s in _list(row.get("shocks_fired"))]})
+                                 # Path producers retain privileged hazard IDs.
+                                 # Engine admission is not public permission.
+                                 "shocks_fired": ([] if art.anchor_diagnostics is not None else
+                                                  [str(s) for s in _list(row.get("shocks_fired"))])})
         return {"k": _as_int(summary_paths.get("k")) or 1, "per_scenario": per_scenario,
                 "leaders": dict(summary_paths.get("leaders") or {}), "per_path": per_path}
     paths = art.world_paths.get("paths") if isinstance(art.world_paths.get("paths"), list) else []
@@ -895,7 +951,7 @@ def _paths_block(art: _Artifacts, scenarios: Sequence[str]) -> Dict[str, Any]:
                 continue
             world = p.get("world") if isinstance(p.get("world"), dict) else {}
             fired = [_text(s.get("id"), 80) for s in _list(world.get("shocks"))
-                     if isinstance(s, dict) and s.get("fired_rounds")]
+                     if art.anchor_diagnostics is None and isinstance(s, dict) and s.get("fired_rounds")]
             per_path.append({"path": p.get("path"), "arbiter_failed_rounds": p.get("arbiter_failed_rounds"),
                              "shocks_fired": fired})
         return {"k": _as_int(art.world_paths.get("k")) or len(per_path_shares) or 1,
@@ -911,13 +967,63 @@ def _shares_block(art: _Artifacts, scenarios: Sequence[str]) -> Dict[str, Any]:
     converged = art.trajectory.get("converged_at")
     if converged is None and isinstance(outcome, dict):
         converged = outcome.get("converged_at")
-    return {
+    block = {
         "epistemic_status": rc.EPISTEMIC_STATUS,
         "final": {str(k): v for k, v in final.items() if _is_number(v)},
         "leader": _text(outcome.get("leader"), 200) or None,
         "converged_at": _as_int(converged),
         "paths": _paths_block(art, scenarios),
     }
+    for key in ("share_prior", "share_source", "share_source_reason", "share_update_reason"):
+        value = outcome.get(key, art.world_seed.get(key))
+        if isinstance(value, str) and value:
+            block[key] = _text(value, 160)
+    return block
+
+
+def share_policy_note(shares: Dict[str, Any], lang: str = "en") -> str:
+    """Reader-facing policy note, shared with the deterministic report bridge.
+
+    Unconfigured historical records return no new text. Probabilities and raw
+    actor messages are never read here; only bounded reducer provenance is used.
+    """
+    zh = str(lang).lower().startswith(("zh", "chinese", "mandarin"))
+    parts = []
+    prior = shares.get("share_prior")
+    if prior == "uniform":
+        parts.append("份额从均匀分布开始；未使用研究先验。" if zh else
+                     "Shares started uniform; the research prior was not used.")
+    elif prior == "research":
+        parts.append("份额使用研究先验初始化（回滚模式）。" if zh else
+                     "Shares started from the research prior (rollback mode).")
+    source = shares.get("share_source")
+    descriptions = {
+        "votes": ("Source: legacy actor votes (rollback mode).", "来源：旧版行动者投票（回滚模式）。"),
+        "power_votes": ("Source: declared outcome power weighted by resolved actions.", "来源：已声明的结果影响力，按行动裁决加权。"),
+        "predicates": ("Source: typed target outcomes classified by scenario predicates.", "来源：按情景条件分类的类型化目标结果。"),
+    }
+    if source in descriptions:
+        parts.append(descriptions[source][int(zh)])
+    if source == "power_votes" and shares.get("share_source_reason") in {
+            "missing_forecast_case", "missing_target_identity", "invalid_target_predicates", "private_target_unavailable"}:
+        parts.append("没有可用的已验证目标条件，因此采用影响力加权。" if zh else
+                     "Declared power was selected because validated target predicates were unavailable.")
+    reasons = {
+        "unknown_power": ("Shares froze because outcome power was unknown.", "结果影响力未知，份额保持不变。"),
+        "unknown_resolution": ("Shares froze because action resolution was unavailable.", "缺少行动裁决，份额保持不变。"),
+        "zero_effect": ("Shares froze because resolved actions had zero effective weight.", "裁决后的行动有效权重为零，份额保持不变。"),
+        "target_unavailable": ("Shares froze because the target outcome was unavailable.", "目标结果不可用，份额保持不变。"),
+        "target_outside_scenario_partition": ("Shares froze because target outcomes did not fit the scenario partition.", "目标结果不符合情景划分，份额保持不变。"),
+        "invalid_target_predicates": ("Shares froze because target predicates were invalid or absent.", "目标情景条件无效或缺失，份额保持不变。"),
+        "invalid_round_status": ("Shares froze because this round lacked a valid action signal.", "本轮缺少有效行动信号，份额保持不变。"),
+        "no_eligible_decisions": ("Shares froze because no eligible decisions were available.", "没有合格的决策，份额保持不变。"),
+        "invalid_decision": ("Shares froze because decision values were invalid.", "决策数值无效，份额保持不变。"),
+        "invalid_total_power": ("Shares froze because total effective power was not finite.", "有效影响力总量不是有限值，份额保持不变。"),
+    }
+    reason = shares.get("share_update_reason")
+    if reason in reasons:
+        parts.append(reasons[reason][int(zh)])
+    return " ".join(parts)
 
 
 def _final_variables(art: _Artifacts) -> List[Dict[str, Any]]:
@@ -1412,6 +1518,10 @@ def build_record(sim_dir: str, *, language: Optional[str] = None, engine_hint: O
             {"actor": _text(a.get("agent_name"), 160), "agency_class": "", "aliases": [], "red_lines": [],
              "documented_plans": []} for a in _list(art.run_summary.get("top_agents")) if isinstance(a, dict)]
 
+    if art.anchor_diagnostics is not None:
+        # setup is already covered by the gate's exact artifact-fidelity check.
+        setup["world_anchor"] = art.anchor_diagnostics
+
     committed = len(periods)
     summary_committed = _as_int(art.world_summary.get("rounds_committed"))
     notes: List[str] = []
@@ -1547,6 +1657,8 @@ def render_markdown(record: Dict[str, Any], lang: Optional[str] = None) -> str:
     out.append("")
     # setup
     setup = record.get("setup") or {}
+    if "world_anchor" in setup:
+        out.extend([rc.anchor_diagnostic_markdown(setup["world_anchor"], language=lang), ""])
     out.append(f"## {L['setup']}")
     out.append("")
     if setup.get("cast"):
@@ -1711,6 +1823,9 @@ def render_markdown(record: Dict[str, Any], lang: Optional[str] = None) -> str:
     out.append(f"### {L['shares']}")
     if shares.get("final"):
         out.append(f"_{L['shares_caption']}_")
+        policy_note = share_policy_note(shares, lang)
+        if policy_note:
+            out.extend(["", policy_note])
         out.append("")
         paths = shares.get("paths") or {}
         per_scenario = paths.get("per_scenario") or {}

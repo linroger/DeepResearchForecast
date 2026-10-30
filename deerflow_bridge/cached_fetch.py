@@ -43,6 +43,11 @@ from html.parser import HTMLParser
 from typing import Any, Awaitable, Callable, Optional
 from urllib.parse import urljoin, urlparse
 
+if __package__:
+    from . import run_spending as _spending
+else:
+    import run_spending as _spending
+
 logger = logging.getLogger(__name__)
 
 try:  # copied beside this module by the bridge sync guard; absence is fail-open
@@ -52,6 +57,7 @@ except ImportError:  # pragma: no cover - exercised only by incomplete deploymen
 
 # 死抓取阈值：正文短于此长度（或以 "Error:" 起头）视作失败/空壳，不落盘。
 DEAD_FETCH_MIN_CHARS = 200
+_RETAIN_SOURCE_METADATA: contextvars.ContextVar[bool] = contextvars.ContextVar("fetch_source_metadata", default=False)
 # env 缺省
 DEFAULT_TTL_HOURS = 72.0
 DEFAULT_MAX_MB = 500.0
@@ -155,6 +161,8 @@ async def _host_is_public(host: str) -> bool:
 
 async def _direct_http_fetch(url: str) -> str:
     """Keyless bounded fallback for a public page when Jina is unavailable."""
+    if _spending.check_context() is not None:
+        _spending.deny("unsupported_route")
     try:
         import httpx
 
@@ -208,6 +216,8 @@ async def _direct_http_fetch(url: str) -> str:
                     return text[:12000] if len(text.strip()) >= 200 else (
                         "Error: direct fallback PDF had no extractable text"
                     )
+                except _spending.SpendingStop:
+                    raise
                 except Exception as exc:  # noqa: BLE001
                     return f"Error: direct fallback PDF extraction failed: {type(exc).__name__}"
             raw = response.text
@@ -222,6 +232,8 @@ async def _direct_http_fetch(url: str) -> str:
                 markdown = article.to_markdown()
                 if len(str(markdown or "").strip()) >= 200:
                     return str(markdown)[:12000]
+            except _spending.SpendingStop:
+                raise
             except Exception:  # noqa: BLE001
                 pass
             parser = _TextExtractor()
@@ -230,12 +242,16 @@ async def _direct_http_fetch(url: str) -> str:
             return plain[:12000] if len(plain.strip()) >= 200 else (
                 "Error: direct fallback extracted no usable content"
             )
+    except _spending.SpendingStop:
+        raise
     except Exception as exc:  # noqa: BLE001
         return f"Error: direct fallback failed: {type(exc).__name__}: {exc}"
 
 
 async def _exa_fetch(url: str) -> str:
     """Fetch one public URL through Exa when its configured credential exists."""
+    if _spending.check_context() is not None:
+        _spending.deny("unsupported_route")
     api_key = os.environ.get("EXA_API_KEY", "").strip()
     if not api_key:
         return "Error: Exa fallback unavailable (EXA_API_KEY is not configured)"
@@ -266,6 +282,8 @@ async def _exa_fetch(url: str) -> str:
         if not body:
             return "Error: Exa fallback returned no page text"
         return f"# {title}\n\n{body[:max_chars]}"
+    except _spending.SpendingStop:
+        raise
     except Exception as exc:  # noqa: BLE001
         # Do not include provider exception text: some clients echo request
         # headers or credentials in their exception representation.
@@ -318,6 +336,17 @@ def get_firecrawl_call_counts() -> dict[str, int]:
     return {"fetch": _firecrawl_fetch_calls}
 
 
+def _firecrawl_usage(response: Any) -> dict | None:
+    """Retain reported credit units before content parsing; absence is unknown usage."""
+    try:
+        raw = response.json()
+    except (ValueError, TypeError):
+        return None
+    if isinstance(raw, dict) and raw.get("creditsUsed") is not None:
+        return {"kind": "provider_reported", "tool_units": raw["creditsUsed"]}
+    return None
+
+
 async def _firecrawl_fetch(url: str) -> str:
     """Fetch one URL through Firecrawl v2 /scrape when its credential exists.
 
@@ -327,8 +356,11 @@ async def _firecrawl_fetch(url: str) -> str:
     _is_cacheable/_is_transport_failure 分类），且绝不回显异常正文（可能含请求头/凭据）。
     """
     global _firecrawl_fetch_calls
+    bound = _spending.check_context() is not None
     api_key = os.environ.get("FIRECRAWL_API_KEY", "").strip()
     if not api_key:
+        if bound:
+            _spending.deny("unsupported_route")
         return "Error: Firecrawl unavailable (FIRECRAWL_API_KEY is not configured)"
     ceiling_sentinel = _firecrawl_over_ceiling()
     if ceiling_sentinel is not None:
@@ -351,18 +383,34 @@ async def _firecrawl_fetch(url: str) -> str:
         if max_age_ms > 0:
             # Firecrawl 端缓存回放窗口（毫秒）：未变页面不再触发全新计费抓取。
             payload_body["maxAge"] = max_age_ms
-        _firecrawl_fetch_calls += 1  # 计在发出请求前：HTTP 4xx/5xx 同样可能计费
-        async with httpx.AsyncClient(timeout=timeout, trust_env=True) as client:
-            response = await client.post(
-                os.environ.get(
-                    "FIRECRAWL_API_URL", "https://api.firecrawl.dev/v2/scrape"
-                ).strip() or "https://api.firecrawl.dev/v2/scrape",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload_body,
-            )
+        endpoint = (os.environ.get("FIRECRAWL_API_URL", "https://api.firecrawl.dev/v2/scrape").strip()
+                    or "https://api.firecrawl.dev/v2/scrape")
+        route_id = (_spending.qualify_route("firecrawl_scrape", endpoint,
+            account_sha256=hashlib.sha256(api_key.encode("utf-8")).hexdigest()) if bound else None)
+        envelope = None
+        if bound:
+            route = _spending.get_route(route_id)
+            envelope = {"endpoint": endpoint, "model": "", "input_tokens": 0,
+                        "max_output_tokens": 0, "tool_units": route["max_tool_units"],
+                        "payload_sha256": _spending.hash_payload(payload_body)}
+        _firecrawl_fetch_calls += 1  # Even errors and remote cache hits retain their full maximum.
+        async def send():
+            options = {"timeout": timeout, "trust_env": not bound}
+            if bound:
+                options.update(follow_redirects=False, transport=httpx.AsyncHTTPTransport(retries=0))
+            async with httpx.AsyncClient(**options) as client:
+                response = await client.post(endpoint, headers={
+                    "Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json=payload_body)
+            if bound and response.status_code >= 300:
+                raise RuntimeError("firecrawl_transport_status")
+            return response
+        if bound:
+            _spending.check_context()
+            with _spending.operation("research:fetch", envelope["payload_sha256"]):
+                response = await _spending.dispatch_async(route_id, envelope, send, usage=_firecrawl_usage)
+        else:
+            response = await send()
         if response.status_code == 402:
             return "Error: Firecrawl failed: payment required / quota exhausted"
         if response.status_code == 429:
@@ -380,7 +428,18 @@ async def _firecrawl_fetch(url: str) -> str:
         if not isinstance(metadata, dict):
             metadata = {}
         title = str(metadata.get("title") or "").strip()
-        return (f"# {title}\n\n{body[:max_chars]}" if title else body[:max_chars])
+        rendered = f"# {title}\n\n{body[:max_chars]}" if title else body[:max_chars]
+        if _RETAIN_SOURCE_METADATA.get() and _is_cacheable(rendered):
+            supplied = {**data, **metadata}
+            retained = {key: supplied[key] for key in ("publication_type", "source_type", "@type", "kind", "published_at",
+                "published_date", "publishedDate", "publishedAt", "datePublished", "publication_date", "published", "date",
+                "original_origin", "original_url", "origin_cluster")
+                if isinstance(supplied.get(key), str) and 0 < len(supplied[key]) <= 2048}
+            retained.update(source_metadata_version="world-anchor-source-metadata/v1", source_metadata_origin="firecrawl_scrape")
+            return json.dumps({"markdown": rendered, "metadata": retained}, ensure_ascii=False)
+        return rendered
+    except _spending.SpendingStop:
+        raise
     except Exception as exc:  # noqa: BLE001
         # Do not include provider exception text (may echo the bearer header).
         return f"Error: Firecrawl failed: {type(exc).__name__}"
@@ -432,6 +491,10 @@ async def _resilient_fetch(url: str) -> str:
     Jina (53% ConnectTimeout in the 2026-07-14 humanoid run) becomes fallback.
     """
     _FETCH_PROVIDER.set("")
+    if _spending.check_context() is not None:
+        result = await _firecrawl_fetch(url)
+        _FETCH_PROVIDER.set("firecrawl")
+        return result
     physical_attempts = 0
     firecrawl_result = ""
     if (os.environ.get("FIRECRAWL_API_KEY", "").strip()
@@ -462,6 +525,8 @@ async def _resilient_fetch(url: str) -> str:
                 _jina_delegate_fetch(url),
                 timeout=_env_float("RESEARCH_JINA_PRIMARY_TIMEOUT_SECONDS", 10.0),
             )
+        except _spending.SpendingStop:
+            raise
         except Exception as exc:  # noqa: BLE001
             primary_result = f"Error: Jina primary failed: {type(exc).__name__}: {exc}"
         if _is_cacheable(primary_result):
@@ -512,6 +577,8 @@ def _source_policy_rejection(url: str) -> Optional[str]:
         from urllib.parse import urlparse
 
         host = (urlparse(str(url or "")).hostname or "").lower().rstrip(".")
+    except _spending.SpendingStop:
+        raise
     except Exception:
         return None
     raw = os.environ.get(
@@ -623,6 +690,17 @@ def _read_cache(path: str, ttl_seconds: float) -> Optional[str]:
         content = obj.get("content")
         if not isinstance(content, str):
             return None
+        if _RETAIN_SOURCE_METADATA.get():
+            try:
+                envelope = json.loads(content)
+            except (ValueError, TypeError):
+                return None
+            metadata = envelope.get("metadata") if isinstance(envelope, dict) else None
+            if (not isinstance(envelope, dict) or not isinstance(envelope.get("markdown"), str)
+                    or not isinstance(metadata, dict)
+                    or metadata.get("source_metadata_version") != "world-anchor-source-metadata/v1"
+                    or metadata.get("source_metadata_origin") != "firecrawl_scrape"):
+                return None
         if (time.time() - fetched_at) > ttl_seconds:
             return None  # 过期 → 视作未命中（调用方将重抓覆盖）
         try:
@@ -630,6 +708,8 @@ def _read_cache(path: str, ttl_seconds: float) -> Optional[str]:
         except OSError:
             pass
         return content
+    except _spending.SpendingStop:
+        raise
     except Exception:  # noqa: BLE001 — 缓存读损坏/并发写中 → 当作未命中，degrade-safe
         return None
 
@@ -650,6 +730,8 @@ def _write_cache(path: str, url: str, content: str) -> None:
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, path)
+    except _spending.SpendingStop:
+        raise
     except Exception as e:  # noqa: BLE001
         logger.warning("cached_fetch: 写缓存失败（跳过，不影响抓取结果）: %s", e)
 
@@ -685,6 +767,8 @@ def _enforce_size_cap(root: str, max_bytes: int) -> None:
                 total -= size
             except OSError:
                 continue
+    except _spending.SpendingStop:
+        raise
     except Exception as e:  # noqa: BLE001
         logger.warning("cached_fetch: 淘汰缓存失败（跳过）: %s", e)
 
@@ -693,12 +777,32 @@ async def cached_fetch(
     url: str,
     fetch_fn: Callable[[str], Awaitable[str]],
     revisit_reason: str = "",
+    *, retain_source_metadata: bool | None = None,
 ) -> str:
+    """Opt-in metadata envelope; the default retains the legacy string/cache path."""
+    if retain_source_metadata is not None and type(retain_source_metadata) is not bool:
+        raise ValueError("invalid source metadata mode")
+    binding = _spending.check_context()
+    if retain_source_metadata is None:
+        retain_source_metadata = bool(_spending.required() and binding is not None
+                                      and binding["schema"] == "target-run-spending-binding/v2")
+    if retain_source_metadata and binding is not None and binding["schema"] != "target-run-spending-binding/v2":
+        _spending.deny("unsupported_route")
+    token = _RETAIN_SOURCE_METADATA.set(retain_source_metadata)
+    try:
+        return await _cached_fetch(url, fetch_fn, revisit_reason)
+    finally:
+        _RETAIN_SOURCE_METADATA.reset(token)
+
+
+async def _cached_fetch(url: str, fetch_fn: Callable[[str], Awaitable[str]], revisit_reason: str = "") -> str:
     """缓存核心流程（可注入 ``fetch_fn`` 供单测，无网络无 deerflow）。返回类型与被包裹工具一致（str）。
 
     TTL<=0 → 关闭正缓存（LOOP-007 预算仍独立生效）。否则：命中未过期即返回；否则真抓，成功且可缓存
     （非失败/非哨兵/≥200 字符）才落盘 + 触发 LRU 淘汰。缓存层任何异常都不改变返回结果。
     """
+    if _spending.check_context() is not None and fetch_fn is not _resilient_fetch:
+        _spending.deny("unsupported_route")
     exact_key = str(url or "").strip()
     if "drf_fmp_capture=" in exact_key:
         # Reserved run-local identities are not provider-served web pages. This
@@ -719,12 +823,17 @@ async def cached_fetch(
         if not attempt.allowed:
             return _research_budget.denial_result("web_fetch", attempt.reason, exact_key)
 
+    coordination_key = ("source-metadata-v1\n" + exact_key) if _RETAIN_SOURCE_METADATA.get() else exact_key
     ttl = _ttl_seconds()
     root = _cache_root()
+    if _RETAIN_SOURCE_METADATA.get():
+        root = os.path.join(root, "source-metadata-v1")
     path = _cache_path(root, url)
     if ttl > 0:
         try:
             hit = _read_cache(path, ttl)
+        except _spending.SpendingStop:
+            raise
         except Exception:  # noqa: BLE001 — 极端情况下路径计算/读取异常也不阻断抓取
             hit = None
         if hit is not None:
@@ -735,21 +844,21 @@ async def cached_fetch(
                     )
                 if not str(revisit_reason or "").strip():
                     artifact_id = _research_budget.positive_repeat(
-                        "fetch", exact_key)
+                        "fetch", coordination_key)
                     if artifact_id:
                         return _research_budget.compact_positive_result(
                             "web_fetch", artifact_id)
-                _research_budget.record_positive("fetch", exact_key)
+                _research_budget.record_positive("fetch", coordination_key)
             return hit
 
     if (_research_budget is not None
-            and _research_budget.negative_suppressed("fetch", exact_key)):
+            and _research_budget.negative_suppressed("fetch", coordination_key)):
         return _research_budget.negative_result("web_fetch", exact_key)
 
     claim_token = ""
     waited_for_claim = False
     if _research_budget is not None and ttl > 0:
-        claim_token = _research_budget.claim_request("fetch", exact_key)
+        claim_token = _research_budget.claim_request("fetch", coordination_key)
         if not claim_token:
             waited_for_claim = True
             try:
@@ -768,13 +877,13 @@ async def cached_fetch(
                     # cannot see the owner's model history. Share the fresh
                     # cache body in full; network dedupe must not become
                     # cross-context evidence loss.
-                    _research_budget.record_positive("fetch", exact_key)
+                    _research_budget.record_positive("fetch", coordination_key)
                     if hasattr(_research_budget, "record_fetched_source"):
                         _research_budget.record_fetched_source(
                             exact_key, hit, provider="cache", cache_hit=True
                         )
                     return hit
-                claim_token = _research_budget.claim_request("fetch", exact_key)
+                claim_token = _research_budget.claim_request("fetch", coordination_key)
                 if claim_token:
                     break
             if not claim_token:
@@ -784,7 +893,7 @@ async def cached_fetch(
                     "message": "Timed out waiting for the identical in-flight fetch.",
                 }, ensure_ascii=False, sort_keys=True)
     if (waited_for_claim and _research_budget is not None
-            and _research_budget.negative_suppressed("fetch", exact_key)):
+            and _research_budget.negative_suppressed("fetch", coordination_key)):
         _research_budget.release_request(claim_token)
         return _research_budget.negative_result("web_fetch", exact_key)
 
@@ -798,6 +907,8 @@ async def cached_fetch(
 
     try:
         content = await fetch_fn(url)
+    except _spending.SpendingStop:
+        raise
     except Exception:
         if _research_budget is not None:
             _research_budget.export_telemetry(force=True)
@@ -808,8 +919,8 @@ async def cached_fetch(
     try:
         if _research_budget is not None:
             if _is_cacheable(content):
-                _research_budget.clear_negative("fetch", exact_key)
-                _research_budget.record_positive("fetch", exact_key)
+                _research_budget.clear_negative("fetch", coordination_key)
+                _research_budget.record_positive("fetch", coordination_key)
                 if hasattr(_research_budget, "record_fetched_source"):
                     _research_budget.record_fetched_source(
                         exact_key,
@@ -818,7 +929,7 @@ async def cached_fetch(
                         cache_hit=False,
                     )
             else:
-                _research_budget.record_negative("fetch", exact_key)
+                _research_budget.record_negative("fetch", coordination_key)
         if ttl > 0 and _is_cacheable(content):
             _write_cache(path, url, content)
             _enforce_size_cap(root, _max_bytes())
@@ -830,6 +941,8 @@ async def cached_fetch(
 
 async def _jina_delegate_fetch(url: str) -> str:
     """委派给 harness 自带的 jina `web_fetch` 异步工具；其读本 `web_fetch` stanza 的 timeout(30)。"""
+    if _spending.check_context() is not None:
+        _spending.deny("unsupported_route")
     import importlib
 
     mod = importlib.import_module("deerflow.community.jina_ai.tools")

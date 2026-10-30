@@ -166,8 +166,8 @@ def test_calendar_config_dispatches_runner_to_n_rounds(sim_env, no_subprocess):
 def test_hours_config_legacy_formula_regression_pin(sim_env, no_subprocess):
     """无 temporal_config → 旧公式 total_rounds = hours*60/minutes，回归钉。
 
-    run_state.json 不得出现任何日历新键（temporal_mode/calendar_unit/
-    current_period_end/horizon_date/options）——旧路径逐字节兼容。
+    Calendar fields stay absent. The separately introduced record-finalization
+    ownership/token remain required on the hours path as well.
     """
     sim_id = "sim_hours_legacy"
     cfg = {"time_config": {"total_simulation_hours": 72, "minutes_per_round": 30}}
@@ -182,9 +182,12 @@ def test_hours_config_legacy_formula_regression_pin(sim_env, no_subprocess):
         assert key not in data
     # Publication ownership and a terminal-attempt token also apply in hours
     # mode; neither adds a calendar nor changes the historical round formula.
+    assert set(data["options"]) == {"record_owner", "terminal_artifacts_token"}
     assert data["options"]["record_owner"] == "runner"
     assert data["options"]["terminal_artifacts_token"]
     assert "max_rounds_ignored" not in data["options"]
+    token = data["options"]["terminal_artifacts_token"]
+    assert isinstance(token, str) and len(token) == 32 and all(c in "0123456789abcdef" for c in token)
 
 
 def test_hours_config_max_rounds_still_truncates(sim_env, no_subprocess):

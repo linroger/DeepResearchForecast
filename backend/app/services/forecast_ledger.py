@@ -260,6 +260,16 @@ def calibration_summary(d: Optional[str] = None, entries: Optional[List[Dict[str
     evaluation lane (``golden_eval``) may opt in with ``include_evaluation=True``
     to score an isolated evaluation ledger; production callers never pass it.
     """
+    if entries is None and not include_evaluation:
+        # The publication/outcome journal is production authority. Historical
+        # ledger rows remain available only via an explicit entries argument.
+        from .forecast_feedback import production_track_record
+        snapshot = production_track_record(d=d)
+        scenario = snapshot.get("tracks", {}).get("scenario", {})
+        return {"n_resolved": scenario.get("n_resolved", 0),
+                "mean_brier": scenario.get("mean_brier"),
+                "calibration_error": None, "source": snapshot.get("source"),
+                "source_digest": snapshot.get("source_digest")}
     led = entries if entries is not None else read_ledger(d)
     resolved = [
         {"forecast": {"scenarios": e.get("scenarios")}, "outcome": e.get("outcome")}
