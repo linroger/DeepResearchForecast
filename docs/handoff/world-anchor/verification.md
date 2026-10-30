@@ -1,6 +1,6 @@
 # World Anchor offline acceptance
 
-Accepted on 2026-10-30 in `codex/world-anchor`, based on `9916b3beff6753cd07f2407f36428ca2030127fd`. Git delivery is recorded separately in the handoff. The machine-readable verdict is [final-verification.json](evidence/final-verification.json), with [703 source/fixture pins](evidence/source-hashes.json) and [distinct passing case IDs](evidence/passed-case-ids.json).
+Accepted on 2026-10-30 in `codex/world-anchor`, based on `9916b3beff6753cd07f2407f36428ca2030127fd`. Implementation commit `8bc53cc50a84faf002782c5fd17caba0e766a03d` is pushed and exact-ref verified on `legacy/codex/world-anchor`; [delivery.json](evidence/delivery.json) records the delivery. The machine-readable verdict is [final-verification.json](evidence/final-verification.json), with [703 source/fixture pins](evidence/source-hashes.json) and [distinct passing case IDs](evidence/passed-case-ids.json).
 
 ## What passed
 

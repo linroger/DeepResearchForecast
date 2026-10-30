@@ -4,7 +4,7 @@
   "date": "2026-10-30T14:00:49.006990+08:00",
   "branch": "codex/world-anchor",
   "base_commit": "9916b3beff6753cd07f2407f36428ca2030127fd",
-  "source_commit": null,
+  "source_commit": "8bc53cc50a84faf002782c5fd17caba0e766a03d",
   "coverage": {
     "schema": "world-anchor-root-coverage/v1",
     "unique_broad_cases": 3703,
@@ -202,5 +202,13 @@
     "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-final-20261030-01",
     "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-v2-process-final-20261030-01"
   ],
-  "archive_policy": "Every regular gate payload was byte/hash verified in compressed private archives; symlinks and one special fixture file are inventoried but not archived. No relocated execution is claimed."
+  "archive_policy": "Every regular gate payload was byte/hash verified in compressed private archives; symlinks and one special fixture file are inventoried but not archived. No relocated execution is claimed.",
+  "delivery": {
+    "remote": "legacy",
+    "branch": "codex/world-anchor",
+    "implementation_ref_verified": "8bc53cc50a84faf002782c5fd17caba0e766a03d",
+    "issue": 12,
+    "issue_state": "closed",
+    "verification_date": "2026-10-30T14:42:57.849096+08:00"
+  }
 }
