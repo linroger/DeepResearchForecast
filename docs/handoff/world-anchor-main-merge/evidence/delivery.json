@@ -1,0 +1,23 @@
+{
+  "schema": "world-anchor-main-delivery/v1",
+  "status": "merge_pushed_and_remote_verified",
+  "verified_at_utc": "2026-10-30T09:07:37.323673+00:00",
+  "repository": "https://github.com/linroger/DeepResearchForecast",
+  "remote": "legacy",
+  "merge_commit": "eb5ce1d1bf437bd43897f0252b1c9182d8890072",
+  "parents": [
+    "f773f61bee4eed6e2c3be23e546d114ff2a786e8",
+    "43efe06defc78de9bedda73d1708ba4c750a6150"
+  ],
+  "refs_verified_at_merge_push": {
+    "refs/heads/main": "eb5ce1d1bf437bd43897f0252b1c9182d8890072",
+    "refs/heads/codex/world-anchor-main-merge": "eb5ce1d1bf437bd43897f0252b1c9182d8890072"
+  },
+  "push": "atomic non-forced update",
+  "source_archive": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-main-merge-20261030/source-eb5ce1d1.tar.gz",
+  "source_archive_sha256": "11e9efb5a101dcbe8c4c2bb031f21627517423e381eaac6a9db3c2cccdadf496",
+  "verification_sha256": "9a6352141ec2579e90e5a24d05208dc83ff4b67dc243765285e7277557a00008",
+  "primary_preserved": true,
+  "running_checkout_adopted": false,
+  "live_provider_or_deployment_authorized": false
+}

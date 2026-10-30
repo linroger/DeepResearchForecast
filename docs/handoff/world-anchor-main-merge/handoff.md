@@ -1,7 +1,7 @@
 # World Anchor merge to main
 
 Updated: 2026-10-30 (Asia/Shanghai). Branch: `codex/world-anchor-main-merge`.
-Status: implementation, offline checks and independent reviews complete; Git delivery pending.
+Status: complete. Merge `eb5ce1d1bf437bd43897f0252b1c9182d8890072` is pushed and exact-ref verified on `legacy/main` and the integration branch.
 Worktree: `/Users/rogerlin/.codex/worktrees/world-anchor-main-merge/DeepResearchForecast`.
 
 ## Request and acceptance
@@ -37,8 +37,8 @@ No tracked entry from either parent is missing. All main-only production files a
 
 ## Remaining work and continuation
 
-Stage only this integration's files, commit the merge, recheck `legacy/main`, push without force and verify both parent ancestries. Then record exact delivery and clean integration status. A remote advance requires integration and affected validation before pushing.
+The authorized merge is delivered. An atomic non-forced push advanced main and the integration branch to `eb5ce1d1`; exact remote-ref and both-parent ancestry checks passed. [delivery.json](evidence/delivery.json) records the implementation merge and source archive. This final documentation commit records that verified delivery; no application code changed afterward.
 
 The standalone saved-world diagnostic's five-file bundle cannot authenticate an anchored replay; that inherited limitation remains explicit. Offline checks do not establish live-provider behavior, deployment or empirical forecast quality. No scheduler activation, service restart or primary-checkout adoption is part of this delivery.
 
-Next-session prompt: Read this handoff and verification, inspect final R5 review closure and current source pins, preserve the dirty primary checkout, then finish the authorized commit/push/merge to `legacy/main`. Do not rerun unchanged broad suites without a new failure or source change. Preserve original red receipts and the named exclusions.
+Next-session prompt: The World Anchor/main source merge is delivered. Read this handoff, verification and delivery receipt before new work. Preserve the dirty primary checkout and do not start providers, schedules or service adoption without separate operational authorization. Original red receipts, source pins and named exclusions remain available for any focused follow-up.

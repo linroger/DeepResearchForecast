@@ -1,4 +1,4 @@
-> Current source integration: [World Anchor merge to main](docs/handoff/world-anchor-main-merge/handoff.md). The isolated merge combines authenticated research anchoring with main preparation, atomic arbiter and model-led translation contracts. Merged-source offline verification and remote delivery are in progress; this does not update the running primary checkout.
+> Current source integration: [World Anchor merge to main](docs/handoff/world-anchor-main-merge/handoff.md). The isolated merge combines authenticated research anchoring with main preparation, atomic arbiter and model-led translation contracts. Merged-source offline verification is complete and merge `eb5ce1d1` is verified on main; the running primary checkout is preserved.
 
 > Current root correction: [typed forecast tasks, atomic arbiter transactions and parsed grounding](docs/handoff/root-workflow-contracts/handoff.md). Final1431-case source and1630-case peer-runtime gates passed; the backend is active and both authorized pipelines resumed with retained-stage proof.
 
