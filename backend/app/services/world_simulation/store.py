@@ -1143,7 +1143,7 @@ class WorldStore:
                         "invalid_event", "Event does not belong to this round")
                 require(isinstance(event.get("kind"), str) and isinstance(event.get("description"), str)
                         and isinstance(event.get("basis"), dict)
-                        and event["basis"].get("kind") in {"scenario_assumption", "source_claim", "report_excerpt", "simulation_event"}
+                        and event["basis"].get("kind") in {"scenario_assumption", "source_claim", "report_excerpt", "simulation_event", "anchor_evidence"}
                         and isinstance(event["basis"].get("refs"), list) and bool(event["basis"]["refs"]),
                         "invalid_event", "Event requires a kind, explanation, and provenance")
                 visibility(event.get("visibility"), set(actors_by_id(self._spec)))

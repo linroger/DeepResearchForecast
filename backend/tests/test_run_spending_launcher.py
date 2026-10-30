@@ -346,6 +346,10 @@ def put(path, value):
 @pytest.fixture(autouse=True)
 def isolation(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    # Broad collection imports tokenizer libraries that set this process hint.
+    # Each launcher case starts with its own explicit environment; production
+    # rejection remains strict and has a separate control below.
+    monkeypatch.delenv("TOKENIZERS_PARALLELISM", raising=False)
     for name in list(os.environ):
         if name.startswith("DRF_RUN_SPENDING_"):
             monkeypatch.delenv(name)
@@ -564,7 +568,8 @@ def test_ambient_dotenv_is_detected_without_read(prepared, monkeypatch):
 
 @pytest.mark.parametrize("env", [{"SERPER_API_KEY": "synthetic"}, {"LLM_FAST_API_KEY": "synthetic"},
                                  {"LLM_FALLBACK_MODEL_NAME": "fallback"}, {"PYTHONPATH": "/deployment"},
-                                 {"OPENAI_API_KEY": "synthetic"}, {"AWS_SECRET_ACCESS_KEY": "synthetic"}])
+                                 {"OPENAI_API_KEY": "synthetic"}, {"AWS_SECRET_ACCESS_KEY": "synthetic"},
+                                 {"TOKENIZERS_PARALLELISM": "false"}])
 def test_ambient_fallback_credentials_refused(env):
     with pytest.raises(launcher.LauncherStop, match="unsafe_environment"):
         launcher.reject_ambient(env)

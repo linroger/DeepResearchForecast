@@ -6,6 +6,7 @@ pipeline lifecycle and never derive allowance from telemetry or stage state.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from contextvars import ContextVar
 import json
 import os
 from pathlib import Path
@@ -15,6 +16,19 @@ from .official_data import bridge_module
 BINDING_KEY = "spending_policy_v1"
 REQUEST_KEY = "spending_request_v1"
 REQUEST_FIELDS = frozenset({"prompt", "mode", "depth", "language", "model", "forecast_authority", "target_simulation"})
+_ANCHOR_BUDGET_FIELDS = (
+    "policy_version", "source_policy_sha256", "model_attempt_limit", "token_envelope_limit",
+    "catalog_attempt_limit", "followup_attempt_limit", "catalog_lookups_per_gap", "followup_round_limit",
+)
+_PIPELINE_STATE = ContextVar("spending_pipeline_state", default=None)
+
+
+def _v2(binding):
+    return isinstance(binding, dict) and binding.get("schema") == "target-run-spending-binding/v2"
+
+
+def _request_fields(binding):
+    return REQUEST_FIELDS | {"world_anchor"} if _v2(binding) else REQUEST_FIELDS
 
 
 def api():
@@ -31,13 +45,62 @@ def state_binding(state):
 
 def validate_api_request(data):
     store = api()
+    # HTTP selects a mode. Scope, policy and limits belong to private authority,
+    # even when the caller happens to repeat their currently authorized values.
+    if isinstance(data, dict) and "world_anchor" in data:
+        value = data["world_anchor"]
+        if type(value) is not dict or value != {"mode": "v1"}:
+            store.deny("invalid_request")
     if not store.required():
         return
-    if not isinstance(data, dict) or set(data) != REQUEST_FIELDS:
+    binding = store.binding_from_environment()
+    if not isinstance(data, dict) or set(data) != _request_fields(binding):
         store.deny("invalid_request")
 
 
-def normalized_request(prompt, *, mode, depth, language, model, forecast_authority, target_simulation):
+def _authorized_anchor_option(binding):
+    """Expand a public selector from the existing, authenticated v2 budget.
+
+    Public core APIs validate source ownership and pins before this bounded
+    read. The subsequent atomic bind revalidates them and the full request;
+    reading a manifest here never grants authority or creates a second ledger.
+    """
+    from .official_data import _contained_bytes
+
+    store = api()
+    bound = store.open_existing(binding)
+    if not _v2(bound):
+        store.deny("invalid_binding")
+
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                store.deny("invalid_manifest")
+            value[key] = item
+        return value
+
+    def nonfinite(_):
+        store.deny("invalid_manifest")
+
+    try:
+        raw = _contained_bytes(Path(bound["root"]), "spend/authorization.json", limit=4_000_000)
+        manifest = store.validate_manifest(json.loads(
+            raw.decode("utf-8"), object_pairs_hook=unique, parse_constant=nonfinite))
+    except (OSError, ValueError, UnicodeError, RecursionError):
+        store.deny("invalid_manifest")
+    if (manifest["schema"] != "target-run-spending/v2"
+            or store.hash_payload(manifest) != bound["manifest_sha256"]
+            or any(manifest[key] != bound[key] for key in
+                   ("root", "authorization_id", "source_sha256", "routes_sha256"))):
+        store.deny("source_drift")
+    budget = manifest["anchor_budget"]
+    return {"mode": "v1", "anchor_budget_scope_id": budget["scope_id"],
+            **{key: budget[key] for key in _ANCHOR_BUDGET_FIELDS}}
+
+
+def normalized_request(prompt, *, mode, depth, language, model, forecast_authority, target_simulation,
+                       world_anchor=None):
     from .target_pipeline import AUTHORITY, normalize_target_options
     store = api()
     if (not isinstance(prompt, str) or not prompt.strip() or mode != "full"
@@ -50,24 +113,36 @@ def normalized_request(prompt, *, mode, depth, language, model, forecast_authori
         options = normalize_target_options(forecast_authority, target_simulation)
     except (ValueError, TypeError):
         store.deny("invalid_request")
-    return {"prompt": prompt.strip(), "mode": mode, "depth": depth, "language": language,
-            "model": model.strip().lower(), "forecast_authority": AUTHORITY,
-            "target_simulation": options["target_simulation"]}
+    result = {"prompt": prompt.strip(), "mode": mode, "depth": depth, "language": language,
+              "model": model.strip().lower(), "forecast_authority": AUTHORITY,
+              "target_simulation": options["target_simulation"]}
+    if world_anchor is not None:
+        if type(world_anchor) is not dict or world_anchor.get("mode") != "v1":
+            store.deny("invalid_request")
+        store.hash_payload(world_anchor)
+        result["world_anchor"] = json.loads(json.dumps(world_anchor, allow_nan=False))
+    return result
 
 
 def bind_start(pipeline_id, prompt, *, mode, depth, language, model, forecast_authority,
-               target_simulation, project_name=None, max_rounds=None):
+               target_simulation, project_name=None, max_rounds=None, world_anchor=None):
     store = api()
     binding = store.binding_from_environment()
     if binding is None:
         return {}
     if project_name is not None or max_rounds is not None:
         store.deny("invalid_request")
+    if _v2(binding) and type(world_anchor) is dict and world_anchor == {"mode": "v1"}:
+        world_anchor = _authorized_anchor_option(binding)
     request = normalized_request(prompt, mode=mode, depth=depth, language=language,
                                  model=model, forecast_authority=forecast_authority,
-                                 target_simulation=target_simulation)
+                                 target_simulation=target_simulation, world_anchor=world_anchor)
+    if set(request) != _request_fields(binding):
+        store.deny("invalid_request")
     bound = store.bind_pipeline(binding, pipeline_id, request)
     store.activate_binding(bound)
+    if _v2(bound):
+        store.preflight_anchor_profile(bound)
     return {BINDING_KEY: bound, REQUEST_KEY: request}
 
 
@@ -76,12 +151,12 @@ def _validate_state(state, binding):
     options = state.get("options", {}) if isinstance(state, dict) else state.options
     value = state.get if isinstance(state, dict) else lambda key: getattr(state, key)
     request = options.get(REQUEST_KEY)
-    if not isinstance(request, dict) or set(request) != REQUEST_FIELDS:
+    if not isinstance(request, dict) or set(request) != _request_fields(binding):
         store.deny("invalid_request")
     actual = normalized_request(value("prompt"), mode=value("mode"), depth=options.get("depth"),
         language=options.get("research_language"), model=options.get("research_model"),
         forecast_authority=options.get("forecast_authority"),
-        target_simulation=options.get("target_simulation"))
+        target_simulation=options.get("target_simulation"), world_anchor=options.get("world_anchor"))
     if actual != request or binding.get("pipeline_id") != value("pipeline_id"):
         store.deny("binding_conflict")
     store.validate_bound_request(binding, actual)
@@ -114,9 +189,13 @@ def pipeline_scope(state):
     store.activate_binding(binding)
     _validate_state(state, binding)
     _private_paths(binding)
-    with store.operation("pipeline", store.hash_payload(state.options[REQUEST_KEY])):
-        store.check_active(binding)
-        yield binding
+    token = _PIPELINE_STATE.set(state)
+    try:
+        with store.operation("pipeline", store.hash_payload(state.options[REQUEST_KEY])):
+            store.check_active(binding)
+            yield binding
+    finally:
+        _PIPELINE_STATE.reset(token)
 
 
 def check_state(state):
@@ -257,13 +336,19 @@ def research_child_scope(prompt, handoff_dir, *, model, budget_run_id, options):
         {"pipeline": binding["pipeline_id"], "question": store.hash_payload(prompt)})}
     tracker = {"process": None}
     with store.operation(**child_operation):
+        entry = {}
+        if _v2(binding):
+            entry["scope_entry_ids"] = (store.preflight_anchor_profile(binding)["scope_id"],)
         child = store.register_participant(binding, participant_id, spawn_receipt_sha256=spawn_hash,
-                                           operation_context=store.current_operation())
+                                           operation_context=store.current_operation(), **entry)
         try:
             yield child, tracker
-            store.check_active(binding)
+            if not _v2(binding):
+                store.check_active(binding)
         finally:
             process = tracker["process"]
+            if _v2(binding) and (process is None or process.poll() is not None):
+                binding = _adopt_research_scope_handoff(binding, handoff_dir)
             if process is None:
                 proof = {"participant": participant_id, "spawn_failed_before_process": True}
             elif process.poll() is not None:
@@ -275,6 +360,62 @@ def research_child_scope(prompt, handoff_dir, *, model, budget_run_id, options):
                 store.participant_exited(binding, participant_id,
                     exit_receipt_sha256=store.hash_payload(proof))
                 store.check_active(binding)
+
+
+def _adopt_research_scope_handoff(binding, handoff_dir):
+    """Adopt DB-authenticated phase transitions and update the active host state."""
+    from .official_data import _contained_bytes
+    store = api()
+    try:
+        raw = _contained_bytes(Path(handoff_dir), "world_anchor_scope_handoff.json", limit=128 * 1024)
+    except FileNotFoundError:
+        return binding
+
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                store.deny("invalid_binding")
+            result[key] = value
+        return result
+
+    try:
+        value = json.loads(raw, object_pairs_hook=pairs)
+        if (type(value) is not dict or set(value) != {"schema_version", "receipts", "completion"}
+                or value["schema_version"] != "world-anchor-scope-handoff/v1"
+                or type(value["receipts"]) is not list or not 1 <= len(value["receipts"]) <= 2
+                or not all(type(row) is dict for row in value["receipts"])):
+            store.deny("invalid_binding")
+    except (ValueError, TypeError):
+        store.deny("invalid_binding")
+    completion = value["completion"]
+    if completion is not None:
+        if (type(completion) is not dict
+                or value["receipts"][-1].get("kind") != "exit"
+                or store.hash_payload(completion) != value["receipts"][-1].get("proof_sha256")):
+            store.deny("invalid_binding")
+    elif value["receipts"][-1].get("kind") == "exit":
+        store.deny("invalid_binding")
+    rebound = store.adopt_scope_handoff(binding, value["receipts"])
+    state = _PIPELINE_STATE.get()
+    if state is not None:
+        if state.pipeline_id != rebound["pipeline_id"]:
+            store.deny("binding_conflict")
+        state.options[BINDING_KEY] = rebound
+        if completion is not None:
+            from . import world_anchor as anchors
+            if not anchors.enabled(state.options):
+                store.deny("binding_conflict")
+            pending = state.options[anchors.LIFECYCLE_KEY]
+            if pending["status"] != "pending":
+                store.deny("binding_conflict")
+            # The exit proof was matched to the durable transition above. This
+            # records produced bytes; the research controller owns ready/sealed.
+            pending["completion_manifest_sha256"] = completion["artifact_manifest_sha256"]
+            state.options[anchors.SCOPE_COMPLETION_KEY] = json.loads(json.dumps(completion, allow_nan=False))
+        from .pipeline_orchestrator import PipelineManager
+        PipelineManager.save(state)
+    return rebound
 
 
 def configure_child(binding, env, cmd, script):

@@ -2881,6 +2881,7 @@ class ReportAgent:
         aggregation_policy: Optional[Dict[str, Any]] = None,
         saved_estimators: Optional[Dict[str, Any]] = None,
         target_evidence: Optional[Dict[str, Any]] = None,
+        anchor_context: Any = None,
     ):
         """
         初始化Report Agent
@@ -2924,7 +2925,7 @@ class ReportAgent:
         if forecast_case is not None:
             self._init_target_report(graph_id, simulation_id, simulation_requirement,
                                      forecast_case, target_simulation, scenario_label, base_simulation_id,
-                                     target_evidence, official_data, news_market_context)
+                                     target_evidence, official_data, news_market_context, anchor_context)
             return
         if target_evidence is not None or saved_estimators is not None:
             raise ValueError("target evidence/estimators require a valid forecast_case")
@@ -3077,7 +3078,7 @@ class ReportAgent:
 
     def _init_target_report(self, graph_id, simulation_id, question, case, simulation,
                             scenario_label=None, base_simulation_id=None, target_evidence=None,
-                            official_data=None, news_market_context=None):
+                            official_data=None, news_market_context=None, anchor_context=None):
         """Admit typed authority before any world-state read or client construction."""
         from .target_report import build_target_report, canonical_json, _case_api
         case = _case_api().validate_case(case)
@@ -3099,9 +3100,18 @@ class ReportAgent:
             raise ValueError("news context differs from frozen target evidence")
         context = _news_context._validated_copy(evidence["news_market_context"])
         self._target_evidence_json = canonical_json(evidence)
+        self._target_anchor_directory = None
+        if anchor_context is not None:
+            from .world_anchor import validate_anchor_context
+            validate_anchor_context(anchor_context, engine="target-first-v1")
+            if not isinstance(simulation_id, str) or not re.fullmatch(r"sim_[A-Za-z0-9_-]{1,100}", simulation_id):
+                raise ValueError("World Anchor report requires its owner simulation")
+            self._target_anchor_directory = Path(Config.OASIS_SIMULATION_DATA_DIR) / simulation_id
         bundle = build_target_report(case, simulation, official_data=evidence["official_data"], markets=evidence["markets"],
                                      scenario_label=self.scenario_label,
-                                     base_simulation_id=self.base_simulation_id)
+                                     base_simulation_id=self.base_simulation_id,
+                                     **({"simulation_dir": self._target_anchor_directory}
+                                        if self._target_anchor_directory is not None else {}))
         self._target_case_json = canonical_json(case)
         self._target_simulation_json = canonical_json(simulation)
         self.graph_id, self.simulation_id = graph_id, simulation_id
@@ -3175,6 +3185,11 @@ class ReportAgent:
                                         "situation_brief": getattr(self, "situation_brief", "")},
                     "quantitative_rows": getattr(self, "quantitative", None),
                     "official_data": getattr(self, "official_data", None)}
+        if getattr(self, "_target_anchor_directory", None) is not None:
+            # Authorized world diagnostics are already rendered from the saved
+            # public projection. Raw paths, private plans and request counters
+            # must not become a second estimator lane or its public input hash.
+            simulation = None
         forecast = run_forecast_tournament(forecast, case=case, simulation=simulation,
                     llm=None if case is not None else getattr(self, "llm", None), policy=policy,
                     markets=markets, evidence=evidence,
@@ -3268,7 +3283,9 @@ class ReportAgent:
                                         official_data=self.official_data,
                                         markets=json.loads(self._target_evidence_json)["markets"],
                                         scenario_label=self.scenario_label,
-                                        base_simulation_id=self.base_simulation_id)
+                                        base_simulation_id=self.base_simulation_id,
+                                        **({"simulation_dir": self._target_anchor_directory}
+                                           if getattr(self, "_target_anchor_directory", None) is not None else {}))
             diagnostic_expected = self._forecast_diagnostics(json.loads(self._target_bundle_json)["forecast"],
                                                               case=case, simulation=simulation)
             for key in ("estimators", "aggregation", "key_uncertainties"):
@@ -12588,6 +12605,14 @@ class ReportAgent:
             }
             # ``audit`` is already referenced by quality.final_audit; adding the
             # compact gate result above therefore persists in both artifacts.
+            if getattr(self, "_target_anchor_directory", None) is not None:
+                # The private audit keeps exact hashes of privileged companion
+                # files. The public forecast carries the verdict, without a
+                # hash that changes with withheld plans or request counters.
+                public_audit = json.loads(json.dumps(audit, allow_nan=False))
+                if isinstance(public_audit.get("target_report"), dict):
+                    public_audit["target_report"].pop("files", None)
+                forecast["quality"]["final_audit"] = public_audit
             forecast_serialized = json.dumps(
                 forecast, ensure_ascii=False, indent=2, allow_nan=False
             )
@@ -17030,6 +17055,36 @@ class ReportManager:
             return status
 
     @classmethod
+    def _validate_target_anchor_publication(cls, report_id, metadata):
+        """Recheck enabled native authority at the common public-read boundary."""
+        from .simulation_record_contract import load_anchor_diagnostics, read_regular
+        from .target_report import canonical_json
+
+        folder = cls._get_report_folder(report_id)
+
+        def read(name):
+            return json.loads(read_regular(os.path.join(folder, name)))
+
+        record, simulation = read("target_report.json"), read("target_simulation.json")
+        if (not isinstance(record, dict) or (simulation is not None and not isinstance(simulation, dict))):
+            raise ValueError("Invalid typed report companions")
+        if "worldAnchor" not in record and not (simulation and "worldAnchor" in simulation):
+            return
+        simulation_id = metadata.get("simulation_id")
+        if not isinstance(simulation_id, str) or not re.fullmatch(r"sim_[A-Za-z0-9_-]{1,100}", simulation_id):
+            raise ValueError("Invalid anchored report owner")
+        diagnostic = load_anchor_diagnostics(
+            os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id),
+            expected_case=read("forecast_case.json"), expected_simulation=simulation)
+        if diagnostic is None or canonical_json(record.get("worldAnchor")) != canonical_json(diagnostic):
+            raise ValueError("Anchored report projection changed")
+        forecast = read("forecast.json")
+        if any(row.get("source") == "simulation" for row in forecast.get("estimators", [])):
+            raise ValueError("Raw simulation estimator is not public anchor evidence")
+        if "files" in ((forecast.get("quality") or {}).get("final_audit") or {}).get("target_report", {}):
+            raise ValueError("Privileged companion hashes are not public anchor evidence")
+
+    @classmethod
     def publication_status(
         cls, report_id: str, lang: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -17114,6 +17169,10 @@ class ReportManager:
                 if not files.get(name) or files[name] != cls._sha256_file(
                         os.path.join(cls._get_report_folder(report_id), name)):
                     result["reasons"].append("typed forecast companion changed: " + name)
+            try:
+                cls._validate_target_anchor_publication(report_id, meta)
+            except (OSError, ValueError, TypeError, KeyError, AttributeError):
+                result["reasons"].append("World Anchor publication authority changed")
         if audit.get("markdown_sha256") != markdown_sha:
             result["reasons"].append("final audit fingerprint does not match Markdown")
         if world and audit.get("world_result_ref") != world["reference"]:

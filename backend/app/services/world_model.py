@@ -526,7 +526,8 @@ class StateVariable:
                  kind: str = "numeric", as_of: Optional[str] = None,
                  provenance: str = "seed", rationale: str = "",
                  history: Optional[List[Dict[str, Any]]] = None,
-                 read_only: bool = False, identity: Optional[Dict[str, Any]] = None) -> None:
+                 read_only: bool = False, identity: Optional[Dict[str, Any]] = None,
+                 anchor_metadata: Optional[Dict[str, Any]] = None) -> None:
         self.id = str(var_id)
         self.name = _text(name, 140) or self.id
         self.kind = kind if kind in VARIABLE_KINDS else "text"
@@ -538,6 +539,7 @@ class StateVariable:
         self.rationale = _text(rationale, 240)
         self.read_only = read_only is True
         self.identity = copy.deepcopy(identity) if isinstance(identity, dict) else None
+        self.anchor_metadata = copy.deepcopy(anchor_metadata) if anchor_metadata is not None else None
         self.history: List[Dict[str, Any]] = list(history or [])
         if not self.history:
             self.history.append({"round": 0, "value": self.value, "cause": "seed",
@@ -673,6 +675,7 @@ class StateVariable:
             "kind": self.kind, "as_of": self.as_of, "provenance": self.provenance,
             "rationale": self.rationale, "history": list(self.history),
             **({"read_only": True, "identity": copy.deepcopy(self.identity)} if self.read_only else {}),
+            **({"anchor_metadata": copy.deepcopy(self.anchor_metadata)} if self.anchor_metadata is not None else {}),
         }
 
     @classmethod
@@ -681,7 +684,7 @@ class StateVariable:
                    d.get("value"), unit=d.get("unit") or "", kind=d.get("kind") or "text",
                    as_of=d.get("as_of"), provenance=d.get("provenance") or "seed",
                    rationale=d.get("rationale") or "", history=d.get("history") or None,
-                   read_only=d.get("read_only", False), identity=d.get("identity"))
+                   read_only=d.get("read_only", False), identity=d.get("identity"), anchor_metadata=d.get("anchor_metadata"))
 
 
 class ActorState:
@@ -693,10 +696,11 @@ class ActorState:
                  documented_plans: Optional[List[str]] = None,
                  red_lines: Optional[List[str]] = None, aliases: Optional[List[str]] = None,
                  goals: Optional[List[str]] = None, incentives: Optional[Dict[str, str]] = None,
-                 reputation: float = 0.5) -> None:
+                 reputation: float = 0.5, agency_class_basis: Optional[Dict[str, Any]] = None) -> None:
         self.agent_id = int(agent_id)
         self.name = _text(name, 160) or f"Agent_{agent_id}"
         self.agency_class = _text(agency_class, 48) or "other_actor"
+        self.agency_class_basis = copy.deepcopy(agency_class_basis)
         self.archetype = _text(archetype, 32) or "actor"
         try:
             self.capacity_per_round = max(1, int(capacity_per_round))
@@ -793,6 +797,7 @@ class ActorState:
             "outcomes": dict(self.outcomes), "expectations": list(self.expectations),
             # derived (from_dict ignores it): for the /world-state API and the panel
             "track_record": self.track_record(),
+            **({"agency_class_basis": copy.deepcopy(self.agency_class_basis)} if self.agency_class_basis is not None else {}),
         }
 
     @classmethod
@@ -803,7 +808,8 @@ class ActorState:
                 outcome_power=d.get("outcome_power"), posture=d.get("posture") or "",
                 documented_plans=d.get("documented_plans"), red_lines=d.get("red_lines"),
                 aliases=d.get("aliases"), goals=d.get("goals"), incentives=d.get("incentives"),
-                reputation=d.get("reputation", 0.5) if isinstance(d.get("reputation"), (int, float)) else 0.5)
+                reputation=d.get("reputation", 0.5) if isinstance(d.get("reputation"), (int, float)) else 0.5,
+                agency_class_basis=d.get("agency_class_basis"))
         try:
             a.capacity_used = max(0, int(d.get("capacity_used") or 0))
         except (TypeError, ValueError):
@@ -926,7 +932,8 @@ class Shock:
     def __init__(self, shock_id: str, *, event: str, hazard_per_day: float,
                  base_rate: Optional[Dict[str, Any]] = None, source: str = "",
                  effects: Optional[List[Dict[str, Any]]] = None, affects: Optional[List[str]] = None,
-                 recurring: bool = False, fired_rounds: Optional[List[int]] = None) -> None:
+                 recurring: bool = False, fired_rounds: Optional[List[int]] = None,
+                 trigger: Optional[Dict[str, Any]] = None) -> None:
         self.id = _text(shock_id, 64) or "shock"
         self.event = _text(event, 200)
         try:
@@ -939,6 +946,7 @@ class Shock:
         self.effects = [dict(e) for e in (effects or []) if isinstance(e, dict) and e.get("variable_id")][:4]
         self.affects = _items(affects, 6, 160)
         self.recurring = recurring is True
+        self.trigger = copy.deepcopy(trigger)
         self.fired_rounds = [int(r) for r in (fired_rounds or []) if isinstance(r, int) and not isinstance(r, bool)]
         # a documented stretch of the calendar ("October–December 2026"): the shock fires only inside it
         start, end = _iso_date(self.base_rate.get("window_start")), _iso_date(self.base_rate.get("window_end"))
@@ -987,14 +995,15 @@ class Shock:
         return {"id": self.id, "event": self.event, "hazard_per_day": self.hazard_per_day,
                 "base_rate": dict(self.base_rate), "source": self.source,
                 "effects": [dict(e) for e in self.effects], "affects": list(self.affects),
-                "recurring": self.recurring, "fired_rounds": list(self.fired_rounds)}
+                "recurring": self.recurring, "fired_rounds": list(self.fired_rounds),
+                **({"trigger": copy.deepcopy(self.trigger)} if self.trigger is not None else {})}
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "Shock":
         return cls(d.get("id") or "", event=d.get("event") or "", hazard_per_day=d.get("hazard_per_day") or 0.0,
                    base_rate=d.get("base_rate"), source=d.get("source") or "", effects=d.get("effects"),
                    affects=d.get("affects"), recurring=d.get("recurring") is True,
-                   fired_rounds=d.get("fired_rounds"))
+                   fired_rounds=d.get("fired_rounds"), trigger=d.get("trigger"))
 
 
 class Interaction:
@@ -1134,11 +1143,15 @@ class WorldModel:
         self._target_evaluated_round: Optional[int] = None
         self.target_projection_status = "unavailable"
         self.target_projection_reason = "not_configured"
+        self._anchor_runtime = None
+        self._anchor_context = None
+        self._anchor_fired_events: List[str] = []
+        self.anchor_signposts: List[Dict[str, Any]] = []
 
     # -- construction -----------------------------------------------------------
     @classmethod
     def from_seed(cls, seed: Dict[str, Any], agent_configs: Optional[List[Dict[str, Any]]] = None,
-                  *, scenarios: Iterable[str] = ()) -> "WorldModel":
+                  *, scenarios: Iterable[str] = (), anchor_context: Any = None) -> "WorldModel":
         """Build the initial world from the PREPARE-time ``world_model`` block.
 
         ``agent_configs`` (``simulation_config.agent_configs``) supplies names for
@@ -1150,6 +1163,8 @@ class WorldModel:
                     horizon_date=seed.get("horizon_date"), scenarios=scenarios or seed.get("scenarios") or (),
                     settings=seed.get("settings") if isinstance(seed.get("settings"), dict) else None)
         world.seed_gaps = [g for g in (seed.get("gaps") or []) if isinstance(g, dict)][:32]
+        if "world_anchor" in seed or anchor_context is not None:
+            world._bind_anchor_runtime(seed, anchor_context)
         world._target_projection = copy.deepcopy(seed.get("target_projection")) if isinstance(seed.get("target_projection"), dict) else None
         world.target_projection_reason = _text(seed.get("target_projection_reason"), 120) or (
             "typed_identity_pending_kernel_propagation" if world._target_projection else "not_configured")
@@ -1172,21 +1187,23 @@ class WorldModel:
             world.add_actor(ActorState(
                 aid, row.get("name") or cfg.get("entity_name") or f"Agent_{aid}",
                 agency_class=row.get("agency_class") or cfg.get("agency_class") or "other_actor",
+                agency_class_basis=row.get("agency_class_basis") if world._anchor_runtime is not None else None,
                 archetype=row.get("archetype") or cfg.get("archetype") or "actor",
                 capacity_per_round=(row["capacity_per_round"] if row.get("capacity_per_round") is not None
                                     else default_capacity(row.get("agency_class") or cfg.get("agency_class") or "other_actor")),
                 outcome_power=row.get("outcome_power", cfg.get("outcome_power")),
-                posture=row.get("posture") or cfg.get("stance") or "",
+                posture=(row.get("posture") or "") if world._anchor_runtime is not None else (row.get("posture") or cfg.get("stance") or ""),
                 documented_plans=row.get("documented_plans"), red_lines=row.get("red_lines"),
                 aliases=row.get("aliases"), goals=row.get("goals"),
-                incentives=row.get("incentives") or {
+                incentives=({} if world._anchor_runtime is not None else row.get("incentives") or {
                     k: v for k, v in (("gains_if", cfg.get("gains_if")), ("loses_if", cfg.get("loses_if"))) if v
-                },
+                }),
             ))
         for aid, row in seeded.items():
             if aid not in world.actors:
                 world.add_actor(ActorState(
                     aid, row.get("name") or f"Agent_{aid}", agency_class=row.get("agency_class") or "other_actor",
+                    agency_class_basis=row.get("agency_class_basis") if world._anchor_runtime is not None else None,
                     archetype=row.get("archetype") or "actor",
                     capacity_per_round=(row["capacity_per_round"] if row.get("capacity_per_round") is not None
                                         else default_capacity(row.get("agency_class") or "other_actor")),
@@ -1203,7 +1220,8 @@ class WorldModel:
                                kind=row.get("kind") or "numeric", as_of=row.get("as_of") or row.get("as_of_date"),
                                provenance=row.get("provenance") or "research",
                                rationale=row.get("rationale") or row.get("source") or "",
-                               var_id=row.get("id"), read_only=row.get("read_only", False), identity=row.get("identity"))
+                               var_id=row.get("id"), read_only=row.get("read_only", False), identity=row.get("identity"),
+                               anchor_metadata=row.get("anchor_metadata"))
         for row in seed.get("relationships") or []:
             if not isinstance(row, dict):
                 continue
@@ -1217,6 +1235,340 @@ class WorldModel:
                 strength=row.get("strength") if isinstance(row.get("strength"), (int, float)) else None,
                 basis=row.get("basis") or ""))
         return world
+
+    def _bind_anchor_runtime(self, payload: Dict[str, Any], context: Any) -> None:
+        from .world_anchor import validate_anchor_context, anchor_config_pin, engine_projection
+        from .world_model_seed import build_anchor_runtime_projection
+        validate_anchor_context(context, engine="oasis-legacy")
+        runtime = payload.get("anchor_runtime")
+        if (not isinstance(runtime, dict) or runtime.get("schema_version") != "world-anchor-reflexive/v1"
+                or payload.get("world_anchor") != anchor_config_pin(context)
+                or runtime.get("projection") != engine_projection(context, engine="oasis-legacy")):
+            raise ValueError("world anchor context/runtime binding mismatch")
+        rebuilt = build_anchor_runtime_projection(context, None, case_projection=payload.get("target_projection"))
+        if runtime != rebuilt:
+            raise ValueError("world anchor executable projection changed")
+        self._anchor_context = context
+        self._anchor_runtime = copy.deepcopy(rebuilt)
+
+    def _validate_anchor_restore(self, payload: Dict[str, Any]) -> None:
+        """Check raw saved fields before legacy deserializers can coerce them.
+
+        Definitions come from the authenticated adapter and its checked case.
+        Only bounded, well-formed evolution is restored. A target evaluation is
+        a snapshot: effects may have changed primitive values since that snapshot.
+        This check neither samples nor applies events.
+        """
+        def fail(note: str) -> None:
+            raise ValueError("world anchor invalid restored state: " + note)
+
+        def number(value: Any) -> bool:
+            try:
+                return type(value) in (int, float) and math.isfinite(value)
+            except OverflowError:
+                return False
+
+        def rows_by_id(rows: Any, expected: set, label: str) -> Dict[str, Any]:
+            if not isinstance(rows, list) or any(
+                    not isinstance(row, dict) or not isinstance(row.get("id"), str) for row in rows):
+                fail(label + " identities")
+            indexed = {row["id"]: row for row in rows}
+            if len(indexed) != len(rows) or set(indexed) != expected:
+                fail(label + " identities")
+            return indexed
+
+        round_num, committed = payload.get("round"), payload.get("committed_round")
+        if type(round_num) is not int or type(committed) is not int or not 0 <= committed <= round_num:
+            fail("round bounds")
+        runtime = self._anchor_runtime
+        projection = payload["target_projection"]
+        writers = {m["outputNodeId"]: m for m in projection["mechanisms"]}
+        metadata = {v["node_id"]: v for v in runtime["variables"]}
+        public_nodes = {slugify(n["nodeId"]): n for n in projection["nodes"] if n["visibility"] == "public"}
+        variables = rows_by_id(payload.get("variables"), set(public_nodes), "variable")
+        for vid, node in public_nodes.items():
+            row = variables[vid]
+            mechanism = writers.get(node["nodeId"])
+            identity = None if mechanism is None else {
+                "mechanismId": mechanism["mechanismId"], "kind": mechanism["kind"],
+                "inputs": mechanism["inputNodeIds"], "parameters": mechanism["parameters"],
+            }
+            expected_unit = "" if is_kind_name_unit(node["units"]) else _text(node["units"], 24)
+            if (row.get("anchor_metadata") != metadata[node["nodeId"]]
+                    or row.get("read_only", False) is not (mechanism is not None)
+                    or row.get("identity") != identity or row.get("kind") != "numeric"
+                    or row.get("name") != _text(node["nodeId"], 140)
+                    or row.get("unit") != expected_unit
+                    or row.get("as_of") != (_text(node["vintage"], 40) or None)
+                    or row.get("rationale") != "Typed structural input; not an assessment."):
+                fail("variable definition")
+            history = row.get("history")
+            if not isinstance(history, list) or not 1 <= len(history) <= HISTORY_LIMIT:
+                fail("variable history")
+            previous = -1
+            for entry in history:
+                if not isinstance(entry, dict) or set(entry) != {"round", "value", "cause", "source"}:
+                    fail("variable history")
+                r, value, source = entry["round"], entry["value"], entry["source"]
+                if (type(r) is not int or not 0 <= r <= round_num or r < previous
+                        or not isinstance(entry["cause"], str) or len(entry["cause"]) > 200):
+                    fail("variable history bounds")
+                if r == 0 and source != "mechanism":
+                    if source != "research" or value != node["value"] or entry["cause"] != "seed":
+                        fail("variable initial history")
+                elif source not in ({"mechanism"} if mechanism else {"action", "arbiter", "effect", "shock", "mechanism"}):
+                    fail("variable history authority")
+                if not number(value) and not (value is None and r == 0 and source == "research" and node["value"] is None):
+                    fail("variable history value")
+                previous = r
+            # Match set_value: mechanism writes retain the previous provenance.
+            # If bounded history contains only mechanism writes, the admitted
+            # research seed remains the provenance authority.
+            expected_provenance = next((entry["source"] for entry in reversed(history)
+                                        if entry["source"] in PROVENANCES), "research")
+            if row.get("provenance") != expected_provenance:
+                fail("variable provenance")
+            value = row.get("value")
+            if (value != history[-1]["value"]
+                    or not number(value) and not (value is None and history[-1]["round"] == 0 and node["value"] is None)):
+                fail("variable current value")
+
+        definitions = [Shock.from_dict(row).to_dict() for row in runtime["shocks"]]
+        shocks = rows_by_id(payload.get("shocks", []), {s["id"] for s in definitions}, "shock")
+        for definition in definitions:
+            saved = shocks[definition["id"]]
+            if {k: v for k, v in saved.items() if k != "fired_rounds"} != {
+                    k: v for k, v in definition.items() if k != "fired_rounds"}:
+                fail("shock definition")
+            fired = saved.get("fired_rounds")
+            if (not isinstance(fired, list) or any(type(r) is not int or not 1 <= r <= round_num for r in fired)
+                    or fired != sorted(set(fired)) or not definition["recurring"] and len(fired) > 1):
+                fail("shock fired rounds")
+
+        calendar_ids = {event["id"] for event in runtime["calendar"]}
+        fired_events = payload.get("anchor_fired_events")
+        if (not isinstance(fired_events, list) or any(not isinstance(e, str) for e in fired_events)
+                or len(fired_events) != len(set(fired_events)) or not set(fired_events) <= calendar_ids
+                or round_num == 0 and fired_events):
+            fail("calendar fired events")
+        period = payload.get("period")
+        if period is not None and not isinstance(period, dict):
+            fail("calendar period")
+        period_end = str((period or {}).get("period_end") or "")[:10]
+        if any(event["id"] in fired_events and (not period_end or event["date"] > period_end)
+               for event in runtime["calendar"]):
+            fail("calendar fired date")
+        indicators = {row["indicator_id"]: row for row in runtime["indicators"]}
+        signposts, seen = payload.get("anchor_signposts"), set()
+        if not isinstance(signposts, list):
+            fail("indicator state")
+        for row in signposts:
+            if (not isinstance(row, dict) or set(row) != {"round", "indicator_id", "node_id", "value", "triggered", "value_kind"}
+                    or type(row["round"]) is not int or not 0 <= row["round"] <= round_num
+                    or not isinstance(row["indicator_id"], str) or row["indicator_id"] not in indicators):
+                fail("indicator state")
+            key = (row["round"], row["indicator_id"])
+            if (key in seen or row["node_id"] != indicators[row["indicator_id"]]["node_id"]
+                    or row["value_kind"] != "simulated" or row["value"] is not None and not number(row["value"])
+                    or row["triggered"] is not None and type(row["triggered"]) is not bool):
+                fail("indicator state")
+            seen.add(key)
+
+        state = payload.get("target_projection_state")
+        if not isinstance(state, dict) or set(state) != {"values", "parameters", "evaluated_round"}:
+            fail("target state")
+        values, parameters, evaluated = state["values"], state["parameters"], state["evaluated_round"]
+        if parameters is None and evaluated is None and values == {}:
+            if payload.get("target_projection_status") != "unavailable":
+                fail("unevaluated target status")
+            if any(variables[vid]["value"] != node["value"]
+                   or any(h["source"] == "mechanism" for h in variables[vid]["history"])
+                   for vid, node in public_nodes.items() if node["nodeId"] in writers):
+                fail("unevaluated derived value")
+            return
+        if (type(evaluated) is not int or not 0 <= evaluated <= round_num
+                or not isinstance(values, dict) or set(values) != {n["nodeId"] for n in projection["nodes"]}
+                or any(not number(value) for value in values.values()) or not isinstance(parameters, dict)
+                or payload.get("target_projection_status") not in ("ready", "unavailable")
+                or payload.get("target_projection_status") == "ready" and evaluated != round_num):
+            fail("target state bounds")
+        # The compiler checks exact parameter keys and fixed/ranged values, and
+        # validates mechanism domains without sampling or mutating saved state.
+        from .target_mechanisms import compile_model
+        checked_projection = copy.deepcopy(projection)
+
+        def provenance(value: Any) -> None:
+            if isinstance(value, dict):
+                if value.get("basis") == "assumed" and "gap" not in value:
+                    value["gap"] = "Structural projection omits evidence prose; declared assumption retained."
+                for child in value.values():
+                    provenance(child)
+            elif isinstance(value, list):
+                for child in value:
+                    provenance(child)
+
+        provenance(checked_projection)
+        try:
+            propagated = compile_model(checked_projection).propagate(values, parameters, evaluated)
+        except (ValueError, TypeError, KeyError, OverflowError):
+            fail("target parameters or values")
+        if propagated != values:
+            fail("target evaluated values")
+        if any(variables[vid]["value"] != values[node["nodeId"]]
+               or any(h["round"] > evaluated for h in variables[vid]["history"])
+               for vid, node in public_nodes.items() if node["nodeId"] in writers):
+            fail("derived current value")
+
+    def _anchor_predicate(self, predicate: Optional[Dict[str, Any]]) -> Optional[bool]:
+        if predicate is None:
+            return True
+        variable = self.variables.get(slugify(predicate["node_id"]))
+        if variable is None or type(variable.value) not in (int, float):
+            return None
+        value, op = variable.value, predicate["operator"]
+        if op == "between":
+            return float(predicate["low"]) <= value <= float(predicate["high"])
+        threshold = float(predicate["value"])
+        if op == "lt":
+            return value < threshold
+        if op == "lte":
+            return value <= threshold
+        if op == "gt":
+            return value > threshold
+        if op == "gte":
+            return value >= threshold
+        raise ValueError("world anchor unsupported_predicate")
+
+    def _apply_anchor_calendar(self) -> None:
+        if self._anchor_runtime is None:
+            return
+        end = str((self.period or {}).get("period_end") or "")[:10]
+        for event in self._anchor_runtime["calendar"]:
+            if event["id"] in self._anchor_fired_events or not end or event["date"] > end:
+                continue
+            for effect in event["effects"]:
+                variable = self.variables.get(slugify(effect["variable_id"]))
+                if variable is None or self.is_derived_variable(variable):
+                    raise ValueError("world anchor unsupported calendar effect target")
+                value = effect["value"]
+                if effect["op"] == "add":
+                    value = variable.value + value
+                elif effect["op"] == "mul":
+                    value = variable.value * value
+                variable.set_value(value, round_num=self.round, source="effect", cause="admitted scheduled event")
+            self._anchor_fired_events.append(event["id"])
+            self._add_event(WorldEvent(self.round, "scheduled", event["description"], source="world_anchor",
+                                       variable_ids=[e["variable_id"] for e in event["effects"]]))
+
+    def evaluate_anchor_indicators(self) -> None:
+        if self._anchor_runtime is None:
+            return
+        seen = {(r["round"], r["indicator_id"]) for r in self.anchor_signposts}
+        for indicator in self._anchor_runtime["indicators"]:
+            if (self.round, indicator["indicator_id"]) in seen:
+                continue
+            variable = self.variables.get(slugify(indicator["node_id"]))
+            self.anchor_signposts.append({"round": self.round, "indicator_id": indicator["indicator_id"],
+                                          "node_id": indicator["node_id"],
+                                          "value": variable.value if variable is not None else None,
+                                          "triggered": self._anchor_predicate(indicator["trigger"]),
+                                          "value_kind": "simulated"})
+
+    def anchor_actor_observations(self, actor_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """No initial analyst/prior values; only authorized initial or public simulated facts."""
+        if self._anchor_runtime is None:
+            raise ValueError("world anchor runtime required for strict actor observation")
+        out = []
+        for variable in self.variables.values():
+            metadata = variable.anchor_metadata or {}
+            identity = metadata.get("identity")
+            authorized = any(
+                identity is not None and item.get("identity") == identity
+                and item.get("value_kind") == metadata.get("value_kind")
+                and isinstance(item.get("value"), dict)
+                and item["value"].get("kind") == "number"
+                and float(item["value"]["value"]) == variable.value
+                for item in actor_payload["items"])
+            simulated = any(h.get("round", 0) > 0 and h.get("source") in {"effect", "shock", "mechanism", "arbiter"}
+                            for h in variable.history)
+            if not authorized and not simulated:
+                continue
+            out.append({"node_id": variable.id, "value": variable.value, "unit": variable.unit,
+                        "value_kind": "simulated" if simulated else metadata.get("value_kind")})
+        return out
+
+    def anchor_owned_simulated_state(self, agent_id: int) -> Dict[str, Any]:
+        """Bounded own duties and verified resolutions, without legacy dossiers.
+
+        Select fields explicitly; free-form resolution rationale, rival state,
+        beliefs, cached text and estimator material never enter this projection.
+        """
+        if self._anchor_runtime is None:
+            raise ValueError("world anchor runtime required for owned simulated state")
+        result: Dict[str, Any] = {"open_commitments": [], "own_outcomes": []}
+        actor = self.actors.get(agent_id) if type(agent_id) is int else None
+        if actor is None:
+            return result
+        outcomes = []
+        for commitment in actor.commitments[-24:]:
+            if not isinstance(commitment, dict):
+                continue
+            cid = commitment.get("id")
+            made, due = commitment.get("made_round"), commitment.get("due_round")
+            description = commitment.get("description")
+            if (not isinstance(cid, str) or not re.fullmatch(rf"c{agent_id}_[0-9]+_[1-9][0-9]*", cid)
+                    or len(cid) > 56 or sum(isinstance(c, dict) and c.get("id") == cid for c in actor.commitments) != 1
+                    or type(made) is not int or type(due) is not int or not 0 <= made < due
+                    or made > self.round or cid.split("_")[1] != str(made)
+                    or not isinstance(description, str) or not description.strip() or len(description) > 220):
+                continue
+            source = commitment.get("source")
+            if (not isinstance(source, str)
+                    or source not in ("decision", "option_lag") and not source.startswith("agreement:")):
+                continue
+            target_ids = []
+            if source.startswith("agreement:"):
+                interaction = self.interactions.get(source.split(":", 1)[1])
+                if (interaction is None or agent_id not in (interaction.proposer, interaction.recipient)
+                        or cid not in interaction.obligations):
+                    continue
+                other = interaction.recipient if agent_id == interaction.proposer else interaction.proposer
+                if (other not in self.actors or type(commitment.get("counterparty", other)) is not int
+                        or commitment.get("counterparty", other) != other):
+                    continue
+                target_ids = [other]
+                if commitment.get("status") in ("pending", "due") and interaction.status != "accepted":
+                    continue
+            if commitment.get("status") in ("pending", "due") and self.round <= due + COMMITMENT_GRACE_PERIODS:
+                row = {key: commitment[key] for key in ("id", "description", "made_round", "due_round", "status")}
+                due_date = commitment.get("due_date")
+                if isinstance(due_date, str) and _iso_date(due_date) is not None and len(due_date) == 10:
+                    row["due_date"] = due_date
+                result["open_commitments"].append(row)
+            for key in ("last_fulfillment_attempt", "fulfillment_evidence"):
+                evidence = commitment.get(key)
+                if (not isinstance(evidence, dict) or type(evidence.get("agent_id")) is not int
+                        or evidence["agent_id"] != agent_id or evidence.get("commitment_id") != cid
+                        or evidence.get("option_id") != FULFILLMENT_PREFIX + cid
+                        or type(evidence.get("round")) is not int or not made < evidence["round"] <= self.round
+                        or evidence.get("commitment_target_ids") != target_ids
+                        or evidence.get("outcome") not in RESOLUTION_COUNTED):
+                    continue
+                if key == "fulfillment_evidence" and (commitment.get("status") != "fulfilled"
+                        or evidence["outcome"] != "success" or commitment.get("fulfilled_round") != evidence["round"]):
+                    continue
+                row = {"commitment_id": cid, "round": evidence["round"], "outcome": evidence["outcome"]}
+                if row not in outcomes:
+                    outcomes.append(row)
+        action = actor.last_action
+        if (isinstance(action, dict) and action.get("status") == "ok" and action.get("action_reviewed") is True
+                and type(action.get("round")) is int and 0 < action["round"] <= self.round
+                and action.get("resolution") in RESOLUTION_COUNTED
+                and isinstance(action.get("option_id"), str)
+                and re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", action["option_id"])):
+            outcomes.append({"round": action["round"], "option_id": action["option_id"], "outcome": action["resolution"]})
+        result["own_outcomes"] = sorted(outcomes, key=lambda row: row["round"])[-8:]
+        return result
 
     def _target_nodes(self) -> List[Dict[str, Any]]:
         nodes = (self._target_projection or {}).get("nodes", [])
@@ -1325,6 +1677,8 @@ class WorldModel:
         except (MechanismValidationError, TypeError, ValueError, KeyError, OverflowError):
             # Raw compiler errors may identify private nodes; publish only a code.
             self.target_projection_reason = "invalid_target_projection"
+            if self._anchor_runtime is not None:
+                raise ValueError("world anchor invalid target projection") from None
             return result()
         self._target_values, self._target_parameters = values, parameters
         self._target_evaluated_round = round_num
@@ -1343,6 +1697,7 @@ class WorldModel:
             variable.unit = _text(node.get("units"), 24)
             variable.read_only = nid in writers
             variable.set_value(values[nid], round_num=round_num, source="mechanism", cause="typed structural propagation")
+        self.evaluate_anchor_indicators()
         return result()
 
     def add_actor(self, actor: ActorState) -> None:
@@ -1354,7 +1709,8 @@ class WorldModel:
                      as_of: Optional[str] = None, provenance: str = "research", rationale: str = "",
                      var_id: Optional[str] = None, initial_round: int = 0,
                      initial_cause: str = "", read_only: bool = False,
-                     identity: Optional[Dict[str, Any]] = None) -> str:
+                     identity: Optional[Dict[str, Any]] = None,
+                     anchor_metadata: Optional[Dict[str, Any]] = None) -> str:
         """Register (or update) a variable; returns its id.  Duplicate names merge."""
         vid = slugify(var_id or name)
         if vid in self.variables:
@@ -1370,7 +1726,7 @@ class WorldModel:
                 unit = parsed_unit
         self.variables[vid] = StateVariable(vid, name, value, unit=unit, kind=kind, as_of=as_of,
                                             provenance=provenance, rationale=rationale,
-                                            read_only=read_only, identity=identity)
+                                            read_only=read_only, identity=identity, anchor_metadata=anchor_metadata)
         self.variables[vid].history = [{
             "round": int(initial_round),
             "value": self.variables[vid].value,
@@ -1467,6 +1823,7 @@ class WorldModel:
         """Open round ``round_num`` (1-based): reset capacity, mark due commitments."""
         self.round = int(round_num)
         self.period = dict(period) if isinstance(period, dict) else None
+        self._apply_anchor_calendar()
         if self._target_projection and self._target_evaluated_round != self.round:
             self.target_projection_status = "unavailable"
             self.target_projection_reason = "typed_identity_pending_kernel_propagation"
@@ -2564,6 +2921,8 @@ class WorldModel:
         base: Dict[str, Any] = {}
         fired: List[Dict[str, Any]] = []
         for shock in self.shocks:
+            if shock.trigger is not None and self._anchor_predicate(shock.trigger) is not True:
+                continue
             if shock.fired_rounds and not shock.recurring:
                 continue
             active = shock.active_days(self.period)
@@ -2916,15 +3275,24 @@ class WorldModel:
             # EXOGENOUS SHOCKS: only when the seed documented some (a world without shocks serialises
             # exactly as before)
             **({"shocks": [s.to_dict() for s in self.shocks]} if self.shocks else {}),
+            **({"world_anchor": copy.deepcopy(self._anchor_runtime["pin"]),
+                "anchor_runtime": copy.deepcopy(self._anchor_runtime),
+                "anchor_fired_events": list(self._anchor_fired_events),
+                "anchor_signposts": copy.deepcopy(self.anchor_signposts)} if self._anchor_runtime is not None else {}),
         }
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "WorldModel":
+    def from_dict(cls, d: Dict[str, Any], *, anchor_context: Any = None) -> "WorldModel":
         if not isinstance(d, dict):
             raise ValueError("world model state must be an object")
         world = cls(question=d.get("question") or "", as_of_date=d.get("as_of_date"),
                     horizon_date=d.get("horizon_date"), scenarios=d.get("scenarios") or (),
                     settings=d.get("settings") if isinstance(d.get("settings"), dict) else None)
+        if "world_anchor" in d or anchor_context is not None:
+            world._bind_anchor_runtime(d, anchor_context)
+            world._validate_anchor_restore(d)
+            world._anchor_fired_events = list(d.get("anchor_fired_events") or [])
+            world.anchor_signposts = copy.deepcopy(d.get("anchor_signposts") or [])
         world._target_projection = copy.deepcopy(d.get("target_projection")) if isinstance(d.get("target_projection"), dict) else None
         world.target_projection_status = "ready" if d.get("target_projection_status") == "ready" and world._target_projection else "unavailable"
         world.target_projection_reason = _text(d.get("target_projection_reason"), 120) or (

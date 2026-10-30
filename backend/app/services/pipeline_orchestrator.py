@@ -1382,6 +1382,7 @@ _RUNTIME_SKILL_SYNC_HELPER_PATH = os.path.abspath(os.path.join(
 _DEPLOYED_BRIDGE_MODULES: tuple[str, ...] = (
     "market_tools.py", "search_tools.py", "cached_fetch.py",
     "research_budget.py", "run_spending.py", "linear_research.py", "research_gateway.py",
+    "world_anchor.py", "world_anchor_binding.py", "world_anchor_case.py", "world_anchor_publication.py",
     "data_mcp.py", "data_catalog.py", "data_sources.py", "data_tools.py",
     "research_skills.py", "backtest_cutoff.py", "forecast_case.py", "target_research.py",
     "news_signals.py", "news_tools.py", "market_intelligence.py",
@@ -8759,6 +8760,10 @@ class PipelineOrchestrator:
         from .world_simulation.contracts import clone, digest, require
         from .world_simulation.service import WorldSimulationService
         require(self._simulation_engine(state) == "world-v1", "engine_mismatch", "World pipeline required")
+        from .world_anchor import require_completed, validate_anchor_context
+        anchor_context = require_completed(state)
+        if anchor_context is not None:
+            validate_anchor_context(anchor_context, engine="world-v1")
         manager = SimulationManager()
         sim = manager.get_simulation(state.simulation_id) if state.simulation_id else None
         prepare_reused = sim is not None and bool(sim.world_input_manifest_sha256)
@@ -8862,7 +8867,8 @@ class PipelineOrchestrator:
                     sim.simulation_id, raw_spec=raw_spec, research_report=report_md,
                     research_generation_id=generation, research_engine=engine,
                     actor_bundle=bundle, policy_spec=policy_spec,
-                    ontology=getattr(project, "ontology", None), simulation_requirement=state.prompt)
+                    ontology=getattr(project, "ontology", None), simulation_requirement=state.prompt,
+                    **({"anchor_context": anchor_context} if anchor_context is not None else {}))
             except WorldError as error:
                 # The stage error keeps only the message; keep the typed code
                 # (and its closed details, e.g. per-attempt modeler codes) too.
@@ -8943,6 +8949,7 @@ class PipelineOrchestrator:
         backtest: Optional[dict] = None,
         forecast_authority: Optional[str] = None,
         target_simulation: Optional[dict] = None,
+        world_anchor: Optional[dict] = None,
     ) -> PipelineState:
         """创建管线记录并在后台线程启动。立即返回（含 pipeline_id / task_id）。
 
@@ -8983,14 +8990,24 @@ class PipelineOrchestrator:
             target_options["target_tournament_enabled"] = bool(getattr(Config, "REPORT_TOURNAMENT", True))
         pipeline_id = f"pipe_{uuid.uuid4().hex[:12]}"
         from . import run_spending as spending
+        from . import world_anchor as anchors
+        private_binding = spending.api().binding_from_environment() if spending.api().required() else None
+        anchor_option = anchors.new_run_option(world_anchor, private_binding=private_binding)
+        if anchor_option is not None and not (
+                private_binding and private_binding.get("schema") == "target-run-spending-binding/v2"):
+            raise anchors.WorldAnchorIntegrationError("anchor_profile_required")
         spending_options = spending.bind_start(
             pipeline_id, prompt, mode=mode, depth=depth or Config.DEERFLOW_RESEARCH_DEPTH,
             language=language, model=model, forecast_authority=forecast_authority,
-            target_simulation=target_simulation, project_name=project_name, max_rounds=max_rounds)
+            target_simulation=target_simulation, project_name=project_name, max_rounds=max_rounds,
+            **({"world_anchor": anchor_option} if anchor_option is not None else {}))
         if spending_options:
             admitted = spending_options[spending.REQUEST_KEY]
             prompt, depth, language, model = (admitted["prompt"], admitted["depth"],
                                                admitted["language"], admitted["model"])
+            # The public mode selector expands from private v2 authority during
+            # binding. Persist that admitted value, not the caller's selector.
+            anchor_option = admitted.get("world_anchor")
         PipelineManager.ensure_dirs(pipeline_id)
 
         task_manager = TaskManager()
@@ -9022,6 +9039,10 @@ class PipelineOrchestrator:
             **simulation_options,
             **spending_options,
         })
+        if anchor_option is not None:
+            state.options[anchors.CONFIG_KEY] = anchor_option
+            state.options[anchors.LIFECYCLE_KEY] = anchors.pending_lifecycle(
+                pipeline_id, spending_options[spending.REQUEST_KEY])
         state.options["actor_intelligence_policy_v1"] = (
             {"required": False, "research_engine": "v3", "source": AUTHORITY}
             if target_options else admission_actor_intelligence_policy_v1()
@@ -10503,6 +10524,20 @@ class PipelineOrchestrator:
         interval rather than an invented multi-hour duration.
         """
         from .target_pipeline import is_target, record_stage
+        anchor_research = stage == STAGE_RESEARCH and "world_anchor" in state.options
+        if anchor_research:
+            from .world_anchor import ANCHOR_ARTIFACTS, complete_research_anchor
+            complete_research_anchor(state)
+            manifest = PipelineManager.load_artifact_manifest(state.pipeline_id)
+            root = state.handoff_dir or PipelineManager.handoff_dir(state.pipeline_id)
+            for name, relative in ANCHOR_ARTIFACTS:
+                path = os.path.join(root, relative)
+                entry = _manifest_entry_for(name, path, stage)
+                if entry is None or not entry.get("sha256") or os.path.islink(path):
+                    raise ValueError("Required World Anchor artifact is missing or indirect")
+                manifest[name] = entry
+                state.artifacts[name] = path
+            PipelineManager.write_artifact_manifest(state.pipeline_id, manifest)
         if is_target(state):
             record_stage(state, stage)
         strict_world = self._simulation_engine(state) == "world-v1" and stage in {STAGE_PREPARE, STAGE_RUN}
@@ -10532,7 +10567,8 @@ class PipelineOrchestrator:
             try:
                 self._record_stage_artifacts(state, stage)  # T6.3
             except Exception:
-                pass
+                if anchor_research:
+                    raise
         PipelineManager.save(state)
         # W9-3：阶段转换必落一版遥测账（重启只丢「上一次阶段边界之后」的增量）。
         self._flush_run_telemetry(state)
@@ -10980,6 +11016,10 @@ class PipelineOrchestrator:
                           os.path.join(hd, "prediction_market_candidates.jsonl")))
             specs.append(("research_budget", os.path.join(hd, "research_budget.json")))
             specs.extend(PipelineOrchestrator._viz_artifact_specs(hd))
+            if "world_anchor" in state.options:
+                from .world_anchor import ANCHOR_ARTIFACTS, enabled
+                enabled(state.options)
+                specs.extend((name, os.path.join(hd, path)) for name, path in ANCHOR_ARTIFACTS)
         elif stage == STAGE_ONTOLOGY:
             specs.append(("ontology", os.path.join(hd, "ontology.json")))
         elif stage == STAGE_GRAPH:
@@ -14495,6 +14535,18 @@ class PipelineOrchestrator:
                 # ---- Stage 3: PREPARE ----
                 upd = self._make_stage_updater(state, STAGE_PREPARE)
                 sim_manager = SimulationManager()
+                from .world_anchor import require_completed, validate_anchor_context
+                anchor_context = require_completed(state)
+                anchor_case = None
+                if anchor_context is not None:
+                    validate_anchor_context(anchor_context, engine="oasis-legacy")
+                    from .official_data import bridge_module as anchor_bridge
+                    case_path = os.path.join(handoff_dir, "forecast_case.json")
+                    if os.path.isfile(case_path):
+                        anchor_case = anchor_bridge("forecast_case").read_case(case_path)
+                        anchor_bridge("world_anchor_case").validate_anchored_case(anchor_case,
+                            pack=anchor_context.pack, requirements=anchor_context.requirements,
+                            index=anchor_context.index, policy=anchor_context.policy)
                 prepare_stage_done = state.stages.get(STAGE_PREPARE) and state.stages[STAGE_PREPARE].status == "completed"
                 sim_state = sim_manager.get_simulation(state.simulation_id) if state.simulation_id else None
                 # I-4-3: 复用前校验 PREPARE 产物（simulation_config.json / personas）未被半写/篡改；
@@ -14599,6 +14651,8 @@ class PipelineOrchestrator:
                         max_rounds=int(_prep_mr) if _prep_mr else None,
                         research_language=state.options.get("research_language"),  # PREP-4
                         **({"ontology": preparation_ontology} if preparation_ontology is not None else {}),
+                        **({"anchor_context": anchor_context} if anchor_context is not None else {}),
+                        **({"forecast_case": anchor_case} if anchor_case is not None else {}),
                     )
                     _prepare_completion_message = "环境就绪"
 

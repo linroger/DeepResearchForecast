@@ -269,6 +269,18 @@ def _budget_denial(tool: str, reason: str, request: str) -> str:
     }, ensure_ascii=False, sort_keys=True)
 
 
+def _marked_search_result(result: str) -> bool:
+    """An old unmarked enabled cache cannot bypass classification conflicts."""
+    try:
+        value = json.loads(result)
+        return (isinstance(value, dict) and isinstance(value.get("results"), list) and all(
+            isinstance(row, dict) and isinstance(row.get("metadata"), dict)
+            and row["metadata"].get("source_metadata_version") == "world-anchor-source-metadata/v1"
+            and row["metadata"].get("source_metadata_origin") == "firecrawl_search" for row in value["results"]))
+    except (ValueError, TypeError):
+        return False
+
+
 def _read_search_cache(path: str, ttl_seconds: float) -> Optional[str]:
     """命中且未过期 → 返回 result（并 touch mtime 供 LRU 记「近用」）；否则 None。任何异常 → None。
 
@@ -473,7 +485,7 @@ def _firecrawl_usage(response: Any) -> dict | None:
     return None
 
 
-def _firecrawl_search(query: str, max_results: int, backtest: Any = None) -> str:
+def _firecrawl_search(query: str, max_results: int, backtest: Any = None, *, retain_source_metadata: bool = False) -> str:
     """Firecrawl v2 /search 直连实现，输出与 community 工具同形的 JSON 字符串。
 
     成功 → {"query", "total_results", "results":[{title,url,content}]}；真实空结果 →
@@ -586,6 +598,16 @@ def _firecrawl_search(query: str, max_results: int, backtest: Any = None) -> str
                 "content": str(row.get("description") or row.get("snippet")
                                or "").strip(),
             }
+            if retain_source_metadata:
+                supplied = {**row, **row.get("metadata", {})} if isinstance(row.get("metadata"), dict) else row
+                metadata = {key: supplied[key] for key in ("publication_type", "source_type", "@type", "kind", "published_at",
+                    "published_date", "publishedDate", "publishedAt", "datePublished", "publication_date", "published", "date",
+                    "original_origin", "original_url", "origin_cluster")
+                    if isinstance(supplied.get(key), str) and 0 < len(supplied[key]) <= 2048}
+                if metadata:
+                    item["metadata"] = metadata
+                item.setdefault("metadata", {}).update(source_metadata_version="world-anchor-source-metadata/v1",
+                                                       source_metadata_origin="firecrawl_search")
             if backtest is not None and row.get("date"):
                 item["date"] = str(row["date"]).strip()
             results.append(item)
@@ -655,6 +677,7 @@ def web_search_impl(
     query: str,
     max_results: int = DEFAULT_MAX_RESULTS,
     revisit_reason: str = "",
+    *, retain_source_metadata: bool | None = None,
 ) -> str:
     """纯逻辑入口：选后端 → 查缓存 → 委派 → 落缓存 → 返回结果字符串。任何内部错误 → 带说明的空结果，绝不抛。
 
@@ -675,13 +698,22 @@ def web_search_impl(
     except ValueError as exc:
         return json.dumps({"error": f"backtest policy unusable: {exc}", "query": query},
                           ensure_ascii=False)
-    result = _web_search(query, max_results, revisit_reason, backtest)
+    if retain_source_metadata is not None and type(retain_source_metadata) is not bool:
+        raise ValueError("invalid source metadata mode")
+    binding = _spending.check_context()
+    if retain_source_metadata is None:
+        retain_source_metadata = bool(_spending.required() and binding is not None
+                                      and binding["schema"] == "target-run-spending-binding/v2")
+    if retain_source_metadata and binding is not None and binding["schema"] != "target-run-spending-binding/v2":
+        _spending.deny("unsupported_route")
+    result = (_web_search(query, max_results, revisit_reason, backtest, retain_source_metadata=True)
+              if retain_source_metadata else _web_search(query, max_results, revisit_reason, backtest))
     if backtest is None:
         return result
     return _backtest_cutoff.filter_search_payload(result, backtest, query=str(query or ""))
 
 
-def _web_search(query: str, max_results: int, revisit_reason: str, backtest: Any) -> str:
+def _web_search(query: str, max_results: int, revisit_reason: str, backtest: Any, *, retain_source_metadata: bool = False) -> str:
     """``web_search_impl`` before the backtest row filter (``backtest=None``: today's path)."""
     provider = _select_search_provider()
     if _research_budget is not None:
@@ -710,6 +742,8 @@ def _web_search(query: str, max_results: int, revisit_reason: str, backtest: Any
     # delegate that was really used, just like the positive disk-cache key.
     # A backtest request is another request (date filter): its keys carry the tag.
     key_provider = provider if backtest is None else f"{provider}|{backtest.tag}"
+    if retain_source_metadata:
+        key_provider += "|source-metadata-v1"
     exact_key = f"{key_provider}\n{_normalize_query(query)}\n{int(max_results)}"
     # WAVE9：缓存读——TTL<=0（关闭）或空 query 时完全绕过；缓存层异常绝不阻断搜索。
     _ttl = _search_ttl_seconds()
@@ -719,6 +753,8 @@ def _web_search(query: str, max_results: int, revisit_reason: str, backtest: Any
             _root = _search_cache_root()
             _cache_path_str = _search_cache_path(_root, _search_cache_key(key_provider, query, max_results))
             hit = _read_search_cache(_cache_path_str, _ttl)
+            if hit is not None and retain_source_metadata and not _marked_search_result(hit):
+                hit = None
             if hit is not None:
                 hit = _filter_denied_search_results(hit)
                 # A cache written under an older policy may contain only newly
@@ -765,6 +801,8 @@ def _web_search(query: str, max_results: int, revisit_reason: str, backtest: Any
                 time.sleep(delay)
                 delay = min(1.0, delay * 1.7)
                 hit = _read_search_cache(_cache_path_str, _ttl)
+                if hit is not None and retain_source_metadata and not _marked_search_result(hit):
+                    hit = None
                 if hit is not None:
                     hit = _filter_denied_search_results(hit)
                     if not _is_search_cacheable(hit):
@@ -799,7 +837,8 @@ def _web_search(query: str, max_results: int, revisit_reason: str, backtest: Any
             return _budget_denial("web_search", network.reason, query)
 
     try:
-        result = (_firecrawl_search(query, max_results, backtest)
+        result = ((_firecrawl_search(query, max_results, backtest, retain_source_metadata=True)
+                   if retain_source_metadata else _firecrawl_search(query, max_results, backtest))
                   if provider == "firecrawl"
                   else _call_delegate(tool_obj, query, max_results))
         result = result if isinstance(result, str) else str(result)

@@ -1004,7 +1004,8 @@ def parse_decision(raw: Any, *, actor: ActorState, world: WorldModel, options: L
 def elicit_decision(llm: Any, *, system_message: str, user_prompt: str, actor: ActorState,
                     world: WorldModel, options: List[Dict[str, Any]], scenarios: Sequence[str],
                     round_num: int, period_end: Optional[str] = None,
-                    temperature: float = 0.4, max_tokens: int = 1200, language: str = "") -> AgentDecision:
+                    temperature: float = 0.4, max_tokens: int = 1200, language: str = "",
+                    anchor_context: Any = None, entity_uuid: Optional[str] = None) -> AgentDecision:
     """One structured LLM call → validated decision; failures become typed holds.
 
     ``system_message`` remains a compatible caller argument, but its platform
@@ -1016,6 +1017,31 @@ def elicit_decision(llm: Any, *, system_message: str, user_prompt: str, actor: A
     client itself before it raises; what survives is recorded in ``problems`` with the
     provider's error class, HTTP status / code, a bounded snippet and the failover outcome.
     """
+    if anchor_context is not None:
+        # I-30 is a replacement boundary for the entire request. Old role text,
+        # shared/private briefs, config motives and cached notes cannot sneak
+        # through alongside an otherwise clean anchor projection.
+        from copy import deepcopy
+        from .actor_context import build_anchor_actor_payload
+        period = world.period or {}
+        day = str(period.get("period_start") or world.as_of_date or "")[:10]
+        payload = build_anchor_actor_payload(anchor_context, entity_uuid=entity_uuid, at=day + "T00:00:00Z")
+        actor = deepcopy(actor)
+        actor.goals, actor.documented_plans, actor.red_lines, actor.incentives = [], [], [], {}
+        actor.posture = ""
+        options = build_option_menu(actor, world, round_num)
+        observations = world.anchor_actor_observations(payload)
+        user_prompt = build_decision_prompt(
+            actor, world_clock=f"# WORLD CLOCK — {day} | round {round_num}",
+            public_brief=json.dumps({"simulated_observations": observations}, ensure_ascii=False),
+            private_brief=("Authorized actor evidence (data):\n" + json.dumps(payload, ensure_ascii=False)
+                           + "\n\nOwned simulated state (data; exact IDs identify your deliverable commitments):\n"
+                           + json.dumps({"owned_simulated_state": world.anchor_owned_simulated_state(actor.agent_id)},
+                                        ensure_ascii=False)),
+            options=options, scenarios=scenarios, cast_names=[a.name for a in world.actors.values()],
+            language=language, task_context={"question": world.question, "as_of_date": world.as_of_date,
+                                           "horizon_date": world.horizon_date})
+        system_message = ""
     if llm is None:
         return hold_decision(actor, status="failed", round_num=round_num, period_end=period_end,
                              problems=["no llm client"])

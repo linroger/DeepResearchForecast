@@ -1,7 +1,8 @@
 """Typed actor information boundaries for the target-first structural runtime.
 
-Only identifiers and finite numeric/control fields cross the decision boundary.
-The original case and free-form research/persona prose never cross it.
+Legacy observations contain only identifiers and finite numeric/control fields.
+Anchored observations also include authenticated actor items. The original case
+and unqualified research/persona prose never cross the decision boundary.
 """
 from __future__ import annotations
 
@@ -95,13 +96,20 @@ def visible_nodes(case, actor):
              or node.get("ownerActorId") == actor["actorId"])}
 
 
-def safe_observation(case, state, actor_id, *, period=0):
+def safe_observation(case, state, actor_id, *, period=0, anchor_context=None, at=None):
     """Construct an allowlist from current values plus dated observation history.
 
     With a flat value mapping, only period-zero, zero-lag values are admissible.
     A later snapshot needs history to establish release eligibility; the latest
     truth must never be substituted for a missing historical release.
+
+    Anchored observations require the native validated case and an explicit
+    observation timestamp. The host and pure adapter authenticate admission;
+    this boundary additionally preserves runtime visibility and release lags.
     """
+    if anchor_context is not None:
+        return _anchored_observation(case, state, actor_id, period=period,
+                                     anchor_context=anchor_context, at=at)
     integer(period, "period")
     actor = next((row for row in case["actors"] if row["actorId"] == actor_id), None)
     if actor is None:
@@ -160,6 +168,75 @@ def safe_observation(case, state, actor_id, *, period=0):
                              "cadencePeriods": actor["decisionRule"]["cadencePeriods"],
                              "triggers": [deepcopy(p) for p in actor["decisionRule"].get("triggers", [])
                                           if p["nodeId"] in permitted]}}
+
+
+def _anchored_observation(case, state, actor_id, *, period, anchor_context, at):
+    # Keep bridge/host imports and validation entirely outside the legacy path.
+    from . import world_anchor as host
+    from .official_data import bridge_module
+
+    host.validate_anchor_context(anchor_context, engine="target-first-v1")
+    admitted = bridge_module("world_anchor_case").actor_observation_inputs(
+        case, pack=anchor_context.pack, requirements=anchor_context.requirements,
+        index=anchor_context.index, policy=anchor_context.policy,
+        actor_id=actor_id, at=at)
+    integer(period, "period")
+    actor = next((row for row in case["actors"] if row["actorId"] == actor_id), None)
+    if actor is None:
+        raise ValueError("unknown actorId")
+    visible = visible_nodes(case, actor)
+    owned = {node["nodeId"] for node in case["nodes"]
+             if node.get("ownerActorId") == actor_id}
+    owned.update(lever["nodeId"] for lever in actor["levers"])
+    structured = "values" in state and isinstance(state["values"], dict)
+    simulated_nodes = (set(state.get("simulatedOwnNodeIds", {}).get(actor_id, []))
+                       if structured else set())
+    initial_nodes = visible & set(admitted["node_ids"])
+    permitted = initial_nodes | (visible & simulated_nodes & owned)
+    # Ownership and a caller's simulated-state marker cannot authenticate the
+    # future settlement or any output derived from it as current knowledge.
+    permitted.difference_update(admitted["excluded_node_ids"])
+    plan_ids = set(admitted["plan_ids"])
+    if structured:
+        plan_ids.update(state.get("simulatedPlanIds", {}).get(actor_id, []))
+
+    def permitted_plans(plans):
+        return [plan for plan in plans if plan["planId"] in plan_ids
+                and (not plan.get("condition")
+                     or plan["condition"]["nodeId"] in permitted)]
+
+    filtered_case = deepcopy(case)
+    filtered_actor = next(row for row in filtered_case["actors"] if row["actorId"] == actor_id)
+    filtered_actor["objectives"] = []
+    filtered_actor["plans"] = permitted_plans(filtered_actor.get("plans", []))
+    filtered_actor["decisionRule"]["triggers"] = [
+        trigger for trigger in filtered_actor["decisionRule"].get("triggers", [])
+        if trigger["nodeId"] in permitted]
+
+    # Filter data, not the actor's information/control menu: a visible, validated
+    # lever is usable even when its initial value has no admitted observation.
+    filtered_state = deepcopy(state)
+    if structured:
+        filtered_state["values"] = {key: value for key, value in filtered_state["values"].items()
+                                    if key in permitted}
+        for row in filtered_state.get("history", []):
+            # A current simulated-own ID does not authenticate older snapshots.
+            # Keep that exception at the current positive period; normal release
+            # lag may withhold it. Historical admission needs per-row evidence.
+            historical_nodes = permitted if row["period"] == period and period > 0 else initial_nodes
+            row["values"] = {key: value for key, value in row["values"].items()
+                             if key in historical_nodes}
+        filtered_state["signals"] = [signal for signal in filtered_state.get("signals", [])
+                                     if signal.get("nodeId") in permitted]
+        if "plans" in filtered_state:
+            filtered_state["plans"] = {
+                actor_id: permitted_plans(filtered_state["plans"].get(actor_id, []))}
+    else:
+        filtered_state = {key: value for key, value in filtered_state.items() if key in permitted}
+
+    observation = safe_observation(filtered_case, filtered_state, actor_id, period=period)
+    observation["anchorItems"] = deepcopy(admitted["actor"]["items"])
+    return observation
 
 
 def rule_actions(observation):

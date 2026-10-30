@@ -93,6 +93,7 @@ def v1_run():
         language: str     Chinese | English | auto（可选）
         model: str        研究模型（可选；须在 Config.SUPPORTED_DEERFLOW_MODELS 内）
         simulation_engine: str  可选；省略采用 fresh default，显式 null 无效
+        world_anchor: dict  可选，仅 {"mode":"v1"}；私有范围、策略和限额由授权决定
         world_spec / world_policy_spec: dict  可选；使用同一 fresh admission 契约
         backtest: dict    可选；回测模式 {as_of, strict, archive, arm, target, run_label}
                           （docs/handoff/backtest/design.md），无效请求 → 400
@@ -154,7 +155,7 @@ def v1_run():
             model=model,
             **{key: data[key] for key in
                ('simulation_engine', 'world_spec', 'world_policy_spec', 'backtest',
-                'forecast_authority', 'target_simulation') if key in data},
+                'forecast_authority', 'target_simulation', 'world_anchor') if key in data},
         )
         return _ok({
             "pipeline_id": state.pipeline_id,
@@ -173,6 +174,9 @@ def v1_run():
         from ..services.run_spending import api as spending_api
         if spending_api().is_spending_stop(e):
             return jsonify({"success": False, "error": "Run spending stopped", "error_code": e.code}), 409
+        from ..services.world_anchor import WorldAnchorIntegrationError
+        if isinstance(e, WorldAnchorIntegrationError):
+            return jsonify({"success": False, "error": "World Anchor admission failed", "error_code": e.code}), 400
         logger.error(f"[v1] 启动管线失败: {e}", exc_info=True)
         return _err(str(e), 500)
 

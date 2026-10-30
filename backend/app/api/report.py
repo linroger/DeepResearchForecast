@@ -460,10 +460,16 @@ def _target_report_inputs(simulation_id, owner):
         if fc.case_hash(research_case) != digest or case["question"].strip() != state.prompt.strip():
             raise ValueError("Target case differs from the admitted research question or case")
         inputs = _target_artifact(pipeline_id, "target_input", root, simulation_id, "target_input.json")
-        if inputs != {"schemaVersion": "target-input/v1", "pipelineId": pipeline_id,
+        from ..services.world_anchor import load_target_anchor, anchor_config_pin
+        simulation_dir = os.path.join(root, simulation_id)
+        anchor_context = load_target_anchor(simulation_dir, expected_case_hash=digest)
+        expected_inputs = {"schemaVersion": "target-input/v1", "pipelineId": pipeline_id,
                       "caseHash": digest, "simulation": settings,
                       "structure": fc.simulation_projection(case), "simulationWeight": 0.0,
-                      "decisionBudget": options.get("target_decision_budget_v1", {"max_calls": 128})}:
+                      "decisionBudget": options.get("target_decision_budget_v1", {"max_calls": 128})}
+        if anchor_context is not None:
+            expected_inputs["worldAnchor"] = anchor_config_pin(anchor_context, require_join=False)
+        if inputs != expected_inputs:
             raise ValueError("Target inputs differ from the frozen case or settings")
         result = _target_artifact(pipeline_id, "target_simulation", root, simulation_id, "target_simulation.json")
         target_evidence = _target_artifact(pipeline_id, "target_evidence", Config.PIPELINE_DATA_DIR,
@@ -478,7 +484,8 @@ def _target_report_inputs(simulation_id, owner):
             raise ValueError("Target evidence must match the frozen case")
         validate_news_context(target_evidence["news_market_context"])
         bundle = build_target_report(case, result, official_data=target_evidence["official_data"],
-                                     markets=target_evidence["markets"])
+                                     markets=target_evidence["markets"],
+                                     **({"simulation_dir": simulation_dir} if anchor_context is not None else {}))
         if options.get("aggregation_policy_v1") is None:
             raise ValueError("Saved target aggregation policy is required")
         policy = pin_aggregation_policy(options["aggregation_policy_v1"], authority="research")
@@ -520,7 +527,8 @@ def _target_report_inputs(simulation_id, owner):
         return {"graph_id": state.graph_id, "simulation_id": simulation_id,
                 "simulation_requirement": case["question"], "forecast_case": case,
                 "target_simulation": result, "aggregation_policy": policy,
-                "saved_estimators": saved_estimators, "target_evidence": target_evidence, **owner_kwargs}
+                "saved_estimators": saved_estimators, "target_evidence": target_evidence,
+                **({"anchor_context": anchor_context} if anchor_context is not None else {}), **owner_kwargs}
     except (HTTPException, OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         raise TargetPipelineError("Target report input integrity verification failed: " + str(exc)) from exc
 

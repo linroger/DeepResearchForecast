@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from .contracts import (
-    CAUSAL_ORDER_POLICY, actors_by_id, causal_order_key, clone, digest, parse_time, period_for, require,
+    CAUSAL_ORDER_POLICY, actors_by_id, anchor_enabled, causal_order_key, clone, digest, parse_time, period_for, require,
     templates_by_id, visible_to,
 )
 
@@ -94,7 +94,98 @@ def build_observation(spec: dict, snapshot: dict, actor_id: str, round_index: in
     if 'evaluationObservationMask' in spec:
         from .evaluation import apply_observation_mask
         result = apply_observation_mask(spec, result)
+    if anchor_enabled(spec):
+        result = _anchor_observation(spec, snapshot, result, actor_id, round_index)
     result['observationId'] = digest(result)
+    return result
+
+
+def _simulated_record(value):
+    """Keep simulated protocol data, never an inherited initial evidence basis."""
+    if not isinstance(value, dict):
+        return clone(value)
+    # Only these record-wrapper locations are server provenance. Actor-defined
+    # terms and typed values are opaque protocol data; their legal keys may be
+    # named description/basis/conditions/effects and must remain exact.
+    result = {key: clone(item) for key, item in value.items()
+              if key not in {"basis", "structuralBasis", "sourceBindings", "descriptionBasis",
+                             "worldAnchor", "pack_hash", "input_hash", "preparedParametersHash"}}
+    if isinstance(result.get("effects"), list):
+        result["effects"] = [_simulated_record(effect) for effect in result["effects"]]
+    if "basis" in value:
+        result["basis"] = {"kind": "simulation_event", "refs": ["visible_" + digest(result)]}
+    return result
+
+
+def _anchor_observation(spec, snapshot, result, actor_id, round_index):
+    """Final enabled-only allowlist across old and new actor request channels."""
+    view = spec["worldAnchorObservations"]["actors"][actor_id]["periods"][str(round_index)]
+    model = {"actorId": actor_id, "name": actors_by_id(spec)[actor_id]["name"],
+             **{key: [] for key in ("objectives", "values", "incentives", "constraints", "beliefs", "priorityRules")},
+             "anchorEvidence": clone(view["items"])}
+    # A public statement remains attributed evidence, not a new sincere belief,
+    # objective or behavioral priority. Modeler/legacy profiles never fill gaps.
+    result["actor"] = model
+    marker = snapshot.get("anchorObservationState")
+    require(isinstance(marker, dict) and marker.get("schemaVersion") == "world-anchor-state/v1",
+            "anchor_binding_mismatch", "Anchor observation origin state is missing")
+    origins = marker["simulatedFields"]
+    initial_fields = set(view["initialFields"])
+    world = {key: {} for key in ("accounts", "metrics", "rules", "relations", "commitments")}
+    structural = {"accounts": ("ownerId", "unit"), "metrics": ("kind", "unit"), "rules": (), "relations": ()}
+    for section in structural:
+        for record_id, record in result["world"][section].items():
+            allowed = {}
+            original = spec["initialState"][section][record_id]
+            simulated = False
+            for field in (("balance", "reserved") if section == "accounts" else ("value",)):
+                origin = origins.get(section, {}).get(record_id, {}).get(field)
+                if origin is not None:
+                    require(type(origin.get("round")) is int and 1 <= origin["round"] <= snapshot["round"]
+                            and parse_time(origin["at"]) <= parse_time(result["simulatedAt"]),
+                            "anchor_binding_mismatch", "Anchor simulated origin is invalid")
+                    allowed[field] = clone(record[field])
+                    simulated = True
+                elif (f"/initialState/{section}/{record_id}/{field}" in initial_fields
+                      and type(record.get(field)) is type(original.get(field)) and record.get(field) == original.get(field)):
+                    allowed[field] = clone(record[field])
+                elif section == "accounts" and field == "reserved" and "balance" in allowed and record.get(field) == "0":
+                    allowed[field] = "0"  # Native initial absence of reservations, not an assumed balance.
+            if allowed:
+                world[section][record_id] = {**{key: clone(record[key]) for key in structural[section]},
+                    **allowed, "visibility": clone(record["visibility"]),
+                    "evidenceType": "simulated" if simulated else record.get("evidenceType", "reported"),
+                    "valueStatus": "specified"}
+    for record_id, record in result["world"]["commitments"].items():
+        if (snapshot["round"] >= 1 and isinstance(record.get("createdAt"), str)
+                and parse_time(spec["asOf"]) <= parse_time(record["createdAt"]) <= parse_time(result["simulatedAt"])):
+            world["commitments"][record_id] = _simulated_record(record)
+    result["world"] = world
+
+    old = result["privateState"]
+    private = {"beliefs": [], "plans": [], "priorityChanges": [], "observedEvents": [],
+               "lastObservedEvents": [], "lastActionResults": []}
+    for field in ("beliefs", "plans"):
+        for item in old.get(field, []):
+            if (isinstance(item, dict) and item.get("round", 0) >= 1
+                    and item.get("basis", {}).get("kind") == "simulation_event" and isinstance(item.get("text"), str)):
+                private[field].append({key: clone(item[key]) for key in ("text", "round", "observationId", "decisionId") if key in item})
+                private[field][-1]["evidenceType"] = "simulated"
+    private["lastObservedEvents"] = [_simulated_record(item) for item in old.get("lastObservedEvents", [])
+                                      if item.get("round", 0) >= 1 and visible_to(item, actor_id)]
+    private["observedEvents"] = [item["eventId"] for item in private["lastObservedEvents"]]
+    private["lastActionResults"] = [{key: clone(item[key]) for key in
+        ("intentId", "actorId", "round", "accepted", "code", "explanation") if key in item}
+        for item in old.get("lastActionResults", []) if item.get("round", 0) >= 1]
+    result["privateState"] = private
+    for field in ("inbox", "ownOffers", "messages"):
+        result[field] = [_simulated_record(item) for item in result[field] if item.get("createdRound", 0) >= 1]
+    options = []
+    for option in result["options"]:
+        approved = view["options"].get(option["templateId"])
+        if approved is not None:
+            options.append({**option, "description": approved["description"], "inputs": clone(approved["inputs"])})
+    result["options"] = options
     return result
 
 

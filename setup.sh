@@ -607,7 +607,7 @@ if [ -d "$DEERFLOW_DIR/backend" ] && [ -d "$BRIDGE_DIR" ]; then
   #     name by search_tools.py, data_sources.py and the v3 engine.
   #     Keep this list in sync with _sync_deerflow_bridge_if_stale in
   #     backend/app/services/pipeline_orchestrator.py (the launch-time drift guard).
-  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py run_spending.py runtime_skill_sync.py linear_research.py research_gateway.py target_research.py forecast_case.py data_mcp.py data_catalog.py data_sources.py data_tools.py research_skills.py backtest_cutoff.py news_signals.py news_tools.py market_intelligence.py; do
+  for _tool_mod in market_tools.py search_tools.py cached_fetch.py research_budget.py run_spending.py world_anchor.py world_anchor_binding.py world_anchor_case.py world_anchor_publication.py runtime_skill_sync.py linear_research.py research_gateway.py target_research.py forecast_case.py data_mcp.py data_catalog.py data_sources.py data_tools.py research_skills.py backtest_cutoff.py news_signals.py news_tools.py market_intelligence.py; do
     if [ -f "$BRIDGE_DIR/$_tool_mod" ]; then
       cp "$BRIDGE_DIR/$_tool_mod" "$DEERFLOW_DIR/$_tool_mod"
       case "$_tool_mod" in

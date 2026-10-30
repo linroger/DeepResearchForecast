@@ -10,7 +10,7 @@ from :mod:`sim_provenance` or from this module's own bilingual label table.
 
 Input contract (design §3.1, tested by T15):
 
-* Only files inside the simulation directory are opened: ``world_state.json``,
+* Off mode opens only files inside the simulation directory: ``world_state.json``,
   ``world_state_history.jsonl``, ``world_digest.jsonl``, ``world_actions.jsonl``,
   ``decisions.jsonl``, ``world_state_trajectory.json``, ``world_paths.json``,
   ``run_summary.json``, ``simulation_config.json`` (its ``temporal_config``,
@@ -20,6 +20,10 @@ Input contract (design §3.1, tested by T15):
   containment, not through the world store).  The research dossier,
   ``sources.json``, the forecast spine, the market pack and ``forecast.json`` are
   never read.
+* Enabled World Anchor authenticates its externally pinned generation using the
+  host runtime loader, then emits only the public diagnostic projection. Raw
+  evidence/metadata never enters record synthesis. Saved runtime provenance is
+  privileged, not an audience grant.
 * From ``world_actions.jsonl`` only :data:`simulation_record_contract.ACTION_PUBLIC_FIELDS`
   are kept; ``private_rationale`` is dropped at load time by allowlist.
 * Scenario shares appear only under ``overall``; per-period sections carry none
@@ -410,12 +414,51 @@ class _Artifacts:
         self.world_seed = config.get("world_state_seed") if isinstance(config.get("world_state_seed"), dict) else {}
         self.output_language = _text(config.get("output_language"), 40)
         self.config_as_of = _text(config.get("as_of_date"), 20)
+        self.anchor_diagnostics = rc.load_anchor_diagnostics(self.dir, config=config, world_state=self.world_state)
         self.history = self._jsonl("world_state_history.jsonl")
         self.actions = [self._public_action(r) for r in self._jsonl("world_actions.jsonl")]
         self.digest = self._jsonl("world_digest.jsonl")
         self.decisions = self._jsonl("decisions.jsonl")
         self.world_result: Dict[str, Any] = {}
         self.world_spec: Dict[str, Any] = {}
+        if self.anchor_diagnostics is not None and "engine" not in self.anchor_diagnostics:
+            self._public_anchor_artifacts(config)
+
+    def _public_anchor_artifacts(self, config):
+        """Keep privileged runtime metadata out of legacy record/prompt channels.
+
+        Sealed initial cast names and explicitly public numeric nodes are the
+        authority here. Unclassified runtime prose, private plans, free-form
+        causes and global gap counts cannot acquire public status by being saved.
+        """
+        from .world_model import slugify
+        allowed = {slugify(r["node_id"]): r for r in self.anchor_diagnostics["variables"]}
+        seed = config["world_model"]
+        variables = []
+        for variable in self.world.get("variables", []):
+            row = allowed.get(variable.get("id"))
+            if row is None:
+                continue
+            history = [{"round": h.get("round"), "value": h.get("value"), "source": "mechanism",
+                        "cause": "Public structural propagation"}
+                       for h in variable.get("history", []) if type(h.get("value")) in (int, float)
+                       and type(h.get("round")) is int
+                       and (row["initial_round"] is None or h.get("round", -1) >= row["initial_round"])]
+            variables.append({"id": variable["id"], "name": row["node_id"], "value": row["final"],
+                              "unit": row["unit"], "kind": "numeric", "history": history})
+        self.world.update(variables=variables, actors=[
+            {k: actor[k] for k in ("agent_id", "name", "agency_class", "aliases") if k in actor}
+            for actor in seed.get("actors", [])], events=[], interactions=[], shocks=[], seed_gaps=[])
+        for row in self.history:
+            diff = row.get("diff") or {}
+            clean = []
+            for change in diff.get("variables_changed", []):
+                variable = allowed.get(change.get("id"))
+                if variable and all(type(change.get(k)) in (int, float) for k in ("from", "to")):
+                    clean.append({"id": change["id"], "name": variable["node_id"],
+                                  "from": change["from"], "to": change["to"], "unit": variable["unit"]})
+            row.update(narrative="", diff={"variables_changed": clean}, deterministic={},
+                       arbiter={"status": (row.get("arbiter") or {}).get("status")})
 
     # containment: a constant basename joined under the realpath'd directory; symlinks refused
     def path(self, name: str) -> Optional[str]:
@@ -487,6 +530,17 @@ class _Artifacts:
         if raw and raw.get("view") != "public":
             self.errors.append("world_result.json is not a public projection")
         self.world_spec = self._json("world_spec.json")
+        if self.anchor_diagnostics is not None:
+            # Native visibility labels do not authorize privileged anchor bases.
+            # Retain only source-admitted scalar fields and committed timestamps.
+            allowed = {r["native_field"]["section"]: set() for r in self.anchor_diagnostics["variables"]}
+            for row in self.anchor_diagnostics["variables"]:
+                allowed[row["native_field"]["section"]].add(row["native_field"]["id"])
+            for snapshot in [self.world_result["world"], *self.world_result["trajectory"]]:
+                for bucket in ("metrics", "rules", "interactions", "commitments"):
+                    snapshot[bucket] = {key: {k: value[k] for k in ("value", "unit", "visibility") if k in value}
+                                        for key, value in snapshot.get(bucket, {}).items() if key in allowed.get(bucket, set())}
+            self.world_result["events"] = []
 
     @property
     def world(self) -> Dict[str, Any]:
@@ -878,7 +932,10 @@ def _paths_block(art: _Artifacts, scenarios: Sequence[str]) -> Dict[str, Any]:
             if isinstance(row, dict):
                 per_path.append({"path": row.get("path"), "leader": row.get("leader"),
                                  "arbiter_failed_rounds": row.get("arbiter_failed_rounds"),
-                                 "shocks_fired": [str(s) for s in _list(row.get("shocks_fired"))]})
+                                 # Path producers retain privileged hazard IDs.
+                                 # Engine admission is not public permission.
+                                 "shocks_fired": ([] if art.anchor_diagnostics is not None else
+                                                  [str(s) for s in _list(row.get("shocks_fired"))])})
         return {"k": _as_int(summary_paths.get("k")) or 1, "per_scenario": per_scenario,
                 "leaders": dict(summary_paths.get("leaders") or {}), "per_path": per_path}
     paths = art.world_paths.get("paths") if isinstance(art.world_paths.get("paths"), list) else []
@@ -894,7 +951,7 @@ def _paths_block(art: _Artifacts, scenarios: Sequence[str]) -> Dict[str, Any]:
                 continue
             world = p.get("world") if isinstance(p.get("world"), dict) else {}
             fired = [_text(s.get("id"), 80) for s in _list(world.get("shocks"))
-                     if isinstance(s, dict) and s.get("fired_rounds")]
+                     if art.anchor_diagnostics is None and isinstance(s, dict) and s.get("fired_rounds")]
             per_path.append({"path": p.get("path"), "arbiter_failed_rounds": p.get("arbiter_failed_rounds"),
                              "shocks_fired": fired})
         return {"k": _as_int(art.world_paths.get("k")) or len(per_path_shares) or 1,
@@ -1461,6 +1518,10 @@ def build_record(sim_dir: str, *, language: Optional[str] = None, engine_hint: O
             {"actor": _text(a.get("agent_name"), 160), "agency_class": "", "aliases": [], "red_lines": [],
              "documented_plans": []} for a in _list(art.run_summary.get("top_agents")) if isinstance(a, dict)]
 
+    if art.anchor_diagnostics is not None:
+        # setup is already covered by the gate's exact artifact-fidelity check.
+        setup["world_anchor"] = art.anchor_diagnostics
+
     committed = len(periods)
     summary_committed = _as_int(art.world_summary.get("rounds_committed"))
     notes: List[str] = []
@@ -1596,6 +1657,8 @@ def render_markdown(record: Dict[str, Any], lang: Optional[str] = None) -> str:
     out.append("")
     # setup
     setup = record.get("setup") or {}
+    if "world_anchor" in setup:
+        out.extend([rc.anchor_diagnostic_markdown(setup["world_anchor"], language=lang), ""])
     out.append(f"## {L['setup']}")
     out.append("")
     if setup.get("cast"):

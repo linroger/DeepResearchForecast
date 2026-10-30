@@ -74,13 +74,21 @@ def _simulation(case, simulation):
     allowed_keys = {"schemaVersion", "caseId", "caseHash", "seed", "paths", "scenarioShares",
                     "targetSummary", "sensitivity", "signposts", "simulationWeight", "baseline",
                     "baselinePaths", "baselineSummary", "baselineScenarioShares", "parameterBases", "replay",
-                    "modelValidation", "interventionTables", "conditionalTables", "hindcastValidation", "decisionBudget"}
+                    "modelValidation", "interventionTables", "conditionalTables", "hindcastValidation", "decisionBudget", "worldAnchor"}
     _require(set(result) <= allowed_keys, "unknown simulation fields")
     _require(result.get("schemaVersion") == "target-simulation/v1", "invalid simulation schema")
     _require(result.get("caseId") == case["caseId"] and
              result.get("caseHash") == _case_api().case_hash(case), "simulation case identity mismatch")
     _require(type(result.get("simulationWeight")) in (int, float) and
              result["simulationWeight"] == 0, "simulation weight must remain zero")
+    if "worldAnchor" in result:
+        anchor = result["worldAnchor"]
+        _require(isinstance(anchor, dict) and set(anchor) == {
+            "adapterVersion", "packHash", "contractHash", "inputHash", "caseHash"}
+            and anchor["adapterVersion"] == "world-anchor-target/v1"
+            and all(isinstance(anchor[k], str) and re.fullmatch(r"[0-9a-f]{64}", anchor[k])
+                    for k in ("packHash", "contractHash", "inputHash", "caseHash"))
+            and anchor["caseHash"] == result["caseHash"], "invalid target anchor runtime receipt")
     if "decisionBudget" in result:
         budget = result["decisionBudget"]
         _require(isinstance(budget, dict) and set(budget) == {"maximumRequests", "requests", "cacheHits", "exhausted"},
@@ -180,12 +188,14 @@ def _assessment(case):
 
 
 def build_target_report(case, simulation=None, *, official_data=None, markets=None,
-                        scenario_label=None, base_simulation_id=None):
+                        scenario_label=None, base_simulation_id=None, simulation_dir=None):
     """Project frozen typed inputs to the public forecast.json and Markdown shape."""
     case = _case_api().validate_case(case)
     from .target_mechanisms import admit_model
     model_admission = admit_model(case)
     simulation = _simulation(case, simulation)
+    if simulation and "worldAnchor" in simulation:
+        _require(simulation_dir is not None, "anchored target report requires saved artifact admission")
     has_model_receipt = simulation is not None and "modelValidation" in simulation
     if has_model_receipt:
         receipt = simulation["modelValidation"]
@@ -249,6 +259,68 @@ def build_target_report(case, simulation=None, *, official_data=None, markets=No
               "targetSummary": simulation.get("targetSummary") if simulation else None}
     if has_model_receipt:
         record["modelValidation"] = model_admission
+    public_anchor_nodes = None
+    public_evidence = {}
+    public_parameter_sources = set()
+    if simulation_dir is not None:
+        from .simulation_record_contract import load_anchor_diagnostics
+        diagnostic = load_anchor_diagnostics(simulation_dir, expected_case=case, expected_simulation=simulation,
+                                             report_evidence=public_evidence)
+        if simulation and "worldAnchor" in simulation:
+            _require(diagnostic is not None and diagnostic.get("engine") == "target-first-v1",
+                     "anchored target report requires native admission")
+        if diagnostic is not None:
+            record["worldAnchor"] = diagnostic
+            if diagnostic.get("engine") == "target-first-v1":
+                # Native results include private plans, parameter bases and
+                # request counts. Public diagnostic authority comes only from
+                # the authenticated audience projection, never those raw fields.
+                record["simulationHash"] = _hash(diagnostic)
+                public_anchor_nodes = {row["node_id"] for row in diagnostic["variables"]}
+                public_mechanisms = {m["mechanismId"] for m in case["mechanisms"]
+                                     if m["outputNodeId"] in public_anchor_nodes
+                                     and set(m["inputNodeIds"]) <= public_anchor_nodes}
+                unknown = [row for row in unknown if row["nodeId"] in public_anchor_nodes]
+                bases = [row for row in bases if row["mechanismId"] in public_mechanisms]
+                for row in unknown:
+                    row["sourceIds"] = [sid for sid in row["sourceIds"]
+                                        if sid in public_evidence["node_sources"].get(row["nodeId"], [])]
+                native_mechanisms = {m["mechanismId"]: m for m in case["mechanisms"]}
+                for row in bases:
+                    mid = row["mechanismId"]
+                    row["sourceIds"] = [sid for sid in row["sourceIds"]
+                                        if sid in public_evidence["mechanism_sources"].get(mid, [])]
+                    # Work on a detached parameter tree; the frozen case is authority.
+                    row["parameters"] = json.loads(canonical_json(row["parameters"]))
+                    allowed = public_evidence["parameter_sources"].get(mid, {})
+                    def filter_slot(value, slot):
+                        if isinstance(value, dict) and "sourceIds" in value:
+                            value["sourceIds"] = [sid for sid in value["sourceIds"] if sid in allowed.get(slot, [])]
+                            public_parameter_sources.update(value["sourceIds"])
+                    for name, value in row["parameters"].items():
+                        if name == "coefficients":
+                            for nid, scalar in zip(native_mechanisms[mid]["inputNodeIds"], value):
+                                filter_slot(scalar, "coefficient:" + nid)
+                        else:
+                            filter_slot(value, name)
+                record["unknownParameters"], record["parameterBases"] = unknown, bases
+                # Full validation receipts can name private nodes and global
+                # model counts. Admission used them above; they are not public.
+                record.pop("modelValidation", None)
+                public_bases = {row["node_id"]: row["provenance"] for row in diagnostic["variables"]}
+                record["simulationParameterBases"] = [{"nodeId": nid, "provenance": public_bases[nid]}
+                                                       for nid in sorted(public_bases)]
+                record["signposts"] = diagnostic["signposts"]
+                record["sensitivity"] = []
+                record["decisionBudget"] = None
+                target = diagnostic["target_node_id"]
+                if target is None:
+                    record["divergence"] = []
+                    record["targetSummary"] = None
+                else:
+                    from .target_simulation import _summary
+                    record["targetSummary"] = _summary([row["final"] for row in diagnostic["variables"]
+                                                        if row["node_id"] == target and row["final"] is not None])
     forecast = {"schema_version": 1, "headline": case["question"], "horizon": resolution["horizon"],
                 "scenarios": scenarios, "binary_forecasts": binaries,
                 "binary_quality": binary_projection["binary_quality"],
@@ -268,14 +340,38 @@ def build_target_report(case, simulation=None, *, official_data=None, markets=No
              f"Settlement URL: {_text(resolution['settlementSource']['url'])}",
              f"Comparator policy: {_text(resolution['comparatorPolicy'])}",
              "<!-- binary-forecast-block:end -->", "", "## Research evidence", ""]
-    for claim in case["claims"]:
-        citations = " ".join(f"[{sid}]" for sid in claim["sourceIds"])
+    native_anchor = record.get("worldAnchor", {}).get("engine") == "target-first-v1"
+    source_map = {source["sourceId"]: source for source in case["sources"]}
+    rendered_claims = set()
+    public_claims = [claim for claim in case["claims"]
+                     if public_anchor_nodes is None or (claim["nodeId"] in public_anchor_nodes
+                                                       and claim["claimId"] in public_evidence["claim_ids"])]
+    public_sources = ({sid for claim in public_claims for sid in claim["sourceIds"]}
+                      | {sid for row in unknown for sid in row["sourceIds"]}
+                      | {sid for row in bases for sid in row["sourceIds"]}
+                      | public_parameter_sources) if native_anchor else None
+    for claim in public_claims:
+        if native_anchor:
+            # One retained passage can support several native nodes. Preserve
+            # it once, with direct source links: it must survive the report's
+            # citation finalizer and idempotent prose lint without losing proof.
+            identity = (claim["passage"], tuple(sorted(claim["sourceIds"])))
+            if identity in rendered_claims:
+                continue
+            rendered_claims.add(identity)
+            citations = " ".join(
+                f"[Source {_text(sid)}]({_text(source_map[sid]['url']).replace('(', '%28').replace(')', '%29')})"
+                for sid in claim["sourceIds"])
+        else:
+            citations = " ".join(f"[{sid}]" for sid in claim["sourceIds"])
         lines.append(f"{_text(claim['passage'])} {citations}".rstrip())
         lines.append("")
-    if not case["claims"]:
+    if not public_claims:
         lines += ["No source-backed claims supplied; parameter uncertainty remains explicit.", ""]
     lines += ["## Evidence provenance", "", "<!-- binary-forecast-block:start -->"]
     for source in case["sources"]:
+        if public_sources is not None and source["sourceId"] not in public_sources:
+            continue
         lines.append(f"- {_text(source['sourceId'])}: publication {_text(source['publishedAt'] or 'unknown')}; "
                      f"retrieved {_text(source['retrievedAt'])}; tier {_text(source['tier'])}; "
                      f"origin {_text(source['originCluster'])}; fetched {source['fetched']}.")
@@ -342,15 +438,19 @@ def diagnostic_markdown(record, *, forecast=None):
     if "modelValidation" in record:
         lines += ["", "### Model validation", "", _text(canonical_json(record["modelValidation"])),
                   "Unsupported units and unmeasured seed identities remain evidence gaps; they are not successful validation checks."]
+    if "worldAnchor" in record:
+        from .simulation_record_contract import anchor_diagnostic_markdown
+        lines += ["", anchor_diagnostic_markdown(record["worldAnchor"])]
     lines += ["", "Prospective paired evaluation is required. No measured lift or promotion is claimed.",
               f"Policy: {POLICY_VERSION}. Record SHA-256: {_hash(record)}.", BRIDGE_END]
     return "\n".join(lines)
 
 
 def audit_target_report(case, simulation, forecast, record, *, official_data=None, markets=None,
-                        scenario_label=None, base_simulation_id=None):
+                        scenario_label=None, base_simulation_id=None, simulation_dir=None):
     expected = build_target_report(case, simulation, official_data=official_data, markets=markets,
-                                    scenario_label=scenario_label, base_simulation_id=base_simulation_id)
+                                    scenario_label=scenario_label, base_simulation_id=base_simulation_id,
+                                    simulation_dir=simulation_dir)
     issues = []
     if expected["record"] != record:
         issues.append("typed report record differs from frozen inputs")
@@ -422,7 +522,10 @@ def register_comparison(path, case, simulation, *, enrolled_at, registry_dir=Non
     _require(enrolled.tzinfo is not None, "enrollment timestamp must include timezone")
     enrolled = enrolled.astimezone(timezone.utc)
     now = _utcnow()
-    bundle = build_target_report(case, simulation)
+    # Enrollment needs only frozen research probabilities from this projection;
+    # the structural arm is separately validated and hashed above. It must not
+    # render a public anchored report without that report's native admission.
+    bundle = build_target_report(case)
     record = {"schemaVersion": "target-comparison/v1", "caseId": case["caseId"],
               "caseHash": bundle["record"]["caseHash"], "simulationHash": _hash(simulation),
               "enrolledAt": enrolled.isoformat(), "resolution": case["resolution"],

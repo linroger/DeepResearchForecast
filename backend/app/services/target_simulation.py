@@ -7,7 +7,7 @@ zero-weight diagnostic estimator, independent of research scenario assessments.
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from functools import wraps
 import hashlib
 import json
@@ -63,13 +63,19 @@ def _case_api():
     return bridge_module("forecast_case")
 
 
-def actor_observation(case, state, actor_id, *, period=0, lookahead=False, identity_mode="named"):
+def actor_observation(case, state, actor_id, *, period=0, lookahead=False, identity_mode="named",
+                      anchor_context=None, at=None):
     """Return a detached, typed actor-specific projection of dated state."""
     validated = _case_api().validate_case(case)
     _identity_mode(identity_mode)
     if not isinstance(lookahead, bool):
         raise ValueError("lookahead must be boolean")
-    observation = safe_observation(_decision_case(validated), state, actor_id, period=period)
+    if anchor_context is not None:
+        _validate_anchor(validated, anchor_context)
+        observation = safe_observation(validated, state, actor_id, period=period,
+                                       anchor_context=anchor_context, at=at)
+    else:
+        observation = safe_observation(_decision_case(validated), state, actor_id, period=period)
     if lookahead:
         observation = add_lookahead(observation, compile_model(validated))
     return DecisionIdentities(validated).transform(observation) if identity_mode == "opaque" else observation
@@ -93,6 +99,21 @@ def _decision_case(case):
                    for actor in case["actors"]],
         "resolution": {"targetNodeId": case["resolution"]["targetNodeId"]},
     }
+
+
+def _validate_anchor(case, context):
+    from .official_data import bridge_module
+    from .world_anchor import validate_anchor_context
+    validate_anchor_context(context, engine="target-first-v1")
+    return bridge_module("world_anchor_case").validate_anchored_case(
+        case, pack=context.pack, requirements=context.requirements,
+        index=context.index, policy=context.policy)
+
+
+def _anchor_time(case, context, period, periods):
+    start = datetime.fromisoformat(context.pack["scope"]["cutoff"].replace("Z", "+00:00"))
+    end = datetime.fromisoformat(case["resolution"]["horizon"] + "T23:59:59+00:00")
+    return (start + (end - start) * (period / periods)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _validate_actors(case):
@@ -219,7 +240,8 @@ def _lever_error(action, actor_id, levers, values, capacities, pending,
 
 
 def _run_path(case, model, initial, parameters, periods, *, callback=None,
-              baseline=False, cancel_check=None, lookahead=False, identity_mode="opaque", path_id=None):
+              baseline=False, cancel_check=None, lookahead=False, identity_mode="opaque", path_id=None,
+              anchor_context=None):
     identities = DecisionIdentities(case)
     actors = sorted(case["actors"], key=lambda actor: actor["actorId"])
     actors_by_id = {actor["actorId"]: actor for actor in actors}
@@ -233,6 +255,9 @@ def _run_path(case, model, initial, parameters, periods, *, callback=None,
              for actor in actors}
     previous_triggers = {actor["actorId"]: [False] * len(actor["decisionRule"].get("triggers", [])) for actor in actors}
     irreversible = {}
+    if anchor_context is not None:
+        simulated_plans = {actor["actorId"]: set() for actor in actors}
+        simulated_nodes = {actor["actorId"]: set() for actor in actors}
     for period in range(1, periods + 1):
         _cancel(cancel_check)
         for action in list(pending):
@@ -248,6 +273,8 @@ def _run_path(case, model, initial, parameters, periods, *, callback=None,
                     status, reason = "blocked", "effect_constraint"
                 else:
                     values = candidate
+                    if anchor_context is not None:
+                        simulated_nodes[action["actorId"]].add(lever["nodeId"])
                     status, reason = "applied", "lag_elapsed"
                 decisions.append(_record(period, action["actorId"], status, reason, action))
                 for plan in plans[action["actorId"]]:
@@ -260,7 +287,13 @@ def _run_path(case, model, initial, parameters, periods, *, callback=None,
             continue
         state = {"values": values, "history": history, "plans": plans, "signals": signals,
                  "capacity": capacities, "credibility": credibility}
-        observations = {actor["actorId"]: safe_observation(case, state, actor["actorId"], period=period) for actor in actors}
+        if anchor_context is not None:
+            state.update(simulatedPlanIds=simulated_plans, simulatedOwnNodeIds=simulated_nodes)
+            observations = {actor["actorId"]: safe_observation(
+                case, state, actor["actorId"], period=period, anchor_context=anchor_context,
+                at=_anchor_time(case, anchor_context, period, periods)) for actor in actors}
+        else:
+            observations = {actor["actorId"]: safe_observation(case, state, actor["actorId"], period=period) for actor in actors}
         proposals = []
         # Decisions are collected from the same beginning-of-period information
         # set. No same-period actor ordering leaks another actor's intervention.
@@ -268,6 +301,8 @@ def _run_path(case, model, initial, parameters, periods, *, callback=None,
             actor_id = actor["actorId"]
             observation = observations[actor_id]
             for plan in plans[actor_id]:
+                if anchor_context is not None and plan["planId"] not in {p["planId"] for p in observation["plans"]}:
+                    continue
                 if (plan["status"] == "pending" and plan["duePeriod"] <= period
                         and (not plan.get("condition") or predicate_matches(plan["condition"], observation["values"]))):
                     proposals.append((actor_id, {"kind": "lever", "actorId": actor_id,
@@ -396,6 +431,8 @@ def _run_path(case, model, initial, parameters, periods, *, callback=None,
                     plans[actor_id].append({"planId": f"commitment-{period}-{len(plans[actor_id])}",
                                            "leverId": action["leverId"], "value": action["value"],
                                            "duePeriod": due, "condition": deepcopy(action.get("condition")), "status": "pending"})
+                    if anchor_context is not None:
+                        simulated_plans[actor_id].add(plans[actor_id][-1]["planId"])
                     decisions.append(_record(period, actor_id, "accepted", "commitment", action))
                     continue
             if reason is None:
@@ -420,6 +457,8 @@ def _run_path(case, model, initial, parameters, periods, *, callback=None,
                 status = "scheduled"
             else:
                 values[lever["nodeId"]] = action["value"]
+                if anchor_context is not None:
+                    simulated_nodes[actor_id].add(lever["nodeId"])
                 status = "applied"
             row = _record(period, actor_id, status, "lever", action)
             row.update(effectivePeriod=effective, cost=cost, remainingCapacity=capacities[actor_id])
@@ -442,7 +481,7 @@ def _run_path(case, model, initial, parameters, periods, *, callback=None,
             score = 1.0 - min(1.0, abs(truth / scale - signal["value"] / scale))
             credibility[signal["actorId"]] = (credibility[signal["actorId"]] + score) / 2
             signal.update(resolved=True, score=score, resolvedPeriod=period)
-    return {"parameters": deepcopy(parameters), "initialValues": deepcopy(initial),
+    return {"parameters": deepcopy(parameters), "initialValues": deepcopy(history[0]["values"] if anchor_context is not None else initial),
             "trajectory": history, "decisions": decisions, "plans": plans,
             "pendingEffects": pending, "signals": signals, "credibility": credibility,
             "remainingCapacity": capacities,
@@ -529,7 +568,7 @@ def _diagnostics(case, model, initial, parameters, periods, cancel_check):
 @_cancellation_boundary
 def run_paths(case, *, paths=32, periods=12, seed=0, decision_provider=None, cancel_check=None,
               lookahead=False, identity_mode="opaque", interventions=None, conditions=None,
-              model_validation="off", hindcast_snapshots=None):
+              model_validation="off", hindcast_snapshots=None, anchor_context=None):
     """Compile once and run K seeded closed-loop paths without provider side effects.
 
     ``decision_provider(observation)`` takes one detached typed dictionary and
@@ -554,6 +593,11 @@ def run_paths(case, *, paths=32, periods=12, seed=0, decision_provider=None, can
     _cancel(cancel_check)
     api = _case_api()
     validated = api.validate_case(case)
+    if anchor_context is not None:
+        validated = _validate_anchor(validated, anchor_context)
+        if hindcast_snapshots is not None:
+            from .official_data import bridge_module
+            raise bridge_module("world_anchor").AnchorError("E_NOT_READY", "unsupported_anchored_hindcast")
     validate_scenarios(validated)
     _validate_actors(validated)
     model = compile_model(validated)
@@ -568,7 +612,7 @@ def run_paths(case, *, paths=32, periods=12, seed=0, decision_provider=None, can
     hindcast_results = (validate_hindcasts(validated, hindcast_snapshots, paths=paths, periods=periods,
                                           seed=seed, cancel_check=cancel_check)
                         if hindcast_snapshots is not None else None)
-    decision_case = _decision_case(validated)
+    decision_case = validated if anchor_context is not None else _decision_case(validated)
     results, baselines = [], []
     for index in range(paths):
         _cancel(cancel_check)
@@ -576,11 +620,12 @@ def run_paths(case, *, paths=32, periods=12, seed=0, decision_provider=None, can
         rng = random.Random(path_seed)
         initial = model.initial_values(rng)
         parameters = model.draw_parameters(rng)
+        path_options = {"anchor_context": anchor_context} if anchor_context is not None else {}
         path = _run_path(decision_case, model, initial, parameters, periods, callback=decision_provider,
                          cancel_check=cancel_check, lookahead=lookahead, identity_mode=identity_mode,
-                         path_id=f"path-{index:05d}")
+                         path_id=f"path-{index:05d}", **path_options)
         path.update(pathId=f"path-{index:05d}", seed=path_seed)
-        baseline = _run_path(decision_case, model, initial, parameters, periods, baseline=True, cancel_check=cancel_check)
+        baseline = _run_path(decision_case, model, initial, parameters, periods, baseline=True, cancel_check=cancel_check, **path_options)
         baseline.update(pathId=path["pathId"], seed=path_seed)
         results.append(path)
         baselines.append(baseline)
@@ -634,6 +679,12 @@ def run_paths(case, *, paths=32, periods=12, seed=0, decision_provider=None, can
               "sensitivity": sensitivity, "signposts": signposts,
               "parameterBases": deepcopy(model.parameter_bases), "replay": replay,
               "simulationWeight": 0.0}
+    if anchor_context is not None:
+        output["worldAnchor"] = {"adapterVersion": "world-anchor-target/v1",
+                                 "packHash": anchor_context.pack_hash,
+                                 "contractHash": anchor_context.pack["contract_hash"],
+                                 "inputHash": anchor_context.pack["input_hash"],
+                                 "caseHash": output["caseHash"]}
     if validation is not None:
         output["modelValidation"] = validation
     if interventions is not None:

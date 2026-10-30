@@ -344,6 +344,23 @@ def research_priorities(case):
     return sorted(result, key=lambda r: (-r["score"], not r["pivotal"], r["nodeId"]))
 
 
+def _actor_additions(current, additions):
+    """Gathering may add sourced candidates; it cannot silently erase a prior one."""
+    if not isinstance(additions, list):
+        raise ValueError("target candidate actors must be a list")
+    actors = {actor["actorId"]: copy.deepcopy(actor) for actor in current}
+    seen = set()
+    for actor in additions:
+        if not isinstance(actor, dict) or not isinstance(actor.get("actorId"), str) or actor["actorId"] in seen:
+            raise ValueError("invalid target candidate actor identity")
+        aid = actor["actorId"]
+        seen.add(aid)
+        if aid in actors and actors[aid] != actor:
+            raise ValueError("target candidate actor cannot overwrite an admitted candidate")
+        actors[aid] = copy.deepcopy(actor)
+    return list(actors.values())
+
+
 def render_case_research(case):
     case = _core().validate_case(case)
     resolution = case["resolution"]
@@ -466,6 +483,8 @@ def _kiqs(engine, case, *, round_no=0, limit=None):
 def execute_target(engine):
     """Production _Engine hook: plan → node agents → findings → assessment → artifacts."""
     core = _core()
+    anchor_control = getattr(engine, "world_anchor_control", None)
+    anchor = None
     folder = engine.work / "target"
     folder.mkdir(exist_ok=True)
     binding = engine.state._data.setdefault("targetResearch", {})
@@ -594,11 +613,20 @@ def execute_target(engine):
 
     def plan_case():
         with engine.phase("target_plan") as deadline:
-            raw = engine.json_call(["Revisable initial planning context: " + _dump(engine.plan.to_dict())], "TARGET CASE PLANNING TASK\n" + CASE_INSTRUCTIONS +
+            anchor_instructions = ""
+            if anchor_control is not None:
+                if __package__:
+                    from .world_anchor_binding import TARGET_IDENTITIES_INSTRUCTIONS, validate_target_declaration
+                    from .world_anchor import anchor_hash
+                else:
+                    from world_anchor_binding import TARGET_IDENTITIES_INSTRUCTIONS, validate_target_declaration
+                    from world_anchor import anchor_hash
+                anchor_instructions = TARGET_IDENTITIES_INSTRUCTIONS
+            raw = engine.json_call(["Revisable initial planning context: " + _dump(engine.plan.to_dict())], "TARGET CASE PLANNING TASK\n" + CASE_INSTRUCTIONS + anchor_instructions +
                     "\nProducer-owned opaque caseId (use exactly): " + case_id +
                     "\nQuestion: " + engine.question + "\nasOf: " + engine.plan.as_of + library_context,
-                    label="target:plan", required=("forecastCase",), deadline=deadline)
-            if set(raw) != {"forecastCase"}:
+                    label="target:plan", required=("forecastCase", "worldAnchorIdentities") if anchor_control is not None else ("forecastCase",), deadline=deadline)
+            if set(raw) != ({"forecastCase", "worldAnchorIdentities"} if anchor_control is not None else {"forecastCase"}):
                 raise ValueError("unknown target planning response fields")
             candidate = raw.get("forecastCase")
             if not isinstance(candidate, dict):
@@ -618,6 +646,11 @@ def execute_target(engine):
             case = build_case(raw, [], _engine_sources(engine), question=engine.question, as_of=engine.plan.as_of)
             if len(case["assessments"]) != 1 or case["assessments"][0]["kind"] != "prior":
                 raise ValueError("target plan must freeze exactly one prior assessment")
+            if anchor_control is not None:
+                identities = raw["worldAnchorIdentities"]
+                validate_target_declaration(identities)
+                engine.write_json(folder / "world_anchor_identities.json", identities)
+                binding["anchorIdentityHash"] = anchor_hash(identities)
             engine.state.set_phase("target_plan", "done")
             return case
 
@@ -645,7 +678,7 @@ def execute_target(engine):
                     raise summary["provider_error"]
             sources = continuation_sources(current)
             pin_sources()
-            raw = engine.json_call([engine.brief], "TARGET FINDINGS TASK\nReturn {\"findings\": [...]} from "
+            task = ("TARGET FINDINGS TASK\nReturn {\"findings\": [...]} from "
                 "the supplied node investigations and fetched passages. Each finding has claimId (unique), nodeId, "
                 "sourceIds, passage (exact source quote), status verified|reported|contested|unknown, optional numeric "
                 "value and ISO vintage. A value must appear literally in the passage; vintage must be in the passage "
@@ -655,10 +688,26 @@ def execute_target(engine):
                 "Existing claims are immutable; emit only new claims. Include adversarial/conflicting findings. "
                 "No evidence yields an empty list, never invented facts.\nExisting claims: " + _dump(current["claims"]) +
                 "\nInvestigations: " + engine.delimit("NODE INVESTIGATIONS", _dump([engine.records[k.id] for k in kiqs
-                    if k.id in engine.records])) + "\nSources: " + engine.delimit("FETCHED PASSAGES", _dump(sources)),
+                    if k.id in engine.records])) + "\nSources: " + engine.delimit("FETCHED PASSAGES", _dump(sources)))
+            if anchor_control is not None:
+                task += ("\nWORLD ANCHOR CANDIDATE ACTORS: You may additionally return actors:[...] using the closed "
+                    "forecast-case Actor shape: actorId,name,decisionBasis,objectives,constraints:{capacity},"
+                    "levers:[{leverId,nodeId,minimum,maximum,cost,lagPeriods,reversible,requiresConsent}],"
+                    "decisionRule:{kind,cadencePeriods,triggers},plans,information:{nodeIds,releaseLagPeriods},credibility. "
+                    "Each lever must target an existing primitive node, with a fetched primary claim ID in decisionBasis. "
+                    "Supply every quantity only when its precise meaning/unit is documented in those sources. "
+                    "Authority must be explicitly documented, not inferred from a name or interest. "
+                    "Do not invent utility weights, triggers, plans or rights; empty objectives/triggers/plans are allowed. "
+                    "A candidate remains untrusted until the anchor independently reviews quantities and authority. "
+                    "Keep existing actors; omit actors when the evidence justifies no addition. No actor changes occur after binding.")
+                task += "\nExisting actor registry: " + _dump(current["actors"])
+            raw = engine.json_call([engine.brief], task,
                 label=f"target:findings:{round_no}", required=("findings",), deadline=deadline)
-            if set(raw) != {"findings"}:
+            allowed_fields = {"findings", "actors"} if anchor_control is not None else {"findings"}
+            if "findings" not in raw or set(raw) - allowed_fields:
                 raise ValueError("unknown target findings response fields")
+            if anchor_control is not None and "actors" in raw:
+                raw = {**raw, "actors": _actor_additions(current["actors"], raw["actors"])}
             updated = build_case({"forecastCase": current}, raw, sources,
                                  question=engine.question, as_of=engine.plan.as_of)
             engine.write_json(folder / f"findings-{round_no}.json", raw)
@@ -684,10 +733,26 @@ def execute_target(engine):
             if not followups and name not in binding:
                 break
             case = checkpoint(name, lambda: gather_case(number, case, followups))
+    if anchor_control is not None:
+        anchor = engine.run_anchor_stage(case=case)
+        pin_sources()
     engine._seal_context()
 
     def bind_mechanisms():
         pin_sources()
+        if anchor is not None:
+            if __package__:
+                from .world_anchor_case import apply_anchors_to_case
+            else:
+                from world_anchor_case import apply_anchors_to_case
+            compiled = apply_anchors_to_case(case, pack=anchor["pack"], requirements=anchor["requirements"],
+                index=anchor["index"], policy=anchor["policy"])
+            proof = {"schema_version": "world-anchor-case-compilation/v1", "pack_hash": anchor["manifest"]["pack_hash"],
+                "contract_hash": anchor["pack"]["contract_hash"], "mechanisms": compiled["mechanisms"]}
+            engine.write_json(folder / "mechanism-bindings.json", proof)
+            binding["mechanismEvidenceHash"] = _hash(proof)
+            engine.state.set_phase("target_mechanisms", "done", "World Anchor deterministic compilation")
+            return compiled
         with engine.phase("target_mechanisms") as deadline:
             task = ("TARGET MECHANISM BINDING TASK\nReturn {\"mechanisms\": [...], \"mechanismEvidence\": [...]} "
                 "covering every existing mechanism ID without changing kind/inputNodeIds/outputNodeId. Use only the "
@@ -712,8 +777,15 @@ def execute_target(engine):
             engine.state.set_phase("target_mechanisms", "done")
             return updated
 
-    if "assessed" not in binding:
+    if "assessed" not in binding or anchor is not None:
         case = checkpoint("mechanisms", bind_mechanisms)
+    if anchor is not None:
+        if __package__:
+            from .world_anchor_case import validate_anchored_case
+        else:
+            from world_anchor_case import validate_anchored_case
+        validate_anchored_case(case, pack=anchor["pack"], requirements=anchor["requirements"],
+            index=anchor["index"], policy=anchor["policy"])
 
     def assess():
         pin_sources()
@@ -732,13 +804,23 @@ def execute_target(engine):
                 deadline=deadline)
             if set(raw) - {"assessment", "binaries", "actors", "scenarios"}:
                 raise ValueError("unknown target assessment response fields")
-            updated = build_case({"forecastCase": case}, raw, continuation_sources(case),
+            assessment_sources = case["sources"] if anchor is not None else continuation_sources(case)
+            if anchor is not None and "actors" in raw and raw["actors"] != case["actors"]:
+                raise ValueError("anchor assessment cannot change admitted actor structure")
+            updated = build_case({"forecastCase": case}, raw, assessment_sources,
                                  question=engine.question, as_of=engine.plan.as_of)
             binding["sourceEvidenceHash"] = _hash(_engine_sources(engine))
             engine.state.set_phase("target_assessment", "done")
             return updated
 
     case = core.validate_case(checkpoint("assessed", assess))
+    if anchor is not None:
+        if __package__:
+            from .world_anchor_case import validate_anchored_case
+        else:
+            from world_anchor_case import validate_anchored_case
+        validate_anchored_case(case, pack=anchor["pack"], requirements=anchor["requirements"],
+            index=anchor["index"], policy=anchor["policy"])
     mechanism_proof_path = folder / "mechanism-bindings.json"
     proof = json.loads(mechanism_proof_path.read_text("utf-8")) if mechanism_proof_path.is_file() else None
     if (proof is None or _hash(proof) != binding.get("mechanismEvidenceHash")
@@ -771,6 +853,13 @@ def execute_target(engine):
                  "timeline.json": [], "forecast_inputs.json": {"authority": AUTHORITY, "caseHash": digest,
                     "resolution": case["resolution"], "scenarios": case["scenarios"], "assessment": latest,
                     "binaries": case["binaries"]}}
+    if anchor is not None:
+        if __package__:
+            from .world_anchor_binding import research_note_projection, research_report_appendix
+        else:
+            from world_anchor_binding import research_note_projection, research_report_appendix
+        _, artifacts["timeline.json"] = research_note_projection(anchor)
+        report += research_report_appendix(anchor)
     for filename, payload in artifacts.items():
         engine.write_json(engine.out_dir / filename, payload, internal=False)
     engine.write_text(engine.out_dir / "research_report.md", report)

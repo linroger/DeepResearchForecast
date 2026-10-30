@@ -30,6 +30,11 @@ CODES = frozenset({
     "attempt_reused", "stale_generation", "participant_unverified",
     "lock_unavailable", "resume_denied", "budget_exhausted", "unknown_outcome",
     "usage_integrity", "observation_conflict", "halted_cancelled", "halted_error", "closed",
+    "budget_scope_missing", "budget_scope_conflict", "stale_admission_epoch",
+    "stage_model_attempts_exhausted", "stage_tokens_exhausted", "stage_tool_attempts_exhausted",
+    "stage_followup_attempts_exhausted", "catalog_lookup_conflict", "stage_profile_oversize",
+    "stage_usage_unverifiable", "tool_operation_conflict",
+    "transport_receipt_missing",
 })
 
 
@@ -61,12 +66,16 @@ for _alias in ("run_spending", "deerflow_bridge.run_spending"):
 _MAX = (1 << 63) - 1
 _SCHEMA = "target-run-spending/v1"
 _BINDING_SCHEMA = "target-run-spending-binding/v1"
+_SCHEMA_V2 = "target-run-spending/v2"
+_BINDING_V2 = "target-run-spending-binding/v2"
 _REQUIRED = False
 _ACTIVE_AUTH = None
+_V2_CONTROL_BINDING = None
 _ENV_PIN = None
 _LOCAL_STOPS = {}
 _binding = contextvars.ContextVar("run_spending_binding", default=None)
 _operation = contextvars.ContextVar("run_spending_operation", default=None)
+_dispatch_captures = contextvars.ContextVar("run_spending_captures", default=())
 _latch_lock = threading.RLock()
 _LOCK_FDS = set()
 _FORKED_PROCESS = False
@@ -166,6 +175,12 @@ def _endpoint(value):
 
 
 def validate_manifest(manifest):
+    if isinstance(manifest, dict) and manifest.get("schema") == _SCHEMA_V2:
+        return _validate_v2_manifest(manifest)
+    return _validate_v1_manifest(manifest)
+
+
+def _validate_v1_manifest(manifest):
     m = _copy(manifest)
     _need(type(m) is dict and set(m) == {"schema", "authorization_id", "root", "currency", "cap_usd",
           "request_sha256", "source_files", "source_sha256", "routes_sha256", "resume_policy", "routes"}, "invalid_manifest")
@@ -225,6 +240,11 @@ def _path(value, *, directory=False, optional=False):
     _need(p.is_absolute() and str(p) == os.path.abspath(p), "invalid_binding")
     try:
         s = p.lstat()
+        if optional and s.st_nlink == 0:
+            # SQLite may unlink a last-connection sidecar during stat. Recheck
+            # that optional name once; absence is valid, a replacement must
+            # still pass every regular-file/owner/no-symlink check below.
+            s = p.lstat()
         _need(not stat.S_ISLNK(s.st_mode) and p.resolve() == p, "invalid_binding")
         _need(stat.S_ISDIR(s.st_mode) if directory else stat.S_ISREG(s.st_mode), "storage_unavailable")
         _need(s.st_uid == os.getuid(), "invalid_binding")
@@ -301,7 +321,13 @@ def _verify_sources(m):
 
 def _validate_binding(binding):
     b = _copy(binding)
-    _need(type(b) is dict and set(b) == _BINDING_KEYS and b["schema"] == _BINDING_SCHEMA, "invalid_binding")
+    v2 = _is_v2(b)
+    keys = _BINDING_KEYS | {"admission_epoch", "active_scope_id"} if v2 else _BINDING_KEYS
+    _need(type(b) is dict and set(b) == keys and b["schema"] == (_BINDING_V2 if v2 else _BINDING_SCHEMA), "invalid_binding")
+    if v2:
+        _count(b["admission_epoch"], "invalid_binding")
+        if b["active_scope_id"] is not None:
+            _identity(b["active_scope_id"])
     _identity(b["authorization_id"])
     _identity(b["participant_id"])
     _need(b["pipeline_id"] == "" or _ID.fullmatch(b["pipeline_id"]), "invalid_binding")
@@ -313,6 +339,7 @@ def _validate_binding(binding):
     _need(b["manifest_path"] == str(root / "spend/authorization.json")
           and b["db_path"] == str(root / "spend/run.sqlite3"), "invalid_binding")
     m = validate_manifest(_read_json(b["manifest_path"]))
+    _need(v2 == (m["schema"] == _SCHEMA_V2), "invalid_binding")
     _need(m["root"] == str(root) and m["authorization_id"] == b["authorization_id"]
           and hash_payload(m) == b["manifest_sha256"]
           and m["source_sha256"] == b["source_sha256"] and m["routes_sha256"] == b["routes_sha256"], "source_drift")
@@ -380,6 +407,8 @@ def create_authorization(manifest_path, *, registry_dir):
              authorization_id=m["authorization_id"], manifest_sha256=hash_payload(m),
              source_sha256=m["source_sha256"], routes_sha256=m["routes_sha256"],
              pipeline_id="", generation=1, participant_id="parent")
+    if m["schema"] == _SCHEMA_V2:
+        b.update(schema=_BINDING_V2, admission_epoch=0, active_scope_id=None)
     _need(not os.path.lexists(b["db_path"]), "authorization_consumed")
     nonce = uuid4().hex
     s = root.stat()
@@ -394,11 +423,17 @@ def create_authorization(manifest_path, *, registry_dir):
         db = sqlite3.connect(str(temp), isolation_level=None)
         db.execute("PRAGMA synchronous=FULL")
         db.executescript(_DDL)
+        if _is_v2(b):
+            db.executescript(_DDL_V2)
         db.execute("BEGIN IMMEDIATE")
         db.execute("INSERT INTO run_authorization(id,manifest_sha256,nonce,cap) VALUES(1,?,?,?)",
                    (b["manifest_sha256"], nonce, _cap(m["cap_usd"])))
-        db.execute("INSERT INTO participants VALUES(1,'parent',NULL,'registered',?,NULL,NULL)", (hash_payload({"nonce": nonce}),))
-        db.execute("PRAGMA user_version=1")
+        db.execute("INSERT INTO participants(generation,participant_id,pid,state,spawn_sha256,operation_sha256,exit_sha256) VALUES(1,'parent',NULL,'registered',?,NULL,NULL)", (hash_payload({"nonce": nonce}),))
+        if _is_v2(b):
+            budget = m["anchor_budget"]
+            db.execute("INSERT INTO budget_scopes(scope_id,policy_sha256,policy) VALUES(?,?,?)",
+                       (budget["scope_id"], hash_payload(budget), _json(budget)))
+        db.execute("PRAGMA user_version=" + ("2" if _is_v2(b) else "1"))
         db.execute("COMMIT")
         db.close()
         db = None
@@ -425,6 +460,10 @@ def _stop(db, code):
     code = code if code in CODES else "halted_error"
     state = {"unknown_outcome": "halted_unknown", "budget_exhausted": "halted_exhausted",
              "halted_cancelled": "halted_cancelled", "closed": "closed"}.get(code, "halted_error")
+    if code in {"stage_model_attempts_exhausted", "stage_tokens_exhausted", "stage_tool_attempts_exhausted", "stage_followup_attempts_exhausted"}:
+        state = "halted_exhausted"
+    if code == "stage_usage_unverifiable":
+        state = "halted_unknown"
     db.execute("UPDATE run_authorization SET state=?,stop_code=? WHERE id=1 AND state NOT IN ('halted_unknown','halted_exhausted','halted_cancelled','halted_error','closed')", (state, code))
     db.execute("INSERT INTO events(kind,code) VALUES('stop',?)", (code,))
 
@@ -487,7 +526,7 @@ def _persist_validation_stop(binding, code):
 
 
 @contextmanager
-def _tx(binding, *, active=False, fence=True, preparing_operation=False):
+def _tx(binding, *, active=False, fence=True, preparing_operation=False, scope_control=False):
     db = None
     b = None
     try:
@@ -501,12 +540,20 @@ def _tx(binding, *, active=False, fence=True, preparing_operation=False):
         db.execute("PRAGMA synchronous=FULL")
         db.execute("PRAGMA busy_timeout=250")
         db.execute("BEGIN IMMEDIATE")
-        _need(db.execute("PRAGMA user_version").fetchone()[0] == 1, "storage_unavailable")
+        _need(db.execute("PRAGMA user_version").fetchone()[0] == (2 if _is_v2(b) else 1), "storage_unavailable")
         row = db.execute("SELECT * FROM run_authorization WHERE id=1").fetchone()
         _need(row is not None and row["manifest_sha256"] == b["manifest_sha256"]
               and row["nonce"] == consumed["nonce"] and row["cap"] == _cap(m["cap_usd"]), "invalid_binding")
+        if _is_v2(b):
+            scope = db.execute("SELECT policy_sha256,policy FROM budget_scopes WHERE scope_id=?", (m["anchor_budget"]["scope_id"],)).fetchone()
+            _need(scope is not None and scope["policy_sha256"] == hash_payload(m["anchor_budget"])
+                  and scope["policy"] == _json(m["anchor_budget"]), "invalid_binding")
         if fence:
             _need(row["generation"] == b["generation"], "stale_generation")
+        if active and _is_v2(b):
+            # Fence old phase workers before an exited participant or changed
+            # phase state can turn their late call into a halt of the new owner.
+            _need(b["admission_epoch"] == row["admission_epoch"], "stale_admission_epoch")
         _need(not b["pipeline_id"] or b["pipeline_id"] == row["pipeline_id"], "binding_conflict")
         if row["pipeline_id"]:
             _need(_read_json(_registry_path(b, ".pipeline.json")) == {"pipeline_id": row["pipeline_id"], "request_sha256": m["request_sha256"]}, "binding_conflict")
@@ -519,12 +566,14 @@ def _tx(binding, *, active=False, fence=True, preparing_operation=False):
             _need(row["owner_pid"] is not None and _lock_held(b), "lock_unavailable")
             p = db.execute("SELECT * FROM participants WHERE generation=? AND participant_id=?", (b["generation"], b["participant_id"])).fetchone()
             _need(p is not None and p["state"] == "running" and p["pid"] == os.getpid(), "participant_unverified")
+            if _is_v2(b):
+                _v2_admission(db, b, row, p, scope_control=scope_control)
         yield db, row, m
         db.execute("COMMIT")
     except SpendingStop as exc:
         if db is not None and db.in_transaction:
             # A stale worker or repeated claim must never poison a new owner.
-            if exc.code not in {"stale_generation", "attempt_reused", "resume_denied", "lock_unavailable"}:
+            if exc.code not in {"stale_generation", "stale_admission_epoch", "attempt_reused", "resume_denied", "lock_unavailable"}:
                 try:
                     _stop(db, exc.code)
                     db.execute("COMMIT")
@@ -532,7 +581,7 @@ def _tx(binding, *, active=False, fence=True, preparing_operation=False):
                     db.execute("ROLLBACK")
             else:
                 db.execute("ROLLBACK")
-        elif exc.code not in {"stale_generation", "attempt_reused", "resume_denied", "lock_unavailable"}:
+        elif exc.code not in {"stale_generation", "stale_admission_epoch", "attempt_reused", "resume_denied", "lock_unavailable"}:
             _persist_validation_stop(binding, exc.code)
         raise
     except (sqlite3.Error, OSError, KeyError, TypeError, ValueError):
@@ -604,6 +653,8 @@ def bind_pipeline(binding, pipeline_id, request):
         _need(binding["participant_id"] == "parent" and _lock_held(binding)
               and row["owner_pid"] == os.getpid(), "lock_unavailable")
         _need(hash_payload(request) == m["request_sha256"], "binding_conflict")
+        if _is_v2(binding):
+            _validate_anchor_request(m, request)
         _need(row["pipeline_id"] in {"", pipeline_id}, "binding_conflict")
         _need(row["state"] in {"prepared", "active"}, _state_code(row))
         value = {"pipeline_id": pipeline_id, "request_sha256": m["request_sha256"]}
@@ -632,6 +683,8 @@ def validate_bound_request(binding, request):
         except (SpendingStop, UnicodeError, RecursionError):
             raise SpendingStop("binding_conflict") from None
         _need(request_sha256 == manifest["request_sha256"], "binding_conflict")
+        if _is_v2(binding):
+            _validate_anchor_request(manifest, request)
         return request_sha256
 
 
@@ -689,6 +742,8 @@ def _adopt_transition(previous, committed):
     No caller-supplied reset or generic adoption API exists. A crash between
     commit and adoption fails closed; it never recreates or replenishes a run.
     """
+    if _is_v2(previous):
+        return _adopt_v2(previous, committed)
     with _latch_lock:
         if _ENV_PIN is None:
             return
@@ -745,6 +800,7 @@ def activate_binding(binding):
             env_binding = binding_from_environment()
             _need(env_binding == b, "invalid_binding")
         _binding.set(_copy(b))
+        _remember_v2_binding(b)
         return b
 
 
@@ -755,6 +811,9 @@ def current_binding():
     b = _binding.get()
     if b is None and _ACTIVE_AUTH is not None:
         _LOCAL_STOPS[_ACTIVE_AUTH[0]] = "missing_context"
+        remembered = _remembered_v2_binding()
+        if remembered is not None:
+            _persist_validation_stop(remembered, "missing_context")
     _need(b is not None, "missing_context")
     return _copy(b)
 
@@ -776,6 +835,8 @@ def check_context():
 def deny(code):
     stop = SpendingStop(code)
     b = _binding.get()
+    if b is None:
+        b = _remembered_v2_binding()
     if b is not None:
         try:
             halt(b, stop.code)
@@ -796,7 +857,7 @@ def operation(stage, logical_key):
         # The lock-owning parent may scope its first bind with operation
         # metadata. All qualification/claim/send paths still demand active,
         # committed pipeline identity through the default transaction checks.
-        with _tx(current_binding(), active=True, preparing_operation=True):
+        with _tx(current_binding(), active=True, preparing_operation=True, scope_control=True):
             pass
     parent = _operation.get()
     if parent is not None:
@@ -832,6 +893,9 @@ def qualify_route(kind, endpoint, model="", *, account_sha256=None):
                    and _endpoint(r["endpoint"]) == _endpoint(endpoint) and r["model"] == model
                    and account_sha256 == r["account_sha256"]]
         _need(len(matches) == 1, "unsupported_route")
+        if _is_v2(b) and b["active_scope_id"] is not None:
+            p = m["anchor_budget"]
+            _need(matches[0] in [p["model_profile"]["route_id"], *p["catalog_route_ids"], *p["followup_route_ids"]], "unsupported_route")
         return matches[0]
 
 
@@ -863,7 +927,8 @@ def quote_request(route_id, request, binding=None):
         return _quote(m, route_id, request)
 
 
-def reserve_and_claim(binding, route_id, request, *, stage, logical_key, attempt_id=None):
+def reserve_and_claim(binding, route_id, request, *, stage, logical_key, attempt_id=None,
+                      catalog_lookup_id=None, followup_operation_id=None):
     op = _operation_value({"stage": stage, "logical_key": logical_key})
     attempt_id = uuid4().hex if attempt_id is None else _identity(attempt_id, "invalid_request")
     with _tx(binding, active=True) as (db, row, m):
@@ -872,11 +937,19 @@ def reserve_and_claim(binding, route_id, request, *, stage, logical_key, attempt
         retained = sum(item[0] for item in db.execute("SELECT reserved FROM attempts"))
         _need(retained <= row["cap"], "usage_integrity")
         _need(quote["reserved_max_microusd"] <= row["cap"] - retained, "budget_exhausted")
+        extra = (_v2_debits(db, binding, row, m, route_id, request, quote,
+                           catalog_lookup_id, followup_operation_id) if _is_v2(binding) else {})
+        if not _is_v2(binding):
+            _need(catalog_lookup_id is None and followup_operation_id is None, "unsupported_route")
         logical = hash_payload(op)
         ordinal = db.execute("SELECT COALESCE(MAX(ordinal),0)+1 FROM attempts WHERE logical_hash=?", (logical,)).fetchone()[0]
-        db.execute("INSERT INTO attempts(attempt_id,logical_hash,ordinal,generation,participant_id,stage_hash,route_id,request_sha256,envelope,reserved) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                   (attempt_id, logical, ordinal, binding["generation"], binding["participant_id"], hash_payload(stage), route_id,
-                    request["payload_sha256"], _json(request), quote["reserved_max_microusd"]))
+        fields = ["attempt_id", "logical_hash", "ordinal", "generation", "participant_id", "stage_hash", "route_id", "request_sha256", "envelope", "reserved", *extra]
+        values = [attempt_id, logical, ordinal, binding["generation"], binding["participant_id"], hash_payload(stage), route_id,
+                  request["payload_sha256"], _json(request), quote["reserved_max_microusd"], *extra.values()]
+        db.execute("INSERT INTO attempts(" + ",".join(fields) + ") VALUES(" + ",".join("?" for _ in fields) + ")", values)
+        if extra.get("tool_operation_id"):
+            db.execute("UPDATE scope_tool_operations SET state='in_flight',in_flight_attempt_id=? WHERE operation_id=?",
+                       (attempt_id, extra["tool_operation_id"]))
         db.execute("INSERT INTO events(kind,evidence_sha256) VALUES('claimed',?)", (hash_payload(attempt_id),))
         return {"binding": _copy(binding), "attempt_id": attempt_id, "ordinal": ordinal,
                 "reserved_max_microusd": quote["reserved_max_microusd"]}
@@ -899,14 +972,27 @@ def _observation(usage):
     return result
 
 
-def record_observation(claim, usage=None):
+def record_observation(claim, usage=None, *, response_fingerprint=None):
     _need(type(claim) is dict and set(claim) == {"binding", "attempt_id", "ordinal", "reserved_max_microusd"}, "invalid_request")
     with _tx(claim["binding"]) as (db, _, _):
         attempt = db.execute("SELECT * FROM attempts WHERE attempt_id=?", (claim["attempt_id"],)).fetchone()
         _need(attempt is not None and attempt["generation"] == claim["binding"]["generation"]
               and attempt["participant_id"] == claim["binding"]["participant_id"]
               and attempt["ordinal"] == claim["ordinal"] and attempt["reserved"] == claim["reserved_max_microusd"], "invalid_binding")
+        scoped = _is_v2(claim["binding"]) and attempt["scope_id"] is not None
+        disposition = None
+        if scoped and isinstance(usage, dict) and "tool_result" in usage:
+            usage = dict(usage)
+            disposition = usage.pop("tool_result")
         obs = _observation(usage)
+        if response_fingerprint is not None:
+            _need(scoped and type(response_fingerprint) is dict and set(response_fingerprint) == {"basis", "sha256"}, "usage_integrity")
+            _need(response_fingerprint["basis"] in {"provider_json/v1", "http_bytes/v1"}, "usage_integrity")
+            _hash(response_fingerprint["sha256"], "usage_integrity")
+            obs["response_fingerprint"] = _copy(response_fingerprint)
+        if disposition is not None:
+            _need(attempt["tool_operation_id"] is not None and disposition in {"complete", "retryable_known", "terminal_known"}, "usage_integrity")
+            obs["tool_result"] = disposition
         envelope = json.loads(attempt["envelope"])
         breached = any(obs.get(field, 0) > envelope[bound] for field, bound in
                        (("input_tokens", "input_tokens"), ("output_tokens", "max_output_tokens"), ("tool_units", "tool_units")))
@@ -920,14 +1006,24 @@ def record_observation(claim, usage=None):
         _need(not breached, "usage_integrity")
         if obs["outcome"] == "unknown":
             _stop(db, "unknown_outcome")
+        if scoped:
+            _v2_observed(db, attempt, obs)
         return obs
 
 
-def _claim_current(route_id, request):
+def _claim_current(route_id, request, *, catalog_lookup_id=None, followup_operation_id=None):
     b = check_context()
     _need(b is not None, "missing_context")
     op = _operation_value(_operation.get())
-    return reserve_and_claim(b, route_id, request, stage=op["stage"], logical_key=op["logical_key"])
+    claim = reserve_and_claim(b, route_id, request, stage=op["stage"], logical_key=op["logical_key"],
+                              catalog_lookup_id=catalog_lookup_id, followup_operation_id=followup_operation_id)
+    try:
+        for capture in _dispatch_captures.get():
+            capture._add(claim)
+    except SpendingStop:
+        halt(b, "transport_receipt_missing")
+        raise
+    return claim
 
 
 def _unknown(claim):
@@ -937,12 +1033,14 @@ def _unknown(claim):
         _LOCAL_STOPS[claim["binding"]["authorization_id"]] = "unknown_outcome"
 
 
-def dispatch(route_id, request, send, *, usage=None):
-    claim = _claim_current(route_id, request)
+def dispatch(route_id, request, send, *, usage=None, catalog_lookup_id=None, followup_operation_id=None,
+             response_fingerprint=None):
+    claim = _claim_current(route_id, request, catalog_lookup_id=catalog_lookup_id, followup_operation_id=followup_operation_id)
     try:
         result = send()
         _need(not hasattr(result, "__await__"), "invalid_request")
-        obs = record_observation(claim, usage(result) if usage else None)
+        obs = record_observation(claim, usage(result) if usage else None,
+                                 response_fingerprint=response_fingerprint(result) if response_fingerprint else None)
         if obs["outcome"] == "unknown":
             raise SpendingStop("unknown_outcome")
         return result
@@ -953,11 +1051,13 @@ def dispatch(route_id, request, send, *, usage=None):
         raise SpendingStop("unknown_outcome") from None
 
 
-async def dispatch_async(route_id, request, send, *, usage=None):
-    claim = _claim_current(route_id, request)
+async def dispatch_async(route_id, request, send, *, usage=None, catalog_lookup_id=None, followup_operation_id=None,
+                         response_fingerprint=None):
+    claim = _claim_current(route_id, request, catalog_lookup_id=catalog_lookup_id, followup_operation_id=followup_operation_id)
     try:
         result = await send()
-        obs = record_observation(claim, usage(result) if usage else None)
+        obs = record_observation(claim, usage(result) if usage else None,
+                                 response_fingerprint=response_fingerprint(result) if response_fingerprint else None)
         if obs["outcome"] == "unknown":
             raise SpendingStop("unknown_outcome")
         return result
@@ -993,7 +1093,10 @@ def mark_recoverable(binding):
         db.execute("INSERT INTO events(kind) VALUES('paused')")
 
 
-def register_participant(binding, participant_id, *, spawn_receipt_sha256, operation_context=None):
+def register_participant(binding, participant_id, *, spawn_receipt_sha256, operation_context=None, scope_entry_ids=()):
+    if _is_v2(binding):
+        return _v2_register_participant(binding, participant_id, spawn_receipt_sha256, operation_context, scope_entry_ids)
+    _need(not scope_entry_ids, "unsupported_route")
     _identity(participant_id)
     _need(participant_id != "parent", "participant_unverified")
     _hash(spawn_receipt_sha256, "participant_unverified")
@@ -1013,6 +1116,8 @@ def participant_started(binding):
         _need(row["state"] == "active" and _lock_held(binding), "participant_unverified")
         p = db.execute("SELECT * FROM participants WHERE generation=? AND participant_id=?", (binding["generation"], binding["participant_id"])).fetchone()
         _need(p is not None and p["state"] in {"registered", "running"} and p["pid"] in {None, os.getpid()}, "participant_unverified")
+        if _is_v2(binding):
+            _v2_epoch(binding, row, p)
         db.execute("UPDATE participants SET pid=?,state='running' WHERE generation=? AND participant_id=?", (os.getpid(), binding["generation"], binding["participant_id"]))
         return _copy(binding)
 
@@ -1020,9 +1125,14 @@ def participant_started(binding):
 def participant_exited(binding, participant_id, *, exit_receipt_sha256):
     _hash(exit_receipt_sha256, "participant_unverified")
     with _tx(binding) as (db, row, _):
-        _need(binding["participant_id"] == "parent" and row["owner_pid"] == os.getpid() and _lock_held(binding)
-              and participant_id != "parent", "participant_unverified")
+        _need(_lock_held(binding) and participant_id != "parent", "participant_unverified")
         p = db.execute("SELECT * FROM participants WHERE generation=? AND participant_id=?", (binding["generation"], participant_id)).fetchone()
+        if _is_v2(binding):
+            registrar = db.execute("SELECT * FROM participants WHERE generation=? AND participant_id=?", (binding["generation"], binding["participant_id"])).fetchone()
+            _need(p is not None and registrar is not None and registrar["pid"] == os.getpid() and registrar["state"] == "running"
+                  and (binding["participant_id"] == "parent" or p["parent_participant_id"] == binding["participant_id"]), "participant_unverified")
+        else:
+            _need(binding["participant_id"] == "parent" and row["owner_pid"] == os.getpid(), "participant_unverified")
         _need(p is not None and p["exit_sha256"] in {None, exit_receipt_sha256}, "participant_unverified")
         db.execute("UPDATE participants SET state='exited',exit_sha256=? WHERE generation=? AND participant_id=?", (exit_receipt_sha256, binding["generation"], participant_id))
         if db.execute("SELECT 1 FROM attempts WHERE generation=? AND participant_id=? AND state='unknown' LIMIT 1",
@@ -1047,10 +1157,15 @@ def export_environment(binding, *, operation_context=None):
 
 
 def _participants(db):
-    return [dict(p) for p in db.execute("SELECT generation,participant_id,state,spawn_sha256,operation_sha256,exit_sha256 FROM participants ORDER BY generation,participant_id")]
+    columns = "generation,participant_id,state,spawn_sha256,operation_sha256,exit_sha256"
+    if db.execute("PRAGMA user_version").fetchone()[0] == 2:
+        columns += ",parent_participant_id,inherited_scope_id,admission_epoch,scope_entry_ids"
+    return [dict(p) for p in db.execute("SELECT " + columns + " FROM participants ORDER BY generation,participant_id")]
 
 
 def resume_existing(binding, proof):
+    if _is_v2(binding):
+        return _v2_resume(binding, proof)
     with _tx(binding) as (db, row, m):
         _need(type(proof) is dict and set(proof) == {"approval_sha256", "request_sha256", "source_sha256", "routes_sha256", "participants_sha256"}, "resume_denied")
         _hash(proof["approval_sha256"], "resume_denied")
@@ -1090,3 +1205,691 @@ def summary(binding):
                 "cap_microusd": row["cap"], "reserved_max_microusd": retained, "remaining_microusd": row["cap"]-retained,
                 "attempt_count": len(attempts), "attempt_states": states, "route_reserved_microusd": routes,
                 "usage_kinds": kinds, "participants": _participants(db)}
+
+
+# v2 is opt-in for newly created authorizations only. No v1 DB is migrated.
+_ANCHOR_LIMITS = {"model_attempt_limit": 20, "token_envelope_limit": 150000,
+                  "catalog_attempt_limit": 8, "followup_attempt_limit": 12}
+_ANCHOR_REQUEST_KEYS = {"mode", "anchor_budget_scope_id", "policy_version", "source_policy_sha256",
+                        *_ANCHOR_LIMITS, "catalog_lookups_per_gap", "followup_round_limit"}
+_SESSION_KEYS = {"session_id", "research_generation_id", "input_manifest_sha256", "requirement_registry_sha256",
+                 "workers_quiesced_sha256", "restart_of_session_id"}
+
+
+def _is_v2(binding):
+    return isinstance(binding, dict) and binding.get("schema") == _BINDING_V2
+
+
+def _remember_v2_binding(binding):
+    global _V2_CONTROL_BINDING
+    if _is_v2(binding):
+        _V2_CONTROL_BINDING = _json(binding)
+
+
+def _remembered_v2_binding():
+    # Only a denial may use this last validated control descriptor. It must
+    # never substitute for missing worker context or grant send permission.
+    if _ACTIVE_AUTH is None or _V2_CONTROL_BINDING is None:
+        return None
+    b = json.loads(_V2_CONTROL_BINDING)
+    if (b["authorization_id"], b["manifest_sha256"], b["root"]) == _ACTIVE_AUTH:
+        return b
+    return None
+
+
+def _validate_v2_manifest(manifest):
+    m = _copy(manifest)
+    _need(set(m) == {"schema", "authorization_id", "root", "currency", "cap_usd", "request_sha256",
+                    "source_files", "source_sha256", "routes_sha256", "resume_policy", "routes", "anchor_budget"}, "invalid_manifest")
+    routes = m["routes"]
+    _need(type(routes) is dict and 1 <= len(routes) <= 16, "invalid_manifest")
+    seen = set()
+    for name, route in routes.items():
+        _need(type(route) is dict, "invalid_manifest")
+        converted = _copy(route)
+        if route.get("kind") == "catalog_lookup":
+            _need(set(route) == _ROUTE_KEYS | {"catalog_contract"}, "invalid_manifest")
+            contract = converted.pop("catalog_contract")
+            _need(type(contract) is dict and set(contract) == {"provider_id", "operation_id", "catalog_sha256",
+                  "request_schema_sha256", "response_bound_sha256", "retry_policy_sha256"}, "invalid_manifest")
+            _identity(contract["provider_id"], "invalid_manifest")
+            _identity(contract["operation_id"], "invalid_manifest")
+            for field in ("catalog_sha256", "request_schema_sha256", "response_bound_sha256", "retry_policy_sha256"):
+                _hash(contract[field])
+            converted["kind"] = "firecrawl_search"
+        else:
+            _need(isinstance(route.get("kind"), str) and route["kind"] not in seen, "unsupported_route")
+            seen.add(route["kind"])
+        base = {k: v for k, v in m.items() if k != "anchor_budget"}
+        base.update(schema=_SCHEMA, routes={name: converted}, routes_sha256=hash_payload({name: converted}))
+        _validate_v1_manifest(base)
+    _need(hash_payload(routes) == m["routes_sha256"], "source_drift")
+    p = m["anchor_budget"]
+    _need(type(p) is dict and set(p) == {"schema", "scope_id", "policy_version", "source_policy_sha256",
+          *_ANCHOR_LIMITS, "catalog_lookups_per_gap", "followup_round_limit", "model_profile",
+          "catalog_route_ids", "followup_route_ids", "usage_policy"}, "invalid_manifest")
+    _need(p["schema"] == "anchor-budget/v1" and p["policy_version"] == "world-anchor-budget/v1"
+          and p["usage_policy"] == "provider_reported_required", "invalid_manifest")
+    _identity(p["scope_id"], "invalid_manifest")
+    _hash(p["source_policy_sha256"])
+    for key, maximum in _ANCHOR_LIMITS.items():
+        _count(p[key], "invalid_manifest", positive=key in {"model_attempt_limit", "token_envelope_limit"})
+        _need(p[key] <= maximum, "invalid_manifest")
+    for field in ("catalog_lookups_per_gap", "followup_round_limit"):
+        _need(type(p[field]) is int and p[field] == 1, "invalid_manifest")
+    profile = p["model_profile"]
+    _need(type(profile) is dict and set(profile) == {"route_id", "max_output_tokens"}, "invalid_manifest")
+    _identity(profile["route_id"], "invalid_manifest")
+    _need(profile["route_id"] in routes and routes[profile["route_id"]]["kind"] == "openai_chat", "unsupported_route")
+    _count(profile["max_output_tokens"], "invalid_manifest", positive=True)
+    _need(profile["max_output_tokens"] <= min(2000, routes[profile["route_id"]]["max_output_tokens"]), "invalid_manifest")
+    for key, allowed in (("catalog_route_ids", {"catalog_lookup"}), ("followup_route_ids", {"firecrawl_search", "firecrawl_scrape"})):
+        _need(type(p[key]) is list and len(p[key]) <= 16 and all(isinstance(x, str) for x in p[key])
+              and len(set(p[key])) == len(p[key]), "invalid_manifest")
+        _need(all(x in routes and routes[x]["kind"] in allowed for x in p[key]), "unsupported_route")
+    return m
+
+
+def _validate_anchor_request(manifest, request):
+    _need(type(request) is dict and "world_anchor" in request, "binding_conflict")
+    expected = {"mode": "v1", "anchor_budget_scope_id": manifest["anchor_budget"]["scope_id"],
+                **{k: manifest["anchor_budget"][k] for k in _ANCHOR_REQUEST_KEYS - {"mode", "anchor_budget_scope_id"}}}
+    _need(request["world_anchor"] == expected, "binding_conflict")
+
+
+_DDL_V2 = """
+ALTER TABLE run_authorization ADD COLUMN admission_epoch INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE run_authorization ADD COLUMN active_scope_id TEXT;
+ALTER TABLE run_authorization ADD COLUMN active_scope_session_id TEXT;
+ALTER TABLE run_authorization ADD COLUMN pending_restart_session_id TEXT;
+ALTER TABLE attempts ADD COLUMN scope_id TEXT;
+ALTER TABLE attempts ADD COLUMN scope_session_id TEXT;
+ALTER TABLE attempts ADD COLUMN admission_epoch INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE attempts ADD COLUMN model_attempt_units INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE attempts ADD COLUMN token_envelope_units INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE attempts ADD COLUMN catalog_attempt_units INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE attempts ADD COLUMN followup_attempt_units INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE attempts ADD COLUMN tool_operation_id TEXT;
+ALTER TABLE participants ADD COLUMN parent_participant_id TEXT;
+ALTER TABLE participants ADD COLUMN inherited_scope_id TEXT;
+ALTER TABLE participants ADD COLUMN admission_epoch INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE participants ADD COLUMN scope_entry_ids TEXT NOT NULL DEFAULT '[]';
+CREATE TABLE budget_scopes(scope_id TEXT PRIMARY KEY, policy_sha256 TEXT NOT NULL, policy TEXT NOT NULL);
+CREATE TABLE scope_sessions(session_id TEXT PRIMARY KEY, scope_id TEXT NOT NULL,
+ context TEXT NOT NULL, owner_generation INTEGER NOT NULL, owner_participant_id TEXT NOT NULL,
+ enter_epoch INTEGER NOT NULL, exit_epoch INTEGER, state TEXT NOT NULL,
+ budget_receipt TEXT, completion TEXT);
+CREATE TABLE scope_transitions(epoch INTEGER PRIMARY KEY, receipt TEXT NOT NULL);
+CREATE TABLE anchor_followups(scope_id TEXT PRIMARY KEY, followup_id TEXT UNIQUE NOT NULL,
+ gap_manifest_sha256 TEXT NOT NULL, gaps TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'open', result_sha256 TEXT);
+CREATE TABLE scope_tool_operations(operation_id TEXT PRIMARY KEY, scope_id TEXT NOT NULL,
+ followup_id TEXT NOT NULL, kind TEXT NOT NULL, gap_key TEXT NOT NULL,
+ route_id TEXT NOT NULL, query_sha256 TEXT NOT NULL, state TEXT NOT NULL,
+ in_flight_attempt_id TEXT, result_sha256 TEXT);
+CREATE UNIQUE INDEX one_catalog_lookup_per_gap ON scope_tool_operations(scope_id,gap_key) WHERE kind='catalog';
+CREATE UNIQUE INDEX one_followup_wire_operation ON scope_tool_operations(scope_id,kind,gap_key,route_id,query_sha256);
+CREATE TRIGGER immutable_scope_update BEFORE UPDATE ON budget_scopes BEGIN SELECT RAISE(ABORT,'immutable'); END;
+CREATE TRIGGER immutable_scope_delete BEFORE DELETE ON budget_scopes BEGIN SELECT RAISE(ABORT,'immutable'); END;
+CREATE TRIGGER immutable_scope_debits BEFORE UPDATE OF scope_id,scope_session_id,admission_epoch,
+ model_attempt_units,token_envelope_units,catalog_attempt_units,followup_attempt_units,tool_operation_id
+ ON attempts BEGIN SELECT RAISE(ABORT,'immutable'); END;
+CREATE TRIGGER immutable_followup_update BEFORE UPDATE OF scope_id,followup_id,gap_manifest_sha256,gaps ON anchor_followups BEGIN SELECT RAISE(ABORT,'immutable'); END;
+CREATE TRIGGER immutable_followup_delete BEFORE DELETE ON anchor_followups BEGIN SELECT RAISE(ABORT,'immutable'); END;
+CREATE TRIGGER immutable_tool_identity BEFORE UPDATE OF operation_id,scope_id,followup_id,kind,gap_key,route_id,query_sha256
+ ON scope_tool_operations BEGIN SELECT RAISE(ABORT,'immutable'); END;
+CREATE TRIGGER no_tool_operation_delete BEFORE DELETE ON scope_tool_operations BEGIN SELECT RAISE(ABORT,'immutable'); END;
+CREATE TRIGGER no_transition_update BEFORE UPDATE ON scope_transitions BEGIN SELECT RAISE(ABORT,'immutable'); END;
+CREATE TRIGGER no_transition_delete BEFORE DELETE ON scope_transitions BEGIN SELECT RAISE(ABORT,'immutable'); END;
+"""
+
+
+def _v2_epoch(b, row, participant):
+    _need(b["admission_epoch"] == row["admission_epoch"] == participant["admission_epoch"], "stale_admission_epoch")
+    _need(b["active_scope_id"] == row["active_scope_id"] == participant["inherited_scope_id"], "budget_scope_conflict")
+
+
+def _v2_admission(db, b, row, participant, *, scope_control=False):
+    _v2_epoch(b, row, participant)
+    if row["active_scope_id"] is not None and not scope_control:
+        session = db.execute("SELECT state FROM scope_sessions WHERE session_id=?", (row["active_scope_session_id"],)).fetchone()
+        _need(session is not None and session["state"] == "open", "budget_scope_missing")
+
+
+def _scope_totals(db, scope_id):
+    rows = db.execute("SELECT reserved,model_attempt_units,token_envelope_units,catalog_attempt_units,followup_attempt_units FROM attempts WHERE scope_id=?", (scope_id,))
+    totals = dict(model_attempts=0, token_envelope_units=0, catalog_attempts=0, followup_attempts=0, reserved_max_microusd=0)
+    for r in rows:
+        for key, col in (("reserved_max_microusd", 0), ("model_attempts", 1), ("token_envelope_units", 2), ("catalog_attempts", 3), ("followup_attempts", 4)):
+            totals[key] += r[col]
+            _count(totals[key], "usage_integrity")
+    return totals
+
+
+def _scope_view(db, row, m):
+    p = m["anchor_budget"]
+    retained = _scope_totals(db, p["scope_id"])
+    mapping = {"model_attempts": "model_attempt_limit", "token_envelope_units": "token_envelope_limit",
+               "catalog_attempts": "catalog_attempt_limit", "followup_attempts": "followup_attempt_limit"}
+    _need(all(retained[k] <= p[v] for k, v in mapping.items()), "usage_integrity")
+    sessions = [dict(r) for r in db.execute("SELECT session_id,owner_generation,owner_participant_id,enter_epoch,exit_epoch,state FROM scope_sessions ORDER BY enter_epoch")]
+    followup = db.execute("SELECT followup_id,gap_manifest_sha256,state,result_sha256 FROM anchor_followups WHERE scope_id=?", (p["scope_id"],)).fetchone()
+    active_session = next((s for s in sessions if s["session_id"] == row["active_scope_session_id"]), None)
+    return {"schema": "anchor-budget-summary/v1", "scope_id": p["scope_id"], "policy_sha256": hash_payload(p),
+            "generation": row["generation"], "admission_epoch": row["admission_epoch"], "active_scope_id": row["active_scope_id"],
+            "active_session_id": row["active_scope_session_id"], "pending_restart_session_id": row["pending_restart_session_id"],
+            "active_session_state": active_session["state"] if active_session is not None else None,
+            "state": row["state"], "stop_code": row["stop_code"], "limits": {k: p[k] for k in _ANCHOR_LIMITS},
+            "retained": retained, "remaining": {k: p[v] - retained[k] for k, v in mapping.items()},
+            "sessions": sessions, "followup": dict(followup) if followup is not None else None}
+
+
+def scope_summary(binding):
+    _need(_is_v2(binding), "budget_scope_missing")
+    with _tx(binding, fence=False) as (db, row, m):
+        return _scope_view(db, row, m)
+
+
+def _profile(m):
+    p = m["anchor_budget"]
+    profile = p["model_profile"]
+    r = m["routes"][profile["route_id"]]
+    tokens = r["input_ceiling"] + profile["max_output_tokens"]
+    _need(tokens <= p["token_envelope_limit"] and tokens <= _MAX, "stage_profile_oversize")
+    return {"schema": "anchor-profile/v1", "scope_id": p["scope_id"], "policy_sha256": hash_payload(p),
+            "route_id": profile["route_id"], "routes_sha256": m["routes_sha256"],
+            "input_upper_bound": r["input_ceiling"], "max_output_tokens": profile["max_output_tokens"], "token_envelope_units": tokens}
+
+
+def preflight_anchor_profile(binding):
+    _need(_is_v2(binding), "budget_scope_missing")
+    with _tx(binding, active=True, scope_control=True) as (_, _, m):
+        return _profile(m)
+
+
+def _scope_owner(db, b, row, *, entering=False):
+    participant = db.execute("SELECT * FROM participants WHERE generation=? AND participant_id=?", (b["generation"], b["participant_id"])).fetchone()
+    _need(participant is not None, "participant_unverified")
+    if entering:
+        scope_id = db.execute("SELECT scope_id FROM budget_scopes").fetchone()[0]
+        _need(b["participant_id"] == "parent" or scope_id in json.loads(participant["scope_entry_ids"]), "participant_unverified")
+    else:
+        s = db.execute("SELECT * FROM scope_sessions WHERE session_id=?", (row["active_scope_session_id"],)).fetchone()
+        _need(s is not None and s["owner_generation"] == b["generation"] and s["owner_participant_id"] == b["participant_id"], "participant_unverified")
+        return s
+
+
+def _quiesced(db, b):
+    ancestors = {b["participant_id"]}
+    current = b["participant_id"]
+    while current != "parent":
+        p = db.execute("SELECT parent_participant_id FROM participants WHERE generation=? AND participant_id=?", (b["generation"], current)).fetchone()
+        _need(p is not None and p[0] is not None and p[0] not in ancestors, "participant_unverified")
+        current = p[0]
+        ancestors.add(current)
+    for p in db.execute("SELECT participant_id,state FROM participants WHERE generation=?", (b["generation"],)):
+        _need(p[0] in ancestors or p[1] == "exited", "participant_unverified")
+    _need(db.execute("SELECT 1 FROM attempts WHERE state='unknown' LIMIT 1").fetchone() is None, "unknown_outcome")
+
+
+def _transition(db, b, row, *, scope_id, session_id, kind, proof_sha256):
+    epoch = row["admission_epoch"] + 1
+    _count(epoch, "budget_scope_conflict")
+    receipt = {"schema": "scope-transition/v1", "authorization_id": b["authorization_id"], "pipeline_id": b["pipeline_id"],
+               "generation": b["generation"], "session_id": session_id, "owner_participant_id": b["participant_id"],
+               "kind": kind, "from_epoch": row["admission_epoch"], "to_epoch": epoch,
+               "from_scope_id": row["active_scope_id"], "to_scope_id": scope_id, "proof_sha256": proof_sha256}
+    db.execute("UPDATE run_authorization SET admission_epoch=?,active_scope_id=?,active_scope_session_id=?,pending_restart_session_id=NULL WHERE id=1",
+               (epoch, scope_id, session_id if scope_id is not None else None))
+    db.execute("UPDATE participants SET admission_epoch=?,inherited_scope_id=? WHERE generation=? AND participant_id=?",
+               (epoch, scope_id, b["generation"], b["participant_id"]))
+    db.execute("INSERT INTO scope_transitions(epoch,receipt) VALUES(?,?)", (epoch, _json(receipt)))
+    db.execute("INSERT INTO events(kind,evidence_sha256) VALUES('scope_transition',?)", (hash_payload(receipt),))
+    updated = _copy(b)
+    updated.update(admission_epoch=epoch, active_scope_id=scope_id)
+    return {"binding": updated, "transition_receipt": receipt}
+
+
+def _adopt_v2(previous, committed):
+    with _latch_lock:
+        _check_env_pin()
+        fixed = _BINDING_KEYS - {"generation", "pipeline_id"}
+        _need(_is_v2(committed) and all(previous[k] == committed[k] for k in fixed), "invalid_binding")
+        with _tx(committed) as (db, row, _):
+            p = db.execute("SELECT * FROM participants WHERE generation=? AND participant_id=?", (committed["generation"], committed["participant_id"])).fetchone()
+            _need(p is not None and p["pid"] == os.getpid() and p["state"] == "running", "participant_unverified")
+            _v2_epoch(committed, row, p)
+            _need(committed["pipeline_id"] == row["pipeline_id"], "binding_conflict")
+        if _ENV_PIN is not None:
+            carrier = _ENV_PIN["current"]
+            old = json.loads(carrier["DRF_RUN_SPENDING_BINDING"])
+            _need(all(old[k] == previous[k] for k in fixed) and old["generation"] == previous["generation"], "invalid_binding")
+            upgraded = dict(carrier)
+            upgraded["DRF_RUN_SPENDING_BINDING"] = _json(committed)
+            os.environ["DRF_RUN_SPENDING_BINDING"] = upgraded["DRF_RUN_SPENDING_BINDING"]
+            _ENV_PIN["current"] = upgraded
+        if _binding.get() is not None:
+            _binding.set(_copy(committed))
+        _remember_v2_binding(committed)
+
+
+def begin_anchor_scope(binding, *, session):
+    _need(_is_v2(binding), "budget_scope_missing")
+    with _tx(binding, active=True, scope_control=True) as (db, row, m):
+        _need(type(session) is dict and set(session) == _SESSION_KEYS, "budget_scope_conflict")
+        for field in ("session_id", "research_generation_id"):
+            _identity(session[field], "budget_scope_conflict")
+        for field in ("input_manifest_sha256", "requirement_registry_sha256", "workers_quiesced_sha256"):
+            _hash(session[field], "budget_scope_conflict")
+        _profile(m)
+        _scope_owner(db, binding, row, entering=True)
+        existing = db.execute("SELECT * FROM scope_sessions WHERE session_id=?", (session["session_id"],)).fetchone()
+        if existing is not None:
+            _need(row["active_scope_session_id"] == session["session_id"] and existing["context"] == _json(session)
+                  and existing["state"] == "open" and existing["owner_generation"] == binding["generation"]
+                  and existing["owner_participant_id"] == binding["participant_id"], "budget_scope_conflict")
+            receipt = json.loads(db.execute("SELECT receipt FROM scope_transitions WHERE epoch=?", (existing["enter_epoch"],)).fetchone()[0])
+            return {"binding": _copy(binding), "transition_receipt": receipt}
+        _need(row["active_scope_session_id"] is None, "budget_scope_conflict")
+        _need(session["restart_of_session_id"] == row["pending_restart_session_id"], "budget_scope_conflict")
+        if session["restart_of_session_id"] is not None:
+            old = db.execute("SELECT context,state FROM scope_sessions WHERE session_id=?", (session["restart_of_session_id"],)).fetchone()
+            _need(old is not None and old["state"] == "interrupted", "budget_scope_conflict")
+            previous = json.loads(old["context"])
+            _need(all(previous[k] == session[k] for k in ("research_generation_id", "input_manifest_sha256", "requirement_registry_sha256")), "budget_scope_conflict")
+        _quiesced(db, binding)
+        scope_id = m["anchor_budget"]["scope_id"]
+        result = _transition(db, binding, row, scope_id=scope_id, session_id=session["session_id"], kind="enter", proof_sha256=hash_payload(session))
+        db.execute("INSERT INTO scope_sessions(session_id,scope_id,context,owner_generation,owner_participant_id,enter_epoch,state) VALUES(?,?,?,?,?,?,'open')",
+                   (session["session_id"], scope_id, _json(session), binding["generation"], binding["participant_id"], result["binding"]["admission_epoch"]))
+    _adopt_v2(binding, result["binding"])
+    return result
+
+
+def seal_anchor_budget(binding, *, seal):
+    _need(_is_v2(binding), "budget_scope_missing")
+    with _tx(binding, active=True, scope_control=True) as (db, row, m):
+        _need(type(seal) is dict and set(seal) == {"session_id", "participants_exited_sha256", "workers_joined_sha256"}, "budget_scope_conflict")
+        for field in ("participants_exited_sha256", "workers_joined_sha256"):
+            _hash(seal[field], "participant_unverified")
+        s = _scope_owner(db, binding, row)
+        _need(s["session_id"] == seal["session_id"] and s["state"] in {"open", "sealing"}, "budget_scope_conflict")
+        if s["budget_receipt"] is not None:
+            return json.loads(s["budget_receipt"])
+        _quiesced(db, binding)
+        p = m["anchor_budget"]
+        followup = db.execute("SELECT state FROM anchor_followups WHERE scope_id=?", (p["scope_id"],)).fetchone()
+        _need(followup is None or followup[0] == "complete", "tool_operation_conflict")
+        receipt = {"schema": "anchor-budget-receipt/v1", "authorization_sha256": hash_payload(binding["authorization_id"]),
+                   "pipeline_id": binding["pipeline_id"], "scope_id": p["scope_id"], "session_id": s["session_id"],
+                   "generation": binding["generation"], "policy_sha256": hash_payload(p), "source_sha256": m["source_sha256"],
+                   "routes_sha256": m["routes_sha256"], "retained": _scope_totals(db, p["scope_id"]),
+                   "limits": {k: p[k] for k in _ANCHOR_LIMITS}, "barrier_sha256": hash_payload(seal)}
+        db.execute("UPDATE scope_sessions SET state='sealing',budget_receipt=? WHERE session_id=?", (_json(receipt), s["session_id"]))
+        return receipt
+
+
+def finish_anchor_scope(binding, *, completion):
+    _need(_is_v2(binding), "budget_scope_missing")
+    with _tx(binding, active=True, scope_control=True) as (db, row, _):
+        _need(type(completion) is dict and set(completion) == {"session_id", "artifact_manifest_sha256", "budget_receipt_sha256", "result"}, "budget_scope_conflict")
+        _need(completion["result"] in {"sealed", "non_ready"}, "budget_scope_conflict")
+        _hash(completion["artifact_manifest_sha256"], "budget_scope_conflict")
+        _hash(completion["budget_receipt_sha256"], "budget_scope_conflict")
+        s = _scope_owner(db, binding, row)
+        _need(s["state"] == "sealing" and s["session_id"] == completion["session_id"]
+              and hash_payload(json.loads(s["budget_receipt"])) == completion["budget_receipt_sha256"], "budget_scope_conflict")
+        _quiesced(db, binding)
+        result = _transition(db, binding, row, scope_id=None, session_id=s["session_id"], kind="exit", proof_sha256=hash_payload(completion))
+        db.execute("UPDATE scope_sessions SET state=?,exit_epoch=?,completion=? WHERE session_id=?",
+                   (completion["result"], result["binding"]["admission_epoch"], _json(completion), s["session_id"]))
+    _adopt_v2(binding, result["binding"])
+    return result
+
+
+def adopt_scope_handoff(binding, receipts):
+    _need(_is_v2(binding), "budget_scope_missing")
+    with _tx(binding) as (db, row, _):
+        _need(binding["participant_id"] == "parent" and row["owner_pid"] == os.getpid() and _lock_held(binding), "participant_unverified")
+        _need(type(receipts) is list and 1 <= len(receipts) <= 2, "budget_scope_conflict")
+        epoch, scope = binding["admission_epoch"], binding["active_scope_id"]
+        for receipt in receipts:
+            _need(type(receipt) is dict and type(receipt.get("to_epoch")) is int, "budget_scope_conflict")
+            stored = db.execute("SELECT receipt FROM scope_transitions WHERE epoch=?", (receipt["to_epoch"],)).fetchone()
+            _need(stored is not None and stored[0] == _json(receipt), "budget_scope_conflict")
+            _need(receipt["generation"] == binding["generation"] and receipt["from_epoch"] == epoch
+                  and receipt["from_scope_id"] == scope, "stale_admission_epoch")
+            epoch, scope = receipt["to_epoch"], receipt["to_scope_id"]
+        _need(epoch == row["admission_epoch"] and scope == row["active_scope_id"], "stale_admission_epoch")
+        db.execute("UPDATE participants SET admission_epoch=?,inherited_scope_id=? WHERE generation=? AND participant_id='parent'", (epoch, scope, binding["generation"]))
+        updated = _copy(binding)
+        updated.update(admission_epoch=epoch, active_scope_id=scope)
+    _adopt_v2(binding, updated)
+    return updated
+
+
+def _v2_register_participant(binding, participant_id, spawn_hash, operation_context, scope_entry_ids):
+    _identity(participant_id)
+    _need(participant_id != "parent", "participant_unverified")
+    _hash(spawn_hash, "participant_unverified")
+    op = _operation_value(operation_context if operation_context is not None else _operation.get())
+    with _tx(binding, active=True, scope_control=True) as (db, row, m):
+        allowed = list(scope_entry_ids)
+        _need(allowed in ([], [m["anchor_budget"]["scope_id"]]), "participant_unverified")
+        _need(not allowed or (binding["participant_id"] == "parent" and row["owner_pid"] == os.getpid()), "participant_unverified")
+        if binding["participant_id"] != "parent":
+            _need(row["active_scope_id"] == m["anchor_budget"]["scope_id"], "participant_unverified")
+        _need(db.execute("SELECT 1 FROM participants WHERE generation=? AND participant_id=?", (binding["generation"], participant_id)).fetchone() is None, "participant_unverified")
+        db.execute("INSERT INTO participants(generation,participant_id,state,spawn_sha256,operation_sha256,parent_participant_id,inherited_scope_id,admission_epoch,scope_entry_ids) VALUES(?,?,'registered',?,?,?,?,?,?)",
+                   (binding["generation"], participant_id, spawn_hash, hash_payload(op), binding["participant_id"], binding["active_scope_id"], binding["admission_epoch"], _json(allowed)))
+        result = _copy(binding)
+        result["participant_id"] = participant_id
+        return result
+
+
+def _v2_debits(db, b, row, m, route_id, request, quote, catalog_id, followup_id):
+    result = {"scope_id": b["active_scope_id"], "scope_session_id": row["active_scope_session_id"],
+              "admission_epoch": b["admission_epoch"], "model_attempt_units": 0, "token_envelope_units": 0,
+              "catalog_attempt_units": 0, "followup_attempt_units": 0, "tool_operation_id": None}
+    if b["active_scope_id"] is None:
+        _need(catalog_id is None and followup_id is None and m["routes"][route_id]["kind"] != "catalog_lookup", "budget_scope_missing")
+        return result
+    p = m["anchor_budget"]
+    _need(b["active_scope_id"] == p["scope_id"], "budget_scope_conflict")
+    kind = m["routes"][route_id]["kind"]
+    if kind == "openai_chat":
+        _need(route_id == p["model_profile"]["route_id"] and catalog_id is None and followup_id is None, "unsupported_route")
+        _need(request["max_output_tokens"] <= p["model_profile"]["max_output_tokens"], "stage_profile_oversize")
+        result.update(model_attempt_units=1, token_envelope_units=request["input_tokens"] + request["max_output_tokens"])
+    else:
+        _need((catalog_id is None) != (followup_id is None), "tool_operation_conflict")
+        operation_id = catalog_id if catalog_id is not None else followup_id
+        _identity(operation_id, "tool_operation_conflict")
+        op = db.execute("SELECT * FROM scope_tool_operations WHERE operation_id=?", (operation_id,)).fetchone()
+        expected = "catalog" if catalog_id is not None else "followup"
+        allowlist = p["catalog_route_ids"] if expected == "catalog" else p["followup_route_ids"]
+        _need(route_id in allowlist and op is not None and op["scope_id"] == p["scope_id"] and op["kind"] == expected
+              and op["route_id"] == route_id and op["query_sha256"] == request["payload_sha256"], "tool_operation_conflict")
+        _need(op["state"] in {"ready", "retry_ready"}, "tool_operation_conflict")
+        round_state = db.execute("SELECT state FROM anchor_followups WHERE followup_id=?", (op["followup_id"],)).fetchone()
+        _need(round_state is not None and round_state[0] == "open", "tool_operation_conflict")
+        _need((kind == "catalog_lookup") == (expected == "catalog"), "unsupported_route")
+        result["catalog_attempt_units" if expected == "catalog" else "followup_attempt_units"] = 1
+        result["tool_operation_id"] = operation_id
+    totals = _scope_totals(db, p["scope_id"])
+    for total, amount, limit, code in (
+        ("model_attempts", "model_attempt_units", "model_attempt_limit", "stage_model_attempts_exhausted"),
+        ("token_envelope_units", "token_envelope_units", "token_envelope_limit", "stage_tokens_exhausted"),
+        ("catalog_attempts", "catalog_attempt_units", "catalog_attempt_limit", "stage_tool_attempts_exhausted"),
+        ("followup_attempts", "followup_attempt_units", "followup_attempt_limit", "stage_followup_attempts_exhausted")):
+        _need(totals[total] <= p[limit], "usage_integrity")
+        _need(result[amount] <= p[limit] - totals[total], code)
+    return result
+
+
+def _v2_observed(db, attempt, obs):
+    if obs["outcome"] == "unknown":
+        if attempt["tool_operation_id"]:
+            db.execute("UPDATE scope_tool_operations SET state='unknown' WHERE operation_id=? AND in_flight_attempt_id=?", (attempt["tool_operation_id"], attempt["attempt_id"]))
+        return
+    required_counts = {"input_tokens", "output_tokens"} if attempt["model_attempt_units"] else {"tool_units"}
+    _need(obs["kind"] == "provider_reported" and required_counts <= set(obs), "stage_usage_unverifiable")
+    if attempt["tool_operation_id"] is None:
+        _need("tool_result" not in obs, "usage_integrity")
+        return
+    disposition = obs.get("tool_result", "complete")
+    next_state = {"complete": "awaiting_admission", "retryable_known": "retry_ready", "terminal_known": "failed"}[disposition]
+    db.execute("UPDATE scope_tool_operations SET state=?,in_flight_attempt_id=NULL WHERE operation_id=? AND in_flight_attempt_id=?",
+               (next_state, attempt["tool_operation_id"], attempt["attempt_id"]))
+
+
+def register_anchor_gaps(binding, *, gap_manifest_sha256, gaps):
+    _need(_is_v2(binding), "budget_scope_missing")
+    with _tx(binding, active=True) as (db, row, m):
+        _scope_owner(db, binding, row)
+        _need(type(gaps) is list and 1 <= len(gaps) <= 1024, "budget_scope_conflict")
+        normalized = []
+        for gap in gaps:
+            _need(type(gap) is dict and set(gap) == {"gap_key", "requirement_id", "constraint_identity_sha256"}, "budget_scope_conflict")
+            _identity(gap["requirement_id"], "budget_scope_conflict")
+            _hash(gap["constraint_identity_sha256"], "budget_scope_conflict")
+            expected = hash_payload({"schema": "anchor-gap-budget-key/v1", "request_sha256": m["request_sha256"],
+                                     "constraint_identity_sha256": gap["constraint_identity_sha256"]})
+            _need(gap["gap_key"] == expected, "budget_scope_conflict")
+            normalized.append(_copy(gap))
+        normalized.sort(key=lambda x: x["gap_key"])
+        _need(len({g["gap_key"] for g in normalized}) == len(normalized) and hash_payload(normalized) == gap_manifest_sha256, "budget_scope_conflict")
+        scope = m["anchor_budget"]["scope_id"]
+        existing = db.execute("SELECT * FROM anchor_followups WHERE scope_id=?", (scope,)).fetchone()
+        if existing is None:
+            followup_id = "followup-" + uuid4().hex
+            db.execute("INSERT INTO anchor_followups(scope_id,followup_id,gap_manifest_sha256,gaps) VALUES(?,?,?,?)", (scope, followup_id, gap_manifest_sha256, _json(normalized)))
+        else:
+            _need(existing["gap_manifest_sha256"] == gap_manifest_sha256 and existing["gaps"] == _json(normalized), "budget_scope_conflict")
+            followup_id = existing["followup_id"]
+        return {"scope_id": scope, "followup_id": followup_id, "gap_manifest_sha256": gap_manifest_sha256,
+                "state": existing["state"] if existing is not None else "open"}
+
+
+def _open_tool_operation(binding, followup_id, gap_key, route_id, query_hash, kind):
+    _need(_is_v2(binding), "budget_scope_missing")
+    _hash(query_hash, "tool_operation_conflict")
+    with _tx(binding, active=True) as (db, row, m):
+        _scope_owner(db, binding, row)
+        p = m["anchor_budget"]
+        followup = db.execute("SELECT * FROM anchor_followups WHERE followup_id=? AND scope_id=?", (followup_id, p["scope_id"])).fetchone()
+        _need(followup is not None and gap_key in {g["gap_key"] for g in json.loads(followup["gaps"])}, "tool_operation_conflict")
+        allowlist = p["catalog_route_ids"] if kind == "catalog" else p["followup_route_ids"]
+        _need(route_id in allowlist, "unsupported_route")
+        if kind == "catalog":
+            existing = db.execute("SELECT * FROM scope_tool_operations WHERE scope_id=? AND gap_key=? AND kind='catalog'", (p["scope_id"], gap_key)).fetchone()
+        else:
+            existing = db.execute("SELECT * FROM scope_tool_operations WHERE scope_id=? AND gap_key=? AND kind=? AND route_id=? AND query_sha256=?",
+                                  (p["scope_id"], gap_key, kind, route_id, query_hash)).fetchone()
+        if existing is None:
+            _need(followup["state"] == "open", "tool_operation_conflict")
+            _need(db.execute("SELECT count(*) FROM scope_tool_operations WHERE scope_id=?", (p["scope_id"],)).fetchone()[0] < 1024, "tool_operation_conflict")
+            operation_id = "lookup-" + uuid4().hex
+            db.execute("INSERT INTO scope_tool_operations(operation_id,scope_id,followup_id,kind,gap_key,route_id,query_sha256,state) VALUES(?,?,?,?,?,?,?,'ready')",
+                       (operation_id, p["scope_id"], followup_id, kind, gap_key, route_id, query_hash))
+            state = "ready"
+        else:
+            _need(existing["route_id"] == route_id and existing["query_sha256"] == query_hash, "catalog_lookup_conflict")
+            operation_id, state = existing["operation_id"], existing["state"]
+        return {"scope_id": p["scope_id"], "followup_id": followup_id, "gap_key": gap_key,
+                "operation_id": operation_id, "route_id": route_id, "query_sha256": query_hash, "state": state}
+
+
+def open_catalog_lookup(binding, *, followup_id, gap_key, catalog_route_id, query_sha256):
+    return _open_tool_operation(binding, followup_id, gap_key, catalog_route_id, query_sha256, "catalog")
+
+
+def open_followup_operation(binding, *, followup_id, gap_key, route_id, query_sha256):
+    return _open_tool_operation(binding, followup_id, gap_key, route_id, query_sha256, "followup")
+
+
+def complete_tool_operation(binding, operation_id, *, result_sha256, outcome="complete"):
+    _need(_is_v2(binding), "budget_scope_missing")
+    _hash(result_sha256, "tool_operation_conflict")
+    with _tx(binding, active=True) as (db, row, _):
+        _scope_owner(db, binding, row)
+        _need(outcome in {"complete", "abandoned"}, "tool_operation_conflict")
+        op = db.execute("SELECT * FROM scope_tool_operations WHERE operation_id=?", (operation_id,)).fetchone()
+        _need(op is not None and op["scope_id"] == binding["active_scope_id"], "tool_operation_conflict")
+        target = "complete" if outcome == "complete" else "failed"
+        permitted = {"awaiting_admission"} if outcome == "complete" else {"ready", "retry_ready", "awaiting_admission"}
+        _need(op["state"] in permitted or (op["state"] == target and op["result_sha256"] == result_sha256), "tool_operation_conflict")
+        db.execute("UPDATE scope_tool_operations SET state=?,result_sha256=? WHERE operation_id=?", (target, result_sha256, operation_id))
+
+
+def complete_catalog_lookup(binding, lookup_id, *, result_sha256):
+    complete_tool_operation(binding, lookup_id, result_sha256=result_sha256)
+
+
+def complete_anchor_followup(binding, followup_id, *, result_sha256):
+    _need(_is_v2(binding), "budget_scope_missing")
+    _hash(result_sha256, "tool_operation_conflict")
+    with _tx(binding, active=True) as (db, row, _):
+        _scope_owner(db, binding, row)
+        followup = db.execute("SELECT * FROM anchor_followups WHERE followup_id=?", (followup_id,)).fetchone()
+        _need(followup is not None and followup["scope_id"] == binding["active_scope_id"]
+              and (followup["state"] == "open" or followup["result_sha256"] == result_sha256), "tool_operation_conflict")
+        _need(db.execute("SELECT 1 FROM scope_tool_operations WHERE followup_id=? AND state NOT IN ('complete','failed') LIMIT 1", (followup_id,)).fetchone() is None, "tool_operation_conflict")
+        db.execute("UPDATE anchor_followups SET state='complete',result_sha256=? WHERE followup_id=?", (result_sha256, followup_id))
+
+
+def _v2_resume(binding, proof):
+    with _tx(binding) as (db, row, m):
+        keys = {"approval_sha256", "request_sha256", "source_sha256", "routes_sha256", "participants_sha256", "scope_state_sha256", "anchor_recovery"}
+        _need(type(proof) is dict and set(proof) == keys, "resume_denied")
+        _hash(proof["approval_sha256"], "resume_denied")
+        _need(binding["participant_id"] == "parent" and row["owner_pid"] == os.getpid() and _lock_held(binding), "lock_unavailable")
+        _need(row["state"] == "paused_recoverable" and all(proof[k] == m[k] for k in ("request_sha256", "source_sha256", "routes_sha256")), "resume_denied")
+        _need(proof["participants_sha256"] == hash_payload(_participants(db))
+              and proof["scope_state_sha256"] == hash_payload(_scope_view(db, row, m)), "resume_denied")
+        _need(db.execute("SELECT 1 FROM attempts WHERE state='unknown' LIMIT 1").fetchone() is None, "resume_denied")
+        _need(db.execute("SELECT 1 FROM participants WHERE participant_id!='parent' AND state!='exited' LIMIT 1").fetchone() is None, "resume_denied")
+        recovery = proof["anchor_recovery"]
+        pending = None
+        prior_session_id = row["active_scope_session_id"] or row["pending_restart_session_id"]
+        if prior_session_id is not None:
+            s = db.execute("SELECT * FROM scope_sessions WHERE session_id=?", (prior_session_id,)).fetchone()
+            allowed_states = {"open", "sealing"} if row["active_scope_session_id"] is not None else {"interrupted"}
+            _need(s is not None and s["state"] in allowed_states, "resume_denied")
+            context = json.loads(s["context"])
+            expected = {"kind": "restart_from_inputs", "previous_session_id": s["session_id"],
+                        **{k: context[k] for k in ("research_generation_id", "input_manifest_sha256", "requirement_registry_sha256")}}
+            _need(recovery == expected, "resume_denied")
+            pending = s["session_id"]
+            db.execute("UPDATE scope_sessions SET state='interrupted' WHERE session_id=?", (pending,))
+        else:
+            _need(recovery is None and row["pending_restart_session_id"] is None, "resume_denied")
+        evidence = hash_payload(proof)
+        _need(db.execute("SELECT 1 FROM events WHERE kind='resumed' AND evidence_sha256=?", (evidence,)).fetchone() is None, "resume_denied")
+        generation, epoch = row["generation"] + 1, row["admission_epoch"] + 1
+        _count(generation, "resume_denied", positive=True)
+        _count(epoch, "resume_denied")
+        db.execute("UPDATE run_authorization SET generation=?,admission_epoch=?,state='active',stop_code=NULL,active_scope_session_id=NULL,pending_restart_session_id=? WHERE id=1", (generation, epoch, pending))
+        db.execute("UPDATE participants SET state='exited',exit_sha256=? WHERE participant_id='parent' AND generation=?", (evidence, row["generation"]))
+        db.execute("INSERT INTO participants(generation,participant_id,pid,state,spawn_sha256,inherited_scope_id,admission_epoch) VALUES(?,'parent',?,'running',?,?,?)", (generation, os.getpid(), evidence, row["active_scope_id"], epoch))
+        db.execute("INSERT INTO events(kind,evidence_sha256) VALUES('resumed',?)", (evidence,))
+        result = _copy(binding)
+        result.update(generation=generation, admission_epoch=epoch, active_scope_id=row["active_scope_id"])
+    _adopt_v2(binding, result)
+    return result
+
+
+_RECEIPT_ISSUER = object()
+
+
+class DispatchReceipt:
+    """Opaque issuer-bound evidence, not a deserialization or authorization API."""
+    __slots__ = ("_binding_json", "_manifest_json", "_issuer")
+
+    def __init__(self, binding, manifest, *, _issuer=None):
+        _need(_issuer is _RECEIPT_ISSUER, "transport_receipt_missing")
+        object.__setattr__(self, "_binding_json", _json(binding))
+        object.__setattr__(self, "_manifest_json", _json(manifest))
+        object.__setattr__(self, "_issuer", _issuer)
+
+    def __setattr__(self, name, value):
+        raise SpendingStop("transport_receipt_missing")
+
+    @property
+    def _binding(self):
+        return json.loads(self._binding_json)
+
+    @property
+    def _manifest(self):
+        return json.loads(self._manifest_json)
+
+
+class _DispatchCapture:
+    __slots__ = ("_binding_json", "_claim_jsons", "_closed", "_lock")
+
+    def __init__(self, binding):
+        object.__setattr__(self, "_binding_json", _json(binding))
+        object.__setattr__(self, "_claim_jsons", ())
+        object.__setattr__(self, "_closed", False)
+        object.__setattr__(self, "_lock", threading.Lock())
+
+    def __setattr__(self, name, value):
+        raise SpendingStop("transport_receipt_missing")
+
+    @property
+    def _binding(self):
+        return json.loads(self._binding_json)
+
+    @property
+    def _claims(self):
+        return [json.loads(value) for value in self._claim_jsons]
+
+    def _add(self, claim):
+        with self._lock:
+            b = claim["binding"]
+            _need(not self._closed and all(b[k] == self._binding[k] for k in
+                  ("authorization_id", "manifest_sha256", "pipeline_id", "generation", "admission_epoch", "active_scope_id")), "transport_receipt_missing")
+            object.__setattr__(self, "_claim_jsons", (*self._claim_jsons, _json(claim)))
+
+    def receipt(self):
+        with self._lock:
+            _need(self._closed, "transport_receipt_missing")
+            ids = [claim["attempt_id"] for claim in self._claims]
+        manifest = _dispatch_receipt_manifest(self._binding, ids)
+        return DispatchReceipt(self._binding, manifest, _issuer=_RECEIPT_ISSUER)
+
+
+@contextmanager
+def capture_dispatch_receipts(binding=None):
+    """Capture committed physical IDs across copied thread/async contexts.
+
+    Call receipt() only after leaving the capture and joining its workers.
+    A separate process captures locally and publishes through its trusted
+    producer receipt issuer; this object is not a cross-process reset API.
+    """
+    b = check_context() if binding is None else check_active(binding, require_operation=True)
+    _need(_is_v2(b) and b["active_scope_id"] is not None, "budget_scope_missing")
+    capture = _DispatchCapture(b)
+    token = _dispatch_captures.set((*_dispatch_captures.get(), capture))
+    try:
+        yield capture
+    finally:
+        with capture._lock:
+            object.__setattr__(capture, "_closed", True)
+        _dispatch_captures.reset(token)
+
+
+def _dispatch_receipt_manifest(binding, attempt_ids):
+    with _tx(binding, fence=False) as (db, _, _):
+        attempts = []
+        for attempt_id in attempt_ids:
+            row = db.execute("SELECT * FROM attempts WHERE attempt_id=?", (attempt_id,)).fetchone()
+            _need(row is not None and row["scope_id"] == binding["active_scope_id"]
+                  and row["generation"] == binding["generation"] and row["admission_epoch"] == binding["admission_epoch"]
+                  and row["state"] == "response_observed", "transport_receipt_missing")
+            obs = json.loads(row["observation"])
+            _need("response_fingerprint" in obs and obs["kind"] == "provider_reported", "transport_receipt_missing")
+            attempts.append({"attempt_id": row["attempt_id"], "logical_hash": row["logical_hash"], "ordinal": row["ordinal"],
+                             "participant_id": row["participant_id"], "route_id": row["route_id"],
+                             "scope_session_id": row["scope_session_id"], "request_sha256": row["request_sha256"],
+                             "response_fingerprint": obs["response_fingerprint"], "observation_sha256": row["observation_sha256"],
+                             "reserved_max_microusd": row["reserved"], "model_attempt_units": row["model_attempt_units"],
+                             "token_envelope_units": row["token_envelope_units"], "catalog_attempt_units": row["catalog_attempt_units"],
+                             "followup_attempt_units": row["followup_attempt_units"]})
+        return {"schema": "anchor-dispatch-receipt/v1", "authorization_sha256": hash_payload(binding["authorization_id"]),
+                "manifest_sha256": binding["manifest_sha256"], "source_sha256": binding["source_sha256"],
+                "routes_sha256": binding["routes_sha256"], "pipeline_id": binding["pipeline_id"],
+                "scope_id": binding["active_scope_id"], "generation": binding["generation"],
+                "admission_epoch": binding["admission_epoch"], "attempts": attempts}
+
+
+def inspect_dispatch_receipt(receipt):
+    """Verify issuer and exact ledger facts before publishing detached metadata.
+
+    Does not authenticate source claims, arbitrary output bytes or a dictionary
+    supplied by a caller. The producer separately matches the output bytes to
+    the transport-owned fingerprint and seals its source-bound artifact.
+    """
+    _need(type(receipt) is DispatchReceipt and receipt._issuer is _RECEIPT_ISSUER, "transport_receipt_missing")
+    actual = _dispatch_receipt_manifest(receipt._binding, [a["attempt_id"] for a in receipt._manifest["attempts"]])
+    _need(actual == receipt._manifest, "transport_receipt_missing")
+    return _copy(actual)

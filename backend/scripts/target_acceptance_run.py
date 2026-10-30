@@ -29,6 +29,7 @@ import time
 import types
 
 SCHEMA = "target-acceptance-runtime/v1"
+SCHEMA_V2 = "target-acceptance-runtime/v2"
 LAUNCHER = "app/backend/scripts/target_acceptance_run.py"
 CORE = "app/deerflow_bridge/run_spending.py"
 CHILD = "deer-flow/deerflow_research.py"
@@ -38,6 +39,10 @@ IDENTITY = ("HOME", "home", "CODEX_HOME", "USERPROFILE")
 CARRIERS = ("DRF_RUN_SPENDING_REQUIRED", "DRF_RUN_SPENDING_BINDING",
             "DRF_RUN_SPENDING_MODULE_SHA256", "DRF_RUN_SPENDING_OPERATION")
 REQUEST_KEYS = {"prompt", "mode", "depth", "language", "model", "forecast_authority", "target_simulation"}
+ANCHOR_LIMITS = {"model_attempt_limit": 20, "token_envelope_limit": 150000,
+                 "catalog_attempt_limit": 8, "followup_attempt_limit": 12}
+ANCHOR_FIELDS = {"mode", "anchor_budget_scope_id", "policy_version", "source_policy_sha256",
+                 *ANCHOR_LIMITS, "catalog_lookups_per_gap", "followup_round_limit"}
 MUTABLE = ("spend", "app/backend/uploads", "app/backend/logs", "deer-flow-home", "tmp", "cache")
 FORBIDDEN_PARTS = {"uploads", "logs", ".git", ".venv", "venv", "node_modules", "__pycache__",
                    "secrets", "credentials", ".ssh", ".aws", ".codex", ".claude"}
@@ -50,7 +55,8 @@ PROFILES = {"glm": ("glm", "ZHIPUAI_API_KEY"), "deepseek": ("deepseek", "DEEPSEE
             "kimi": ("kimi", "KIMI_API_KEY")}
 SAFE_CODES = {"invalid_path", "invalid_spec", "source_drift", "invalid_request", "invalid_binding",
               "unsafe_environment", "unsafe_import", "billing_class_unverified", "missing_ledger",
-              "runtime_exists", "isolated_python_required", "pipeline_failed", "launcher_failed", "resume_denied"}
+              "runtime_exists", "isolated_python_required", "pipeline_failed", "launcher_failed", "resume_denied",
+              "stage_profile_oversize", "unsupported_route"}
 
 
 class LauncherStop(RuntimeError):
@@ -154,7 +160,7 @@ def hash_map(value, *, source=False):
 
 
 def check_request(request):
-    require(type(request) is dict and set(request) == REQUEST_KEYS, "invalid_request")
+    require(type(request) is dict and set(request) in (REQUEST_KEYS, REQUEST_KEYS | {"world_anchor"}), "invalid_request")
     require(request["mode"] == "full" and request["forecast_authority"] == "target-first-v1", "invalid_request")
     require(request["depth"] in {"quick", "standard", "deep"}
             and request["language"] in {"English", "Chinese", ""}, "invalid_request")
@@ -169,7 +175,49 @@ def check_request(request):
     require(type(sim) is dict and set(sim) == {"paths", "periods", "seed"}, "invalid_request")
     for key, low, high in (("paths", 1, 256), ("periods", 1, 120), ("seed", 0, 2**31 - 1)):
         require(type(sim[key]) is int and low <= sim[key] <= high, "invalid_request")
+    if "world_anchor" in request:
+        anchor = request["world_anchor"]
+        require(type(anchor) is dict and set(anchor) == ANCHOR_FIELDS, "invalid_request")
+        require(anchor["mode"] == "v1" and anchor["policy_version"] == "world-anchor-budget/v1", "invalid_request")
+        require(isinstance(anchor["anchor_budget_scope_id"], str)
+                and re.fullmatch(r"[A-Za-z0-9_.:-]{1,160}", anchor["anchor_budget_scope_id"]), "invalid_request")
+        require(isinstance(anchor["source_policy_sha256"], str) and HEX.fullmatch(anchor["source_policy_sha256"]), "invalid_request")
+        for key, maximum in ANCHOR_LIMITS.items():
+            minimum = 1 if key in {"model_attempt_limit", "token_envelope_limit"} else 0
+            require(type(anchor[key]) is int and minimum <= anchor[key] <= maximum, "invalid_request")
+        for key in ("catalog_lookups_per_gap", "followup_round_limit"):
+            require(type(anchor[key]) is int and anchor[key] == 1, "invalid_request")
     return request
+
+
+def check_anchor_budget(budget, request, model):
+    """Validate the private prepared policy without loading application code."""
+    check_request(request)
+    require("world_anchor" in request, "invalid_request")
+    fields = {"schema", "scope_id", "policy_version", "source_policy_sha256", *ANCHOR_LIMITS,
+              "catalog_lookups_per_gap", "followup_round_limit", "model_profile",
+              "catalog_route_ids", "followup_route_ids", "usage_policy"}
+    require(type(budget) is dict and set(budget) == fields, "invalid_request")
+    require(budget["schema"] == "anchor-budget/v1" and budget["usage_policy"] == "provider_reported_required", "invalid_request")
+    expected = {"mode": "v1", "anchor_budget_scope_id": budget["scope_id"],
+                **{key: budget[key] for key in ANCHOR_FIELDS - {"mode", "anchor_budget_scope_id"}}}
+    # Validate separately: Python equality alone would admit bool as integer.
+    check_request({**request, "world_anchor": expected})
+    require(canonical(expected) == canonical(request["world_anchor"]), "invalid_request")
+    profile = budget["model_profile"]
+    require(type(profile) is dict and set(profile) == {"route_id", "max_output_tokens"}, "invalid_request")
+    require(isinstance(profile["route_id"], str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,160}", profile["route_id"]), "invalid_request")
+    require(type(profile["max_output_tokens"]) is int and 1 <= profile["max_output_tokens"] <= 2000
+            and profile["max_output_tokens"] <= model["max_output_tokens"], "invalid_request")
+    for key in ("catalog_route_ids", "followup_route_ids"):
+        values = budget[key]
+        require(type(values) is list and len(values) <= 16
+                and all(isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,160}", value) for value in values), "invalid_request")
+        require(len(set(values)) == len(values), "invalid_request")
+    envelope = model["input_ceiling"] + profile["max_output_tokens"]
+    require(envelope <= budget["token_envelope_limit"], "stage_profile_oversize")
+    return {"scope_id": budget["scope_id"], "input_upper_bound": model["input_ceiling"],
+            "max_output_tokens": profile["max_output_tokens"], "token_envelope_units": envelope}
 
 
 def tree_files(root):
@@ -232,14 +280,20 @@ def prepare(source, deerflow_source, root, spec_path):
     no_dotenv(root)
     require(not any(root.is_relative_to(p) or p.is_relative_to(root) for p in (source, deerflow_source)), "invalid_path")
     spec = read_json(spec_path)
-    require(type(spec) is dict and set(spec) == {"schema", "python", "python_sha256", "app_files", "deerflow_files", "dependencies", "request", "model"})
-    require(spec["schema"] == "target-acceptance-prepare/v1")
+    require(type(spec) is dict)
+    is_v2 = spec.get("schema") == "target-acceptance-prepare/v2"
+    fields = {"schema", "python", "python_sha256", "app_files", "deerflow_files", "dependencies", "request", "model"}
+    require(set(spec) == fields | ({"anchor_budget"} if is_v2 else set()))
+    require(spec["schema"] in {"target-acceptance-prepare/v1", "target-acceptance-prepare/v2"})
     python = path_checked(spec["python"])
     require(os.access(python, os.X_OK) and digest(read_bytes(python)) == spec["python_sha256"], "source_drift")
     check_dependencies(spec["dependencies"], root)
     request = check_request(spec["request"])
     config = model_config(spec["model"])
     require(request["model"] == spec["model"]["alias"], "invalid_request")
+    require(("world_anchor" in request) == is_v2, "invalid_request")
+    if is_v2:
+        check_anchor_budget(spec["anchor_budget"], request, spec["model"])
     staged = {}
     for prefix, origin, entries in (("app", source, spec["app_files"]), ("deer-flow", deerflow_source, spec["deerflow_files"])):
         for name, sha in hash_map(entries, source=True).items():
@@ -264,8 +318,10 @@ def prepare(source, deerflow_source, root, spec_path):
     require(SKILL_LOCK not in staged, "invalid_spec")
     staged["control/request.json"] = canonical(request)
     staged["control/config.json"] = canonical(spec["model"])
+    if is_v2:
+        staged["control/anchor_budget.json"] = canonical(spec["anchor_budget"])
     staged["deer-flow/config.yaml"] = canonical(config)  # JSON is a YAML subset.
-    runtime = {"schema": SCHEMA, "root": str(root), "python": str(python), "python_sha256": spec["python_sha256"],
+    runtime = {"schema": SCHEMA_V2 if is_v2 else SCHEMA, "root": str(root), "python": str(python), "python_sha256": spec["python_sha256"],
                "files": {name: digest(raw) for name, raw in staged.items()}, "dependencies": spec["dependencies"],
                "import_roots": import_roots(root), "mutable_roots": [str(root / p) for p in MUTABLE]}
     root.mkdir(mode=0o700)
@@ -292,7 +348,8 @@ def verify(root):
     runtime = read_json(root / "spend/runtime.json")
     require(read_bytes(root / "spend/runtime.json") == read_bytes(root / "control/runtime.json"), "source_drift")
     require(type(runtime) is dict and set(runtime) == {"schema", "root", "python", "python_sha256", "files", "dependencies", "import_roots", "mutable_roots"})
-    require(runtime["schema"] == SCHEMA and runtime["root"] == str(root), "invalid_binding")
+    require(runtime["schema"] in {SCHEMA, SCHEMA_V2} and runtime["root"] == str(root), "invalid_binding")
+    is_v2 = runtime["schema"] == SCHEMA_V2
     require(runtime["import_roots"] == import_roots(root)
             and runtime["mutable_roots"] == [str(root / p) for p in MUTABLE], "invalid_binding")
     for name in (*runtime["mutable_roots"], *runtime["import_roots"]):
@@ -302,7 +359,8 @@ def verify(root):
     files = hash_map(runtime["files"])
     for name in files:
         require(name != SKILL_LOCK, "invalid_spec")
-        require(name.startswith(("app/", "deer-flow/")) or name in {"control/request.json", "control/config.json"})
+        controls = {"control/request.json", "control/config.json"} | ({"control/anchor_budget.json"} if is_v2 else set())
+        require(name.startswith(("app/", "deer-flow/")) or name in controls)
         relative(name, source=True)
         require(digest(read_bytes(root / name)) == files[name], "source_drift")
     for name in (LAUNCHER, CORE, CHILD, "deer-flow/run_spending.py", "control/request.json", "control/config.json", "deer-flow/config.yaml"):
@@ -328,10 +386,19 @@ def verify(root):
     request = check_request(read_json(root / "control/request.json"))
     model = read_json(root / "control/config.json")
     require(request["model"] == model["alias"] and read_json(root / "deer-flow/config.yaml") == model_config(model), "source_drift")
+    require(("world_anchor" in request) == is_v2, "invalid_request")
+    budget = None
+    if is_v2:
+        require("control/anchor_budget.json" in files, "source_drift")
+        budget = read_json(root / "control/anchor_budget.json")
+        check_anchor_budget(budget, request, model)
     # Core source_files deliberately excludes spend/. Pin an immutable mirror
     # and require byte-for-byte equality with the coordinator-facing descriptor.
     source_files = {**files, "control/runtime.json": digest(read_bytes(root / "control/runtime.json"))}
-    return {"runtime": runtime, "request": request, "model": model, "source_files": source_files}
+    checked = {"runtime": runtime, "request": request, "model": model, "source_files": source_files}
+    if is_v2:
+        checked["anchor_budget"] = budget
+    return checked
 
 
 def load_core(root, *, child=False):
@@ -349,9 +416,18 @@ def load_core(root, *, child=False):
 
 def qualify_manifest(core, checked, manifest):
     manifest = core.validate_manifest(manifest)
+    is_v2 = checked["runtime"]["schema"] == SCHEMA_V2
+    require(manifest["schema"] == ("target-run-spending/v2" if is_v2 else "target-run-spending/v1"), "invalid_binding")
     require(manifest["root"] == checked["runtime"]["root"]
             and manifest["source_files"] == checked["source_files"]
             and manifest["request_sha256"] == core.hash_payload(checked["request"]), "source_drift")
+    if is_v2:
+        require(canonical(manifest["anchor_budget"]) == canonical(checked["anchor_budget"]), "source_drift")
+        check_anchor_budget(manifest["anchor_budget"], checked["request"], checked["model"])
+        # No catalog credential/transport mapping is qualified in this initial
+        # launcher profile. Core/binder synthetic catalog tests are separate.
+        require(not manifest["anchor_budget"]["catalog_route_ids"]
+                and not any(r["kind"] == "catalog_lookup" for r in manifest["routes"].values()), "unsupported_route")
     routes = {r["kind"]: r for r in manifest["routes"].values()}
     require(set(routes) == {"openai_chat", "firecrawl_search", "firecrawl_scrape"}, "billing_class_unverified")
     route, model = routes["openai_chat"], checked["model"]
@@ -361,6 +437,18 @@ def qualify_manifest(core, checked, manifest):
     require(routes["firecrawl_search"]["endpoint"] == "https://api.firecrawl.dev/v2/search"
             and routes["firecrawl_scrape"]["endpoint"] == "https://api.firecrawl.dev/v2/scrape", "billing_class_unverified")
     return manifest
+
+
+def preflight_bound_runtime(core, binding, checked):
+    """Bound v2 consumer guard, called before importing application/providers."""
+    require(binding["schema"] == "target-run-spending-binding/v2", "invalid_binding")
+    core.validate_bound_request(binding, checked["request"])
+    profile = core.preflight_anchor_profile(binding)
+    expected = check_anchor_budget(checked["anchor_budget"], checked["request"], checked["model"])
+    require(all(profile[key] == value for key, value in expected.items())
+            and profile["policy_sha256"] == core.hash_payload(checked["anchor_budget"])
+            and profile["route_id"] == checked["anchor_budget"]["model_profile"]["route_id"], "invalid_binding")
+    return profile
 
 
 def check_credentials(credentials, manifest):
@@ -772,10 +860,16 @@ def child(args):
     check_credentials(credentials, manifest)
     bound = core.binding_from_environment()  # existing ledger + spawn-bound operation
     require(bound == binding, "invalid_binding")
+    is_v2 = checked["runtime"]["schema"] == SCHEMA_V2
+    if is_v2:
+        core.activate_binding(bound)
+        core.check_context()
+        preflight_bound_runtime(core, bound, checked)
     carriers = {k: os.environ[k] for k in CARRIERS}
     controls = child_controls(os.environ, root, checked, bound, argv)
     setup_execution(root, checked, credentials, carriers, binding["registry_dir"], controls=controls)
-    core.activate_binding(bound)  # claims registered participant before model factory
+    if not is_v2:
+        core.activate_binding(bound)  # claims registered participant before model factory
     core.check_context()
     sys.argv = argv
     runpy.run_path(argv[0], run_name="__main__")

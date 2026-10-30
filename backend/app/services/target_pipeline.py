@@ -81,6 +81,14 @@ def stage_specs(state, stage):
                     ("target_input", simulation / "target_input.json")],
         "run": [("target_simulation", simulation / "target_simulation.json")],
     }
+    if "world_anchor" in state.options:
+        from .world_anchor import enabled
+        enabled(state.options)
+        mapping["research"].extend(("world_anchor_" + key, handoff / filename) for key, filename in (
+            ("manifest", "world_anchor_manifest.json"), ("pack", "world_anchor.json"),
+            ("sheet", "world_anchor.md"), ("gaps", "world_anchor_gaps.json"),
+            ("coverage", "world_anchor_coverage.json"), ("inputs", "world_anchor_inputs.json"),
+            ("contract", "world_anchor_contract.json"), ("policy", "world_anchor_policy.json")))
     if stage == "report" and state.report_id:
         folder = Path(ReportManager._get_report_folder(state.report_id))
         return [("target_forecast", str(folder / "forecast.json")),
@@ -386,6 +394,18 @@ def run_target_pipeline(owner, state):
         state.research_pid = None
         _check_cancel(state)
     case = fc.read_case(case_path)
+    anchor_context = None
+    if "world_anchor" in state.options:
+        from . import world_anchor as anchors
+        if state.options[anchors.LIFECYCLE_KEY]["status"] == "ready":
+            anchor_context = anchors.require_completed(state)
+        else:
+            receipt_hash = state.options[anchors.LIFECYCLE_KEY].get("completion_manifest_sha256")
+            anchor_context = anchors.accept_completion(state, expected_manifest_sha256=receipt_hash)
+        anchors.validate_anchor_context(anchor_context, engine=AUTHORITY)
+        bridge_module("world_anchor_case").validate_anchored_case(case,
+            pack=anchor_context.pack, requirements=anchor_context.requirements,
+            index=anchor_context.index, policy=anchor_context.policy)
     from .target_mechanisms import admit_model
     # The schema validates shape; production admission must also consume the
     # dimensional and seed-identity checks before any case is published/reused.
@@ -505,6 +525,9 @@ def run_target_pipeline(owner, state):
               "caseHash": case_digest, "simulation": options["target_simulation"],
               "structure": fc.simulation_projection(case), "simulationWeight": 0.0,
               "decisionBudget": state.options.get("target_decision_budget_v1", {"max_calls": 128})}
+    if anchor_context is not None:
+        from .world_anchor import anchor_config_pin
+        inputs["worldAnchor"] = anchor_config_pin(anchor_context, require_join=False)
     if reused:
         if _read(directory / "target_input.json") != inputs:
             raise TargetPipelineError("Prepared target inputs or pinned settings changed")
@@ -524,7 +547,8 @@ def run_target_pipeline(owner, state):
     else:
         result = run_paths(case, **options["target_simulation"],
                            decision_provider=_decision_provider(owner, state), cancel_check=lambda: _check_cancel(state),
-                           model_validation="admission")
+                           model_validation="admission",
+                           **({"anchor_context": anchor_context} if anchor_context is not None else {}))
         _check_cancel(state)
         result["decisionBudget"] = dict(state.options.get("target_decision_usage") or {})
         write_json_atomic(str(directory / "target_simulation.json"), result)
@@ -554,6 +578,7 @@ def run_target_pipeline(owner, state):
             simulation_requirement=state.prompt, forecast_case=case,
             target_simulation=result, aggregation_policy=state.options.get("aggregation_policy_v1"),
             saved_estimators=saved_estimators, target_evidence=target_evidence,
+            **({"anchor_context": anchor_context} if anchor_context is not None else {}),
             **owner._report_scenario_context(state),
         ).generate_report(progress_callback=lambda stage, progress, message: update(progress, message),
                           report_id=state.report_id)

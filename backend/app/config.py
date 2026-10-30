@@ -1237,6 +1237,8 @@ class Config:
     # commits ONE world update per paired round (deterministic kernel + bounded arbiter LLM call)
     # that every agent observes next round. false → legacy in-band scenario evolution, byte-identical.
     SIM_WORLD_MODEL = os.environ.get('SIM_WORLD_MODEL', 'true').strip().lower() == 'true'
+    # Read only at new-run admission; persisted absence remains off on reuse.
+    SIM_WORLD_ANCHOR = os.environ.get('SIM_WORLD_ANCHOR', 'false').strip().lower() == 'true'
     # Arbiter LLM call that resolves contested moves / moves state variables; false = mechanical
     # updates only (capacity, commitments, relationship nudges, due effects, scheduled events).
     SIM_WORLD_ARBITER = os.environ.get('SIM_WORLD_ARBITER', 'true').strip().lower() == 'true'

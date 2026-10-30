@@ -57,6 +57,7 @@ except ImportError:  # pragma: no cover - exercised only by incomplete deploymen
 
 # 死抓取阈值：正文短于此长度（或以 "Error:" 起头）视作失败/空壳，不落盘。
 DEAD_FETCH_MIN_CHARS = 200
+_RETAIN_SOURCE_METADATA: contextvars.ContextVar[bool] = contextvars.ContextVar("fetch_source_metadata", default=False)
 # env 缺省
 DEFAULT_TTL_HOURS = 72.0
 DEFAULT_MAX_MB = 500.0
@@ -427,7 +428,16 @@ async def _firecrawl_fetch(url: str) -> str:
         if not isinstance(metadata, dict):
             metadata = {}
         title = str(metadata.get("title") or "").strip()
-        return (f"# {title}\n\n{body[:max_chars]}" if title else body[:max_chars])
+        rendered = f"# {title}\n\n{body[:max_chars]}" if title else body[:max_chars]
+        if _RETAIN_SOURCE_METADATA.get() and _is_cacheable(rendered):
+            supplied = {**data, **metadata}
+            retained = {key: supplied[key] for key in ("publication_type", "source_type", "@type", "kind", "published_at",
+                "published_date", "publishedDate", "publishedAt", "datePublished", "publication_date", "published", "date",
+                "original_origin", "original_url", "origin_cluster")
+                if isinstance(supplied.get(key), str) and 0 < len(supplied[key]) <= 2048}
+            retained.update(source_metadata_version="world-anchor-source-metadata/v1", source_metadata_origin="firecrawl_scrape")
+            return json.dumps({"markdown": rendered, "metadata": retained}, ensure_ascii=False)
+        return rendered
     except _spending.SpendingStop:
         raise
     except Exception as exc:  # noqa: BLE001
@@ -680,6 +690,17 @@ def _read_cache(path: str, ttl_seconds: float) -> Optional[str]:
         content = obj.get("content")
         if not isinstance(content, str):
             return None
+        if _RETAIN_SOURCE_METADATA.get():
+            try:
+                envelope = json.loads(content)
+            except (ValueError, TypeError):
+                return None
+            metadata = envelope.get("metadata") if isinstance(envelope, dict) else None
+            if (not isinstance(envelope, dict) or not isinstance(envelope.get("markdown"), str)
+                    or not isinstance(metadata, dict)
+                    or metadata.get("source_metadata_version") != "world-anchor-source-metadata/v1"
+                    or metadata.get("source_metadata_origin") != "firecrawl_scrape"):
+                return None
         if (time.time() - fetched_at) > ttl_seconds:
             return None  # 过期 → 视作未命中（调用方将重抓覆盖）
         try:
@@ -756,7 +777,25 @@ async def cached_fetch(
     url: str,
     fetch_fn: Callable[[str], Awaitable[str]],
     revisit_reason: str = "",
+    *, retain_source_metadata: bool | None = None,
 ) -> str:
+    """Opt-in metadata envelope; the default retains the legacy string/cache path."""
+    if retain_source_metadata is not None and type(retain_source_metadata) is not bool:
+        raise ValueError("invalid source metadata mode")
+    binding = _spending.check_context()
+    if retain_source_metadata is None:
+        retain_source_metadata = bool(_spending.required() and binding is not None
+                                      and binding["schema"] == "target-run-spending-binding/v2")
+    if retain_source_metadata and binding is not None and binding["schema"] != "target-run-spending-binding/v2":
+        _spending.deny("unsupported_route")
+    token = _RETAIN_SOURCE_METADATA.set(retain_source_metadata)
+    try:
+        return await _cached_fetch(url, fetch_fn, revisit_reason)
+    finally:
+        _RETAIN_SOURCE_METADATA.reset(token)
+
+
+async def _cached_fetch(url: str, fetch_fn: Callable[[str], Awaitable[str]], revisit_reason: str = "") -> str:
     """缓存核心流程（可注入 ``fetch_fn`` 供单测，无网络无 deerflow）。返回类型与被包裹工具一致（str）。
 
     TTL<=0 → 关闭正缓存（LOOP-007 预算仍独立生效）。否则：命中未过期即返回；否则真抓，成功且可缓存
@@ -773,8 +812,11 @@ async def cached_fetch(
         if not attempt.allowed:
             return _research_budget.denial_result("web_fetch", attempt.reason, exact_key)
 
+    coordination_key = ("source-metadata-v1\n" + exact_key) if _RETAIN_SOURCE_METADATA.get() else exact_key
     ttl = _ttl_seconds()
     root = _cache_root()
+    if _RETAIN_SOURCE_METADATA.get():
+        root = os.path.join(root, "source-metadata-v1")
     path = _cache_path(root, url)
     if ttl > 0:
         try:
@@ -791,21 +833,21 @@ async def cached_fetch(
                     )
                 if not str(revisit_reason or "").strip():
                     artifact_id = _research_budget.positive_repeat(
-                        "fetch", exact_key)
+                        "fetch", coordination_key)
                     if artifact_id:
                         return _research_budget.compact_positive_result(
                             "web_fetch", artifact_id)
-                _research_budget.record_positive("fetch", exact_key)
+                _research_budget.record_positive("fetch", coordination_key)
             return hit
 
     if (_research_budget is not None
-            and _research_budget.negative_suppressed("fetch", exact_key)):
+            and _research_budget.negative_suppressed("fetch", coordination_key)):
         return _research_budget.negative_result("web_fetch", exact_key)
 
     claim_token = ""
     waited_for_claim = False
     if _research_budget is not None and ttl > 0:
-        claim_token = _research_budget.claim_request("fetch", exact_key)
+        claim_token = _research_budget.claim_request("fetch", coordination_key)
         if not claim_token:
             waited_for_claim = True
             try:
@@ -824,13 +866,13 @@ async def cached_fetch(
                     # cannot see the owner's model history. Share the fresh
                     # cache body in full; network dedupe must not become
                     # cross-context evidence loss.
-                    _research_budget.record_positive("fetch", exact_key)
+                    _research_budget.record_positive("fetch", coordination_key)
                     if hasattr(_research_budget, "record_fetched_source"):
                         _research_budget.record_fetched_source(
                             exact_key, hit, provider="cache", cache_hit=True
                         )
                     return hit
-                claim_token = _research_budget.claim_request("fetch", exact_key)
+                claim_token = _research_budget.claim_request("fetch", coordination_key)
                 if claim_token:
                     break
             if not claim_token:
@@ -840,7 +882,7 @@ async def cached_fetch(
                     "message": "Timed out waiting for the identical in-flight fetch.",
                 }, ensure_ascii=False, sort_keys=True)
     if (waited_for_claim and _research_budget is not None
-            and _research_budget.negative_suppressed("fetch", exact_key)):
+            and _research_budget.negative_suppressed("fetch", coordination_key)):
         _research_budget.release_request(claim_token)
         return _research_budget.negative_result("web_fetch", exact_key)
 
@@ -866,8 +908,8 @@ async def cached_fetch(
     try:
         if _research_budget is not None:
             if _is_cacheable(content):
-                _research_budget.clear_negative("fetch", exact_key)
-                _research_budget.record_positive("fetch", exact_key)
+                _research_budget.clear_negative("fetch", coordination_key)
+                _research_budget.record_positive("fetch", coordination_key)
                 if hasattr(_research_budget, "record_fetched_source"):
                     _research_budget.record_fetched_source(
                         exact_key,
@@ -876,7 +918,7 @@ async def cached_fetch(
                         cache_hit=False,
                     )
             else:
-                _research_budget.record_negative("fetch", exact_key)
+                _research_budget.record_negative("fetch", coordination_key)
         if ttl > 0 and _is_cacheable(content):
             _write_cache(path, url, content)
             _enforce_size_cap(root, _max_bytes())

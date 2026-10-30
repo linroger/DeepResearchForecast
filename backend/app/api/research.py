@@ -79,6 +79,7 @@ def run_pipeline():
         project_name: str      可选
         depth: str             quick | standard | deep（默认 standard）
         max_rounds: int        OASIS 最大轮数（可选，截断模拟）
+        world_anchor: dict    可选，仅 {"mode":"v1"}；私有范围、策略和限额由授权决定
     """
     try:
         data = request.get_json(silent=True) or {}
@@ -125,7 +126,7 @@ def run_pipeline():
         # against the current configuration before creating any pipeline state.
         run_options = {key: data[key] for key in
                        ('simulation_engine', 'world_spec', 'world_policy_spec', 'backtest',
-                        'forecast_authority', 'target_simulation') if key in data}
+                        'forecast_authority', 'target_simulation', 'world_anchor') if key in data}
 
         # 起飞前体检：把"研究跑完 40 分钟后才发现 Zep Key 是占位符"这类失败提前到现在
         target = normalize_target_options(data.get("forecast_authority"), data.get("target_simulation"))
@@ -167,6 +168,9 @@ def run_pipeline():
         from ..services.run_spending import api as spending_api
         if spending_api().is_spending_stop(e):
             return jsonify({"success": False, "error": "Run spending stopped", "error_code": e.code}), 409
+        from ..services.world_anchor import WorldAnchorIntegrationError
+        if isinstance(e, WorldAnchorIntegrationError):
+            return jsonify({"success": False, "error": "World Anchor admission failed", "error_code": e.code}), 400
         logger.error(f"启动管线失败: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e), "traceback": traceback.format_exc()}), 500
 

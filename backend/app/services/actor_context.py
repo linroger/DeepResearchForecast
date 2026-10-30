@@ -24,6 +24,25 @@ from ..utils.atomic import write_json_atomic
 
 
 ACTOR_CONTEXT_VERSION = "actor-context/v1"
+
+
+def build_anchor_actor_payload(anchor_context: Any, *, entity_uuid: str, at: str) -> Dict[str, Any]:
+    """Fresh authorized projection, never the old inference-bearing summary cache.
+
+    Authentication and the UUID join belong to the host adapter. Global pack
+    hashes, requirement/gap counts and raw evidence registries are not returned.
+    """
+    from .world_anchor import validate_anchor_context, actor_projection
+    validate_anchor_context(anchor_context, engine="oasis-legacy")
+    projected = actor_projection(anchor_context, entity_uuid=entity_uuid, at=at)
+    return {
+        "schema_version": projected["schema_version"], "actor_ref": projected["actor_ref"],
+        "at": projected["at"], "items": [
+            {key: item[key] for key in ("item_id", "text", "value", "value_kind", "identity",
+                                        "public_source_url", "known_by", "effective_at")}
+            for item in projected["items"]
+        ],
+    }
 ACTOR_CONTEXT_MANIFEST_VERSION = "actor-context-manifest/v1"
 ACTOR_INTELLIGENCE_VERSION = "actor-intelligence/v1"
 ACTOR_KNOWN_VISIBILITIES = frozenset({

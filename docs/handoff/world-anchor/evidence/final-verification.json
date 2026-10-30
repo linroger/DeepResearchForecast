@@ -1,0 +1,206 @@
+{
+  "schema": "world-anchor-final-verification/v1",
+  "status": "accepted_offline",
+  "date": "2026-10-30T14:00:49.006990+08:00",
+  "branch": "codex/world-anchor",
+  "base_commit": "9916b3beff6753cd07f2407f36428ca2030127fd",
+  "source_commit": null,
+  "coverage": {
+    "schema": "world-anchor-root-coverage/v1",
+    "unique_broad_cases": 3703,
+    "separate_cases": 4,
+    "total_unique_cases": 3707,
+    "initial_broad": {
+      "total": 3702,
+      "failed": 12
+    },
+    "closing_cases": 286,
+    "reflexive_current_cases": 61,
+    "all_known_failures_closed": true,
+    "production_unchanged_since_initial_broad": true,
+    "final_source_files": 703,
+    "final_source_drift": [],
+    "receipt_paths": [
+      "/private/tmp/world-anchor-root-final-20261030-01/junit.xml",
+      "/private/tmp/world-anchor-root-closing-20261030-02/junit.xml",
+      "/private/tmp/world-anchor-reflexive-lint-final-20261030-03/junit.xml"
+    ],
+    "note": "Coverage combines the initial frozen broad run with full affected-module closure and current reflexive fixture cleanup. It is not a claim that the initial broad command exited successfully. The final guard-only module marker was separately reverified; case IDs and assertions are unchanged.",
+    "guard_only_marker_receipt": "/private/tmp/world-anchor-budget-marker-final-20261030-04/junit.xml",
+    "guard_only_marker_cases": 1
+  },
+  "final_source_pin_count": 703,
+  "production_changed_after_initial_broad": false,
+  "test_only_closure_files": [
+    "backend/tests/test_run_spending_launcher.py",
+    "backend/tests/test_world_anchor_records.py",
+    "backend/tests/test_world_anchor_reflexive.py",
+    "backend/tests/test_world_anchor_budget_completion.py"
+  ],
+  "static_checks": {
+    "python_files": 60,
+    "ruff_F_E9": "passed",
+    "git_diff_check": "passed",
+    "setup_shell_syntax": "passed"
+  },
+  "private_process": {
+    "receipt_sha256": "4dc0b9285d380091fdb807306107e8770e447cf2d5821871cde990fcff4dd8e3",
+    "controls": [
+      {
+        "scenario": "actor",
+        "status": "passed",
+        "child_exit": 0,
+        "wall_elapsed_seconds": 254.03842474999874,
+        "http_attempt_count": 41,
+        "actor_observation_capture_joins": 10,
+        "retained": {
+          "catalog_attempts": 0,
+          "followup_attempts": 0,
+          "model_attempts": 14,
+          "reserved_max_microusd": 168000,
+          "token_envelope_units": 140000
+        },
+        "limits": {
+          "catalog_attempt_limit": 8,
+          "followup_attempt_limit": 12,
+          "model_attempt_limit": 20,
+          "token_envelope_limit": 150000
+        },
+        "whole_run_retained_microusd": 1146032,
+        "used_repository_files": 172,
+        "runtime_pins_checked": 424,
+        "hard_exit_verified_by_parent": true,
+        "five_minute_target_met": true,
+        "child_guard_events": {
+          "blocked:network:socket.__new__": 2,
+          "blocked:process:subprocess.Popen": 2
+        },
+        "parent_guard_events": {
+          "allowed:guarded_child": 1
+        },
+        "unused_release_drift": [
+          {
+            "after": "786afbaa3d696962fe1436ec9e2b913a73084f6fc7a481e4c7ce0eb40b329b28",
+            "before": "1045fa456b2578c2ef2d1a9521314727da7bc7bc2853720d66aa2f8670b9145d",
+            "path": "backend/tests/test_run_spending_launcher.py",
+            "staged_or_used": false
+          },
+          {
+            "after": "738e2766ac764c8fe6af90656ad700484ea2b51b52b6504b82e6e4db1b3f6c2e",
+            "before": "dce4a033deb488bfc4ee4e8d62d2ec4c2e2ed5d1be2abec3d0e87f128b688608",
+            "path": "backend/tests/test_world_anchor_budget_completion.py",
+            "staged_or_used": false
+          },
+          {
+            "after": "ce8e3bd304e9377c9b5a1725e30e0f0eda737f876392d773f898533a6e238093",
+            "before": "77f4af198e803f74155ccaa23ad085a00badbb9d30857e33a02eb2cc14049f37",
+            "path": "backend/tests/test_world_anchor_records.py",
+            "staged_or_used": false
+          },
+          {
+            "after": "9300995f8c28d65459996c3a6ef364bff29b13bd002b9c0cbd47c09b9c68e127",
+            "before": "aef3c234a2c91e908bd60a32362d122b78759c97bb587ebb0df12188785930db",
+            "path": "backend/tests/test_world_anchor_reflexive.py",
+            "staged_or_used": false
+          }
+        ],
+        "copy_manifest_sha256": "3bfeb13c372ed7e679926a28c273abac1c520e7e154c46f84965dcc0e57659f6"
+      },
+      {
+        "scenario": "actor_missing_authority",
+        "status": "passed",
+        "child_exit": 2,
+        "wall_elapsed_seconds": 245.5353287910002,
+        "http_attempt_count": 40,
+        "actor_observation_capture_joins": 9,
+        "retained": {
+          "catalog_attempts": 0,
+          "followup_attempts": 0,
+          "model_attempts": 14,
+          "reserved_max_microusd": 168000,
+          "token_envelope_units": 140000
+        },
+        "limits": {
+          "catalog_attempt_limit": 8,
+          "followup_attempt_limit": 12,
+          "model_attempt_limit": 20,
+          "token_envelope_limit": 150000
+        },
+        "whole_run_retained_microusd": 1106032,
+        "used_repository_files": 172,
+        "runtime_pins_checked": 424,
+        "hard_exit_verified_by_parent": true,
+        "five_minute_target_met": true,
+        "child_guard_events": {
+          "blocked:network:socket.__new__": 2,
+          "blocked:process:subprocess.Popen": 2
+        },
+        "parent_guard_events": {
+          "allowed:guarded_child": 1
+        },
+        "unused_release_drift": [
+          {
+            "after": "786afbaa3d696962fe1436ec9e2b913a73084f6fc7a481e4c7ce0eb40b329b28",
+            "before": "1045fa456b2578c2ef2d1a9521314727da7bc7bc2853720d66aa2f8670b9145d",
+            "path": "backend/tests/test_run_spending_launcher.py",
+            "staged_or_used": false
+          },
+          {
+            "after": "738e2766ac764c8fe6af90656ad700484ea2b51b52b6504b82e6e4db1b3f6c2e",
+            "before": "dce4a033deb488bfc4ee4e8d62d2ec4c2e2ed5d1be2abec3d0e87f128b688608",
+            "path": "backend/tests/test_world_anchor_budget_completion.py",
+            "staged_or_used": false
+          },
+          {
+            "after": "ce8e3bd304e9377c9b5a1725e30e0f0eda737f876392d773f898533a6e238093",
+            "before": "77f4af198e803f74155ccaa23ad085a00badbb9d30857e33a02eb2cc14049f37",
+            "path": "backend/tests/test_world_anchor_records.py",
+            "staged_or_used": false
+          },
+          {
+            "after": "9300995f8c28d65459996c3a6ef364bff29b13bd002b9c0cbd47c09b9c68e127",
+            "before": "aef3c234a2c91e908bd60a32362d122b78759c97bb587ebb0df12188785930db",
+            "path": "backend/tests/test_world_anchor_reflexive.py",
+            "staged_or_used": false
+          }
+        ],
+        "copy_manifest_sha256": "6d2dfb99a7d4ee102d1d3a4851c76a6eee2a4aabc8511b556d3ef930958612a1"
+      }
+    ],
+    "provider_connections_admitted": 0,
+    "shutdown_note": "Production child os._exit is preserved: child shutdown_complete=false; parent wait proves process termination. CPython audit hooks are not an OS sandbox."
+  },
+  "private_specimen": {
+    "raw_files": 95,
+    "ledger_sources": 201,
+    "fetched_pages": 34,
+    "snippet_only": 167,
+    "kiq_facts": 116,
+    "missing_typed_contract": true,
+    "official_series": 0,
+    "same_period_forecast_vintages": [
+      239.8,
+      244.2,
+      246.2,
+      248.2,
+      247.5
+    ],
+    "value_kind": "third_party_forecast",
+    "reference_year": 2026,
+    "original_inputs_preserved": true
+  },
+  "operational_limits": [
+    "No live provider, billing, deployment or empirical forecast-quality qualification.",
+    "Initial launcher profile is full target-first; other engine adapters require separate launch-profile qualification.",
+    "64 KiB serialized packet limit is not an exact model-token fit proof; full qualified route input/output envelopes remain retained.",
+    "Unsupported required mappings and missing evidence block preparation.",
+    "Partial target-v3 child resume remains unsupported; completed-research parent resume retains existing limits."
+  ],
+  "evidence_roots": [
+    "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-final-20261030-03",
+    "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-final-20261030-02",
+    "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-final-20261030-01",
+    "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/world-anchor-v2-process-final-20261030-01"
+  ],
+  "archive_policy": "Every regular gate payload was byte/hash verified in compressed private archives; symlinks and one special fixture file are inventoried but not archived. No relocated execution is claimed."
+}

@@ -1,0 +1,23 @@
+{
+  "git_base": "0d46ccbfc10b109562179b7647c81c1b86f70407",
+  "inspection_only": true,
+  "sha256": {
+    "deerflow_bridge/linear_research.py": "54c489fbe41e424689fc2722cf2376a8eb0f934c2abdd0bdb611932378bde44c",
+    "deerflow_bridge/target_research.py": "e65b6f0db0fd9edb118f3b2f004a2269cbe8dee74ebd1e188b31c025f7a0f98f",
+    "deerflow_bridge/forecast_case.py": "ab8aa052a1ac8b12537de141cdb0900632442f11d0081c94cfa9c2a8c39d9573",
+    "backend/app/services/world_model_seed.py": "30832cbf1f70afe49d74c225dbce3f25f0f77c531c51b0d15bd4425cff64d606",
+    "backend/app/services/simulation_config_generator.py": "8de3804f77f7bfd49b7d4a514e508ffaece36ecce159e349f2ba654475d1c541",
+    "backend/app/services/run_spending.py": "796a7a2ec63001b1bd62e077db527956be4211f2f94a80123e393f90660ac01a",
+    "backend/app/services/pipeline_orchestrator.py": "38d0800566d78a7df2dca810abd4e2a36ba77bc2eacb1e36c667898b36d09bc7",
+    "backend/app/services/agency_classification.py": "9405c796d19d43fc0d52e0f272e5531d4d4667df9a6e6a7904fb87739242b4ba"
+  },
+  "specimen": {
+    "private_handoff": "/Users/rogerlin/.local/share/DeepResearchForecast/evaluations/target-first-acceptance-20261028T095104Z/pipelines/pipe_9d9b84efcd3d/handoff",
+    "private_pages_present": false,
+    "forecast_case_present": false,
+    "247_5_role": "2026 third-party forecast via secondary source, not observed 2027 outcome",
+    "kiq_G1F2_numbers_verified": null,
+    "original_S107_page_verified_sha256": "432d1695e7c86f412348527c2a61ec2d49a3c77101d193df16981716ebbe0146",
+    "original_S107_page_inspection_only": true
+  }
+}

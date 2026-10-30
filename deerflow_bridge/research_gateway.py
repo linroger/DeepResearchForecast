@@ -2828,6 +2828,8 @@ class SourceLedger:
                 clean["origin_cluster"] = _source_metadata(clean)["origin_cluster"]
                 if clean.get("evidence_tier") not in _EVIDENCE_TIERS:
                     clean["evidence_tier"] = "primary" if clean.get("dataset") else "unknown"
+                if clean.get("source_metadata_status") == "conflict":
+                    clean["evidence_tier"] = "unknown"
                 clean["passages"] = self._bounded_passages(clean.get("passages"))
             self._rows[sid] = clean
             self._by_canonical.setdefault(canonical, sid)
@@ -2920,6 +2922,7 @@ class SourceLedger:
             if self.capture_evidence:
                 row.update(_source_metadata(metadata), passages=[])
                 row["retrieved_at"] = row["retrieved_at"] or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                self._merge_metadata(row, metadata)
             self._rows[sid] = row
             self._by_canonical[canonical] = sid
             self._touch()
@@ -2930,13 +2933,47 @@ class SourceLedger:
         copied = dict(row)
         if self.capture_evidence and isinstance(row.get("passages"), list):
             copied["passages"] = list(row["passages"])
+        if isinstance(row.get("source_metadata_receipts"), list):
+            copied["source_metadata_receipts"] = [dict(item) for item in row["source_metadata_receipts"]]
         return copied
 
     def _merge_metadata(self, row: dict, metadata: Mapping[str, Any] | None) -> bool:
         if not self.capture_evidence:
             return False
         changed = False
+        raw = metadata if isinstance(metadata, Mapping) else {}
+        nested = raw.get("metadata")
+        fields = {**raw, **nested} if isinstance(nested, Mapping) else raw
+        if fields.get("source_metadata_version") == "world-anchor-source-metadata/v1":
+            allowed = (*_PUBLICATION_FIELDS, "publication_type", "source_type", "@type", "kind",
+                       "origin_cluster", "original_origin", "original_url", "source_metadata_origin", "source_metadata_version")
+            receipt = {key: fields[key] for key in allowed if isinstance(fields.get(key), str) and 0 < len(fields[key]) <= 2048}
+            receipts = list(row.get("source_metadata_receipts") or [])
+            tiers = {row.get("evidence_tier", "unknown")}
+            for item in [*receipts, receipt]:
+                tiers.update(_PUBLICATION_TIERS.get(item[key].strip().casefold(), "unknown")
+                             for key in ("publication_type", "source_type", "@type", "kind") if isinstance(item.get(key), str))
+            tiers.discard("unknown")
+            if receipt not in receipts:
+                # Keep the first classifications and the latest raw receipt;
+                # overflow is itself closed and cannot regain primary status.
+                if len(receipts) >= 8:
+                    receipts = receipts[:7]
+                    row["source_metadata_overflow"] = True
+                receipts.append(receipt)
+                row["source_metadata_receipts"] = receipts
+                changed = True
+            conflict = row.get("source_metadata_status") == "conflict" or len(tiers) > 1 or row.get("source_metadata_overflow") is True
+            status = "conflict" if conflict else "consistent"
+            if row.get("source_metadata_status") != status:
+                row["source_metadata_status"] = status
+                changed = True
+            if conflict and row.get("evidence_tier") != "unknown":
+                row["evidence_tier"] = "unknown"
+                changed = True
         for key, value in _source_metadata(metadata).items():
+            if key == "evidence_tier" and row.get("source_metadata_status") == "conflict":
+                continue
             if value in (None, "unknown"):
                 continue
             if (key == "retrieved_at" or row.get(key) in (None, "", "unknown")) and row.get(key) != value:

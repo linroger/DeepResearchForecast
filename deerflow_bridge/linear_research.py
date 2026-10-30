@@ -5256,7 +5256,7 @@ class _Engine:
 
     def __init__(self, question: str, out_dir: Path, args: Any, meta: dict, reporter: _Reporter,
                  write_meta: Callable[[], None], bridge: Any, gateway_factory: GatewayFactory,
-                 tools_factory: ToolsFactory, env: Mapping[str, str]) -> None:
+                 tools_factory: ToolsFactory, env: Mapping[str, str], world_anchor_control: Any = None) -> None:
         self.question = str(question or "").strip()
         if not self.question:
             raise _EngineFailure("empty research question")
@@ -5267,6 +5267,7 @@ class _Engine:
         self._write_meta = write_meta
         self.bridge = bridge
         self.env = env
+        self.world_anchor_control = world_anchor_control
         self.model_name = str(getattr(args, "model", "") or "")
         # Backtest mode (docs/handoff/backtest/design.md): the parent-owned
         # DRF_BACKTEST_POLICY cuts every input at an as-of date; an unusable
@@ -5299,6 +5300,13 @@ class _Engine:
             # retain their exact identity and never adopt typed authority.
             identity["forecast_authority"] = "target-first-v1"
             identity["target_research_version"] = 1
+        if world_anchor_control is not None:
+            identity["world_anchor"] = {"mode": "v1", "base_policy_hash": getattr(world_anchor_control, "base_policy_hash", _sha256(world_anchor_control.policy_json)),
+                "request_sha256": world_anchor_control.lifecycle["request_sha256"],
+                "research_generation_id": world_anchor_control.scope["research_generation_id"]}
+            previous = _read_json(self.out_dir / WORK_DIRNAME / "state.json")
+            if previous and "world_anchor" not in previous.get("identity", {}):
+                raise _EngineFailure("world_anchor_mode_changed: saved absence remains off")
         if self.backtest is not None:
             # Another cutoff is another run: never resume pages read under it.
             identity["backtest"] = self.backtest.tag
@@ -5702,6 +5710,9 @@ class _Engine:
 
     def _data_pinned(self) -> bool:
         """Gathering finished: the evidence agents saw is pinned, admission closed."""
+        if getattr(self, "world_anchor_control", None) is not None:
+            anchor = self.state.snapshot().get("world_anchor_producer") or {}
+            return bool(anchor.get("collection_closed")) or any(self.state.is_done(phase) for phase in ("synthesize", "qa", "finalize"))
         return any(self.state.is_done(phase) for phase in ("gather", "synthesize", "qa", "finalize"))
 
     def _data_rows(self) -> list[tuple[Any, int]]:
@@ -5944,6 +5955,8 @@ class _Engine:
             self.load_followups()
             self.phase_gather()
             self.phase_gap()
+            if self.world_anchor_control is not None:
+                self.run_anchor_stage()
             self._seal_context()
             self.phase_synthesize()
             self.phase_qa()
@@ -5952,6 +5965,20 @@ class _Engine:
             self.meta.update(status="failed", error=str(failure), finished_at=_iso_now())
             self.log("error", f"v3: {failure}")
             return 2
+
+    def run_anchor_stage(self, *, case=None):
+        """Host-enabled producer boundary; no ambient mode or provider fallback."""
+        if self.world_anchor_control is None:
+            return None
+        if __package__:
+            from .world_anchor_binding import run_anchor_stage
+        else:
+            from world_anchor_binding import run_anchor_stage
+        with self.phase("world_anchor"):
+            result = run_anchor_stage(self, self.world_anchor_control, case=case)
+        self.state.set_phase("world_anchor", "done", "immutable completion published")
+        self.flush_meta()
+        return result
 
     # ========================================================== official data
     def phase_data(self) -> None:
@@ -8361,6 +8388,12 @@ class _Engine:
             if len(report.strip()) < MIN_REPORT_CHARS:
                 self.state.set_phase("finalize", "failed", "report too short")
                 raise _EngineFailure(f"report_too_short: {len(report.strip())} chars < {MIN_REPORT_CHARS}")
+            if self.world_anchor_control is not None:
+                if __package__:
+                    from .world_anchor_binding import research_report_appendix
+                else:
+                    from world_anchor_binding import research_report_appendix
+                report += research_report_appendix(self.world_anchor_result)
             report_name = self._filename("REPORT_FILENAME", "research_report.md")
             order = [int(sid) for sid in self.qa.get("citation_order") or []]
             sources = self._source_rows(order)
@@ -8372,14 +8405,23 @@ class _Engine:
             self.write_text(self.out_dir / report_name, report)
             self.log("ok", f"wrote {report_name} ({len(report)} chars)")
             self.log("ok", f"wrote {sources_name} ({len(sources)} sources)")
-            actors_raw, facts_raw = self._structured(strip_references(report), deadline)
+            if self.world_anchor_control is not None:
+                if __package__:
+                    from .world_anchor_binding import legacy_projection, write_report_crosswalk
+                else:
+                    from world_anchor_binding import legacy_projection, write_report_crosswalk
+                actors_raw, facts_raw = legacy_projection(self, self.world_anchor_result)
+                self.meta["world_anchor_publication"]["report_crosswalk_sha256"] = write_report_crosswalk(self, self.world_anchor_result)
+            else:
+                actors_raw, facts_raw = self._structured(strip_references(report), deadline)
             counts = self._write_structured(actors_raw, facts_raw, sources)
             self._analytics(sources, counts.pop("_actors_obj"))
             self.bridge_call("_collect_prediction_markets", self.out_dir, self.question, report,
                              self.meta, self.reporter, model_name=self.model_name)
             self.bridge_call("_render_research_charts", self.out_dir, self.meta, self.reporter,
                              question=self.question)
-            counts.update(self._attach_official_quant())
+            if self.world_anchor_control is None:
+                counts.update(self._attach_official_quant())
             final_text = _read_text(self.out_dir / report_name) or report
             words = self.bridge_call("count_prose_words", final_text)
             fetched = sum(1 for row in sources if row.get("source_origin") in ("fetched", "official_data"))
@@ -9414,7 +9456,7 @@ def _stop_on_signals(engine: _Engine) -> Callable[[], None]:
     return restore
 
 
-def _validate_spending_request(question: str, out_dir: Path, args: Any, binding: Mapping[str, Any]) -> None:
+def _validate_spending_request(question: str, out_dir: Path, args: Any, binding: Mapping[str, Any]) -> dict:
     """Bind the producer's loaded input to the immutable launcher request.
 
     The CLI reads its prompt file after bootstrap validation. Validate that
@@ -9456,8 +9498,10 @@ def _validate_spending_request(question: str, out_dir: Path, args: Any, binding:
     except (OSError, TypeError, ValueError, UnicodeError):
         _spending.deny("binding_conflict")
     _spending.validate_bound_request(binding, approved)
-    if (type(question) is not str or set(approved) != {
-            "prompt", "mode", "depth", "language", "model", "forecast_authority", "target_simulation"}
+    expected_keys = {"prompt", "mode", "depth", "language", "model", "forecast_authority", "target_simulation"}
+    if binding["schema"] == "target-run-spending-binding/v2":
+        expected_keys.add("world_anchor")
+    if (type(question) is not str or set(approved) != expected_keys
             or approved["mode"] != "full" or approved["forecast_authority"] != "target-first-v1"):
         _spending.deny("binding_conflict")
     actual = dict(approved)
@@ -9465,11 +9509,12 @@ def _validate_spending_request(question: str, out_dir: Path, args: Any, binding:
                   depth=getattr(args, "depth", None), language=getattr(args, "target_language", None) or "",
                   forecast_authority=getattr(args, "forecast_authority", None))
     _spending.validate_bound_request(binding, actual)
+    return approved
 
 
 def run(question: str, out_dir: Path, args: Any, meta: dict, plog: Any, write_meta: Callable[[], None],
         *, bridge: Any = None, gateway_factory: GatewayFactory | None = None,
-        tools_factory: ToolsFactory | None = None) -> int:
+        tools_factory: ToolsFactory | None = None, world_anchor_control: Any = None) -> int:
     """Run the v3 engine; returns 0 iff research_report.md (>= 400 chars) was written.
 
     Always leaves ``meta.status`` terminal (``completed``/``failed``) and never
@@ -9487,7 +9532,22 @@ def run(question: str, out_dir: Path, args: Any, meta: dict, plog: Any, write_me
         if binding is not None:
             _spending.activate_binding(binding)
             _spending.check_context()
-            _validate_spending_request(question, out_dir, args, binding)
+            approved_request = _validate_spending_request(question, out_dir, args, binding)
+            if "world_anchor" in approved_request and world_anchor_control is None:
+                if __package__:
+                    from .world_anchor_binding import production_control
+                else:
+                    from world_anchor_binding import production_control
+                world_anchor_control = production_control(binding, approved_request)
+            if ("world_anchor" in approved_request) != (world_anchor_control is not None):
+                _spending.deny("binding_conflict")
+            if world_anchor_control is not None:
+                if __package__:
+                    from .world_anchor_binding import PendingProducerControl, ProducerControl
+                else:
+                    from world_anchor_binding import PendingProducerControl, ProducerControl
+                if type(world_anchor_control) not in {PendingProducerControl, ProducerControl} or approved_request != world_anchor_control.request:
+                    _spending.deny("binding_conflict")
             if (getattr(args, "extract_only", False) or getattr(args, "evidence_only", False)
                     or os.environ.get("RESEARCH_LINEAR_MODE", "").strip().lower() == "salvage"):
                 _spending.deny("unsupported_route")
@@ -9495,7 +9555,7 @@ def run(question: str, out_dir: Path, args: Any, meta: dict, plog: Any, write_me
             import deerflow_research as bridge  # noqa: PLW0127 — deployed next to this file
         engine = _Engine(question, Path(out_dir), args, meta, reporter, write_meta, bridge,
                          gateway_factory or _default_gateway_factory,
-                         tools_factory or _default_tools_factory, os.environ)
+                         tools_factory or _default_tools_factory, os.environ, world_anchor_control=world_anchor_control)
         restore_signals = _stop_on_signals(engine)
         return engine.execute()
     except _EngineFailure as failure:

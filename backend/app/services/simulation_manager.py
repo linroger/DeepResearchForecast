@@ -123,6 +123,15 @@ def build_simulation_config_seal(
             "sha256": actual,
         }
 
+    if "world_anchor" in config:
+        from .world_anchor import research_source_identity, validate_config_pin
+        pin = validate_config_pin(config["world_anchor"])
+        join_sha = _file_sha256(os.path.join(sim_dir, "world_anchor_join.json"))
+        if join_sha != pin["actor_join_sha256"]:
+            raise ValueError("World Anchor actor join fingerprint mismatch")
+        bindings["world_anchor"] = {"file": "world_anchor_join.json", "sha256": join_sha,
+                                    "completion_manifest_sha256": pin["completion_manifest_sha256"],
+                                    "research_identity": research_source_identity(str(simulation_id))}
     manifest = {
         "schema_version": SIMULATION_CONFIG_MANIFEST_VERSION,
         "simulation_id": str(simulation_id),
@@ -211,6 +220,17 @@ def validate_simulation_config_seal(
     role_bindings = bindings.get("actor_role_manifests")
     if not isinstance(role_bindings, dict):
         raise ValueError("actor role manifest bindings are invalid")
+    if "world_anchor" in config:
+        from .world_anchor import research_source_identity, validate_config_pin
+        pin = validate_config_pin(config["world_anchor"])
+        expected_anchor = {"file": "world_anchor_join.json", "sha256": pin["actor_join_sha256"],
+                           "completion_manifest_sha256": pin["completion_manifest_sha256"],
+                           "research_identity": research_source_identity(str(manifest["simulation_id"]))}
+        if (bindings.get("world_anchor") != expected_anchor
+                or _file_sha256(os.path.join(sim_dir, "world_anchor_join.json")) != pin["actor_join_sha256"]):
+            raise ValueError("World Anchor preparation binding changed")
+    elif "world_anchor" in bindings:
+        raise ValueError("World Anchor preparation pin was removed")
     role_files = {
         "reddit": "reddit_profiles_roles.json",
         "twitter": "twitter_profiles_roles.json",
@@ -897,7 +917,7 @@ class SimulationManager:
     def prepare_world_simulation(self, simulation_id: str, *, raw_spec: Optional[dict],
                                  research_report: str, research_generation_id: str,
                                  research_engine: str, actor_bundle=None, policy_spec=None,
-                                 ontology=None, simulation_requirement="") -> SimulationState:
+                                 ontology=None, simulation_requirement="", anchor_context=None) -> SimulationState:
         from .world_simulation.service import WorldSimulationService
         from .world_simulation.contracts import require
         require(raw_spec is not None or policy_spec is not None, "world_model_not_ready",
@@ -907,12 +927,16 @@ class SimulationManager:
             raise ValueError("Simulation does not exist")
         if validate_simulation_engine(state.simulation_engine) != "world-v1":
             raise ValueError("Engine mismatch: world preparation requires world-v1")
+        if anchor_context is not None:
+            from .world_anchor import bind_context_sources
+            anchor_context = bind_context_sources(anchor_context, simulation_id=simulation_id)
         prepared = WorldSimulationService.prepare_model(
             simulation_id, raw_spec=raw_spec, research_report=research_report,
             research_generation_id=research_generation_id,
             research_engine=research_engine, actor_bundle=actor_bundle,
             policy_spec=policy_spec, ontology=ontology,
-            simulation_requirement=simulation_requirement, root=self.SIMULATION_DATA_DIR)
+            simulation_requirement=simulation_requirement, root=self.SIMULATION_DATA_DIR,
+            **({"anchor_context": anchor_context} if anchor_context is not None else {}))
         return self._pin_world_preparation(state, prepared)
 
     def _pin_world_preparation(self, state: SimulationState, prepared: dict) -> SimulationState:
@@ -932,8 +956,31 @@ class SimulationManager:
         self.validate_prepared_simulation_config(simulation_id)
         if parent.simulation_engine != "world-v1":
             raise ValueError("Engine mismatch: world fork requires world-v1")
+        from .world_simulation.artifacts import load_inputs
+        parent_spec, _ = load_inputs(
+            WorldSimulationService.directory(simulation_id, root=self.SIMULATION_DATA_DIR),
+            simulation_id=simulation_id, expected_manifest_sha256=parent.world_input_manifest_sha256)
+        anchor_enabled = "worldAnchor" in parent_spec.get("sourceBindings", {})
+        parent_binding = None
+        if anchor_enabled:
+            from .official_data import simulation_research_binding
+            parent_binding = simulation_research_binding(simulation_id)
+            if parent_binding.get("status") != "valid":
+                raise ValueError("World Anchor parent research binding is invalid")
         child = self.create_simulation(parent.project_id, parent.graph_id,
                                        simulation_engine="world-v1")
+        if parent_binding is not None:
+            from .official_data import bind_simulation_research
+            bind_simulation_research(child.simulation_id, parent_binding["handoff_dir"],
+                pipeline_id=parent_binding["pipeline_id"], expected_generation={
+                    "handoff_dir": parent_binding["handoff_dir"], "files": parent_binding["files"]})
+            if parent_spec["sourceBindings"]["worldAnchor"]["pin"].get("actor_join_sha256"):
+                from .world_anchor import _publication
+                pub = _publication()
+                source_dir = WorldSimulationService.directory(simulation_id, root=self.SIMULATION_DATA_DIR)
+                child_dir = WorldSimulationService.directory(child.simulation_id, root=self.SIMULATION_DATA_DIR)
+                for name in ("actor_cast_manifest.json", "world_anchor_join.json"):
+                    pub.write_once(child_dir, name, pub.read_bytes(source_dir, name))
         prepared = WorldSimulationService.fork(simulation_id, child.simulation_id,
                                                root=self.SIMULATION_DATA_DIR, seed=seed)
         return self._pin_world_preparation(child, prepared)
@@ -954,6 +1001,8 @@ class SimulationManager:
         max_rounds: Optional[int] = None,
         research_language: Optional[str] = None,
         ontology: Optional[Dict[str, Any]] = None,
+        anchor_context=None,
+        forecast_case: Optional[Dict[str, Any]] = None,
     ) -> SimulationState:
         """
         准备模拟环境（全程自动化）
@@ -1068,6 +1117,9 @@ class SimulationManager:
             write_json_atomic(actor_cast_path, actor_cast_manifest, allow_nan=False)
             with open(actor_cast_path, "rb") as actor_cast_handle:
                 actor_cast_sha = hashlib.sha256(actor_cast_handle.read()).hexdigest()
+            if anchor_context is not None:
+                from .world_anchor import bind_actor_cast
+                anchor_context = bind_actor_cast(anchor_context, sim_dir)
             filtered.filtered_count = len(filtered.entities)
 
             # Compile and seal one exact research-context pack for every actor
@@ -1272,6 +1324,8 @@ class SimulationManager:
                 research_language=research_language,  # PREP-4: 英文调研→global_market 画像
                 **({"agency_classifications": agency_classifications}
                    if agency_classifications is not None else {}),
+                **({"anchor_context": anchor_context} if anchor_context is not None else {}),
+                **({"forecast_case": forecast_case} if forecast_case is not None else {}),
             )
             
             if progress_callback:

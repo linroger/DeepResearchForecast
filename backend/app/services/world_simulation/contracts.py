@@ -175,10 +175,60 @@ def templates_by_id(spec: dict) -> dict[str, dict]:
 def _basis(record: dict) -> None:
     basis = record.get("basis")
     require(isinstance(basis, dict) and basis.get("kind") in {
-        "source_claim", "report_excerpt", "scenario_assumption", "simulation_event"
+        "source_claim", "report_excerpt", "scenario_assumption", "simulation_event", "anchor_evidence"
     }, "missing_provenance", "Every modeled value needs an explicit evidence/assumption basis")
     require(isinstance(basis.get("refs"), list) and bool(basis["refs"]),
             "missing_provenance", "A modeled value requires basis references")
+    if basis["kind"] == "anchor_evidence":
+        require(set(basis) == {"kind", "refs"} and all(isinstance(ref, dict) and set(ref) == {
+            "pack_hash", "requirement_id", "binding_id", "observation_id", "field", "target", "target_object_id"
+        } for ref in basis["refs"]), "anchor_binding_mismatch", "Anchor references must retain their exact schema")
+
+
+def anchor_enabled(spec):
+    """Presence is authoritative; malformed enabled metadata cannot mean off."""
+    binding = spec.get("sourceBindings", {}).get("worldAnchor")
+    present = "worldAnchor" in spec.get("sourceBindings", {}) or "worldAnchorObservations" in spec
+    if not present:
+        return False
+    projection = spec.get("worldAnchorObservations")
+    require(isinstance(binding, dict) and binding.get("schemaVersion") == "world-anchor-binding/v1"
+            and isinstance(projection, dict) and set(projection) == {"schemaVersion", "actors"}
+            and projection["schemaVersion"] == "world-anchor-observations/v1"
+            and binding.get("actorProjectionHash") == digest(projection),
+            "anchor_binding_mismatch", "Prepared anchor observation projection is missing or changed")
+    require(set(projection["actors"]) == {actor["actorId"] for actor in spec["actors"]},
+            "anchor_binding_mismatch", "Anchor actor projection does not match the compiled cast")
+    for actor in projection["actors"].values():
+        require(isinstance(actor, dict) and set(actor) == {"actorRef", "periods"}
+                and set(actor["periods"]) == {str(period["index"]) for period in spec["periods"]},
+                "anchor_binding_mismatch", "Anchor actor periods are incomplete")
+        for view in actor["periods"].values():
+            require(isinstance(view, dict) and set(view) == {"items", "initialFields", "options"}
+                    and isinstance(view["items"], list) and isinstance(view["initialFields"], list)
+                    and isinstance(view["options"], dict), "anchor_binding_mismatch", "Malformed anchor actor view")
+    return True
+
+
+def record_anchor_changes(spec, before, after, *, at, round_index):
+    """Reducer hook: mark committed later scalar changes, never initial/no-op writes.
+
+    The kernel owner calls this only on the successful resolved state. The
+    marker stays privileged; observation projection applies the record's own
+    visibility and never uses a marker to admit descriptions or source bases.
+    """
+    if not anchor_enabled(spec) or round_index < 1:
+        return
+    marker = after.get("anchorObservationState")
+    require(isinstance(marker, dict) and marker.get("schemaVersion") == "world-anchor-state/v1",
+            "anchor_binding_mismatch", "Anchor observation state is missing")
+    for section in ("accounts", "metrics", "rules", "relations"):
+        for record_id, record in after[section].items():
+            for field in (("balance", "reserved") if section == "accounts" else ("value",)):
+                previous = before[section][record_id].get(field)
+                if type(previous) is not type(record.get(field)) or previous != record.get(field):
+                    marker["simulatedFields"].setdefault(section, {}).setdefault(record_id, {})[field] = {
+                        "round": round_index, "at": time_text(parse_time(at))}
 
 
 def validate_spec(raw: Any) -> dict:
@@ -306,6 +356,10 @@ def initial_snapshot(spec: dict) -> dict:
                  scheduledEvents=clone(spec["scheduledEvents"]), appliedEvents=[], sampling={"seed": spec["seed"], "draws": []})
     if spec.get("resolutionOrderPolicy") == CAUSAL_ORDER_POLICY:
         state["causalOrder"] = {}
+    if anchor_enabled(spec):
+        for actor_state in state["actorStates"].values():
+            actor_state["beliefs"] = []
+        state["anchorObservationState"] = {"schemaVersion": "world-anchor-state/v1", "simulatedFields": {}}
     return state
 
 
@@ -332,6 +386,23 @@ def validate_snapshot(spec: dict, snapshot: dict) -> None:
         balance, held = decimal(account["balance"], nonnegative=True), decimal(account["reserved"], nonnegative=True)
         require(held <= balance, "resource_violation", "Reserved resources exceed account balance")
     require(set(snapshot["actorStates"]) == set(actors_by_id(spec)), "actor_identity_mismatch", "Actor state roster changed")
+    if anchor_enabled(spec):
+        marker = snapshot.get("anchorObservationState")
+        require(isinstance(marker, dict) and set(marker) == {"schemaVersion", "simulatedFields"}
+                and marker["schemaVersion"] == "world-anchor-state/v1"
+                and isinstance(marker["simulatedFields"], dict), "anchor_binding_mismatch", "Invalid anchor observation state")
+        for section, records in marker["simulatedFields"].items():
+            require(section in {"accounts", "metrics", "rules", "relations"} and isinstance(records, dict),
+                    "anchor_binding_mismatch", "Invalid anchor origin section")
+            for record_id, fields in records.items():
+                require(record_id in spec["initialState"][section] and isinstance(fields, dict),
+                        "anchor_binding_mismatch", "Invalid anchor origin record")
+                for field, origin in fields.items():
+                    require(field in ({"balance", "reserved"} if section == "accounts" else {"value"})
+                            and isinstance(origin, dict) and set(origin) == {"round", "at"}
+                            and type(origin["round"]) is int and 1 <= origin["round"] <= snapshot["round"]
+                            and parse_time(origin["at"]) <= parse_time(snapshot["simulatedAt"]),
+                            "anchor_binding_mismatch", "Invalid simulated anchor origin")
     if spec.get("resolutionOrderPolicy") == CAUSAL_ORDER_POLICY:
         records = {key: record for key, record in snapshot["commitments"].items() if record["kind"] != "vote"}
         records.update(snapshot["interactions"])

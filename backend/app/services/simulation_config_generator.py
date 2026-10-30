@@ -384,6 +384,7 @@ class SimulationParameters:
     # 生成元数据
     generated_at: str = field(default_factory=lambda: datetime.now().isoformat())
     generation_reasoning: str = ""  # LLM的推理说明
+    world_anchor: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
@@ -421,6 +422,8 @@ class SimulationParameters:
             data["output_language"] = self.output_language
         if self.world_model:
             data["world_model"] = self.world_model
+        if self.world_anchor is not None:
+            data["world_anchor"] = self.world_anchor
         return data
     
     def to_json(self, indent: int = 2) -> str:
@@ -490,6 +493,8 @@ class SimulationConfigGenerator:
         research_language: Optional[str] = None,
         *,
         agency_classifications: Optional[Dict[str, Dict[str, Any]]] = None,
+        forecast_case: Optional[Dict[str, Any]] = None,
+        anchor_context: Any = None,
     ) -> SimulationParameters:
         """
         智能生成完整的模拟配置（分步生成）
@@ -523,6 +528,17 @@ class SimulationConfigGenerator:
             SimulationParameters: 完整的模拟参数
         """
         logger.info(f"开始智能生成模拟配置: simulation_id={simulation_id}, 实体数={len(entities)}")
+        anchor_runtime = None
+        if anchor_context is not None:
+            from .world_model_seed import build_anchor_runtime_projection
+            from .world_anchor import actor_ref_for
+            from .agency_classification import agency_classification_for
+            anchor_runtime = build_anchor_runtime_projection(anchor_context, forecast_case)
+            for entity in entities:
+                actor_ref_for(anchor_context, entity.uuid)
+                declared = agency_classification_for(agency_classifications, entity.uuid)
+                if declared is None or declared["agency_class"] is None:
+                    raise ValueError("world anchor missing_authority: resolved C5 class required")
 
         # PREP-4(2): 英文调研 + 未显式设置 SIM_ACTIVITY_PROFILE 环境变量 → 本实例切换
         # global_market 画像（作息/提示词口径与英文语料一致）。显式 env 永远优先；
@@ -592,6 +608,11 @@ class SimulationConfigGenerator:
                 logger.warning(f"日历时间线构建失败（降级回小时制路径）: {e}")
                 temporal_timeline = None
         self._temporal_timeline = temporal_timeline
+        if anchor_runtime is not None:
+            scope = anchor_runtime["projection"]["scope"]
+            if (temporal_timeline is None or temporal_timeline.as_of_date != scope["cutoff"][:10]
+                    or temporal_timeline.horizon_date != scope["horizon"]["end"]):
+                raise ValueError("world anchor timeline differs from admitted cutoff/horizon")
 
         # ========== 步骤1: 生成时间配置 ==========
         report_progress(1, "生成时间配置...")
@@ -681,6 +702,23 @@ class SimulationConfigGenerator:
             )
             all_agent_configs.extend(batch_configs)
 
+        if anchor_context is not None:
+            # Old shaping outputs cannot become initial actor knowledge or drive
+            # enabled behavior through inferred stance/salience/interest proxies.
+            world_brief = ""
+            event_config.initial_posts = []
+            event_config.hot_topics = []
+            for config in all_agent_configs:
+                config.stance = "neutral"
+                config.sentiment_bias = 0.0
+                config.gains_if = config.loses_if = config.actor_context_digest = config.actor_context_urgency = ""
+                config.actor_context_evidence_gap_audit = {}
+                config.interested_topics = []
+                config.influence_weight = 0.5
+                config.activity_level, config.posts_per_hour, config.comments_per_hour = 0.5, 1.0, 2.0
+                config.active_hours = list(range(8, 23))
+                config.response_delay_min, config.response_delay_max = 5, 60
+
         # Apply source declarations before any config consumer, including the world
         # seed. UUID binding prevents a same-name or reordered cast from borrowing
         # another actor's declaration. Missing/invalid entries leave legacy behavior.
@@ -732,6 +770,12 @@ class SimulationConfigGenerator:
         except Exception as e:
             logger.warning(f"受众群体生成失败（降级跳过，不影响模拟）: {e}")
 
+        if anchor_context is not None:
+            # Synthetic audience fill is not a source-authenticated actor join.
+            # Reject unsupported cast expansion before sealing a runtime config.
+            for config in all_agent_configs:
+                actor_ref_for(anchor_context, config.entity_uuid)
+
         # ========== 主角节奏分层（TEMPORAL cadence tiering）==========
         # 非受众且 influence_weight ≥ 0.6 的阵容按影响力降序（并列按 agent_id 升序）取前
         # 20 名标记 cadence="principal"；受众与其余保持默认 "sampled"。日历模式运行脚本
@@ -767,12 +811,15 @@ class SimulationConfigGenerator:
                 actors, time_config, all_agent_configs, max_rounds=max_rounds,
                 timeline=temporal_timeline,
                 actor_context_packs=actor_context_packs,
+                **({"anchor_runtime": anchor_runtime} if anchor_runtime is not None else {}),
             )
             if event_config.scheduled_events:
                 reasoning_parts.append(f"定时事件: {len(event_config.scheduled_events)} 个")
                 logger.info(f"定时事件（时间线回放）: {len(event_config.scheduled_events)} 个")
         except Exception as e:
             logger.warning(f"定时事件构建失败（降级为空，不影响模拟）: {e}")
+            if anchor_context is not None:
+                raise
             event_config.scheduled_events = []
 
         # ========== 把 echo-chamber 同温层关注补进初始关注图（T3.4）==========
@@ -805,6 +852,8 @@ class SimulationConfigGenerator:
                     temporal_timeline, simulation_id,
                     **({"agency_classifications": agency_classifications}
                        if agency_classifications is not None else {}),
+                    **({"forecast_case": forecast_case} if forecast_case is not None else {}),
+                    **({"anchor_context": anchor_context} if anchor_context is not None else {}),
                 )
                 if world_model_block:
                     from .world_model_seed import world_model_seed_summary
@@ -812,7 +861,14 @@ class SimulationConfigGenerator:
                     logger.info(world_model_seed_summary(world_model_block))
             except Exception as e:
                 logger.warning(f"world model seed failed (legacy evolution path keeps running): {e}")
+                if anchor_context is not None:
+                    raise
                 world_model_block = None
+
+        if anchor_context is not None and world_model_block is None:
+            raise ValueError("world anchor modeling_gap: reflexive calendar world model required")
+        if anchor_context is not None:
+            event_config.initial_follows = []
 
         # ========== 最后一步: 生成平台配置 ==========
         report_progress(total_steps, "生成平台配置...")
@@ -862,6 +918,8 @@ class SimulationConfigGenerator:
             llm_base_url=self.base_url,
             generation_reasoning=" | ".join(reasoning_parts)
         )
+        if anchor_runtime is not None:
+            params.world_anchor = anchor_runtime["pin"]
         
         logger.info(f"模拟配置生成完成: {len(params.agent_configs)} 个Agent配置")
 
@@ -1124,6 +1182,7 @@ class SimulationConfigGenerator:
         max_rounds: Optional[int] = None,
         timeline: Optional[sim_timeline.SimulationTimeline] = None,
         actor_context_packs: Optional[Dict[str, Dict[str, Any]]] = None,
+        anchor_runtime: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """T3.8: 研究 key_events → 映射到 [0,total_rounds) 的定时事件，附最相关高影响力发布者。
 
@@ -1142,6 +1201,10 @@ class SimulationConfigGenerator:
         事件完整留档到 timeline.beyond_horizon_events，日期不可解析的条目排除并记
         ``event_date_unparsed:<n>`` warning。timeline=None（小时制）→ 旧路径字节不变。
         """
+        if anchor_runtime is not None:
+            actors = {"as_of_date": anchor_runtime["projection"]["scope"]["cutoff"][:10],
+                      "key_events": [{"date": e["date"], "event": e["description"]}
+                                     for e in anchor_runtime["calendar"]]}
         if not isinstance(actors, dict) or not agent_configs:
             return []
         event_source = actors
@@ -2206,6 +2269,8 @@ class SimulationConfigGenerator:
         simulation_id: Optional[str] = None,
         *,
         agency_classifications: Optional[Dict[str, Dict[str, Any]]] = None,
+        forecast_case: Optional[Dict[str, Any]] = None,
+        anchor_context: Any = None,
     ) -> Optional[Dict[str, Any]]:
         """REFLEXIVE WORLD (design §2.7): the sealed ``world_model`` seed block.
 
@@ -2237,6 +2302,8 @@ class SimulationConfigGenerator:
             share_source=getattr(Config, "SIM_SHARE_SOURCE", "auto"),
             **({"agency_classifications": agency_classifications}
                if agency_classifications is not None else {}),
+            **({"forecast_case": forecast_case} if forecast_case is not None else {}),
+            **({"anchor_context": anchor_context} if anchor_context is not None else {}),
         )
         if not block.get("actors"):
             return None

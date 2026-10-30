@@ -1,0 +1,102 @@
+[
+  {
+    "archive": "world-anchor-root-final-20261030-01.tar.gz",
+    "sha256": "1d1b755d4d2483d7c7010064b754b9826bcc48faf06c82974e3809aaea88194f",
+    "bytes": 91143324,
+    "regular_files": 35495,
+    "original_root": "/private/tmp/world-anchor-root-final-20261030-01",
+    "relocated_execution": false,
+    "omitted_symlinks": 1054,
+    "omitted_special_files": 1
+  },
+  {
+    "archive": "world-anchor-root-closing-20261030-02.tar.gz",
+    "sha256": "06199674eaaad69844d40043311d874f6db96e892f9b350067767b1a05e897b1",
+    "bytes": 27861353,
+    "regular_files": 9122,
+    "original_root": "/private/tmp/world-anchor-root-closing-20261030-02",
+    "relocated_execution": false,
+    "omitted_symlinks": 108,
+    "omitted_special_files": 0
+  },
+  {
+    "archive": "world-anchor-reflexive-lint-final-20261030-03.tar.gz",
+    "sha256": "9d5274753de9dfb48ce8e5bb234312db5bbc2e5fad25e8eb11faee407edf9b46",
+    "bytes": 1775855,
+    "regular_files": 1744,
+    "original_root": "/private/tmp/world-anchor-reflexive-lint-final-20261030-03",
+    "relocated_execution": false,
+    "omitted_symlinks": 26,
+    "omitted_special_files": 0
+  },
+  {
+    "archive": "world-anchor-final-budget-20261030-02.tar.gz",
+    "sha256": "725a5699cb9215cb4ff3a2ea377e2316559285efbcb44a19054850e823973de1",
+    "bytes": 31796,
+    "regular_files": 59,
+    "original_root": "/private/tmp/world-anchor-final-budget-20261030-02",
+    "relocated_execution": false,
+    "omitted_symlinks": 2,
+    "omitted_special_files": 0
+  },
+  {
+    "archive": "world-anchor-final-archived-target-20261030-02.tar.gz",
+    "sha256": "0ef7dfeb5dde4b128e43289f3cf6082445616fa3daa3083dc4b9218c31e676b0",
+    "bytes": 2019,
+    "regular_files": 6,
+    "original_root": "/private/tmp/world-anchor-final-archived-target-20261030-02",
+    "relocated_execution": false,
+    "omitted_symlinks": 1,
+    "omitted_special_files": 0
+  },
+  {
+    "archive": "world-anchor-final-private-specimen-20261030-02.tar.gz",
+    "sha256": "c17adbcdde688817ba685749667f439b3c3dc8d0185880ddc35b285d69182558",
+    "bytes": 567187,
+    "regular_files": 137,
+    "original_root": "/private/tmp/world-anchor-final-private-specimen-20261030-02",
+    "relocated_execution": false,
+    "omitted_symlinks": 3,
+    "omitted_special_files": 0
+  },
+  {
+    "archive": "world-anchor-final-private-specimen-20261030-02-envelope.tar.gz",
+    "sha256": "7db0f5356efe230cc426d4559a56de702e884371ffffa4373e15b7dad85eb686",
+    "bytes": 6838,
+    "regular_files": 3,
+    "original_root": "/private/tmp/world-anchor-final-private-specimen-20261030-02-envelope",
+    "relocated_execution": false,
+    "omitted_symlinks": 0,
+    "omitted_special_files": 0
+  },
+  {
+    "archive": "world-anchor-launcher-environment-20261030-01.tar.gz",
+    "sha256": "67cd3c5e4c837d40cdf649856fd2285048adfe111ffb071984417b96b076648d",
+    "bytes": 138774,
+    "regular_files": 38,
+    "original_root": "/private/tmp/world-anchor-launcher-environment-20261030-01",
+    "relocated_execution": false,
+    "omitted_symlinks": 2,
+    "omitted_special_files": 0
+  },
+  {
+    "archive": "world-anchor-launcher-environment-20261030-02.tar.gz",
+    "sha256": "a70c549d57df84154b0192bcccc8132de0b87f74f98ae727caec57d4e557df57",
+    "bytes": 1644216,
+    "regular_files": 478,
+    "original_root": "/private/tmp/world-anchor-launcher-environment-20261030-02",
+    "relocated_execution": false,
+    "omitted_symlinks": 8,
+    "omitted_special_files": 0
+  },
+  {
+    "archive": "world-anchor-gateway-performance-20261030-01.tar.gz",
+    "sha256": "9fc7f18af1505fadd390aa0c475dcdc99195c6987533f33c7e1312467f7b77e6",
+    "bytes": 3062,
+    "regular_files": 16,
+    "original_root": "/private/tmp/world-anchor-gateway-performance-20261030-01",
+    "relocated_execution": false,
+    "omitted_symlinks": 1,
+    "omitted_special_files": 0
+  }
+]
